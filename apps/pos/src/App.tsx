@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { OrderProvider } from './contexts/OrderContext'
+import { MenuProvider } from './contexts/MenuContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import PaymentPage from './pages/PaymentPage'
@@ -32,9 +33,11 @@ function AppRoutes() {
         path="/register"
         element={
           <ProtectedRoute>
-            <OrderProvider>
-              <RegisterPage />
-            </OrderProvider>
+            <MenuProvider>
+              <OrderProvider>
+                <RegisterPage />
+              </OrderProvider>
+            </MenuProvider>
           </ProtectedRoute>
         }
       />
