@@ -1,0 +1,464 @@
+:root {
+  --pico-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --pico-border-radius: 0.5rem;
+
+  --kds-green: #4caf50;
+  --kds-yellow: #ffc107;
+  --kds-red: #f44336;
+  --kds-green-bg: #e8f5e9;
+  --kds-yellow-bg: #fff8e1;
+  --kds-red-bg: #ffebee;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+/* KDS Layout */
+.kds-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.kds-layout.all-day-mode {
+  grid-template-columns: 1fr;
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--pico-card-background-color);
+  border-right: 1px solid var(--pico-muted-border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.sidebar-header h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.station-type {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.nav-item {
+  display: block;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background: var(--pico-card-background-color);
+  border-color: var(--pico-primary);
+}
+
+.nav-item.active {
+  background: var(--pico-primary-focus);
+  border-color: var(--pico-primary);
+}
+
+/* Mini All-Day Counts */
+.mini-all-day {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+
+.mini-all-day h3 {
+  font-size: 0.875rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--pico-muted-color);
+}
+
+.count-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.count-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.count-value {
+  font-weight: 700;
+  font-size: 1.125rem;
+  min-width: 2rem;
+}
+
+.count-name {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count-more {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  font-style: italic;
+  padding-top: 0.25rem;
+}
+
+.empty-counts {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  margin: 0;
+}
+
+/* Main Content */
+.main-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tab Bar */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--pico-muted-border-color);
+  padding: 0 1rem;
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--pico-muted-color);
+}
+
+.tab:hover {
+  color: var(--pico-color);
+}
+
+.tab.active {
+  color: var(--pico-primary);
+  border-bottom-color: var(--pico-primary);
+}
+
+/* Ticket Grid */
+.ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.ticket-grid.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-message {
+  color: var(--pico-muted-color);
+  font-size: 1.25rem;
+}
+
+/* Ticket Card */
+.ticket {
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket.completed {
+  opacity: 0.7;
+}
+
+/* Ticket Header (color-coded) */
+.ticket-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.urgency-normal .ticket-header {
+  background: var(--kds-green);
+  color: white;
+}
+
+.urgency-warning .ticket-header {
+  background: var(--kds-yellow);
+  color: black;
+}
+
+.urgency-critical .ticket-header {
+  background: var(--kds-red);
+  color: white;
+}
+
+.ticket.completed .ticket-header {
+  background: var(--pico-muted-color);
+  color: white;
+}
+
+.order-type {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.order-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-number {
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.customer-name {
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.ticket-time {
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.priority-badge {
+  width: 1.5rem;
+  height: 1.5rem;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+/* Table Name */
+.table-name {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+/* Ticket Items */
+.ticket-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+}
+
+.ticket-line-item {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.ticket-line-item:hover:not(.completed) {
+  background: var(--pico-card-background-color);
+}
+
+.ticket-line-item:last-child {
+  border-bottom: none;
+}
+
+.ticket-line-item.completed {
+  text-decoration: line-through;
+  opacity: 0.5;
+  cursor: default;
+}
+
+.item-quantity {
+  font-weight: 700;
+  min-width: 2rem;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-name {
+  display: block;
+  font-weight: 500;
+}
+
+.item-modifiers {
+  list-style: none;
+  margin: 0.25rem 0 0 0;
+  padding: 0;
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+}
+
+.item-modifiers li {
+  padding-left: 0.5rem;
+}
+
+/* Ticket Footer */
+.ticket-footer {
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+
+.ticket-footer:empty {
+  display: none;
+}
+
+.prioritize-btn,
+.recall-btn {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.prioritize-btn.active {
+  background: var(--kds-yellow);
+  border-color: var(--kds-yellow);
+  color: black;
+}
+
+/* All-Day Counts View */
+.all-day-counts-view {
+  padding: 1rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.all-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.all-day-header h2 {
+  margin: 0;
+}
+
+.close-btn {
+  width: auto;
+  padding: 0.5rem 1rem;
+}
+
+.all-day-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.all-day-item {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.all-day-count {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--pico-primary);
+}
+
+.all-day-name {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  margin-top: 0.25rem;
+}
+
+/* Settings Page */
+.settings-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.settings-header {
+  margin-bottom: 2rem;
+}
+
+.back-link {
+  font-size: 0.875rem;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.settings-header h1 {
+  margin: 0;
+}
+
+.settings-form fieldset {
+  margin-bottom: 1.5rem;
+}
+
+.settings-form label {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.settings-form small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--pico-muted-color);
+}
+
+.settings-note {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  font-style: italic;
+}
