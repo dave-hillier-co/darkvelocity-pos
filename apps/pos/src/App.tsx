@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { OrderProvider } from './contexts/OrderContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import PaymentPage from './pages/PaymentPage'
 import { useAuth } from './contexts/AuthContext'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <OrderProvider>
               <RegisterPage />
+            </OrderProvider>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payment"
+        element={
+          <ProtectedRoute>
+            <OrderProvider>
+              <PaymentPage />
             </OrderProvider>
           </ProtectedRoute>
         }

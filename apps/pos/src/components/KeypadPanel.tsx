@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useOrder } from '../contexts/OrderContext'
 
 function formatCurrency(amount: number): string {
@@ -10,6 +11,7 @@ function formatCurrency(amount: number): string {
 
 export default function KeypadPanel() {
   const [keypadValue, setKeypadValue] = useState('')
+  const navigate = useNavigate()
   const { order, selectedLineId, changeQuantity, clearOrder } = useOrder()
 
   function handleDigit(digit: string) {
@@ -42,8 +44,7 @@ export default function KeypadPanel() {
 
   function handlePay() {
     if (order && order.lines.length > 0) {
-      // Navigate to payment screen (to be implemented)
-      alert(`Payment of ${formatCurrency(order.grandTotal)} would be processed here`)
+      navigate('/payment')
     }
   }
 

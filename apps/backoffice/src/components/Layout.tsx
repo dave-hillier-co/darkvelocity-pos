@@ -11,24 +11,30 @@ const navSections = [
     title: 'Menu',
     links: [
       { to: '/menu/items', label: 'Item List' },
+      { to: '/menu/categories', label: 'Categories' },
+      { to: '/menu/recipes', label: 'Recipes' },
     ],
   },
   {
     title: 'Inventory',
     links: [
       { to: '/inventory/ingredients', label: 'Ingredients' },
+      { to: '/inventory/stock', label: 'Stock Levels' },
     ],
   },
   {
     title: 'Procurement',
     links: [
       { to: '/procurement/suppliers', label: 'Suppliers' },
+      { to: '/procurement/purchase-orders', label: 'Purchase Orders' },
+      { to: '/procurement/deliveries', label: 'Deliveries' },
     ],
   },
   {
     title: 'Analytics',
     links: [
-      { to: '/reports', label: 'Reports' },
+      { to: '/reports', label: 'Sales Reports' },
+      { to: '/reports/margins', label: 'Margin Analysis' },
     ],
   },
 ]

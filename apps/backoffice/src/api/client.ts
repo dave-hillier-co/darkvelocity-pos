@@ -19,7 +19,6 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.accessToken}`
     }
 
-    // Merge any additional headers from options
     if (options.headers) {
       const additionalHeaders = options.headers as Record<string, string>
       Object.assign(headers, additionalHeaders)

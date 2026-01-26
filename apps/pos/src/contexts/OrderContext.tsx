@@ -10,6 +10,7 @@ interface OrderContextValue extends OrderState {
   applyDiscount: (lineId: string, amount: number, reason?: string) => void
   selectLine: (lineId: string | null) => void
   clearOrder: () => void
+  completePayment: (paymentId: string) => void
   dispatch: React.Dispatch<OrderAction>
 }
 
@@ -49,6 +50,10 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ORDER_CLEARED' })
   }
 
+  function completePayment(paymentId: string) {
+    dispatch({ type: 'ORDER_PAID', payload: { paymentId } })
+  }
+
   return (
     <OrderContext.Provider
       value={{
@@ -60,6 +65,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
         applyDiscount,
         selectLine,
         clearOrder,
+        completePayment,
         dispatch,
       }}
     >
