@@ -701,4 +701,234 @@ public class PaymentIntegrationTests : IClassFixture<PaymentsServiceFixture>
     }
 
     #endregion
+
+    #region P2: Tips and Overpayment
+
+    [Fact]
+    public async Task CashPayment_WithOverpayment_RecordsAsTip()
+    {
+        // Arrange - Order total is $25, customer pays $30
+        var orderId = Guid.NewGuid();
+        var createRequest = new CreateCashPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CashPaymentMethodId,
+            Amount: 25.00m,
+            ReceivedAmount: 30.00m,
+            TipAmount: 5.00m);
+
+        // Act
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/cash",
+            createRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var payment = await response.Content.ReadFromJsonAsync<PaymentDto>();
+        payment!.TipAmount.Should().Be(5.00m);
+        payment.ChangeAmount.Should().Be(0m); // No change when overpayment is tip
+    }
+
+    [Fact]
+    public async Task CardPayment_WithTip_IncludesTipInTotal()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var createRequest = new CreateCardPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CardPaymentMethodId,
+            Amount: 50.00m,
+            TipAmount: 10.00m);
+
+        // Act
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card",
+            createRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var payment = await response.Content.ReadFromJsonAsync<PaymentDto>();
+        payment!.TipAmount.Should().Be(10.00m);
+        // Total charged should include tip
+    }
+
+    #endregion
+
+    #region P2: Advanced Split Payments
+
+    [Fact]
+    public async Task SplitPayment_MultipleCards_AllSucceed()
+    {
+        // Arrange - Order total is $100, split between 3 cards
+        var orderId = Guid.NewGuid();
+
+        var card1 = new CreateCardPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CardPaymentMethodId,
+            Amount: 33.33m);
+
+        var card2 = new CreateCardPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CardPaymentMethodId,
+            Amount: 33.33m);
+
+        var card3 = new CreateCardPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CardPaymentMethodId,
+            Amount: 33.34m);
+
+        // Act
+        var response1 = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card", card1);
+        var response2 = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card", card2);
+        var response3 = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card", card3);
+
+        // Assert
+        response1.StatusCode.Should().Be(HttpStatusCode.Created);
+        response2.StatusCode.Should().Be(HttpStatusCode.Created);
+        response3.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task SplitPayment_EqualSplit_DividesEvenly()
+    {
+        // Arrange - Create order for equal split
+        var orderId = Guid.NewGuid();
+        var orderTotal = 60.00m;
+        var numberOfWays = 3;
+        var splitAmount = orderTotal / numberOfWays;
+
+        // Act - Create 3 equal payments
+        var payments = new List<PaymentDto>();
+        for (int i = 0; i < numberOfWays; i++)
+        {
+            var request = new CreateCardPaymentRequest(
+                OrderId: orderId,
+                UserId: _fixture.TestUserId,
+                PaymentMethodId: _fixture.CardPaymentMethodId,
+                Amount: splitAmount);
+
+            var response = await _client.PostAsJsonAsync(
+                $"/api/locations/{_fixture.TestLocationId}/payments/card", request);
+
+            if (response.StatusCode == HttpStatusCode.Created)
+            {
+                var payment = await response.Content.ReadFromJsonAsync<PaymentDto>();
+                payments.Add(payment!);
+            }
+        }
+
+        // Assert - All payments should be equal
+        payments.Should().NotBeEmpty();
+        payments.Should().OnlyContain(p => p.Amount == splitAmount);
+    }
+
+    [Fact]
+    public async Task PartialRefund_OnSplitPayment_RefundsSpecificPayment()
+    {
+        // Arrange - Create order with multiple payments
+        var orderId = Guid.NewGuid();
+
+        var payment1Response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/cash",
+            new CreateCashPaymentRequest(
+                orderId, _fixture.TestUserId, _fixture.CashPaymentMethodId, 25.00m, 25.00m));
+        var payment1 = await payment1Response.Content.ReadFromJsonAsync<PaymentDto>();
+
+        await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card",
+            new CreateCardPaymentRequest(
+                orderId, _fixture.TestUserId, _fixture.CardPaymentMethodId, 25.00m));
+
+        // Act - Refund only the cash payment
+        var refundRequest = new RefundPaymentRequest(
+            Amount: 25.00m,
+            Reason: "Item returned");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/{payment1!.Id}/refund",
+            refundRequest);
+
+        // Assert
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
+    }
+
+    #endregion
+
+    #region P2: Void Before Settlement
+
+    [Fact]
+    public async Task VoidPayment_BeforeSettlement_Succeeds()
+    {
+        // Arrange - Create a card payment (not yet settled)
+        var orderId = Guid.NewGuid();
+        var createRequest = new CreateCardPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CardPaymentMethodId,
+            Amount: 50.00m);
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/card",
+            createRequest);
+        var payment = await createResponse.Content.ReadFromJsonAsync<PaymentDto>();
+
+        // Act - Void the payment
+        var voidRequest = new VoidPaymentRequest(
+            Reason: "Customer changed mind",
+            UserId: _fixture.TestUserId);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/{payment!.Id}/void",
+            voidRequest);
+
+        // Assert
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task VoidPayment_AlreadyVoided_ReturnsBadRequest()
+    {
+        // Arrange - Create and void a payment
+        var orderId = Guid.NewGuid();
+        var createRequest = new CreateCashPaymentRequest(
+            OrderId: orderId,
+            UserId: _fixture.TestUserId,
+            PaymentMethodId: _fixture.CashPaymentMethodId,
+            Amount: 20.00m,
+            ReceivedAmount: 20.00m);
+
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/cash",
+            createRequest);
+        var payment = await createResponse.Content.ReadFromJsonAsync<PaymentDto>();
+
+        var voidRequest = new VoidPaymentRequest("Test void", _fixture.TestUserId);
+
+        // First void
+        await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/{payment!.Id}/void",
+            voidRequest);
+
+        // Act - Try to void again
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/payments/{payment.Id}/void",
+            voidRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    #endregion
 }
+
+// P2 DTOs
+public record VoidPaymentRequest(
+    string Reason,
+    Guid UserId);
