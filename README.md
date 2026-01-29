@@ -72,11 +72,47 @@ lightspeed-clone/
 
 ## Prerequisites
 
+- Docker & Docker Compose
 - .NET 10 SDK
-- PostgreSQL (for production) or SQLite (for development/testing)
 - Node.js 20+ (for frontend apps)
 
 ## Getting Started
+
+### Quick Setup (Recommended)
+
+The fastest way to get started is using the setup script:
+
+```bash
+# Full setup: checks prerequisites, starts Docker, builds backend, installs frontend deps
+./scripts/setup.sh
+
+# Check prerequisites only
+./scripts/setup.sh --check-only
+
+# Skip specific steps
+./scripts/setup.sh --skip-frontend
+./scripts/setup.sh --skip-docker
+
+# Show current environment status
+./scripts/setup.sh --status
+```
+
+### Manual Setup
+
+If you prefer to set things up manually:
+
+```bash
+# 1. Start Docker infrastructure
+cd docker && docker compose up -d && cd ..
+
+# 2. Build .NET projects
+dotnet build
+
+# 3. Install frontend dependencies
+cd apps/pos && npm install && cd ../..
+cd apps/backoffice && npm install && cd ../..
+cd apps/kds && npm install && cd ../..
+```
 
 ### Run Tests
 
@@ -86,20 +122,85 @@ dotnet test
 
 # Run specific service tests
 dotnet test tests/Costing.Tests
+
+# Run tests with coverage
+./scripts/setup.sh --run-tests
 ```
 
-### Build All Services
+### Running Services
 
 ```bash
-dotnet build
+# Run all backend services
+./scripts/run-services.sh start
+
+# Run specific services
+./scripts/run-services.sh start Menu Orders
+
+# Check service status
+./scripts/run-services.sh status
+
+# Stop all services
+./scripts/run-services.sh stop
+
+# View service logs
+./scripts/run-services.sh logs Menu
 ```
 
-### Run a Service
+Or run a single service manually:
 
 ```bash
 cd src/Services/Menu/Menu.Api
 dotnet run
 ```
+
+### Running Frontend Apps
+
+```bash
+# POS App (PWA)
+cd apps/pos && npm run dev
+
+# Back Office
+cd apps/backoffice && npm run dev
+
+# Kitchen Display System
+cd apps/kds && npm run dev
+```
+
+### Teardown
+
+```bash
+# Stop Docker containers (preserves data)
+./scripts/teardown.sh
+
+# Stop and remove volumes (deletes all data)
+./scripts/teardown.sh --remove-volumes
+
+# Remove everything including images
+./scripts/teardown.sh --remove-all
+```
+
+### Service Ports
+
+| Service | Port | | Service | Port |
+|---------|------|-|---------|------|
+| Auth | 5000 | | Hardware | 5005 |
+| Location | 5001 | | Inventory | 5006 |
+| Menu | 5002 | | Procurement | 5007 |
+| Orders | 5003 | | Costing | 5008 |
+| Payments | 5004 | | Reporting | 5009 |
+| API Gateway | 8000 | | | |
+
+### Infrastructure Ports
+
+| Service | Port | URL |
+|---------|------|-----|
+| PostgreSQL | 5432 | - |
+| Redis | 6379 | - |
+| Kafka | 9092 | - |
+| Zookeeper | 2181 | - |
+| Kafka UI | 8080 | http://localhost:8080 |
+
+Database credentials (development): `darkvelocity` / `darkvelocity_dev`
 
 ## Test Coverage
 
