@@ -56,19 +56,6 @@ services:
       timeout: 10s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: darkvelocity-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: darkvelocity-kafka-ui
@@ -84,4 +71,3 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
