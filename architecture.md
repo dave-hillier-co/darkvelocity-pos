@@ -61,12 +61,12 @@ Aligned with K-Series architecture from spec:
 │  Auth │ Orders │ Menu │ Users │ Hardware │ Payments │ Reports   │
 └─────────────────────────────────────────────────────────────────┘
                               │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│   PostgreSQL    │ │     Redis       │ │  Blob Storage   │
-│   (Primary DB)  │ │ (Cache/PubSub)  │ │ (Images/Docs)   │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
+          ┌─────────────────────┴─────────────────────┐
+          ▼                                         ▼
+┌─────────────────┐                       ┌─────────────────┐
+│   PostgreSQL    │                       │  Blob Storage   │
+│   (Primary DB)  │                       │ (Images/Docs)   │
+└─────────────────┘                       └─────────────────┘
                               │
                               │ Cloud Sync / SignalR
                               ▼

@@ -195,7 +195,6 @@ cd apps/kds && npm run dev
 | Service | Port | URL |
 |---------|------|-----|
 | PostgreSQL | 5432 | - |
-| Redis | 6379 | - |
 | Kafka | 9092 | - |
 | Zookeeper | 2181 | - |
 | Kafka UI | 8080 | http://localhost:8080 |

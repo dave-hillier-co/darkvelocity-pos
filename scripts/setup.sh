@@ -3,7 +3,7 @@
 # DarkVelocity POS - Local Development Environment Setup
 #
 # This script sets up the complete local development environment including:
-# - Docker infrastructure (PostgreSQL, Kafka, Redis, Zookeeper)
+# - Docker infrastructure (PostgreSQL, Kafka, Zookeeper)
 # - .NET backend services build
 # - Node.js frontend apps dependencies
 #
@@ -210,28 +210,10 @@ wait_for_kafka() {
     return 0
 }
 
-wait_for_redis() {
-    print_info "Waiting for Redis to be ready..."
-
-    local elapsed=0
-    while [[ $elapsed -lt 30 ]]; do
-        if docker exec darkvelocity-redis redis-cli ping &> /dev/null; then
-            print_success "Redis is ready"
-            return 0
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
-
-    print_warning "Redis did not become ready"
-    return 0
-}
-
 wait_for_services() {
     print_header "Waiting for Infrastructure Services"
 
     wait_for_postgres
-    wait_for_redis
     wait_for_kafka
 
     echo ""
@@ -308,7 +290,6 @@ show_status() {
     echo "Service Ports:"
     echo "--------------"
     echo "  PostgreSQL:  localhost:5432"
-    echo "  Redis:       localhost:6379"
     echo "  Kafka:       localhost:9092"
     echo "  Zookeeper:   localhost:2181"
     echo "  Kafka UI:    http://localhost:8080"
