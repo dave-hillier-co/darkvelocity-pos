@@ -1,6 +1,8 @@
 using System.Text;
 using DarkVelocity.Auth.Api.Data;
+using DarkVelocity.Auth.Api.EventHandlers;
 using DarkVelocity.Auth.Api.Services;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +22,10 @@ if (!builder.Environment.IsEnvironment("Test"))
 
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Event Bus
+builder.Services.AddInMemoryEventBus();
+builder.Services.AddEventHandlersFromAssembly(typeof(Program).Assembly);
 
 // Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "default-dev-key-minimum-32-chars!";

@@ -1,7 +1,9 @@
 using DarkVelocity.Labor.Api.Data;
 using DarkVelocity.Labor.Api.Dtos;
 using DarkVelocity.Labor.Api.Entities;
+using DarkVelocity.Shared.Contracts.Events;
 using DarkVelocity.Shared.Contracts.Hal;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,10 +14,12 @@ namespace DarkVelocity.Labor.Api.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly LaborDbContext _context;
+    private readonly IEventBus _eventBus;
 
-    public EmployeesController(LaborDbContext context)
+    public EmployeesController(LaborDbContext context, IEventBus eventBus)
     {
         _context = context;
+        _eventBus = eventBus;
     }
 
     /// <summary>
@@ -116,6 +120,9 @@ public class EmployeesController : ControllerBase
         if (existingEmail)
             return BadRequest(new { message = "Email already exists" });
 
+        // Get the role for the event
+        var role = await _context.Roles.FindAsync(request.DefaultRoleId);
+
         var employee = new Employee
         {
             TenantId = tenantId,
@@ -153,6 +160,22 @@ public class EmployeesController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // Publish EmployeeCreated event
+        await _eventBus.PublishAsync(new EmployeeCreated(
+            EmployeeId: employee.Id,
+            TenantId: tenantId,
+            UserId: employee.UserId,
+            LocationId: locationId,
+            EmployeeNumber: employee.EmployeeNumber,
+            FirstName: employee.FirstName,
+            LastName: employee.LastName,
+            Email: employee.Email,
+            EmploymentType: employee.EmploymentType,
+            DefaultRoleId: employee.DefaultRoleId,
+            DefaultRoleName: role?.Name ?? "",
+            HireDate: employee.HireDate
+        ));
+
         // Reload with navigation properties
         employee = await _context.Employees
             .Include(e => e.DefaultRole)
@@ -182,24 +205,152 @@ public class EmployeesController : ControllerBase
         if (employee == null)
             return NotFound();
 
-        if (request.FirstName != null) employee.FirstName = request.FirstName;
-        if (request.LastName != null) employee.LastName = request.LastName;
-        if (request.Email != null) employee.Email = request.Email;
-        if (request.Phone != null) employee.Phone = request.Phone;
-        if (request.DateOfBirth.HasValue) employee.DateOfBirth = request.DateOfBirth;
-        if (request.EmploymentType != null) employee.EmploymentType = request.EmploymentType;
-        if (request.Status != null) employee.Status = request.Status;
-        if (request.DefaultLocationId.HasValue) employee.DefaultLocationId = request.DefaultLocationId.Value;
-        if (request.AllowedLocationIds != null) employee.AllowedLocationIds = request.AllowedLocationIds;
-        if (request.DefaultRoleId.HasValue) employee.DefaultRoleId = request.DefaultRoleId.Value;
-        if (request.HourlyRate.HasValue) employee.HourlyRate = request.HourlyRate;
-        if (request.SalaryAmount.HasValue) employee.SalaryAmount = request.SalaryAmount;
-        if (request.PayFrequency != null) employee.PayFrequency = request.PayFrequency;
-        if (request.OvertimeRate.HasValue) employee.OvertimeRate = request.OvertimeRate.Value;
-        if (request.MaxHoursPerWeek.HasValue) employee.MaxHoursPerWeek = request.MaxHoursPerWeek;
-        if (request.MinHoursPerWeek.HasValue) employee.MinHoursPerWeek = request.MinHoursPerWeek;
+        var changedFields = new List<string>();
+        var oldStatus = employee.Status;
+        var oldDefaultRoleId = employee.DefaultRoleId;
+        var oldDefaultRoleName = employee.DefaultRole?.Name ?? "";
+        var oldHourlyRate = employee.HourlyRate;
+        var oldSalaryAmount = employee.SalaryAmount;
+        var oldPayFrequency = employee.PayFrequency;
+
+        if (request.FirstName != null && employee.FirstName != request.FirstName)
+        {
+            employee.FirstName = request.FirstName;
+            changedFields.Add("FirstName");
+        }
+        if (request.LastName != null && employee.LastName != request.LastName)
+        {
+            employee.LastName = request.LastName;
+            changedFields.Add("LastName");
+        }
+        if (request.Email != null && employee.Email != request.Email)
+        {
+            employee.Email = request.Email;
+            changedFields.Add("Email");
+        }
+        if (request.Phone != null && employee.Phone != request.Phone)
+        {
+            employee.Phone = request.Phone;
+            changedFields.Add("Phone");
+        }
+        if (request.DateOfBirth.HasValue && employee.DateOfBirth != request.DateOfBirth)
+        {
+            employee.DateOfBirth = request.DateOfBirth;
+            changedFields.Add("DateOfBirth");
+        }
+        if (request.EmploymentType != null && employee.EmploymentType != request.EmploymentType)
+        {
+            employee.EmploymentType = request.EmploymentType;
+            changedFields.Add("EmploymentType");
+        }
+        if (request.Status != null && employee.Status != request.Status)
+        {
+            employee.Status = request.Status;
+            changedFields.Add("Status");
+        }
+        if (request.DefaultLocationId.HasValue && employee.DefaultLocationId != request.DefaultLocationId)
+        {
+            employee.DefaultLocationId = request.DefaultLocationId.Value;
+            changedFields.Add("DefaultLocationId");
+        }
+        if (request.AllowedLocationIds != null)
+        {
+            employee.AllowedLocationIds = request.AllowedLocationIds;
+            changedFields.Add("AllowedLocationIds");
+        }
+        if (request.DefaultRoleId.HasValue && employee.DefaultRoleId != request.DefaultRoleId)
+        {
+            employee.DefaultRoleId = request.DefaultRoleId.Value;
+            changedFields.Add("DefaultRoleId");
+        }
+        if (request.HourlyRate.HasValue && employee.HourlyRate != request.HourlyRate)
+        {
+            employee.HourlyRate = request.HourlyRate;
+            changedFields.Add("HourlyRate");
+        }
+        if (request.SalaryAmount.HasValue && employee.SalaryAmount != request.SalaryAmount)
+        {
+            employee.SalaryAmount = request.SalaryAmount;
+            changedFields.Add("SalaryAmount");
+        }
+        if (request.PayFrequency != null && employee.PayFrequency != request.PayFrequency)
+        {
+            employee.PayFrequency = request.PayFrequency;
+            changedFields.Add("PayFrequency");
+        }
+        if (request.OvertimeRate.HasValue && employee.OvertimeRate != request.OvertimeRate)
+        {
+            employee.OvertimeRate = request.OvertimeRate.Value;
+            changedFields.Add("OvertimeRate");
+        }
+        if (request.MaxHoursPerWeek.HasValue && employee.MaxHoursPerWeek != request.MaxHoursPerWeek)
+        {
+            employee.MaxHoursPerWeek = request.MaxHoursPerWeek;
+            changedFields.Add("MaxHoursPerWeek");
+        }
+        if (request.MinHoursPerWeek.HasValue && employee.MinHoursPerWeek != request.MinHoursPerWeek)
+        {
+            employee.MinHoursPerWeek = request.MinHoursPerWeek;
+            changedFields.Add("MinHoursPerWeek");
+        }
 
         await _context.SaveChangesAsync();
+
+        // Publish events based on changes
+        if (changedFields.Count > 0)
+        {
+            await _eventBus.PublishAsync(new EmployeeUpdated(
+                EmployeeId: employee.Id,
+                TenantId: employee.TenantId,
+                UserId: employee.UserId,
+                ChangedFields: changedFields
+            ));
+        }
+
+        // Publish status change event
+        if (changedFields.Contains("Status") && oldStatus != employee.Status)
+        {
+            await _eventBus.PublishAsync(new EmployeeStatusChanged(
+                EmployeeId: employee.Id,
+                TenantId: employee.TenantId,
+                UserId: employee.UserId,
+                OldStatus: oldStatus,
+                NewStatus: employee.Status
+            ));
+        }
+
+        // Publish default role change event
+        if (changedFields.Contains("DefaultRoleId"))
+        {
+            // Reload to get new role name
+            await _context.Entry(employee).Reference(e => e.DefaultRole).LoadAsync();
+
+            await _eventBus.PublishAsync(new EmployeeDefaultRoleChanged(
+                EmployeeId: employee.Id,
+                TenantId: employee.TenantId,
+                UserId: employee.UserId,
+                OldRoleId: oldDefaultRoleId,
+                OldRoleName: oldDefaultRoleName,
+                NewRoleId: employee.DefaultRoleId,
+                NewRoleName: employee.DefaultRole?.Name ?? ""
+            ));
+        }
+
+        // Publish compensation change event
+        if (changedFields.Contains("HourlyRate") || changedFields.Contains("SalaryAmount") || changedFields.Contains("PayFrequency"))
+        {
+            await _eventBus.PublishAsync(new EmployeeCompensationChanged(
+                EmployeeId: employee.Id,
+                TenantId: employee.TenantId,
+                UserId: employee.UserId,
+                OldHourlyRate: oldHourlyRate,
+                NewHourlyRate: employee.HourlyRate,
+                OldSalaryAmount: oldSalaryAmount,
+                NewSalaryAmount: employee.SalaryAmount,
+                OldPayFrequency: oldPayFrequency,
+                NewPayFrequency: employee.PayFrequency
+            ));
+        }
 
         var dto = MapToDto(employee);
         AddLinks(dto);
@@ -228,6 +379,16 @@ public class EmployeesController : ControllerBase
         employee.TerminationDate = request.TerminationDate;
 
         await _context.SaveChangesAsync();
+
+        // Publish EmployeeTerminated event
+        await _eventBus.PublishAsync(new EmployeeTerminated(
+            EmployeeId: employee.Id,
+            TenantId: employee.TenantId,
+            UserId: employee.UserId,
+            LocationId: employee.LocationId,
+            TerminationDate: request.TerminationDate,
+            Reason: request.Reason
+        ));
 
         var dto = MapToDto(employee);
         AddLinks(dto);
@@ -316,6 +477,18 @@ public class EmployeesController : ControllerBase
 
         _context.EmployeeRoles.Add(employeeRole);
         await _context.SaveChangesAsync();
+
+        // Publish EmployeeRoleAssigned event
+        await _eventBus.PublishAsync(new EmployeeRoleAssigned(
+            EmployeeId: employee.Id,
+            TenantId: employee.TenantId,
+            UserId: employee.UserId,
+            RoleId: request.RoleId,
+            RoleName: role.Name,
+            Department: role.Department,
+            IsPrimary: request.IsPrimary,
+            HourlyRateOverride: request.HourlyRateOverride
+        ));
 
         var dto = new EmployeeRoleDto
         {

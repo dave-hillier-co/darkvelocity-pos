@@ -4,6 +4,7 @@ namespace DarkVelocity.Auth.Api.Entities;
 
 public class Location : BaseEntity
 {
+    public Guid TenantId { get; set; }
     public required string Name { get; set; }
     public required string Timezone { get; set; }
     public required string CurrencyCode { get; set; }

@@ -1,4 +1,5 @@
 using DarkVelocity.Labor.Api.Data;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,10 @@ if (!builder.Environment.IsEnvironment("Test"))
         options.UseNpgsql(connectionString);
     });
 }
+
+// Event Bus
+builder.Services.AddInMemoryEventBus();
+builder.Services.AddEventHandlersFromAssembly(typeof(Program).Assembly);
 
 // Controllers
 builder.Services.AddControllers();
