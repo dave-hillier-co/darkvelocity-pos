@@ -1,0 +1,177 @@
+@baseUrl = http://localhost:5015
+
+### List all delivery platforms
+GET {{baseUrl}}/api/delivery-platforms
+
+### Connect a new delivery platform (Uber Eats)
+POST {{baseUrl}}/api/delivery-platforms
+Content-Type: application/json
+
+{
+  "platformType": "UberEats",
+  "name": "Uber Eats - Main Store",
+  "merchantId": "merchant-123",
+  "credentials": {
+    "clientId": "test-client-id",
+    "clientSecret": "test-client-secret",
+    "webhookSecret": "test-webhook-secret"
+  },
+  "settings": {
+    "autoAcceptOrders": true,
+    "defaultPrepTime": 20,
+    "busyModePrepTime": 35,
+    "autoSyncMenu": false
+  }
+}
+
+### Get platform status
+GET {{baseUrl}}/api/delivery-platforms/{{platformId}}/status
+
+### Test platform connection
+POST {{baseUrl}}/api/delivery-platforms/{{platformId}}/test
+
+### Pause receiving orders
+POST {{baseUrl}}/api/delivery-platforms/{{platformId}}/pause
+
+### Resume receiving orders
+POST {{baseUrl}}/api/delivery-platforms/{{platformId}}/resume
+
+### Map a location to a platform
+POST {{baseUrl}}/api/delivery-platforms/{{platformId}}/locations
+Content-Type: application/json
+
+{
+  "locationId": "00000000-0000-0000-0000-000000000001",
+  "platformStoreId": "uber-store-123"
+}
+
+### List external orders
+GET {{baseUrl}}/api/external-orders
+
+### Get orders by location
+GET {{baseUrl}}/api/locations/{{locationId}}/external-orders
+
+### Accept an order
+POST {{baseUrl}}/api/external-orders/{{orderId}}/accept
+Content-Type: application/json
+
+{
+  "prepTimeMinutes": 25
+}
+
+### Reject an order
+POST {{baseUrl}}/api/external-orders/{{orderId}}/reject
+Content-Type: application/json
+
+{
+  "reason": "Item unavailable",
+  "reasonCode": "ItemUnavailable"
+}
+
+### Mark order as ready
+POST {{baseUrl}}/api/external-orders/{{orderId}}/ready
+
+### Adjust prep time
+POST {{baseUrl}}/api/external-orders/{{orderId}}/adjust-time
+Content-Type: application/json
+
+{
+  "newPrepTimeMinutes": 35
+}
+
+### Cancel an order
+POST {{baseUrl}}/api/external-orders/{{orderId}}/cancel
+Content-Type: application/json
+
+{
+  "reason": "Customer requested cancellation",
+  "cancelledBy": "Customer"
+}
+
+### Trigger menu sync
+POST {{baseUrl}}/api/delivery-platforms/{{platformId}}/menu-sync
+Content-Type: application/json
+
+{
+  "fullSync": false
+}
+
+### Get menu sync status
+GET {{baseUrl}}/api/menu-syncs/{{syncId}}
+
+### Get menu sync history
+GET {{baseUrl}}/api/delivery-platforms/{{platformId}}/menu-syncs
+
+### List menu mappings
+GET {{baseUrl}}/api/menu-mappings
+
+### List platform payouts
+GET {{baseUrl}}/api/platform-payouts
+
+### Get pending payouts
+GET {{baseUrl}}/api/platform-payouts/pending
+
+### Reconcile a payout
+POST {{baseUrl}}/api/platform-payouts/{{payoutId}}/reconcile
+Content-Type: application/json
+
+{
+  "notes": "Verified against bank statement"
+}
+
+### Get analytics summary
+GET {{baseUrl}}/api/delivery-analytics/summary
+
+### Get analytics by platform
+GET {{baseUrl}}/api/delivery-analytics/by-platform
+
+### Get revenue analytics
+GET {{baseUrl}}/api/delivery-analytics/revenue
+
+### Get prep time metrics
+GET {{baseUrl}}/api/delivery-analytics/prep-times
+
+### Simulate Uber Eats webhook (order created)
+POST {{baseUrl}}/webhooks/ubereats?storeId=uber-store-123
+Content-Type: application/json
+
+{
+  "event_type": "orders.notification",
+  "meta": {
+    "resource": {
+      "id": "order-12345",
+      "display_id": "UE-1234",
+      "eater": {
+        "first_name": "John",
+        "last_name": "Doe",
+        "phone": "+1234567890"
+      },
+      "cart": {
+        "items": [
+          {
+            "id": "item-1",
+            "title": "Burger",
+            "quantity": 2,
+            "price": {
+              "unit_price": { "amount": 1299 },
+              "total_price": { "amount": 2598 }
+            }
+          }
+        ],
+        "sub_total": { "amount": 2598 },
+        "total": { "amount": 2998 }
+      },
+      "delivery_info": {
+        "location": {
+          "address": "123 Main St, City"
+        }
+      },
+      "payment": {
+        "currency_code": "USD"
+      }
+    }
+  }
+}
+
+### Health check
+GET {{baseUrl}}/health
