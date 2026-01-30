@@ -1,5 +1,6 @@
 using DarkVelocity.Orders.Api.Data;
 using DarkVelocity.Orders.Api.Entities;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -97,5 +98,16 @@ public class OrdersApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
     {
         var scope = Services.CreateScope();
         return scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
+    }
+
+    public InMemoryEventBus GetEventBus()
+    {
+        var scope = Services.CreateScope();
+        return (InMemoryEventBus)scope.ServiceProvider.GetRequiredService<IEventBus>();
+    }
+
+    public void ClearEventLog()
+    {
+        GetEventBus().ClearEventLog();
     }
 }

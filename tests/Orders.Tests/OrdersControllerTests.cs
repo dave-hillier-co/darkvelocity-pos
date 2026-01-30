@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DarkVelocity.Orders.Api.Dtos;
+using DarkVelocity.Shared.Contracts.Events;
 using DarkVelocity.Shared.Contracts.Hal;
 using FluentAssertions;
 
@@ -322,5 +323,181 @@ public class OrdersControllerTests : IClassFixture<OrdersApiFixture>
             lineRequest);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // Event Publishing Tests
+
+    [Fact]
+    public async Task Create_PublishesOrderCreatedEvent()
+    {
+        _fixture.ClearEventLog();
+
+        var request = new CreateOrderRequest(
+            UserId: _fixture.TestUserId,
+            OrderType: "dine_in",
+            CustomerName: "Event Test Customer");
+
+        var response = await _client.PostAsJsonAsync($"/api/locations/{_fixture.TestLocationId}/orders", request);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var order = await response.Content.ReadFromJsonAsync<OrderDto>();
+
+        var events = _fixture.GetEventBus().GetEventLog();
+        var orderCreatedEvent = events.OfType<OrderCreated>().FirstOrDefault(e => e.OrderId == order!.Id);
+
+        orderCreatedEvent.Should().NotBeNull();
+        orderCreatedEvent!.LocationId.Should().Be(_fixture.TestLocationId);
+        orderCreatedEvent.UserId.Should().Be(_fixture.TestUserId);
+        orderCreatedEvent.OrderNumber.Should().Be(order!.OrderNumber);
+        orderCreatedEvent.OrderType.Should().Be("dine_in");
+    }
+
+    [Fact]
+    public async Task AddLine_PublishesOrderLineAddedEvent()
+    {
+        // Create an order first
+        var createRequest = new CreateOrderRequest(UserId: _fixture.TestUserId);
+        var createResponse = await _client.PostAsJsonAsync($"/api/locations/{_fixture.TestLocationId}/orders", createRequest);
+        var order = await createResponse.Content.ReadFromJsonAsync<OrderDto>();
+
+        _fixture.ClearEventLog();
+
+        var lineRequest = new AddOrderLineRequest(
+            MenuItemId: _fixture.TestMenuItemId,
+            ItemName: "Event Test Burger",
+            Quantity: 2,
+            UnitPrice: 15.00m,
+            TaxRate: 0.20m);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order!.Id}/lines",
+            lineRequest);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var line = await response.Content.ReadFromJsonAsync<OrderLineDto>();
+
+        var events = _fixture.GetEventBus().GetEventLog();
+        var lineAddedEvent = events.OfType<OrderLineAdded>().FirstOrDefault(e => e.LineId == line!.Id);
+
+        lineAddedEvent.Should().NotBeNull();
+        lineAddedEvent!.OrderId.Should().Be(order.Id);
+        lineAddedEvent.MenuItemId.Should().Be(_fixture.TestMenuItemId);
+        lineAddedEvent.ItemName.Should().Be("Event Test Burger");
+        lineAddedEvent.Quantity.Should().Be(2);
+        lineAddedEvent.UnitPrice.Should().Be(15.00m);
+        lineAddedEvent.LineTotal.Should().Be(30.00m);
+    }
+
+    [Fact]
+    public async Task RemoveLine_PublishesOrderLineRemovedEvent()
+    {
+        // Create an order with a line
+        var createRequest = new CreateOrderRequest(UserId: _fixture.TestUserId);
+        var createResponse = await _client.PostAsJsonAsync($"/api/locations/{_fixture.TestLocationId}/orders", createRequest);
+        var order = await createResponse.Content.ReadFromJsonAsync<OrderDto>();
+
+        var lineRequest = new AddOrderLineRequest(
+            MenuItemId: _fixture.TestMenuItemId,
+            ItemName: "To Be Removed",
+            Quantity: 1,
+            UnitPrice: 10.00m,
+            TaxRate: 0.20m);
+        var lineResponse = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order!.Id}/lines",
+            lineRequest);
+        var line = await lineResponse.Content.ReadFromJsonAsync<OrderLineDto>();
+
+        _fixture.ClearEventLog();
+
+        // Remove the line
+        var response = await _client.DeleteAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order.Id}/lines/{line!.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var events = _fixture.GetEventBus().GetEventLog();
+        var lineRemovedEvent = events.OfType<OrderLineRemoved>().FirstOrDefault(e => e.LineId == line.Id);
+
+        lineRemovedEvent.Should().NotBeNull();
+        lineRemovedEvent!.OrderId.Should().Be(order.Id);
+        lineRemovedEvent.LineId.Should().Be(line.Id);
+    }
+
+    [Fact]
+    public async Task Complete_PublishesOrderCompletedEvent()
+    {
+        // Create an order with lines
+        var createRequest = new CreateOrderRequest(UserId: _fixture.TestUserId);
+        var createResponse = await _client.PostAsJsonAsync($"/api/locations/{_fixture.TestLocationId}/orders", createRequest);
+        var order = await createResponse.Content.ReadFromJsonAsync<OrderDto>();
+
+        var lineRequest1 = new AddOrderLineRequest(
+            MenuItemId: _fixture.TestMenuItemId,
+            ItemName: "Item One",
+            Quantity: 2,
+            UnitPrice: 10.00m,
+            TaxRate: 0.20m);
+        await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order!.Id}/lines",
+            lineRequest1);
+
+        var lineRequest2 = new AddOrderLineRequest(
+            MenuItemId: Guid.NewGuid(),
+            ItemName: "Item Two",
+            Quantity: 1,
+            UnitPrice: 5.00m,
+            TaxRate: 0.20m);
+        await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order.Id}/lines",
+            lineRequest2);
+
+        _fixture.ClearEventLog();
+
+        // Complete the order
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order.Id}/complete",
+            new CompleteOrderRequest());
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var events = _fixture.GetEventBus().GetEventLog();
+        var completedEvent = events.OfType<OrderCompleted>().FirstOrDefault(e => e.OrderId == order.Id);
+
+        completedEvent.Should().NotBeNull();
+        completedEvent!.LocationId.Should().Be(_fixture.TestLocationId);
+        completedEvent.OrderNumber.Should().Be(order.OrderNumber);
+        completedEvent.GrandTotal.Should().BeGreaterThan(0);
+        completedEvent.Lines.Should().HaveCount(2);
+        completedEvent.Lines.Should().Contain(l => l.ItemName == "Item One" && l.Quantity == 2);
+        completedEvent.Lines.Should().Contain(l => l.ItemName == "Item Two" && l.Quantity == 1);
+    }
+
+    [Fact]
+    public async Task Void_PublishesOrderVoidedEvent()
+    {
+        // Create an order
+        var createRequest = new CreateOrderRequest(UserId: _fixture.TestUserId);
+        var createResponse = await _client.PostAsJsonAsync($"/api/locations/{_fixture.TestLocationId}/orders", createRequest);
+        var order = await createResponse.Content.ReadFromJsonAsync<OrderDto>();
+
+        _fixture.ClearEventLog();
+
+        // Void the order
+        var voidRequest = new VoidOrderRequest(
+            UserId: _fixture.TestUserId,
+            Reason: "Test void reason");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/locations/{_fixture.TestLocationId}/orders/{order!.Id}/void",
+            voidRequest);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var events = _fixture.GetEventBus().GetEventLog();
+        var voidedEvent = events.OfType<OrderVoided>().FirstOrDefault(e => e.OrderId == order.Id);
+
+        voidedEvent.Should().NotBeNull();
+        voidedEvent!.UserId.Should().Be(_fixture.TestUserId);
+        voidedEvent.Reason.Should().Be("Test void reason");
     }
 }
