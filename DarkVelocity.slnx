@@ -49,6 +49,18 @@
   <Folder Name="/src/Services/PaymentGateway/PaymentGateway.Api/">
     <Project Path="src/Services/PaymentGateway/PaymentGateway.Api/DarkVelocity.PaymentGateway.Api.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Accounting/" />
+  <Folder Name="/src/Services/Accounting/Accounting.Api/">
+    <Project Path="src/Services/Accounting/Accounting.Api/DarkVelocity.Accounting.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Booking/" />
+  <Folder Name="/src/Services/Booking/Booking.Api/">
+    <Project Path="src/Services/Booking/Booking.Api/DarkVelocity.Booking.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Customers/" />
+  <Folder Name="/src/Services/Customers/Customers.Api/">
+    <Project Path="src/Services/Customers/Customers.Api/DarkVelocity.Customers.Api.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Labor/" />
   <Folder Name="/src/Services/Labor/Labor.Api/">
     <Project Path="src/Services/Labor/Labor.Api/DarkVelocity.Labor.Api.csproj" />
@@ -100,5 +112,8 @@
   </Folder>
   <Folder Name="/tests/Tests.Shared/">
     <Project Path="tests/Tests.Shared/DarkVelocity.Tests.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/Accounting.Tests/">
+    <Project Path="tests/Accounting.Tests/DarkVelocity.Accounting.Tests.csproj" />
   </Folder>
 </Solution>
