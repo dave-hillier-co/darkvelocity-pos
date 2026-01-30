@@ -1,0 +1,240 @@
+@baseUrl = http://localhost:5014
+@locationId = 00000000-0000-0000-0000-000000000001
+
+### Health Check
+GET {{baseUrl}}/health
+
+### ===== CHART OF ACCOUNTS =====
+
+### List all accounts
+GET {{baseUrl}}/api/accounts
+
+### Get account by ID
+GET {{baseUrl}}/api/accounts/{{$guid}}
+
+### Get account tree (hierarchical)
+GET {{baseUrl}}/api/accounts/tree
+
+### Create a new account
+POST {{baseUrl}}/api/accounts
+Content-Type: application/json
+
+{
+  "accountCode": "1000",
+  "name": "Cash in Drawer",
+  "accountType": "Asset",
+  "subType": "Cash",
+  "description": "Cash held in POS drawers"
+}
+
+### Create revenue account
+POST {{baseUrl}}/api/accounts
+Content-Type: application/json
+
+{
+  "accountCode": "4100",
+  "name": "Food Sales",
+  "accountType": "Revenue",
+  "subType": "Sales",
+  "taxCode": "A"
+}
+
+### ===== COST CENTERS =====
+
+### List all cost centers
+GET {{baseUrl}}/api/cost-centers
+
+### Create a cost center
+POST {{baseUrl}}/api/cost-centers
+Content-Type: application/json
+
+{
+  "code": "FOH",
+  "name": "Front of House",
+  "description": "Front of house operations"
+}
+
+### ===== JOURNAL ENTRIES =====
+
+### List journal entries for a location
+GET {{baseUrl}}/api/locations/{{locationId}}/journal-entries
+
+### Get journal entry by ID
+GET {{baseUrl}}/api/locations/{{locationId}}/journal-entries/{{$guid}}
+
+### Create a manual journal entry (sales example)
+POST {{baseUrl}}/api/locations/{{locationId}}/journal-entries
+Content-Type: application/json
+
+{
+  "entryDate": "2026-01-30",
+  "description": "Cash sale - Order #20260130-0001",
+  "currency": "EUR",
+  "sourceType": "Order",
+  "lines": [
+    {
+      "accountCode": "1000",
+      "debitAmount": 11.90,
+      "creditAmount": 0,
+      "description": "Cash received"
+    },
+    {
+      "accountCode": "4100",
+      "debitAmount": 0,
+      "creditAmount": 10.00,
+      "taxCode": "A",
+      "taxAmount": 1.90,
+      "description": "Food sales revenue"
+    },
+    {
+      "accountCode": "2100",
+      "debitAmount": 0,
+      "creditAmount": 1.90,
+      "taxCode": "A",
+      "description": "VAT payable 19%"
+    }
+  ]
+}
+
+### Reverse a journal entry
+POST {{baseUrl}}/api/locations/{{locationId}}/journal-entries/{{$guid}}/reverse
+Content-Type: application/json
+
+{
+  "reason": "Customer refund requested"
+}
+
+### ===== ACCOUNTING PERIODS =====
+
+### List accounting periods
+GET {{baseUrl}}/api/locations/{{locationId}}/accounting-periods
+
+### Get current accounting period
+GET {{baseUrl}}/api/locations/{{locationId}}/accounting-periods/current
+
+### Create a monthly accounting period
+POST {{baseUrl}}/api/locations/{{locationId}}/accounting-periods
+Content-Type: application/json
+
+{
+  "periodType": "Monthly",
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31",
+  "notes": "January 2026 accounting period"
+}
+
+### Close an accounting period
+POST {{baseUrl}}/api/locations/{{locationId}}/accounting-periods/{{$guid}}/close
+Content-Type: application/json
+
+{
+  "notes": "Period closed for month-end"
+}
+
+### Lock an accounting period
+POST {{baseUrl}}/api/locations/{{locationId}}/accounting-periods/{{$guid}}/lock
+Content-Type: application/json
+
+{
+  "notes": "Period locked after audit"
+}
+
+### ===== RECONCILIATIONS =====
+
+### List reconciliations
+GET {{baseUrl}}/api/locations/{{locationId}}/reconciliations
+
+### Get pending reconciliations
+GET {{baseUrl}}/api/locations/{{locationId}}/reconciliations/pending
+
+### Create a cash drawer reconciliation
+POST {{baseUrl}}/api/locations/{{locationId}}/reconciliations
+Content-Type: application/json
+
+{
+  "reconciliationType": "CashDrawer",
+  "date": "2026-01-30",
+  "expectedAmount": 500.00,
+  "actualAmount": 498.50,
+  "currency": "EUR"
+}
+
+### Resolve a reconciliation with variance
+POST {{baseUrl}}/api/locations/{{locationId}}/reconciliations/{{$guid}}/resolve
+Content-Type: application/json
+
+{
+  "resolutionNotes": "Variance due to rounding on cash transactions"
+}
+
+### ===== FINANCIAL REPORTS =====
+
+### Trial Balance
+GET {{baseUrl}}/api/reports/trial-balance?asOfDate=2026-01-30&currency=EUR
+
+### Profit & Loss Statement
+GET {{baseUrl}}/api/reports/profit-loss?startDate=2026-01-01&endDate=2026-01-31&currency=EUR
+
+### Balance Sheet
+GET {{baseUrl}}/api/reports/balance-sheet?asOfDate=2026-01-30&currency=EUR
+
+### VAT Summary
+GET {{baseUrl}}/api/reports/vat-summary?startDate=2026-01-01&endDate=2026-01-31&currency=EUR
+
+### Tax Liability
+GET {{baseUrl}}/api/reports/tax-liability?period=2026-Q1&currency=EUR
+
+### Gift Card Liability
+GET {{baseUrl}}/api/reports/gift-card-liability?asOfDate=2026-01-30&currency=EUR
+
+### Daily Summary
+GET {{baseUrl}}/api/reports/daily-summary?locationId={{locationId}}&date=2026-01-30&currency=EUR
+
+### ===== EXPORTS =====
+
+### Export to DATEV format (German)
+POST {{baseUrl}}/api/exports/datev
+Content-Type: application/json
+
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31",
+  "includeHeaders": true
+}
+
+### Export to generic CSV
+POST {{baseUrl}}/api/exports/csv
+Content-Type: application/json
+
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31",
+  "includeHeaders": true
+}
+
+### Export to Sage format
+POST {{baseUrl}}/api/exports/sage
+Content-Type: application/json
+
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31"
+}
+
+### Export to Xero format
+POST {{baseUrl}}/api/exports/xero
+Content-Type: application/json
+
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31"
+}
+
+### Export to QuickBooks format
+POST {{baseUrl}}/api/exports/quickbooks
+Content-Type: application/json
+
+{
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31"
+}
