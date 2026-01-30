@@ -4,7 +4,9 @@ A full-featured Point of Sale system inspired by Lightspeed Restaurant K-Series,
 
 ## Architecture
 
-**Backend**: Service-Oriented Architecture with 10 discrete .NET 10 Web APIs
+**Backend**: Service-Oriented Architecture with 18 discrete .NET 10 Web APIs deployed on Kubernetes (no API gateway).
+
+### Core Services
 
 | Service | Purpose | Database |
 |---------|---------|----------|
@@ -18,6 +20,19 @@ A full-featured Point of Sale system inspired by Lightspeed Restaurant K-Series,
 | Procurement | Suppliers, purchase orders, deliveries | procurement_db |
 | Costing | Recipes, cost calculations, margin analysis | costing_db |
 | Reporting | Sales reports, COGS, margin projections | reporting_db |
+| Booking | Table reservations, availability, deposits | booking_db |
+| PaymentGateway | External payment processor integration | paymentgateway_db |
+
+### Planned Services (See [Additional Features Plan](docs/ADDITIONAL_FEATURES_PLAN.md))
+
+| Service | Purpose | Database |
+|---------|---------|----------|
+| GiftCards | Gift card lifecycle, programs, liability tracking | giftcards_db |
+| Fiscalisation | KassenSichV (TSE), European tax compliance, DSFinV-K | fiscalisation_db |
+| Accounting | Journal entries, P&L, reconciliation, DATEV export | accounting_db |
+| OrdersGateway | Uber Eats, DoorDash, Deliveroo, Just Eat integration | ordersgateway_db |
+| Customers | CRM, loyalty programs, points, rewards, referrals | customers_db |
+| Labor | Scheduling, time tracking, tip distribution, payroll | labor_db |
 
 **Frontend**: React SPAs (planned)
 - POS Application - Offline-first PWA for tablets
@@ -25,12 +40,20 @@ A full-featured Point of Sale system inspired by Lightspeed Restaurant K-Series,
 
 ## Key Features
 
+- **Multi-tenant SaaS** with schema-per-tenant isolation
 - **Multi-location support** with timezone and currency handling
 - **Recipe-based costing** with waste percentage calculations
 - **FIFO inventory tracking** for accurate COGS
 - **Margin analysis** and cost alerts
 - **Full procurement workflow** - suppliers, POs, deliveries
+- **Gift cards** - programs, designs, balance tracking, liability reporting
+- **European fiscalisation** - KassenSichV (Germany), TSE integration, DSFinV-K export
+- **Integrated accounting** - journal entries, P&L, reconciliation, DATEV export
+- **Delivery platform integrations** - Uber Eats, DoorDash, Deliveroo, Just Eat, Wolt, and more
+- **Customer loyalty** - points, tiers, rewards, referrals
+- **Labor management** - scheduling, time tracking, tip pooling, payroll export
 - **HAL+JSON hypermedia** API responses
+- **Kubernetes-native** - Ingress routing, Istio service mesh, no API gateway
 
 ## Project Structure
 
@@ -183,12 +206,15 @@ cd apps/kds && npm run dev
 
 | Service | Port | | Service | Port |
 |---------|------|-|---------|------|
-| Auth | 5000 | | Hardware | 5005 |
-| Location | 5001 | | Inventory | 5006 |
-| Menu | 5002 | | Procurement | 5007 |
-| Orders | 5003 | | Costing | 5008 |
-| Payments | 5004 | | Reporting | 5009 |
-| API Gateway | 8000 | | | |
+| Auth | 5000 | | Inventory | 5006 |
+| Location | 5001 | | Procurement | 5007 |
+| Menu | 5002 | | Costing | 5008 |
+| Orders | 5003 | | Reporting | 5009 |
+| Payments | 5004 | | Booking | 5010 |
+| Hardware | 5005 | | PaymentGateway | 5011 |
+| GiftCards | 5012 | | Fiscalisation | 5013 |
+| Accounting | 5014 | | OrdersGateway | 5015 |
+| Customers | 5016 | | Labor | 5017 |
 
 ### Infrastructure Ports
 
