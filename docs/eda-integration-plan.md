@@ -20,7 +20,7 @@ This plan outlines the staged approach to integrating all DarkVelocity POS servi
 | Fiscalisation | 6 | No | No | Pending |
 | Costing | 0 | No | No | Pending |
 | Menu | 0 | No | No | Pending |
-| Booking | 0 | No | No | Pending |
+| Booking | 7 | Yes | Yes | **Complete** |
 | Reporting | 0 | No | No | Pending |
 
 ---
@@ -444,36 +444,40 @@ public sealed record MenuItemCostUpdated(
 **Priority:** Low
 **Dependencies:** Stage 1 (Orders)
 **Estimated Scope:** Booking service
+**Status:** Complete
 
 ### Objective
 Link reservations to orders when guests are seated.
 
 ### Tasks
 
-- [ ] **10.1** Add event bus registration to Booking Program.cs
+- [x] **10.1** Add event bus registration to Booking Program.cs
 
-- [ ] **10.2** Create `OrderCreatedHandler` in Booking
+- [x] **10.2** Create `OrderCreatedHandler` in Booking
   - If order has table assignment, find matching booking
   - Update Booking.OrderId
 
-- [ ] **10.3** Publish booking lifecycle events
+- [x] **10.3** Publish booking lifecycle events
   - `BookingCreated`, `BookingConfirmed`
   - `BookingCancelled`, `BookingNoShow`
   - `GuestSeated`, `GuestDeparted`
+  - `BookingLinkedToOrder` (bonus event)
 
-### Files to Modify
+### Files Modified
 - `src/Services/Booking/Booking.Api/Program.cs`
-- Create: `src/Services/Booking/Booking.Api/EventHandlers/OrderEventHandlers.cs`
+- Created: `src/Services/Booking/Booking.Api/EventHandlers/OrderEventHandlers.cs`
+- `src/Services/Booking/Booking.Api/Controllers/BookingsController.cs`
+- Created: `src/Shared/Shared.Contracts/Events/BookingEvents.cs`
 
-### New Events to Define
+### Events Defined (in BookingEvents.cs)
 ```csharp
 public sealed record BookingCreated(...) : IntegrationEvent;
-public sealed record GuestSeated(
-    Guid BookingId,
-    Guid LocationId,
-    Guid? OrderId,
-    DateTime SeatedAt
-) : IntegrationEvent;
+public sealed record BookingConfirmed(...) : IntegrationEvent;
+public sealed record BookingCancelled(...) : IntegrationEvent;
+public sealed record BookingNoShow(...) : IntegrationEvent;
+public sealed record GuestSeated(...) : IntegrationEvent;
+public sealed record GuestDeparted(...) : IntegrationEvent;
+public sealed record BookingLinkedToOrder(...) : IntegrationEvent;
 ```
 
 ### Verification
@@ -627,7 +631,7 @@ Stage 12: Kafka (After all stages verified with InMemory)
 | Customer | `CustomerEvents.cs` | 8 events |
 | Fiscalisation | `FiscalisationEvents.cs` | 6 events |
 | Payment | **To Create** | ~4 events |
-| Booking | **To Create** | ~5 events |
+| Booking | `BookingEvents.cs` | 7 events |
 | Costing | **To Create** | ~2 events |
 | Menu | **To Create** | ~2 events |
 

@@ -1,5 +1,6 @@
 using DarkVelocity.Booking.Api.Data;
 using DarkVelocity.Booking.Api.Entities;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -158,5 +159,22 @@ public class BookingApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         Client?.Dispose();
         if (_connection != null)
             await _connection.DisposeAsync();
+    }
+
+    public BookingDbContext GetDbContext()
+    {
+        var scope = Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+    }
+
+    public InMemoryEventBus GetEventBus()
+    {
+        var scope = Services.CreateScope();
+        return (InMemoryEventBus)scope.ServiceProvider.GetRequiredService<IEventBus>();
+    }
+
+    public void ClearEventLog()
+    {
+        GetEventBus().ClearEventLog();
     }
 }
