@@ -53,6 +53,10 @@
   <Folder Name="/src/Services/Labor/Labor.Api/">
     <Project Path="src/Services/Labor/Labor.Api/DarkVelocity.Labor.Api.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Fiscalisation/" />
+  <Folder Name="/src/Services/Fiscalisation/Fiscalisation.Api/">
+    <Project Path="src/Services/Fiscalisation/Fiscalisation.Api/DarkVelocity.Fiscalisation.Api.csproj" />
+  </Folder>
   <Folder Name="/src/Shared/" />
   <Folder Name="/src/Shared/Shared.Contracts/">
     <Project Path="src/Shared/Shared.Contracts/DarkVelocity.Shared.Contracts.csproj" />
