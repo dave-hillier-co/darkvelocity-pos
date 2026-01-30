@@ -1,0 +1,224 @@
+@baseUrl = http://localhost:5012
+@tenantId = 00000000-0000-0000-0000-000000000001
+@locationId = 00000000-0000-0000-0000-000000000001
+
+### Health Check
+GET {{baseUrl}}/health
+
+### ============================================
+### Gift Card Programs
+### ============================================
+
+### List Programs
+GET {{baseUrl}}/api/giftcard-programs?tenantId={{tenantId}}
+
+### Create Program
+POST {{baseUrl}}/api/giftcard-programs?tenantId={{tenantId}}
+Content-Type: application/json
+
+{
+  "name": "Standard Gift Cards",
+  "description": "Standard gift card program for retail customers",
+  "cardNumberPrefix": "GC",
+  "defaultExpiryMonths": 24,
+  "minimumLoadAmount": 10.00,
+  "maximumLoadAmount": 500.00,
+  "maximumBalance": 1000.00,
+  "allowReload": true,
+  "allowPartialRedemption": true,
+  "requirePin": false,
+  "currencyCode": "EUR"
+}
+
+### Get Program by ID
+@programId = <replace-with-program-id>
+GET {{baseUrl}}/api/giftcard-programs/{{programId}}
+
+### Update Program
+PUT {{baseUrl}}/api/giftcard-programs/{{programId}}
+Content-Type: application/json
+
+{
+  "description": "Updated description for standard gift cards",
+  "maximumLoadAmount": 750.00
+}
+
+### Get Cards for Program
+GET {{baseUrl}}/api/giftcard-programs/{{programId}}/cards
+
+### ============================================
+### Gift Card Designs
+### ============================================
+
+### List Designs for Program
+GET {{baseUrl}}/api/giftcard-programs/{{programId}}/designs
+
+### Create Design
+POST {{baseUrl}}/api/giftcard-programs/{{programId}}/designs
+Content-Type: application/json
+
+{
+  "name": "Birthday",
+  "description": "Birthday themed gift card design",
+  "imageUrl": "https://example.com/designs/birthday.png",
+  "thumbnailUrl": "https://example.com/designs/birthday-thumb.png",
+  "isDefault": false,
+  "sortOrder": 1
+}
+
+### Update Design
+@designId = <replace-with-design-id>
+PUT {{baseUrl}}/api/giftcard-programs/{{programId}}/designs/{{designId}}
+Content-Type: application/json
+
+{
+  "isDefault": true
+}
+
+### ============================================
+### Gift Cards
+### ============================================
+
+### List Gift Cards
+GET {{baseUrl}}/api/giftcards?tenantId={{tenantId}}
+
+### List Gift Cards by Status
+GET {{baseUrl}}/api/giftcards?tenantId={{tenantId}}&status=active
+
+### List Expiring Soon
+GET {{baseUrl}}/api/giftcards?tenantId={{tenantId}}&expiringSoon=true
+
+### Create/Issue Gift Card
+POST {{baseUrl}}/api/giftcards?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "programId": "<replace-with-program-id>",
+  "initialBalance": 50.00,
+  "cardType": "physical",
+  "recipientName": "John Smith",
+  "recipientEmail": "john.smith@example.com",
+  "giftMessage": "Happy Birthday!",
+  "purchaserName": "Jane Doe",
+  "purchaserEmail": "jane.doe@example.com"
+}
+
+### Get Gift Card by ID
+@cardId = <replace-with-card-id>
+GET {{baseUrl}}/api/giftcards/{{cardId}}
+
+### Lookup Gift Card by Number
+@cardNumber = <replace-with-card-number>
+GET {{baseUrl}}/api/giftcards/lookup?number={{cardNumber}}
+
+### Get Gift Card Balance
+GET {{baseUrl}}/api/giftcards/{{cardId}}/balance
+
+### Get Gift Card Transactions
+GET {{baseUrl}}/api/giftcards/{{cardId}}/transactions
+
+### Activate Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/activate?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "activatedByUserId": "00000000-0000-0000-0000-000000000002"
+}
+
+### Activate Gift Card with PIN
+POST {{baseUrl}}/api/giftcards/{{cardId}}/activate?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "pin": "1234",
+  "activatedByUserId": "00000000-0000-0000-0000-000000000002"
+}
+
+### Redeem Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/redeem?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "amount": 15.00,
+  "orderId": "00000000-0000-0000-0000-000000000003",
+  "userId": "00000000-0000-0000-0000-000000000002",
+  "notes": "Purchase at register 1"
+}
+
+### Redeem Gift Card (with PIN)
+POST {{baseUrl}}/api/giftcards/{{cardId}}/redeem?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "amount": 15.00,
+  "pin": "1234",
+  "orderId": "00000000-0000-0000-0000-000000000003",
+  "userId": "00000000-0000-0000-0000-000000000002"
+}
+
+### Reload Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/reload?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "amount": 25.00,
+  "userId": "00000000-0000-0000-0000-000000000002",
+  "notes": "Additional value added"
+}
+
+### Refund to Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/refund?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "amount": 10.00,
+  "orderId": "00000000-0000-0000-0000-000000000003",
+  "userId": "00000000-0000-0000-0000-000000000002",
+  "reason": "Item returned"
+}
+
+### Adjust Gift Card Balance
+POST {{baseUrl}}/api/giftcards/{{cardId}}/adjust?locationId={{locationId}}
+Content-Type: application/json
+
+{
+  "amount": 5.00,
+  "reason": "Goodwill adjustment for customer complaint",
+  "userId": "00000000-0000-0000-0000-000000000002"
+}
+
+### Suspend Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/suspend
+Content-Type: application/json
+
+{
+  "reason": "Suspected fraudulent activity",
+  "suspendedByUserId": "00000000-0000-0000-0000-000000000002"
+}
+
+### Resume Gift Card
+POST {{baseUrl}}/api/giftcards/{{cardId}}/resume
+Content-Type: application/json
+
+{
+  "resumedByUserId": "00000000-0000-0000-0000-000000000002"
+}
+
+### ============================================
+### Reports
+### ============================================
+
+### Liability Report
+GET {{baseUrl}}/api/giftcard-reports/liability?tenantId={{tenantId}}
+
+### Liability Report by Location
+GET {{baseUrl}}/api/giftcard-reports/liability?tenantId={{tenantId}}&locationId={{locationId}}
+
+### Activity Report (Last 30 days)
+GET {{baseUrl}}/api/giftcard-reports/activity?tenantId={{tenantId}}
+
+### Activity Report (Custom Date Range)
+GET {{baseUrl}}/api/giftcard-reports/activity?tenantId={{tenantId}}&startDate=2026-01-01&endDate=2026-01-31
+
+### Expiring Cards Report
+GET {{baseUrl}}/api/giftcard-reports/expiring?tenantId={{tenantId}}
