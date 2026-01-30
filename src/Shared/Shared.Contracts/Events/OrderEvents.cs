@@ -5,7 +5,8 @@ public sealed record OrderCreated(
     Guid LocationId,
     Guid UserId,
     string OrderNumber,
-    string OrderType
+    string OrderType,
+    Guid? TableId = null
 ) : IntegrationEvent
 {
     public override string EventType => "orders.order.created";

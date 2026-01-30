@@ -105,7 +105,8 @@ public class OrdersController : ControllerBase
             LocationId: order.LocationId,
             UserId: order.UserId,
             OrderNumber: order.OrderNumber,
-            OrderType: order.OrderType
+            OrderType: order.OrderType,
+            TableId: order.TableId
         ));
 
         var dto = MapToDto(order);

@@ -1,7 +1,9 @@
 using DarkVelocity.Booking.Api.Data;
 using DarkVelocity.Booking.Api.Dtos;
 using DarkVelocity.Booking.Api.Services;
+using DarkVelocity.Shared.Contracts.Events;
 using DarkVelocity.Shared.Contracts.Hal;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,15 +16,18 @@ public class BookingsController : ControllerBase
     private readonly BookingDbContext _context;
     private readonly IBookingReferenceGenerator _referenceGenerator;
     private readonly IAvailabilityService _availabilityService;
+    private readonly IEventBus _eventBus;
 
     public BookingsController(
         BookingDbContext context,
         IBookingReferenceGenerator referenceGenerator,
-        IAvailabilityService availabilityService)
+        IAvailabilityService availabilityService,
+        IEventBus eventBus)
     {
         _context = context;
         _referenceGenerator = referenceGenerator;
         _availabilityService = availabilityService;
+        _eventBus = eventBus;
     }
 
     [HttpGet]
@@ -222,6 +227,34 @@ public class BookingsController : ControllerBase
         _context.Bookings.Add(booking);
         await _context.SaveChangesAsync();
 
+        // Publish BookingCreated event
+        await _eventBus.PublishAsync(new BookingCreated(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            GuestName: booking.GuestName,
+            PartySize: booking.PartySize,
+            BookingDate: booking.BookingDate,
+            StartTime: booking.StartTime,
+            EndTime: booking.EndTime,
+            TableId: booking.TableId,
+            TableCombinationId: booking.TableCombinationId,
+            Source: booking.Source,
+            CreatedByUserId: booking.CreatedByUserId
+        ));
+
+        // Also publish BookingConfirmed if auto-confirmed
+        if (booking.Status == "confirmed")
+        {
+            await _eventBus.PublishAsync(new BookingConfirmed(
+                BookingId: booking.Id,
+                LocationId: booking.LocationId,
+                BookingReference: booking.BookingReference,
+                ConfirmationMethod: booking.ConfirmationMethod ?? "auto",
+                ConfirmedAt: booking.ConfirmedAt ?? DateTime.UtcNow
+            ));
+        }
+
         // Reload with related data
         await _context.Entry(booking).Reference(b => b.Table).LoadAsync();
         await _context.Entry(booking).Reference(b => b.TableCombination).LoadAsync();
@@ -336,6 +369,15 @@ public class BookingsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // Publish BookingConfirmed event
+        await _eventBus.PublishAsync(new BookingConfirmed(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            ConfirmationMethod: booking.ConfirmationMethod ?? "manual",
+            ConfirmedAt: booking.ConfirmedAt ?? DateTime.UtcNow
+        ));
+
         var dto = MapToDto(booking);
         AddLinks(dto, locationId);
         AddActionLinks(dto, locationId, booking);
@@ -424,6 +466,17 @@ public class BookingsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // Publish GuestSeated event
+        await _eventBus.PublishAsync(new GuestSeated(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            TableId: booking.TableId,
+            TableCombinationId: booking.TableCombinationId,
+            PartySize: booking.PartySize,
+            SeatedAt: booking.SeatedAt ?? DateTime.UtcNow
+        ));
+
         // Reload table
         await _context.Entry(booking).Reference(b => b.Table).LoadAsync();
         await _context.Entry(booking).Reference(b => b.TableCombination).LoadAsync();
@@ -453,6 +506,14 @@ public class BookingsController : ControllerBase
         booking.OrderId = request.OrderId;
 
         await _context.SaveChangesAsync();
+
+        // Publish BookingLinkedToOrder event
+        await _eventBus.PublishAsync(new BookingLinkedToOrder(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            OrderId: request.OrderId
+        ));
 
         var dto = MapToDto(booking);
         AddLinks(dto, locationId);
@@ -497,6 +558,15 @@ public class BookingsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // Publish GuestDeparted event
+        await _eventBus.PublishAsync(new GuestDeparted(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            OrderId: booking.OrderId,
+            CompletedAt: booking.CompletedAt ?? DateTime.UtcNow
+        ));
+
         var dto = MapToDto(booking);
         AddLinks(dto, locationId);
 
@@ -537,6 +607,16 @@ public class BookingsController : ControllerBase
         booking.CancellationReason = request.Reason;
 
         await _context.SaveChangesAsync();
+
+        // Publish BookingCancelled event
+        await _eventBus.PublishAsync(new BookingCancelled(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            Reason: booking.CancellationReason,
+            CancelledByUserId: booking.CancelledByUserId,
+            CancelledAt: booking.CancelledAt ?? DateTime.UtcNow
+        ));
 
         var dto = MapToDto(booking);
         AddLinks(dto, locationId);
@@ -580,6 +660,15 @@ public class BookingsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+
+        // Publish BookingNoShow event
+        await _eventBus.PublishAsync(new BookingNoShow(
+            BookingId: booking.Id,
+            LocationId: booking.LocationId,
+            BookingReference: booking.BookingReference,
+            MarkedByUserId: booking.MarkedNoShowByUserId,
+            MarkedAt: booking.MarkedNoShowAt ?? DateTime.UtcNow
+        ));
 
         var dto = MapToDto(booking);
         AddLinks(dto, locationId);
