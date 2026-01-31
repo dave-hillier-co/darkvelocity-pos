@@ -129,6 +129,11 @@ public static class GrainKeys
     public static string DailySales(Guid orgId, Guid siteId, DateOnly date) => $"{orgId}:{siteId}:sales:{date:yyyy-MM-dd}";
 
     /// <summary>
+    /// Creates a key for a customer spend projection grain (loyalty derived from spend).
+    /// </summary>
+    public static string CustomerSpendProjection(Guid orgId, Guid customerId) => OrgEntity(orgId, "customerspend", customerId);
+
+    /// <summary>
     /// Parses an organization-level key.
     /// </summary>
     public static (Guid OrgId, string EntityType, Guid EntityId) ParseOrgEntity(string key)

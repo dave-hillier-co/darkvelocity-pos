@@ -341,3 +341,242 @@ public sealed record AlertTriggeredEvent(
 ) : StreamEvent;
 
 #endregion
+
+#region Booking Deposit Stream Events
+
+/// <summary>
+/// Published when a deposit is required for a booking.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositRequiredEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] DateTime RequiredBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking deposit is paid.
+/// Triggers: Debit Cash, Credit Deposits Payable liability.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositPaidEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] string PaymentMethod,
+    [property: Id(5)] string? PaymentReference
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking deposit is refunded.
+/// Triggers: Debit Deposits Payable, Credit Cash.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositRefundedEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] string? Reason
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking deposit is forfeited (no-show, late cancellation).
+/// Triggers: Debit Deposits Payable, Credit Other Income.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositForfeitedEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] string Reason
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking deposit is applied to the final bill.
+/// Triggers: Debit Deposits Payable, Credit AR/Sales.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositAppliedEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] Guid? CustomerId,
+    [property: Id(4)] decimal Amount
+) : StreamEvent;
+
+#endregion
+
+#region Gift Card Stream Events
+
+/// <summary>
+/// Published when a gift card is activated (sold).
+/// Triggers: Debit Cash, Credit Gift Card Liability.
+/// </summary>
+[GenerateSerializer]
+public sealed record GiftCardActivatedEvent(
+    [property: Id(0)] Guid CardId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string CardNumber,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] Guid? PurchasedByCustomerId,
+    [property: Id(5)] Guid? OrderId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a gift card is reloaded.
+/// Triggers: Debit Cash, Credit Gift Card Liability.
+/// </summary>
+[GenerateSerializer]
+public sealed record GiftCardReloadedEvent(
+    [property: Id(0)] Guid CardId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string CardNumber,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] decimal NewBalance,
+    [property: Id(5)] Guid? OrderId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a gift card is redeemed.
+/// Triggers: Debit Gift Card Liability, Credit Sales Revenue.
+/// </summary>
+[GenerateSerializer]
+public sealed record GiftCardRedeemedEvent(
+    [property: Id(0)] Guid CardId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string CardNumber,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] decimal RemainingBalance,
+    [property: Id(5)] Guid OrderId,
+    [property: Id(6)] Guid? CustomerId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a gift card expires with remaining balance.
+/// Triggers: Debit Gift Card Liability, Credit Breakage Income.
+/// </summary>
+[GenerateSerializer]
+public sealed record GiftCardExpiredEvent(
+    [property: Id(0)] Guid CardId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string CardNumber,
+    [property: Id(3)] decimal ExpiredBalance
+) : StreamEvent;
+
+/// <summary>
+/// Published when a refund is applied to a gift card.
+/// Triggers: Debit Refunds Expense, Credit Gift Card Liability.
+/// </summary>
+[GenerateSerializer]
+public sealed record GiftCardRefundAppliedEvent(
+    [property: Id(0)] Guid CardId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string CardNumber,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] decimal NewBalance,
+    [property: Id(5)] Guid OriginalOrderId,
+    [property: Id(6)] string? Reason
+) : StreamEvent;
+
+#endregion
+
+#region Customer Spend Stream Events
+
+/// <summary>
+/// Published when a customer completes a purchase.
+/// Used for loyalty projection - cumulative spend tracking.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerSpendRecordedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal NetSpend,
+    [property: Id(4)] decimal GrossSpend,
+    [property: Id(5)] decimal DiscountAmount,
+    [property: Id(6)] decimal TaxAmount,
+    [property: Id(7)] int ItemCount,
+    [property: Id(8)] DateOnly TransactionDate
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer's spend is reversed (void/refund).
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerSpendReversedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal ReversedAmount,
+    [property: Id(4)] string Reason
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer's loyalty tier changes based on spend.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerTierChangedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string OldTier,
+    [property: Id(2)] string NewTier,
+    [property: Id(3)] decimal CumulativeSpend,
+    [property: Id(4)] decimal SpendToNextTier
+) : StreamEvent;
+
+/// <summary>
+/// Published when loyalty points are calculated from spend.
+/// Points = NetSpend × PointsPerDollar × TierMultiplier
+/// </summary>
+[GenerateSerializer]
+public sealed record LoyaltyPointsEarnedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid OrderId,
+    [property: Id(2)] decimal SpendAmount,
+    [property: Id(3)] int PointsEarned,
+    [property: Id(4)] int TotalPoints,
+    [property: Id(5)] string CurrentTier,
+    [property: Id(6)] decimal TierMultiplier
+) : StreamEvent;
+
+/// <summary>
+/// Published when loyalty points are redeemed.
+/// Triggers: Debit Loyalty Liability, Credit Discount Applied.
+/// </summary>
+[GenerateSerializer]
+public sealed record LoyaltyPointsRedeemedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid OrderId,
+    [property: Id(2)] int PointsRedeemed,
+    [property: Id(3)] decimal DiscountValue,
+    [property: Id(4)] int RemainingPoints,
+    [property: Id(5)] string RewardType
+) : StreamEvent;
+
+#endregion
+
+#region Accounting Stream Events
+
+/// <summary>
+/// Published when a journal entry is created.
+/// </summary>
+[GenerateSerializer]
+public sealed record JournalEntryCreatedEvent(
+    [property: Id(0)] Guid EntryId,
+    [property: Id(1)] Guid AccountId,
+    [property: Id(2)] string AccountCode,
+    [property: Id(3)] string AccountName,
+    [property: Id(4)] bool IsDebit,
+    [property: Id(5)] decimal Amount,
+    [property: Id(6)] decimal BalanceAfter,
+    [property: Id(7)] string Description,
+    [property: Id(8)] string? ReferenceType,
+    [property: Id(9)] Guid? ReferenceId,
+    [property: Id(10)] Guid PerformedBy
+) : StreamEvent;
+
+#endregion

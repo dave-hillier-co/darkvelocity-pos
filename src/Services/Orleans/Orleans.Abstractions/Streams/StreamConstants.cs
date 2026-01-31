@@ -39,4 +39,24 @@ public static class StreamConstants
     /// Stream namespace for alert triggers.
     /// </summary>
     public const string AlertStreamNamespace = "alert-events";
+
+    /// <summary>
+    /// Stream namespace for booking deposit events.
+    /// </summary>
+    public const string BookingStreamNamespace = "booking-events";
+
+    /// <summary>
+    /// Stream namespace for gift card events.
+    /// </summary>
+    public const string GiftCardStreamNamespace = "giftcard-events";
+
+    /// <summary>
+    /// Stream namespace for customer spend events (for loyalty projection).
+    /// </summary>
+    public const string CustomerSpendStreamNamespace = "customer-spend-events";
+
+    /// <summary>
+    /// Stream namespace for accounting/journal entry events.
+    /// </summary>
+    public const string AccountingStreamNamespace = "accounting-events";
 }

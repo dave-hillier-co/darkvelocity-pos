@@ -1,19 +1,31 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
 public class BookingGrain : Grain, IBookingGrain
 {
     private readonly IPersistentState<BookingState> _state;
+    private IAsyncStream<IStreamEvent>? _bookingStream;
 
     public BookingGrain(
         [PersistentState("booking", "OrleansStorage")]
         IPersistentState<BookingState> state)
     {
         _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+        var streamId = StreamId.Create(StreamConstants.BookingStreamNamespace, _state.State.OrganizationId.ToString());
+        _bookingStream = streamProvider.GetStream<IStreamEvent>(streamId);
+
+        return base.OnActivateAsync(cancellationToken);
     }
 
     public async Task<BookingRequestedResult> RequestAsync(RequestBookingCommand command)
@@ -259,6 +271,20 @@ public class BookingGrain : Grain, IBookingGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish deposit required event
+        if (_bookingStream != null)
+        {
+            await _bookingStream.OnNextAsync(new BookingDepositRequiredEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.CustomerId,
+                command.Amount,
+                command.RequiredBy)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task RecordDepositPaymentAsync(RecordDepositPaymentCommand command)
@@ -271,6 +297,8 @@ public class BookingGrain : Grain, IBookingGrain
         if (_state.State.Deposit.Status != DepositStatus.Required)
             throw new InvalidOperationException($"Deposit is not required: {_state.State.Deposit.Status}");
 
+        var depositAmount = _state.State.Deposit.Amount;
+
         _state.State.Deposit = _state.State.Deposit with
         {
             Status = DepositStatus.Paid,
@@ -281,6 +309,21 @@ public class BookingGrain : Grain, IBookingGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish deposit paid event - triggers accounting journal entry
+        if (_bookingStream != null)
+        {
+            await _bookingStream.OnNextAsync(new BookingDepositPaidEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.CustomerId,
+                depositAmount,
+                command.Method.ToString(),
+                command.PaymentReference)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task WaiveDepositAsync(Guid waivedBy)
@@ -303,6 +346,8 @@ public class BookingGrain : Grain, IBookingGrain
         if (_state.State.Deposit == null || _state.State.Deposit.Status != DepositStatus.Paid)
             throw new InvalidOperationException("No paid deposit to forfeit");
 
+        var depositAmount = _state.State.Deposit.Amount;
+
         _state.State.Deposit = _state.State.Deposit with
         {
             Status = DepositStatus.Forfeited,
@@ -311,6 +356,20 @@ public class BookingGrain : Grain, IBookingGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish deposit forfeited event - converts liability to income
+        if (_bookingStream != null)
+        {
+            await _bookingStream.OnNextAsync(new BookingDepositForfeitedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.CustomerId,
+                depositAmount,
+                "No-show or late cancellation")
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task RefundDepositAsync(string reason, Guid refundedBy)
@@ -319,6 +378,8 @@ public class BookingGrain : Grain, IBookingGrain
 
         if (_state.State.Deposit == null || _state.State.Deposit.Status != DepositStatus.Paid)
             throw new InvalidOperationException("No paid deposit to refund");
+
+        var depositAmount = _state.State.Deposit.Amount;
 
         _state.State.Deposit = _state.State.Deposit with
         {
@@ -329,6 +390,20 @@ public class BookingGrain : Grain, IBookingGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish deposit refunded event - reverses the liability
+        if (_bookingStream != null)
+        {
+            await _bookingStream.OnNextAsync(new BookingDepositRefundedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.CustomerId,
+                depositAmount,
+                reason)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task LinkToOrderAsync(Guid orderId)
