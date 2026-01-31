@@ -1,19 +1,33 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
 public class CustomerGrain : Grain, ICustomerGrain
 {
     private readonly IPersistentState<CustomerState> _state;
+    private IAsyncStream<IStreamEvent>? _customerStream;
 
     public CustomerGrain(
         [PersistentState("customer", "OrleansStorage")]
         IPersistentState<CustomerState> state)
     {
         _state = state;
+    }
+
+    private IAsyncStream<IStreamEvent> GetCustomerStream()
+    {
+        if (_customerStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.CustomerStreamNamespace, _state.State.OrganizationId.ToString());
+            _customerStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _customerStream!;
     }
 
     public async Task<CustomerCreatedResult> CreateAsync(CreateCustomerCommand command)
@@ -40,6 +54,18 @@ public class CustomerGrain : Grain, ICustomerGrain
         };
 
         await _state.WriteStateAsync();
+
+        // Publish customer created event
+        await GetCustomerStream().OnNextAsync(new CustomerCreatedEvent(
+            customerId,
+            _state.State.DisplayName,
+            command.Email,
+            command.Phone,
+            command.Source)
+        {
+            OrganizationId = command.OrganizationId
+        });
+
         return new CustomerCreatedResult(customerId, _state.State.DisplayName, _state.State.CreatedAt);
     }
 
@@ -49,24 +75,58 @@ public class CustomerGrain : Grain, ICustomerGrain
     {
         EnsureExists();
 
-        if (command.FirstName != null) _state.State.FirstName = command.FirstName;
-        if (command.LastName != null) _state.State.LastName = command.LastName;
+        var changedFields = new List<string>();
+
+        if (command.FirstName != null)
+        {
+            _state.State.FirstName = command.FirstName;
+            changedFields.Add("FirstName");
+        }
+        if (command.LastName != null)
+        {
+            _state.State.LastName = command.LastName;
+            changedFields.Add("LastName");
+        }
         if (command.FirstName != null || command.LastName != null)
             _state.State.DisplayName = $"{_state.State.FirstName} {_state.State.LastName}".Trim();
 
         if (command.Email != null || command.Phone != null)
+        {
             _state.State.Contact = _state.State.Contact with
             {
                 Email = command.Email ?? _state.State.Contact.Email,
                 Phone = command.Phone ?? _state.State.Contact.Phone
             };
+            if (command.Email != null) changedFields.Add("Email");
+            if (command.Phone != null) changedFields.Add("Phone");
+        }
 
-        if (command.DateOfBirth != null) _state.State.DateOfBirth = command.DateOfBirth;
-        if (command.Preferences != null) _state.State.Preferences = command.Preferences;
+        if (command.DateOfBirth != null)
+        {
+            _state.State.DateOfBirth = command.DateOfBirth;
+            changedFields.Add("DateOfBirth");
+        }
+        if (command.Preferences != null)
+        {
+            _state.State.Preferences = command.Preferences;
+            changedFields.Add("Preferences");
+        }
 
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
         await _state.WriteStateAsync();
+
+        // Publish customer updated event
+        if (changedFields.Count > 0)
+        {
+            await GetCustomerStream().OnNextAsync(new CustomerUpdatedEvent(
+                _state.State.Id,
+                _state.State.DisplayName,
+                changedFields)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task AddTagAsync(string tag)
@@ -77,6 +137,15 @@ public class CustomerGrain : Grain, ICustomerGrain
             _state.State.Tags.Add(tag);
             _state.State.Version++;
             await _state.WriteStateAsync();
+
+            // Publish customer tagged event
+            await GetCustomerStream().OnNextAsync(new CustomerTaggedEvent(
+                _state.State.Id,
+                tag,
+                IsAdded: true)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
         }
     }
 
@@ -87,6 +156,15 @@ public class CustomerGrain : Grain, ICustomerGrain
         {
             _state.State.Version++;
             await _state.WriteStateAsync();
+
+            // Publish customer tagged event
+            await GetCustomerStream().OnNextAsync(new CustomerTaggedEvent(
+                _state.State.Id,
+                tag,
+                IsAdded: false)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
         }
     }
 
@@ -124,6 +202,17 @@ public class CustomerGrain : Grain, ICustomerGrain
         };
         _state.State.Version++;
         await _state.WriteStateAsync();
+
+        // Publish customer loyalty enrolled event
+        await GetCustomerStream().OnNextAsync(new CustomerLoyaltyEnrolledEvent(
+            _state.State.Id,
+            command.ProgramId,
+            command.MemberNumber,
+            command.InitialTierId,
+            command.TierName)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
     }
 
     public async Task<PointsResult> EarnPointsAsync(EarnPointsCommand command)
@@ -314,6 +403,18 @@ public class CustomerGrain : Grain, ICustomerGrain
         _state.State.LastVisitAt = DateTime.UtcNow;
         _state.State.Version++;
         await _state.WriteStateAsync();
+
+        // Publish customer visit recorded event
+        await GetCustomerStream().OnNextAsync(new CustomerVisitRecordedEvent(
+            _state.State.Id,
+            command.SiteId,
+            command.SpendAmount,
+            _state.State.Stats.TotalVisits,
+            _state.State.Stats.TotalSpend,
+            _state.State.Stats.AverageCheck)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
     }
 
     public async Task SetReferralCodeAsync(string code)

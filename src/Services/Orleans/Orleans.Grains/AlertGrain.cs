@@ -1,6 +1,8 @@
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
@@ -10,12 +12,24 @@ namespace DarkVelocity.Orleans.Grains;
 public class AlertGrain : Grain, IAlertGrain
 {
     private readonly IPersistentState<AlertState> _state;
+    private IAsyncStream<IStreamEvent>? _alertStream;
 
     public AlertGrain(
         [PersistentState("alerts", "OrleansStorage")]
         IPersistentState<AlertState> state)
     {
         _state = state;
+    }
+
+    private IAsyncStream<IStreamEvent> GetAlertStream()
+    {
+        if (_alertStream == null && _state.State.OrgId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, _state.State.OrgId.ToString());
+            _alertStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _alertStream!;
     }
 
     public async Task InitializeAsync(Guid orgId, Guid siteId)
@@ -78,6 +92,19 @@ public class AlertGrain : Grain, IAlertGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish alert triggered event for notifications and integrations
+        await GetAlertStream().OnNextAsync(new AlertTriggeredEvent(
+            alertId,
+            _state.State.SiteId,
+            command.Type.ToString(),
+            command.Severity.ToString(),
+            command.Title,
+            command.Message,
+            alertRecord.Metadata ?? new Dictionary<string, string>())
+        {
+            OrganizationId = _state.State.OrgId
+        });
 
         return ToAlert(alertRecord);
     }

@@ -1,7 +1,9 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
@@ -9,6 +11,7 @@ public class PaymentGrain : Grain, IPaymentGrain
 {
     private readonly IPersistentState<PaymentState> _state;
     private readonly IGrainFactory _grainFactory;
+    private IAsyncStream<IStreamEvent>? _paymentStream;
 
     public PaymentGrain(
         [PersistentState("payment", "OrleansStorage")]
@@ -17,6 +20,24 @@ public class PaymentGrain : Grain, IPaymentGrain
     {
         _state = state;
         _grainFactory = grainFactory;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        // Stream will be lazily initialized when first payment operation occurs
+        // to avoid initializing for non-existent payments
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    private IAsyncStream<IStreamEvent> GetPaymentStream()
+    {
+        if (_paymentStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.PaymentStreamNamespace, _state.State.OrganizationId.ToString());
+            _paymentStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _paymentStream!;
     }
 
     public async Task<PaymentInitiatedResult> InitiateAsync(InitiatePaymentCommand command)
@@ -46,6 +67,19 @@ public class PaymentGrain : Grain, IPaymentGrain
 
         await _state.WriteStateAsync();
 
+        // Publish payment initiated event
+        await GetPaymentStream().OnNextAsync(new PaymentInitiatedEvent(
+            paymentId,
+            _state.State.SiteId,
+            _state.State.OrderId,
+            _state.State.Amount,
+            _state.State.Method.ToString(),
+            _state.State.CustomerId,
+            _state.State.CashierId)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
+
         return new PaymentInitiatedResult(paymentId, _state.State.CreatedAt);
     }
 
@@ -68,7 +102,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
-        await RecordOnOrderAsync();
+        await PublishPaymentCompletedEventAsync();
 
         return new PaymentCompletedResult(_state.State.TotalAmount, _state.State.ChangeGiven);
     }
@@ -92,7 +126,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
-        await RecordOnOrderAsync();
+        await PublishPaymentCompletedEventAsync();
 
         return new PaymentCompletedResult(_state.State.TotalAmount, null);
     }
@@ -110,7 +144,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
-        await RecordOnOrderAsync();
+        await PublishPaymentCompletedEventAsync();
 
         return new PaymentCompletedResult(_state.State.TotalAmount, null);
     }
@@ -196,6 +230,21 @@ public class PaymentGrain : Grain, IPaymentGrain
 
         await _state.WriteStateAsync();
 
+        // Publish payment refunded event
+        await GetPaymentStream().OnNextAsync(new PaymentRefundedEvent(
+            _state.State.Id,
+            _state.State.SiteId,
+            _state.State.OrderId,
+            refundId,
+            command.Amount,
+            _state.State.RefundedAmount,
+            _state.State.Method.ToString(),
+            command.Reason,
+            command.IssuedBy)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
+
         return new RefundResult(refundId, _state.State.RefundedAmount, _state.State.TotalAmount - _state.State.RefundedAmount);
     }
 
@@ -211,6 +260,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         if (_state.State.Status is PaymentStatus.Voided or PaymentStatus.Refunded)
             throw new InvalidOperationException($"Cannot void payment with status: {_state.State.Status}");
 
+        var voidedAmount = _state.State.TotalAmount;
         _state.State.Status = PaymentStatus.Voided;
         _state.State.VoidedBy = command.VoidedBy;
         _state.State.VoidedAt = DateTime.UtcNow;
@@ -218,6 +268,19 @@ public class PaymentGrain : Grain, IPaymentGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish payment voided event
+        await GetPaymentStream().OnNextAsync(new PaymentVoidedEvent(
+            _state.State.Id,
+            _state.State.SiteId,
+            _state.State.OrderId,
+            voidedAmount,
+            _state.State.Method.ToString(),
+            command.Reason,
+            command.VoidedBy)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
     }
 
     public async Task AdjustTipAsync(AdjustTipCommand command)
@@ -260,16 +323,27 @@ public class PaymentGrain : Grain, IPaymentGrain
             throw new InvalidOperationException($"Invalid status. Expected {expected}, got {_state.State.Status}");
     }
 
-    private async Task RecordOnOrderAsync()
+    private async Task PublishPaymentCompletedEventAsync()
     {
-        var orderGrain = _grainFactory.GetGrain<IOrderGrain>(
-            GrainKeys.Order(_state.State.OrganizationId, _state.State.SiteId, _state.State.OrderId));
-
-        await orderGrain.RecordPaymentAsync(
+        // Publish payment completed event via stream
+        // This replaces the direct grain call to OrderGrain.RecordPaymentAsync
+        // allowing multiple subscribers to react to payment completions
+        await GetPaymentStream().OnNextAsync(new PaymentCompletedEvent(
             _state.State.Id,
+            _state.State.SiteId,
+            _state.State.OrderId,
             _state.State.Amount,
             _state.State.TipAmount,
-            _state.State.Method.ToString());
+            _state.State.TotalAmount,
+            _state.State.Method.ToString(),
+            _state.State.CustomerId,
+            _state.State.CashierId,
+            _state.State.DrawerId,
+            _state.State.GatewayReference,
+            _state.State.CardInfo?.LastFour)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
     }
 }
 

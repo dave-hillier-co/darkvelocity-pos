@@ -59,4 +59,14 @@ public static class StreamConstants
     /// Stream namespace for accounting/journal entry events.
     /// </summary>
     public const string AccountingStreamNamespace = "accounting-events";
+
+    /// <summary>
+    /// Stream namespace for payment-related events (completion, refunds, voids).
+    /// </summary>
+    public const string PaymentStreamNamespace = "payment-events";
+
+    /// <summary>
+    /// Stream namespace for customer lifecycle events.
+    /// </summary>
+    public const string CustomerStreamNamespace = "customer-events";
 }

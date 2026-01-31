@@ -1,19 +1,55 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
+using Microsoft.Extensions.Logging;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
 public class InventoryGrain : Grain, IInventoryGrain
 {
     private readonly IPersistentState<InventoryState> _state;
+    private readonly ILogger<InventoryGrain> _logger;
+    private IAsyncStream<IStreamEvent>? _inventoryStream;
+    private IAsyncStream<IStreamEvent>? _alertStream;
 
     public InventoryGrain(
         [PersistentState("inventory", "OrleansStorage")]
-        IPersistentState<InventoryState> state)
+        IPersistentState<InventoryState> state,
+        ILogger<InventoryGrain> logger)
     {
         _state = state;
+        _logger = logger;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        // Streams will be lazily initialized when first operation occurs
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    private IAsyncStream<IStreamEvent> GetInventoryStream()
+    {
+        if (_inventoryStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, _state.State.OrganizationId.ToString());
+            _inventoryStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _inventoryStream!;
+    }
+
+    private IAsyncStream<IStreamEvent> GetAlertStream()
+    {
+        if (_alertStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, _state.State.OrganizationId.ToString());
+            _alertStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _alertStream!;
     }
 
     public async Task InitializeAsync(InitializeInventoryCommand command)
@@ -74,6 +110,27 @@ public class InventoryGrain : Grain, IInventoryGrain
         _state.State.Version++;
         await _state.WriteStateAsync();
 
+        // Publish stock received event
+        await GetInventoryStream().OnNextAsync(new StockReceivedEvent(
+            _state.State.IngredientId,
+            _state.State.SiteId,
+            _state.State.IngredientName,
+            command.Quantity,
+            _state.State.Unit,
+            command.UnitCost,
+            command.BatchNumber,
+            command.ExpiryDate.HasValue ? DateOnly.FromDateTime(command.ExpiryDate.Value) : null)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
+
+        _logger.LogInformation(
+            "Stock received for {IngredientName}: {Quantity} {Unit} at {UnitCost:C}",
+            _state.State.IngredientName,
+            command.Quantity,
+            _state.State.Unit,
+            command.UnitCost);
+
         return new BatchReceivedResult(batchId, _state.State.QuantityOnHand, _state.State.WeightedAverageCost);
     }
 
@@ -113,6 +170,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         if (command.Quantity > _state.State.QuantityAvailable)
             throw new InvalidOperationException("Insufficient stock");
 
+        var previousLevel = _state.State.StockLevel;
         var breakdown = ConsumeFifo(command.Quantity);
 
         _state.State.LastConsumedAt = DateTime.UtcNow;
@@ -122,7 +180,77 @@ public class InventoryGrain : Grain, IInventoryGrain
         await _state.WriteStateAsync();
 
         var totalCost = breakdown.Sum(b => b.TotalCost);
+
+        // Publish stock consumed event
+        await GetInventoryStream().OnNextAsync(new StockConsumedEvent(
+            _state.State.IngredientId,
+            _state.State.SiteId,
+            _state.State.IngredientName,
+            command.Quantity,
+            _state.State.Unit,
+            totalCost,
+            command.OrderId,
+            command.Reason)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
+
+        // Check for low stock alerts
+        await CheckAndPublishStockAlertsAsync(previousLevel);
+
+        _logger.LogInformation(
+            "Stock consumed for {IngredientName}: {Quantity} {Unit}. Remaining: {Remaining}",
+            _state.State.IngredientName,
+            command.Quantity,
+            _state.State.Unit,
+            _state.State.QuantityAvailable);
+
         return new ConsumptionResult(command.Quantity, totalCost, breakdown);
+    }
+
+    private async Task CheckAndPublishStockAlertsAsync(StockLevel previousLevel)
+    {
+        var currentLevel = _state.State.StockLevel;
+
+        // Publish low stock alert when crossing threshold
+        if (currentLevel == StockLevel.Low && previousLevel != StockLevel.Low)
+        {
+            await GetAlertStream().OnNextAsync(new LowStockAlertEvent(
+                _state.State.IngredientId,
+                _state.State.SiteId,
+                _state.State.IngredientName,
+                _state.State.QuantityAvailable,
+                _state.State.ReorderPoint,
+                _state.State.ParLevel)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+
+            _logger.LogWarning(
+                "Low stock alert for {IngredientName}: {Quantity} {Unit} (Reorder point: {ReorderPoint})",
+                _state.State.IngredientName,
+                _state.State.QuantityAvailable,
+                _state.State.Unit,
+                _state.State.ReorderPoint);
+        }
+
+        // Publish out of stock alert
+        if (currentLevel == StockLevel.OutOfStock && previousLevel != StockLevel.OutOfStock)
+        {
+            await GetAlertStream().OnNextAsync(new OutOfStockEvent(
+                _state.State.IngredientId,
+                _state.State.SiteId,
+                _state.State.IngredientName,
+                DateTime.UtcNow)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+
+            _logger.LogError(
+                "OUT OF STOCK: {IngredientName} at site {SiteId}",
+                _state.State.IngredientName,
+                _state.State.SiteId);
+        }
     }
 
     public Task<ConsumptionResult> ConsumeForOrderAsync(Guid orderId, decimal quantity, Guid? performedBy)
