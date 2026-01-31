@@ -47,6 +47,19 @@ public record DailySalesSnapshot(
     IReadOnlyDictionary<string, decimal> SalesByCategory);
 
 /// <summary>
+/// Simplified sale command for stream-based aggregation.
+/// </summary>
+public record RecordSaleFromStreamCommand(
+    Guid OrderId,
+    decimal GrossSales,
+    decimal Discounts,
+    decimal Tax,
+    int GuestCount,
+    int ItemCount,
+    string Channel,
+    decimal TheoreticalCOGS);
+
+/// <summary>
 /// Grain for daily sales aggregation at site level.
 /// Key: "{orgId}:{siteId}:sales:{date:yyyy-MM-dd}"
 /// </summary>
@@ -54,6 +67,8 @@ public interface IDailySalesGrain : IGrainWithStringKey
 {
     Task InitializeAsync(DailySalesAggregationCommand command);
     Task RecordSaleAsync(RecordSaleCommand command);
+    Task RecordSaleAsync(RecordSaleFromStreamCommand command);
+    Task RecordVoidAsync(Guid orderId, decimal voidAmount, string reason);
     Task<DailySalesSnapshot> GetSnapshotAsync();
     Task<SalesMetrics> GetMetricsAsync();
     Task<GrossProfitMetrics> GetGrossProfitMetricsAsync(CostingMethod method);

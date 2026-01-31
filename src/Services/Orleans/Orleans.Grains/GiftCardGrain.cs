@@ -3,19 +3,31 @@ using System.Text;
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
 public class GiftCardGrain : Grain, IGiftCardGrain
 {
     private readonly IPersistentState<GiftCardState> _state;
+    private IAsyncStream<IStreamEvent>? _giftCardStream;
 
     public GiftCardGrain(
         [PersistentState("giftcard", "OrleansStorage")]
         IPersistentState<GiftCardState> state)
     {
         _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+        var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, _state.State.OrganizationId.ToString());
+        _giftCardStream = streamProvider.GetStream<IStreamEvent>(streamId);
+
+        return base.OnActivateAsync(cancellationToken);
     }
 
     public async Task<GiftCardCreatedResult> CreateAsync(CreateGiftCardCommand command)
@@ -81,6 +93,21 @@ public class GiftCardGrain : Grain, IGiftCardGrain
 
         await _state.WriteStateAsync();
 
+        // Publish gift card activated event - triggers accounting: Debit Cash, Credit GC Liability
+        if (_giftCardStream != null)
+        {
+            await _giftCardStream.OnNextAsync(new GiftCardActivatedEvent(
+                _state.State.Id,
+                command.SiteId,
+                _state.State.CardNumber,
+                _state.State.InitialValue,
+                command.PurchaserCustomerId,
+                command.OrderId)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
+
         return new GiftCardActivatedResult(_state.State.CurrentBalance, _state.State.ActivatedAt.Value);
     }
 
@@ -135,6 +162,22 @@ public class GiftCardGrain : Grain, IGiftCardGrain
 
         await _state.WriteStateAsync();
 
+        // Publish gift card redeemed event - triggers accounting: Debit GC Liability, Credit Sales Revenue
+        if (_giftCardStream != null)
+        {
+            await _giftCardStream.OnNextAsync(new GiftCardRedeemedEvent(
+                _state.State.Id,
+                command.SiteId,
+                _state.State.CardNumber,
+                command.Amount,
+                _state.State.CurrentBalance,
+                command.OrderId,
+                _state.State.RecipientCustomerId)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
+
         return new RedemptionResult(command.Amount, _state.State.CurrentBalance);
     }
 
@@ -171,6 +214,21 @@ public class GiftCardGrain : Grain, IGiftCardGrain
 
         await _state.WriteStateAsync();
 
+        // Publish gift card reloaded event - triggers accounting: Debit Cash, Credit GC Liability
+        if (_giftCardStream != null)
+        {
+            await _giftCardStream.OnNextAsync(new GiftCardReloadedEvent(
+                _state.State.Id,
+                command.SiteId,
+                _state.State.CardNumber,
+                command.Amount,
+                _state.State.CurrentBalance,
+                command.OrderId)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
+
         return _state.State.CurrentBalance;
     }
 
@@ -205,6 +263,22 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish refund applied event - triggers accounting: Debit Refund Expense, Credit GC Liability
+        if (_giftCardStream != null && command.OriginalOrderId != null)
+        {
+            await _giftCardStream.OnNextAsync(new GiftCardRefundAppliedEvent(
+                _state.State.Id,
+                command.SiteId,
+                _state.State.CardNumber,
+                command.Amount,
+                _state.State.CurrentBalance,
+                command.OriginalOrderId.Value,
+                command.Notes)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
 
         return _state.State.CurrentBalance;
     }
@@ -283,6 +357,19 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish gift card expired event - triggers accounting: Debit GC Liability, Credit Breakage Income
+        if (_giftCardStream != null && previousBalance > 0)
+        {
+            await _giftCardStream.OnNextAsync(new GiftCardExpiredEvent(
+                _state.State.Id,
+                _state.State.ActivationSiteId ?? Guid.Empty,
+                _state.State.CardNumber,
+                previousBalance)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task CancelAsync(string reason, Guid cancelledBy)

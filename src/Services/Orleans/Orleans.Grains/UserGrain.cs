@@ -1,7 +1,9 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,12 +12,23 @@ namespace DarkVelocity.Orleans.Grains;
 public class UserGrain : Grain, IUserGrain
 {
     private readonly IPersistentState<UserState> _state;
+    private IAsyncStream<IStreamEvent>? _userStream;
 
     public UserGrain(
         [PersistentState("user", "OrleansStorage")]
         IPersistentState<UserState> state)
     {
         _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        // Get the stream for publishing user events
+        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+        var streamId = StreamId.Create(StreamConstants.UserStreamNamespace, _state.State.OrganizationId.ToString());
+        _userStream = streamProvider.GetStream<IStreamEvent>(streamId);
+
+        return base.OnActivateAsync(cancellationToken);
     }
 
     public async Task<UserCreatedResult> CreateAsync(CreateUserCommand command)
@@ -43,6 +56,21 @@ public class UserGrain : Grain, IUserGrain
 
         await _state.WriteStateAsync();
 
+        // Publish user created event to stream
+        if (_userStream != null)
+        {
+            await _userStream.OnNextAsync(new UserCreatedEvent(
+                userId,
+                command.Email,
+                command.DisplayName,
+                command.FirstName,
+                command.LastName,
+                command.Type)
+            {
+                OrganizationId = command.OrganizationId
+            });
+        }
+
         return new UserCreatedResult(userId, command.Email, _state.State.CreatedAt);
     }
 
@@ -50,22 +78,50 @@ public class UserGrain : Grain, IUserGrain
     {
         EnsureExists();
 
-        if (command.DisplayName != null)
+        var changedFields = new List<string>();
+
+        if (command.DisplayName != null && _state.State.DisplayName != command.DisplayName)
+        {
             _state.State.DisplayName = command.DisplayName;
+            changedFields.Add(nameof(command.DisplayName));
+        }
 
-        if (command.FirstName != null)
+        if (command.FirstName != null && _state.State.FirstName != command.FirstName)
+        {
             _state.State.FirstName = command.FirstName;
+            changedFields.Add(nameof(command.FirstName));
+        }
 
-        if (command.LastName != null)
+        if (command.LastName != null && _state.State.LastName != command.LastName)
+        {
             _state.State.LastName = command.LastName;
+            changedFields.Add(nameof(command.LastName));
+        }
 
         if (command.Preferences != null)
+        {
             _state.State.Preferences = command.Preferences;
+            changedFields.Add(nameof(command.Preferences));
+        }
 
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish user updated event to stream
+        if (_userStream != null && changedFields.Count > 0)
+        {
+            await _userStream.OnNextAsync(new UserUpdatedEvent(
+                _state.State.Id,
+                command.DisplayName,
+                command.FirstName,
+                command.LastName,
+                changedFields)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
 
         return new UserUpdatedResult(_state.State.Version, _state.State.UpdatedAt.Value);
     }
@@ -117,6 +173,17 @@ public class UserGrain : Grain, IUserGrain
             _state.State.UpdatedAt = DateTime.UtcNow;
             _state.State.Version++;
             await _state.WriteStateAsync();
+
+            // Publish site access granted event
+            if (_userStream != null)
+            {
+                await _userStream.OnNextAsync(new UserSiteAccessGrantedEvent(
+                    _state.State.Id,
+                    siteId)
+                {
+                    OrganizationId = _state.State.OrganizationId
+                });
+            }
         }
     }
 
@@ -129,6 +196,17 @@ public class UserGrain : Grain, IUserGrain
             _state.State.UpdatedAt = DateTime.UtcNow;
             _state.State.Version++;
             await _state.WriteStateAsync();
+
+            // Publish site access revoked event
+            if (_userStream != null)
+            {
+                await _userStream.OnNextAsync(new UserSiteAccessRevokedEvent(
+                    _state.State.Id,
+                    siteId)
+                {
+                    OrganizationId = _state.State.OrganizationId
+                });
+            }
         }
     }
 
@@ -166,45 +244,101 @@ public class UserGrain : Grain, IUserGrain
     {
         EnsureExists();
 
+        var oldStatus = _state.State.Status;
         _state.State.Status = UserStatus.Active;
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish status changed event
+        if (_userStream != null && oldStatus != UserStatus.Active)
+        {
+            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+                _state.State.Id,
+                oldStatus,
+                UserStatus.Active,
+                null)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task DeactivateAsync()
     {
         EnsureExists();
 
+        var oldStatus = _state.State.Status;
         _state.State.Status = UserStatus.Inactive;
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish status changed event
+        if (_userStream != null && oldStatus != UserStatus.Inactive)
+        {
+            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+                _state.State.Id,
+                oldStatus,
+                UserStatus.Inactive,
+                null)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task LockAsync(string reason)
     {
         EnsureExists();
 
+        var oldStatus = _state.State.Status;
         _state.State.Status = UserStatus.Locked;
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish status changed event
+        if (_userStream != null && oldStatus != UserStatus.Locked)
+        {
+            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+                _state.State.Id,
+                oldStatus,
+                UserStatus.Locked,
+                reason)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task UnlockAsync()
     {
         EnsureExists();
 
+        var oldStatus = _state.State.Status;
         _state.State.Status = UserStatus.Active;
         _state.State.FailedLoginAttempts = 0;
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish status changed event
+        if (_userStream != null && oldStatus != UserStatus.Active)
+        {
+            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+                _state.State.Id,
+                oldStatus,
+                UserStatus.Active,
+                "Account unlocked")
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task RecordLoginAsync()

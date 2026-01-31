@@ -1,13 +1,17 @@
 using DarkVelocity.Orleans.Abstractions;
 using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Abstractions.Streams;
 using Orleans.Runtime;
+using Orleans.Streams;
 
 namespace DarkVelocity.Orleans.Grains;
 
 public class OrderGrain : Grain, IOrderGrain
 {
     private readonly IPersistentState<OrderState> _state;
+    private IAsyncStream<IStreamEvent>? _orderStream;
+    private IAsyncStream<IStreamEvent>? _salesStream;
     private static int _orderCounter = 1000;
 
     public OrderGrain(
@@ -15,6 +19,21 @@ public class OrderGrain : Grain, IOrderGrain
         IPersistentState<OrderState> state)
     {
         _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+
+        // Order events stream (for inventory consumption, kitchen updates, etc.)
+        var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, _state.State.OrganizationId.ToString());
+        _orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+
+        // Sales events stream (for daily aggregations)
+        var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, _state.State.OrganizationId.ToString());
+        _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
+
+        return base.OnActivateAsync(cancellationToken);
     }
 
     public async Task<OrderCreatedResult> CreateAsync(CreateOrderCommand command)
@@ -45,6 +64,19 @@ public class OrderGrain : Grain, IOrderGrain
         };
 
         await _state.WriteStateAsync();
+
+        // Publish order created event
+        if (_orderStream != null)
+        {
+            await _orderStream.OnNextAsync(new OrderCreatedEvent(
+                orderId,
+                siteId,
+                orderNumber,
+                command.CreatedBy)
+            {
+                OrganizationId = orgId
+            });
+        }
 
         return new OrderCreatedResult(orderId, orderNumber, _state.State.CreatedAt);
     }
@@ -87,6 +119,23 @@ public class OrderGrain : Grain, IOrderGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish line added event
+        if (_orderStream != null)
+        {
+            await _orderStream.OnNextAsync(new OrderLineAddedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                lineId,
+                command.MenuItemId,
+                command.Name,
+                command.Quantity,
+                command.UnitPrice,
+                lineTotal)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
 
         return new AddLineResult(lineId, lineTotal, _state.State.GrandTotal);
     }
@@ -370,12 +419,66 @@ public class OrderGrain : Grain, IOrderGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Build order line snapshots
+        var lineSnapshots = _state.State.Lines
+            .Where(l => l.Status != OrderLineStatus.Voided)
+            .Select(l => new OrderLineSnapshot(
+                l.Id,
+                l.MenuItemId,
+                l.Name,
+                l.Quantity,
+                l.UnitPrice,
+                l.LineTotal,
+                null)) // RecipeId would come from menu item lookup
+            .ToList();
+
+        // Publish order completed event (triggers inventory consumption)
+        if (_orderStream != null)
+        {
+            await _orderStream.OnNextAsync(new OrderCompletedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.OrderNumber,
+                _state.State.Subtotal,
+                _state.State.TaxTotal,
+                _state.State.GrandTotal,
+                _state.State.DiscountTotal,
+                lineSnapshots,
+                _state.State.ServerId,
+                _state.State.ServerName)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
+
+        // Publish sale recorded event (triggers sales aggregation)
+        if (_salesStream != null)
+        {
+            await _salesStream.OnNextAsync(new SaleRecordedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                DateOnly.FromDateTime(_state.State.ClosedAt.Value),
+                _state.State.Subtotal,
+                _state.State.DiscountTotal,
+                _state.State.Subtotal - _state.State.DiscountTotal,
+                _state.State.TaxTotal,
+                0m, // TheoreticalCOGS - would be calculated from recipes
+                lineSnapshots.Sum(l => l.Quantity),
+                _state.State.GuestCount,
+                _state.State.Type.ToString())
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task VoidAsync(VoidOrderCommand command)
     {
         EnsureExists();
         EnsureNotClosed();
+
+        var voidedAmount = _state.State.GrandTotal;
 
         _state.State.Status = OrderStatus.Voided;
         _state.State.VoidedBy = command.VoidedBy;
@@ -385,6 +488,35 @@ public class OrderGrain : Grain, IOrderGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish order voided event
+        if (_orderStream != null)
+        {
+            await _orderStream.OnNextAsync(new OrderVoidedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                _state.State.OrderNumber,
+                voidedAmount,
+                command.Reason,
+                command.VoidedBy)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
+
+        // Publish void recorded event for sales aggregation
+        if (_salesStream != null)
+        {
+            await _salesStream.OnNextAsync(new VoidRecordedEvent(
+                _state.State.Id,
+                _state.State.SiteId,
+                DateOnly.FromDateTime(DateTime.UtcNow),
+                voidedAmount,
+                command.Reason)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public async Task ReopenAsync(Guid reopenedBy, string reason)

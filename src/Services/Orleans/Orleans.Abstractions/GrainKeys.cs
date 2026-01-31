@@ -39,6 +39,16 @@ public static class GrainKeys
     public static string UserGroup(Guid orgId, Guid groupId) => OrgEntity(orgId, "usergroup", groupId);
 
     /// <summary>
+    /// Creates a key for an employee grain.
+    /// </summary>
+    public static string Employee(Guid orgId, Guid employeeId) => OrgEntity(orgId, "employee", employeeId);
+
+    /// <summary>
+    /// Creates a key for an employee grain by user ID (for lookup).
+    /// </summary>
+    public static string EmployeeByUser(Guid orgId, Guid userId) => $"{orgId}:employeebyuser:{userId}";
+
+    /// <summary>
     /// Creates a key for an order grain.
     /// </summary>
     public static string Order(Guid orgId, Guid siteId, Guid orderId) => SiteEntity(orgId, siteId, "order", orderId);
@@ -112,6 +122,16 @@ public static class GrainKeys
     /// Creates a key for a booking calendar grain (one per site per day).
     /// </summary>
     public static string BookingCalendar(Guid orgId, Guid siteId, DateOnly date) => $"{orgId}:{siteId}:calendar:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a daily sales grain (one per site per day).
+    /// </summary>
+    public static string DailySales(Guid orgId, Guid siteId, DateOnly date) => $"{orgId}:{siteId}:sales:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a customer spend projection grain (loyalty derived from spend).
+    /// </summary>
+    public static string CustomerSpendProjection(Guid orgId, Guid customerId) => OrgEntity(orgId, "customerspend", customerId);
 
     /// <summary>
     /// Parses an organization-level key.
