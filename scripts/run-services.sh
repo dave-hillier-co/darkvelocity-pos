@@ -2,7 +2,7 @@
 #
 # DarkVelocity POS - Run Backend Services
 #
-# This script starts backend services in the background.
+# This script starts the Orleans Silo and API Gateway.
 #
 
 set -e
@@ -17,21 +17,16 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# All available services
-ALL_SERVICES=("Auth" "Location" "Menu" "Orders" "Payments" "Hardware" "Inventory" "Procurement" "Costing" "Reporting")
+# Services configuration
+declare -A SERVICES
+SERVICES["orleans-silo"]="src/Services/Orleans/Orleans.Silo"
+SERVICES["gateway"]="src/Gateway/ApiGateway"
 
-# Service ports
 declare -A SERVICE_PORTS
-SERVICE_PORTS["Auth"]=5000
-SERVICE_PORTS["Location"]=5001
-SERVICE_PORTS["Menu"]=5002
-SERVICE_PORTS["Orders"]=5003
-SERVICE_PORTS["Payments"]=5004
-SERVICE_PORTS["Hardware"]=5005
-SERVICE_PORTS["Inventory"]=5006
-SERVICE_PORTS["Procurement"]=5007
-SERVICE_PORTS["Costing"]=5008
-SERVICE_PORTS["Reporting"]=5009
+SERVICE_PORTS["orleans-silo"]=5200
+SERVICE_PORTS["gateway"]=5000
+
+ALL_SERVICES=("orleans-silo" "gateway")
 
 # PID file location
 PID_DIR="$PROJECT_ROOT/.run"
@@ -66,14 +61,20 @@ show_usage() {
     echo "  -h, --help           Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 start                    # Start all services"
-    echo "  $0 start Menu Orders        # Start specific services"
-    echo "  $0 stop                     # Stop all services"
-    echo "  $0 status                   # Show status"
-    echo "  $0 logs Menu                # View Menu service logs"
+    echo "  $0 start                        # Start all services"
+    echo "  $0 start orleans-silo           # Start Orleans Silo only"
+    echo "  $0 start gateway                # Start API Gateway only"
+    echo "  $0 stop                         # Stop all services"
+    echo "  $0 status                       # Show status"
+    echo "  $0 logs orleans-silo            # View Orleans Silo logs"
     echo ""
     echo "Available services:"
-    echo "  ${ALL_SERVICES[*]}"
+    echo "  orleans-silo  - Orleans Silo (all backend APIs, port 5200)"
+    echo "  gateway       - API Gateway (port 5000)"
+    echo ""
+    echo "Additional endpoints:"
+    echo "  Orleans Dashboard: http://localhost:8888"
+    echo "  Swagger UI:        http://localhost:5200/swagger"
     echo ""
 }
 
@@ -105,13 +106,19 @@ is_service_running() {
 
 start_service() {
     local service=$1
+    local service_dir="${SERVICES[$service]}"
     local port=${SERVICE_PORTS[$service]}
-    local service_dir="$PROJECT_ROOT/src/Services/$service/$service.Api"
     local pid_file=$(get_pid_file "$service")
     local log_file=$(get_log_file "$service")
 
-    if [[ ! -d "$service_dir" ]]; then
-        print_error "Service directory not found: $service_dir"
+    if [[ -z "$service_dir" ]]; then
+        print_error "Unknown service: $service"
+        return 1
+    fi
+
+    local full_path="$PROJECT_ROOT/$service_dir"
+    if [[ ! -d "$full_path" ]]; then
+        print_error "Service directory not found: $full_path"
         return 1
     fi
 
@@ -122,7 +129,7 @@ start_service() {
 
     print_info "Starting $service on port $port..."
 
-    cd "$service_dir"
+    cd "$full_path"
     ASPNETCORE_URLS="http://localhost:$port" \
         nohup dotnet run --no-build > "$log_file" 2>&1 &
     local pid=$!
@@ -219,8 +226,21 @@ start_services() {
     dotnet build --verbosity quiet
 
     echo ""
+    # Start orleans-silo first if in the list
     for service in "${services[@]}"; do
-        start_service "$service"
+        if [[ "$service" == "orleans-silo" ]]; then
+            start_service "orleans-silo"
+            # Give Orleans time to fully start before starting gateway
+            sleep 3
+            break
+        fi
+    done
+
+    # Start remaining services
+    for service in "${services[@]}"; do
+        if [[ "$service" != "orleans-silo" ]]; then
+            start_service "$service"
+        fi
     done
 
     echo ""
@@ -230,7 +250,7 @@ start_services() {
 stop_services() {
     local services=("$@")
     if [[ ${#services[@]} -eq 0 ]]; then
-        services=("${ALL_SERVICES[@]}")
+        services=("gateway" "orleans-silo")
     fi
 
     for service in "${services[@]}"; do

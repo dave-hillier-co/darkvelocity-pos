@@ -229,3 +229,80 @@ public sealed class PayrollEntryState
     [Id(8)] public decimal Deductions { get; set; }
     [Id(9)] public decimal NetPay { get; set; }
 }
+
+// ============================================================================
+// Employee Availability State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class EmployeeAvailabilityState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid EmployeeId { get; set; }
+    [Id(2)] public List<AvailabilityEntryState> Availabilities { get; set; } = [];
+    [Id(3)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class AvailabilityEntryState
+{
+    [Id(0)] public Guid Id { get; set; }
+    [Id(1)] public int DayOfWeek { get; set; }
+    [Id(2)] public TimeSpan? StartTime { get; set; }
+    [Id(3)] public TimeSpan? EndTime { get; set; }
+    [Id(4)] public bool IsAvailable { get; set; }
+    [Id(5)] public bool IsPreferred { get; set; }
+    [Id(6)] public DateOnly EffectiveFrom { get; set; }
+    [Id(7)] public DateOnly? EffectiveTo { get; set; }
+    [Id(8)] public string? Notes { get; set; }
+}
+
+// ============================================================================
+// Shift Swap Request State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class ShiftSwapState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SwapRequestId { get; set; }
+    [Id(2)] public Guid RequestingEmployeeId { get; set; }
+    [Id(3)] public string RequestingEmployeeName { get; set; } = string.Empty;
+    [Id(4)] public Guid RequestingShiftId { get; set; }
+    [Id(5)] public Guid? TargetEmployeeId { get; set; }
+    [Id(6)] public string? TargetEmployeeName { get; set; }
+    [Id(7)] public Guid? TargetShiftId { get; set; }
+    [Id(8)] public ShiftSwapType Type { get; set; }
+    [Id(9)] public ShiftSwapStatus Status { get; set; }
+    [Id(10)] public DateTime RequestedAt { get; set; }
+    [Id(11)] public DateTime? RespondedAt { get; set; }
+    [Id(12)] public Guid? ManagerApprovedByUserId { get; set; }
+    [Id(13)] public string? Reason { get; set; }
+    [Id(14)] public string? Notes { get; set; }
+    [Id(15)] public int Version { get; set; }
+}
+
+// ============================================================================
+// Time Off Request State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class TimeOffState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid TimeOffRequestId { get; set; }
+    [Id(2)] public Guid EmployeeId { get; set; }
+    [Id(3)] public string EmployeeName { get; set; } = string.Empty;
+    [Id(4)] public TimeOffType Type { get; set; }
+    [Id(5)] public DateOnly StartDate { get; set; }
+    [Id(6)] public DateOnly EndDate { get; set; }
+    [Id(7)] public int TotalDays { get; set; }
+    [Id(8)] public bool IsPaid { get; set; }
+    [Id(9)] public TimeOffStatus Status { get; set; }
+    [Id(10)] public DateTime RequestedAt { get; set; }
+    [Id(11)] public Guid? ReviewedByUserId { get; set; }
+    [Id(12)] public DateTime? ReviewedAt { get; set; }
+    [Id(13)] public string? Reason { get; set; }
+    [Id(14)] public string? Notes { get; set; }
+    [Id(15)] public int Version { get; set; }
+}

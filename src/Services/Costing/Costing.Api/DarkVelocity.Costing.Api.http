@@ -1,6 +1,0 @@
-@DarkVelocity.Costing.Api_HostAddress = http://localhost:5259
-
-GET {{DarkVelocity.Costing.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

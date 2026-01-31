@@ -450,3 +450,184 @@ public interface IPayrollPeriodGrain : IGrainWithStringKey
     Task<PayrollPeriodSnapshot> GetSnapshotAsync();
     Task<PayrollEntrySnapshot> GetEmployeePayrollAsync(Guid employeeId);
 }
+
+// ============================================================================
+// Employee Availability Grain
+// ============================================================================
+
+public record SetAvailabilityCommand(
+    int DayOfWeek,
+    TimeSpan? StartTime,
+    TimeSpan? EndTime,
+    bool IsAvailable,
+    bool IsPreferred,
+    DateOnly? EffectiveFrom,
+    DateOnly? EffectiveTo,
+    string? Notes);
+
+public record AvailabilityEntrySnapshot(
+    Guid Id,
+    int DayOfWeek,
+    string DayOfWeekName,
+    TimeSpan? StartTime,
+    TimeSpan? EndTime,
+    bool IsAvailable,
+    bool IsPreferred,
+    DateOnly EffectiveFrom,
+    DateOnly? EffectiveTo,
+    string? Notes);
+
+public record EmployeeAvailabilitySnapshot(
+    Guid EmployeeId,
+    IReadOnlyList<AvailabilityEntrySnapshot> Availabilities);
+
+/// <summary>
+/// Grain for employee availability management.
+/// Key: "{orgId}:availability:{employeeId}"
+/// </summary>
+public interface IEmployeeAvailabilityGrain : IGrainWithStringKey
+{
+    Task InitializeAsync(Guid employeeId);
+    Task<EmployeeAvailabilitySnapshot> GetSnapshotAsync();
+    Task<bool> ExistsAsync();
+    Task<AvailabilityEntrySnapshot> SetAvailabilityAsync(SetAvailabilityCommand command);
+    Task UpdateAvailabilityAsync(Guid availabilityId, SetAvailabilityCommand command);
+    Task RemoveAvailabilityAsync(Guid availabilityId);
+    Task SetWeekAvailabilityAsync(IReadOnlyList<SetAvailabilityCommand> availabilities);
+    Task<IReadOnlyList<AvailabilityEntrySnapshot>> GetCurrentAvailabilityAsync();
+    Task<bool> IsAvailableOnAsync(int dayOfWeek, TimeSpan time);
+}
+
+// ============================================================================
+// Shift Swap Request Grain
+// ============================================================================
+
+public enum ShiftSwapType
+{
+    Swap,
+    Drop,
+    Pickup
+}
+
+public enum ShiftSwapStatus
+{
+    Pending,
+    Approved,
+    Rejected,
+    Cancelled
+}
+
+public record CreateShiftSwapCommand(
+    Guid RequestingEmployeeId,
+    Guid RequestingShiftId,
+    Guid? TargetEmployeeId,
+    Guid? TargetShiftId,
+    ShiftSwapType Type,
+    string? Reason);
+
+public record RespondToShiftSwapCommand(
+    Guid RespondingUserId,
+    string? Notes);
+
+public record ShiftSwapSnapshot(
+    Guid SwapRequestId,
+    Guid RequestingEmployeeId,
+    string RequestingEmployeeName,
+    Guid RequestingShiftId,
+    Guid? TargetEmployeeId,
+    string? TargetEmployeeName,
+    Guid? TargetShiftId,
+    ShiftSwapType Type,
+    ShiftSwapStatus Status,
+    DateTime RequestedAt,
+    DateTime? RespondedAt,
+    Guid? ManagerApprovedByUserId,
+    string? Reason,
+    string? Notes);
+
+/// <summary>
+/// Grain for shift swap request management.
+/// Key: "{orgId}:shiftswap:{requestId}"
+/// </summary>
+public interface IShiftSwapGrain : IGrainWithStringKey
+{
+    Task<ShiftSwapSnapshot> CreateAsync(CreateShiftSwapCommand command);
+    Task<ShiftSwapSnapshot> GetSnapshotAsync();
+    Task<bool> ExistsAsync();
+    Task<ShiftSwapSnapshot> ApproveAsync(RespondToShiftSwapCommand command);
+    Task<ShiftSwapSnapshot> RejectAsync(RespondToShiftSwapCommand command);
+    Task<ShiftSwapSnapshot> CancelAsync();
+    Task<ShiftSwapStatus> GetStatusAsync();
+}
+
+// ============================================================================
+// Time Off Request Grain
+// ============================================================================
+
+public enum TimeOffType
+{
+    Vacation,
+    Sick,
+    Personal,
+    Unpaid,
+    Bereavement,
+    JuryDuty,
+    Other
+}
+
+public enum TimeOffStatus
+{
+    Pending,
+    Approved,
+    Rejected,
+    Cancelled
+}
+
+public record CreateTimeOffCommand(
+    Guid EmployeeId,
+    TimeOffType Type,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string? Reason);
+
+public record RespondToTimeOffCommand(
+    Guid ReviewedByUserId,
+    string? Notes);
+
+public record TimeOffBalanceSnapshot(
+    TimeOffType Type,
+    decimal Accrued,
+    decimal Used,
+    decimal Pending,
+    decimal Available);
+
+public record TimeOffSnapshot(
+    Guid TimeOffRequestId,
+    Guid EmployeeId,
+    string EmployeeName,
+    TimeOffType Type,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    int TotalDays,
+    bool IsPaid,
+    TimeOffStatus Status,
+    DateTime RequestedAt,
+    Guid? ReviewedByUserId,
+    DateTime? ReviewedAt,
+    string? Reason,
+    string? Notes);
+
+/// <summary>
+/// Grain for time off request management.
+/// Key: "{orgId}:timeoff:{requestId}"
+/// </summary>
+public interface ITimeOffGrain : IGrainWithStringKey
+{
+    Task<TimeOffSnapshot> CreateAsync(CreateTimeOffCommand command);
+    Task<TimeOffSnapshot> GetSnapshotAsync();
+    Task<bool> ExistsAsync();
+    Task<TimeOffSnapshot> ApproveAsync(RespondToTimeOffCommand command);
+    Task<TimeOffSnapshot> RejectAsync(RespondToTimeOffCommand command);
+    Task<TimeOffSnapshot> CancelAsync();
+    Task<TimeOffStatus> GetStatusAsync();
+}
