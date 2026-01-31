@@ -94,6 +94,11 @@ public static class GrainKeys
     public static string GiftCard(Guid orgId, Guid cardId) => OrgEntity(orgId, "giftcard", cardId);
 
     /// <summary>
+    /// Creates a key for an account grain.
+    /// </summary>
+    public static string Account(Guid orgId, Guid accountId) => OrgEntity(orgId, "account", accountId);
+
+    /// <summary>
     /// Creates a key for a menu grain.
     /// </summary>
     public static string Menu(Guid orgId, Guid menuId) => OrgEntity(orgId, "menu", menuId);
