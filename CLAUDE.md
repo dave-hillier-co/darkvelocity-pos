@@ -28,17 +28,9 @@ DarkVelocity POS is a full-featured Point of Sale system built with .NET 10 and 
 ```
 darkvelocity-pos/
 ├── src/
-│   ├── Gateway/ApiGateway/          # API Gateway service
-│   ├── Services/Orleans/
-│   │   ├── Orleans.Abstractions/    # Grain interfaces
-│   │   ├── Orleans.Grains/          # Grain implementations
-│   │   └── Orleans.Silo/            # Silo host
-│   └── Shared/
-│       ├── Shared.Contracts/        # DTOs, events, HAL helpers
-│       └── Shared.Infrastructure/   # Base entities, common patterns
+│   └── DarkVelocity.Host/           # Orleans silo with grains, state, events, API
 ├── tests/
-│   ├── Orleans.Tests/               # Orleans grain tests
-│   └── Tests.Shared/                # Shared test utilities
+│   └── DarkVelocity.Tests/          # Orleans grain tests
 ├── apps/
 │   ├── pos/                         # React PWA for tablets
 │   └── backoffice/                  # React SPA for management
@@ -61,7 +53,7 @@ dotnet build
 dotnet test
 
 # Run specific test project
-dotnet test tests/Orleans.Tests
+dotnet test tests/DarkVelocity.Tests
 ```
 
 ### Local Development Setup

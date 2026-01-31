@@ -1,32 +1,8 @@
 <Solution>
-  <Folder Name="/src/" />
-  <Folder Name="/src/Gateway/" />
-  <Folder Name="/src/Gateway/ApiGateway/">
-    <Project Path="src/Gateway/ApiGateway/DarkVelocity.Gateway.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/DarkVelocity.Host/DarkVelocity.Host.csproj" />
   </Folder>
-  <Folder Name="/src/Services/" />
-  <Folder Name="/src/Services/Orleans/" />
-  <Folder Name="/src/Services/Orleans/Orleans.Abstractions/">
-    <Project Path="src/Services/Orleans/Orleans.Abstractions/DarkVelocity.Orleans.Abstractions.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Orleans/Orleans.Grains/">
-    <Project Path="src/Services/Orleans/Orleans.Grains/DarkVelocity.Orleans.Grains.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Orleans/Orleans.Silo/">
-    <Project Path="src/Services/Orleans/Orleans.Silo/DarkVelocity.Orleans.Silo.csproj" />
-  </Folder>
-  <Folder Name="/src/Shared/" />
-  <Folder Name="/src/Shared/Shared.Contracts/">
-    <Project Path="src/Shared/Shared.Contracts/DarkVelocity.Shared.Contracts.csproj" />
-  </Folder>
-  <Folder Name="/src/Shared/Shared.Infrastructure/">
-    <Project Path="src/Shared/Shared.Infrastructure/DarkVelocity.Shared.Infrastructure.csproj" />
-  </Folder>
-  <Folder Name="/tests/" />
-  <Folder Name="/tests/Orleans.Tests/">
-    <Project Path="tests/Orleans.Tests/DarkVelocity.Orleans.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Tests.Shared/">
-    <Project Path="tests/Tests.Shared/DarkVelocity.Tests.Shared.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/DarkVelocity.Tests/DarkVelocity.Tests.csproj" />
   </Folder>
 </Solution>

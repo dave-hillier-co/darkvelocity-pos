@@ -1,6 +1,0 @@
-@DarkVelocity.Gateway_HostAddress = http://localhost:5213
-
-GET {{DarkVelocity.Gateway_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
