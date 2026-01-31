@@ -580,3 +580,134 @@ public sealed record JournalEntryCreatedEvent(
 ) : StreamEvent;
 
 #endregion
+
+#region Payment Stream Events
+
+/// <summary>
+/// Published when a payment is initiated.
+/// </summary>
+[GenerateSerializer]
+public sealed record PaymentInitiatedEvent(
+    [property: Id(0)] Guid PaymentId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] string Method,
+    [property: Id(5)] Guid? CustomerId,
+    [property: Id(6)] Guid CashierId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a payment is completed (cash, card, or gift card).
+/// Triggers: Debit Cash/AR, Credit Sales Revenue.
+/// </summary>
+[GenerateSerializer]
+public sealed record PaymentCompletedEvent(
+    [property: Id(0)] Guid PaymentId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] decimal TipAmount,
+    [property: Id(5)] decimal TotalAmount,
+    [property: Id(6)] string Method,
+    [property: Id(7)] Guid? CustomerId,
+    [property: Id(8)] Guid CashierId,
+    [property: Id(9)] Guid? DrawerId,
+    [property: Id(10)] string? GatewayReference,
+    [property: Id(11)] string? CardLastFour
+) : StreamEvent;
+
+/// <summary>
+/// Published when a payment is refunded.
+/// Triggers: Debit Refund Expense, Credit Cash/AR.
+/// </summary>
+[GenerateSerializer]
+public sealed record PaymentRefundedEvent(
+    [property: Id(0)] Guid PaymentId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] Guid RefundId,
+    [property: Id(4)] decimal RefundAmount,
+    [property: Id(5)] decimal TotalRefundedAmount,
+    [property: Id(6)] string Method,
+    [property: Id(7)] string? Reason,
+    [property: Id(8)] Guid IssuedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when a payment is voided.
+/// Reverses the original accounting entries.
+/// </summary>
+[GenerateSerializer]
+public sealed record PaymentVoidedEvent(
+    [property: Id(0)] Guid PaymentId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal VoidedAmount,
+    [property: Id(4)] string Method,
+    [property: Id(5)] string? Reason,
+    [property: Id(6)] Guid VoidedBy
+) : StreamEvent;
+
+#endregion
+
+#region Customer Lifecycle Stream Events
+
+/// <summary>
+/// Published when a customer is created.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerCreatedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string DisplayName,
+    [property: Id(2)] string? Email,
+    [property: Id(3)] string? Phone,
+    [property: Id(4)] string Source
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer's profile is updated.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerUpdatedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string DisplayName,
+    [property: Id(2)] List<string> ChangedFields
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer enrolls in a loyalty program.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerLoyaltyEnrolledEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid ProgramId,
+    [property: Id(2)] string MemberNumber,
+    [property: Id(3)] Guid InitialTierId,
+    [property: Id(4)] string TierName
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer is tagged.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerTaggedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string Tag,
+    [property: Id(2)] bool IsAdded
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer visit is recorded.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerVisitRecordedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] decimal SpendAmount,
+    [property: Id(3)] int TotalVisits,
+    [property: Id(4)] decimal TotalSpend,
+    [property: Id(5)] decimal AverageCheck
+) : StreamEvent;
+
+#endregion
