@@ -134,6 +134,76 @@ public static class GrainKeys
     public static string CustomerSpendProjection(Guid orgId, Guid customerId) => OrgEntity(orgId, "customerspend", customerId);
 
     /// <summary>
+    /// Creates a key for a recipe grain.
+    /// </summary>
+    public static string Recipe(Guid orgId, Guid recipeId) => OrgEntity(orgId, "recipe", recipeId);
+
+    /// <summary>
+    /// Creates a key for an ingredient price grain.
+    /// </summary>
+    public static string IngredientPrice(Guid orgId, Guid ingredientId) => OrgEntity(orgId, "ingredientprice", ingredientId);
+
+    /// <summary>
+    /// Creates a key for a cost alert grain.
+    /// </summary>
+    public static string CostAlert(Guid orgId, Guid alertId) => OrgEntity(orgId, "costalert", alertId);
+
+    /// <summary>
+    /// Creates a key for a costing settings grain (per location).
+    /// </summary>
+    public static string CostingSettings(Guid orgId, Guid locationId) => $"{orgId}:{locationId}:costingsettings";
+
+    /// <summary>
+    /// Creates a key for a table grain.
+    /// </summary>
+    public static string Table(Guid orgId, Guid siteId, Guid tableId) => SiteEntity(orgId, siteId, "table", tableId);
+
+    /// <summary>
+    /// Creates a key for a floor plan grain.
+    /// </summary>
+    public static string FloorPlan(Guid orgId, Guid siteId, Guid floorPlanId) => SiteEntity(orgId, siteId, "floorplan", floorPlanId);
+
+    /// <summary>
+    /// Creates a key for booking settings grain (per site).
+    /// </summary>
+    public static string BookingSettings(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:bookingsettings";
+
+    /// <summary>
+    /// Creates a key for a shift swap request grain.
+    /// </summary>
+    public static string ShiftSwapRequest(Guid orgId, Guid requestId) => OrgEntity(orgId, "shiftswap", requestId);
+
+    /// <summary>
+    /// Creates a key for a time off request grain.
+    /// </summary>
+    public static string TimeOffRequest(Guid orgId, Guid requestId) => OrgEntity(orgId, "timeoff", requestId);
+
+    /// <summary>
+    /// Creates a key for employee availability grain.
+    /// </summary>
+    public static string EmployeeAvailability(Guid orgId, Guid employeeId) => OrgEntity(orgId, "availability", employeeId);
+
+    /// <summary>
+    /// Creates a key for a merchant grain (payment gateway).
+    /// </summary>
+    public static string Merchant(Guid orgId, Guid merchantId) => OrgEntity(orgId, "merchant", merchantId);
+
+    /// <summary>
+    /// Creates a key for a terminal grain (payment gateway).
+    /// </summary>
+    public static string Terminal(Guid orgId, Guid terminalId) => OrgEntity(orgId, "terminal", terminalId);
+
+    /// <summary>
+    /// Creates a key for a refund grain (payment gateway).
+    /// </summary>
+    public static string Refund(Guid orgId, Guid refundId) => OrgEntity(orgId, "refund", refundId);
+
+    /// <summary>
+    /// Creates a key for a webhook grain (payment gateway).
+    /// </summary>
+    public static string Webhook(Guid orgId, Guid webhookId) => OrgEntity(orgId, "webhook", webhookId);
+
+    /// <summary>
     /// Parses an organization-level key.
     /// </summary>
     public static (Guid OrgId, string EntityType, Guid EntityId) ParseOrgEntity(string key)

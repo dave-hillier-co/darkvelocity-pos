@@ -1058,3 +1058,511 @@ public class PayrollPeriodGrain : Grain, IPayrollPeriodGrain
             throw new InvalidOperationException("Payroll period grain not initialized");
     }
 }
+
+// ============================================================================
+// Employee Availability Grain Implementation
+// ============================================================================
+
+/// <summary>
+/// Grain for employee availability management.
+/// </summary>
+public class EmployeeAvailabilityGrain : Grain, IEmployeeAvailabilityGrain
+{
+    private readonly IPersistentState<EmployeeAvailabilityState> _state;
+    private static readonly string[] DayNames = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+    public EmployeeAvailabilityGrain(
+        [PersistentState("employeeAvailability", "OrleansStorage")]
+        IPersistentState<EmployeeAvailabilityState> state)
+    {
+        _state = state;
+    }
+
+    public async Task InitializeAsync(Guid employeeId)
+    {
+        if (_state.State.EmployeeId != Guid.Empty)
+            return; // Already initialized
+
+        var key = this.GetPrimaryKeyString();
+        var parts = key.Split(':');
+        var orgId = Guid.Parse(parts[0]);
+
+        _state.State = new EmployeeAvailabilityState
+        {
+            OrgId = orgId,
+            EmployeeId = employeeId,
+            Version = 1
+        };
+
+        await _state.WriteStateAsync();
+    }
+
+    public Task<EmployeeAvailabilitySnapshot> GetSnapshotAsync()
+    {
+        EnsureInitialized();
+        return Task.FromResult(CreateSnapshot());
+    }
+
+    public Task<bool> ExistsAsync()
+    {
+        return Task.FromResult(_state.State.EmployeeId != Guid.Empty);
+    }
+
+    public async Task<AvailabilityEntrySnapshot> SetAvailabilityAsync(SetAvailabilityCommand command)
+    {
+        EnsureInitialized();
+
+        if (command.DayOfWeek < 0 || command.DayOfWeek > 6)
+            throw new ArgumentException("Day of week must be 0-6");
+
+        var effectiveFrom = command.EffectiveFrom ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // End any existing availability for this day
+        var existing = _state.State.Availabilities.FirstOrDefault(a =>
+            a.DayOfWeek == command.DayOfWeek &&
+            a.EffectiveFrom <= effectiveFrom &&
+            (a.EffectiveTo == null || a.EffectiveTo >= effectiveFrom));
+
+        if (existing != null)
+        {
+            existing.EffectiveTo = effectiveFrom.AddDays(-1);
+        }
+
+        var entry = new AvailabilityEntryState
+        {
+            Id = Guid.NewGuid(),
+            DayOfWeek = command.DayOfWeek,
+            StartTime = command.StartTime,
+            EndTime = command.EndTime,
+            IsAvailable = command.IsAvailable,
+            IsPreferred = command.IsPreferred,
+            EffectiveFrom = effectiveFrom,
+            EffectiveTo = command.EffectiveTo,
+            Notes = command.Notes
+        };
+
+        _state.State.Availabilities.Add(entry);
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateEntrySnapshot(entry);
+    }
+
+    public async Task UpdateAvailabilityAsync(Guid availabilityId, SetAvailabilityCommand command)
+    {
+        EnsureInitialized();
+
+        var entry = _state.State.Availabilities.FirstOrDefault(a => a.Id == availabilityId)
+            ?? throw new InvalidOperationException("Availability entry not found");
+
+        if (command.StartTime.HasValue) entry.StartTime = command.StartTime;
+        if (command.EndTime.HasValue) entry.EndTime = command.EndTime;
+        entry.IsAvailable = command.IsAvailable;
+        entry.IsPreferred = command.IsPreferred;
+        if (command.EffectiveTo.HasValue) entry.EffectiveTo = command.EffectiveTo;
+        if (command.Notes != null) entry.Notes = command.Notes;
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public async Task RemoveAvailabilityAsync(Guid availabilityId)
+    {
+        EnsureInitialized();
+
+        _state.State.Availabilities.RemoveAll(a => a.Id == availabilityId);
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+    }
+
+    public async Task SetWeekAvailabilityAsync(IReadOnlyList<SetAvailabilityCommand> availabilities)
+    {
+        EnsureInitialized();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // End all existing availabilities
+        foreach (var existing in _state.State.Availabilities
+            .Where(a => a.EffectiveTo == null || a.EffectiveTo >= today))
+        {
+            existing.EffectiveTo = today.AddDays(-1);
+        }
+
+        // Add new availabilities
+        foreach (var command in availabilities)
+        {
+            if (command.DayOfWeek < 0 || command.DayOfWeek > 6)
+                continue;
+
+            var entry = new AvailabilityEntryState
+            {
+                Id = Guid.NewGuid(),
+                DayOfWeek = command.DayOfWeek,
+                StartTime = command.StartTime,
+                EndTime = command.EndTime,
+                IsAvailable = command.IsAvailable,
+                IsPreferred = command.IsPreferred,
+                EffectiveFrom = command.EffectiveFrom ?? today,
+                EffectiveTo = command.EffectiveTo,
+                Notes = command.Notes
+            };
+
+            _state.State.Availabilities.Add(entry);
+        }
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public Task<IReadOnlyList<AvailabilityEntrySnapshot>> GetCurrentAvailabilityAsync()
+    {
+        EnsureInitialized();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var current = _state.State.Availabilities
+            .Where(a => a.EffectiveFrom <= today && (a.EffectiveTo == null || a.EffectiveTo >= today))
+            .OrderBy(a => a.DayOfWeek)
+            .Select(CreateEntrySnapshot)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<AvailabilityEntrySnapshot>>(current);
+    }
+
+    public Task<bool> IsAvailableOnAsync(int dayOfWeek, TimeSpan time)
+    {
+        EnsureInitialized();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var availability = _state.State.Availabilities
+            .FirstOrDefault(a =>
+                a.DayOfWeek == dayOfWeek &&
+                a.EffectiveFrom <= today &&
+                (a.EffectiveTo == null || a.EffectiveTo >= today));
+
+        if (availability == null || !availability.IsAvailable)
+            return Task.FromResult(false);
+
+        // Check time window if specified
+        if (availability.StartTime.HasValue && time < availability.StartTime.Value)
+            return Task.FromResult(false);
+
+        if (availability.EndTime.HasValue && time > availability.EndTime.Value)
+            return Task.FromResult(false);
+
+        return Task.FromResult(true);
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_state.State.EmployeeId == Guid.Empty)
+            throw new InvalidOperationException("Employee availability grain not initialized");
+    }
+
+    private EmployeeAvailabilitySnapshot CreateSnapshot()
+    {
+        return new EmployeeAvailabilitySnapshot(
+            _state.State.EmployeeId,
+            _state.State.Availabilities.Select(CreateEntrySnapshot).ToList());
+    }
+
+    private static AvailabilityEntrySnapshot CreateEntrySnapshot(AvailabilityEntryState entry)
+    {
+        return new AvailabilityEntrySnapshot(
+            entry.Id,
+            entry.DayOfWeek,
+            DayNames[entry.DayOfWeek],
+            entry.StartTime,
+            entry.EndTime,
+            entry.IsAvailable,
+            entry.IsPreferred,
+            entry.EffectiveFrom,
+            entry.EffectiveTo,
+            entry.Notes);
+    }
+}
+
+// ============================================================================
+// Shift Swap Grain Implementation
+// ============================================================================
+
+/// <summary>
+/// Grain for shift swap request management.
+/// </summary>
+public class ShiftSwapGrain : Grain, IShiftSwapGrain
+{
+    private readonly IPersistentState<ShiftSwapState> _state;
+
+    public ShiftSwapGrain(
+        [PersistentState("shiftSwap", "OrleansStorage")]
+        IPersistentState<ShiftSwapState> state)
+    {
+        _state = state;
+    }
+
+    public async Task<ShiftSwapSnapshot> CreateAsync(CreateShiftSwapCommand command)
+    {
+        if (_state.State.SwapRequestId != Guid.Empty)
+            throw new InvalidOperationException("Shift swap request already exists");
+
+        var key = this.GetPrimaryKeyString();
+        var parts = key.Split(':');
+        var orgId = Guid.Parse(parts[0]);
+        var requestId = Guid.Parse(parts[2]);
+
+        _state.State = new ShiftSwapState
+        {
+            OrgId = orgId,
+            SwapRequestId = requestId,
+            RequestingEmployeeId = command.RequestingEmployeeId,
+            RequestingEmployeeName = string.Empty, // Would be populated from employee lookup
+            RequestingShiftId = command.RequestingShiftId,
+            TargetEmployeeId = command.TargetEmployeeId,
+            TargetShiftId = command.TargetShiftId,
+            Type = command.Type,
+            Status = ShiftSwapStatus.Pending,
+            RequestedAt = DateTime.UtcNow,
+            Reason = command.Reason,
+            Version = 1
+        };
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public Task<ShiftSwapSnapshot> GetSnapshotAsync()
+    {
+        EnsureInitialized();
+        return Task.FromResult(CreateSnapshot());
+    }
+
+    public Task<bool> ExistsAsync()
+    {
+        return Task.FromResult(_state.State.SwapRequestId != Guid.Empty);
+    }
+
+    public async Task<ShiftSwapSnapshot> ApproveAsync(RespondToShiftSwapCommand command)
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status != ShiftSwapStatus.Pending)
+            throw new InvalidOperationException("Request is not pending");
+
+        _state.State.Status = ShiftSwapStatus.Approved;
+        _state.State.RespondedAt = DateTime.UtcNow;
+        _state.State.ManagerApprovedByUserId = command.RespondingUserId;
+        if (command.Notes != null) _state.State.Notes = command.Notes;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public async Task<ShiftSwapSnapshot> RejectAsync(RespondToShiftSwapCommand command)
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status != ShiftSwapStatus.Pending)
+            throw new InvalidOperationException("Request is not pending");
+
+        _state.State.Status = ShiftSwapStatus.Rejected;
+        _state.State.RespondedAt = DateTime.UtcNow;
+        _state.State.ManagerApprovedByUserId = command.RespondingUserId;
+        if (command.Notes != null) _state.State.Notes = command.Notes;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public async Task<ShiftSwapSnapshot> CancelAsync()
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status == ShiftSwapStatus.Rejected ||
+            _state.State.Status == ShiftSwapStatus.Cancelled)
+            throw new InvalidOperationException("Cannot cancel this request");
+
+        _state.State.Status = ShiftSwapStatus.Cancelled;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public Task<ShiftSwapStatus> GetStatusAsync()
+    {
+        return Task.FromResult(_state.State.Status);
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_state.State.SwapRequestId == Guid.Empty)
+            throw new InvalidOperationException("Shift swap grain not initialized");
+    }
+
+    private ShiftSwapSnapshot CreateSnapshot()
+    {
+        return new ShiftSwapSnapshot(
+            _state.State.SwapRequestId,
+            _state.State.RequestingEmployeeId,
+            _state.State.RequestingEmployeeName,
+            _state.State.RequestingShiftId,
+            _state.State.TargetEmployeeId,
+            _state.State.TargetEmployeeName,
+            _state.State.TargetShiftId,
+            _state.State.Type,
+            _state.State.Status,
+            _state.State.RequestedAt,
+            _state.State.RespondedAt,
+            _state.State.ManagerApprovedByUserId,
+            _state.State.Reason,
+            _state.State.Notes);
+    }
+}
+
+// ============================================================================
+// Time Off Grain Implementation
+// ============================================================================
+
+/// <summary>
+/// Grain for time off request management.
+/// </summary>
+public class TimeOffGrain : Grain, ITimeOffGrain
+{
+    private readonly IPersistentState<TimeOffState> _state;
+
+    public TimeOffGrain(
+        [PersistentState("timeOff", "OrleansStorage")]
+        IPersistentState<TimeOffState> state)
+    {
+        _state = state;
+    }
+
+    public async Task<TimeOffSnapshot> CreateAsync(CreateTimeOffCommand command)
+    {
+        if (_state.State.TimeOffRequestId != Guid.Empty)
+            throw new InvalidOperationException("Time off request already exists");
+
+        if (command.EndDate < command.StartDate)
+            throw new ArgumentException("End date must be after start date");
+
+        var key = this.GetPrimaryKeyString();
+        var parts = key.Split(':');
+        var orgId = Guid.Parse(parts[0]);
+        var requestId = Guid.Parse(parts[2]);
+
+        var totalDays = (command.EndDate.DayNumber - command.StartDate.DayNumber) + 1;
+        var isPaid = command.Type != TimeOffType.Unpaid;
+
+        _state.State = new TimeOffState
+        {
+            OrgId = orgId,
+            TimeOffRequestId = requestId,
+            EmployeeId = command.EmployeeId,
+            EmployeeName = string.Empty, // Would be populated from employee lookup
+            Type = command.Type,
+            StartDate = command.StartDate,
+            EndDate = command.EndDate,
+            TotalDays = totalDays,
+            IsPaid = isPaid,
+            Status = TimeOffStatus.Pending,
+            RequestedAt = DateTime.UtcNow,
+            Reason = command.Reason,
+            Version = 1
+        };
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public Task<TimeOffSnapshot> GetSnapshotAsync()
+    {
+        EnsureInitialized();
+        return Task.FromResult(CreateSnapshot());
+    }
+
+    public Task<bool> ExistsAsync()
+    {
+        return Task.FromResult(_state.State.TimeOffRequestId != Guid.Empty);
+    }
+
+    public async Task<TimeOffSnapshot> ApproveAsync(RespondToTimeOffCommand command)
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status != TimeOffStatus.Pending)
+            throw new InvalidOperationException("Request is not pending");
+
+        _state.State.Status = TimeOffStatus.Approved;
+        _state.State.ReviewedByUserId = command.ReviewedByUserId;
+        _state.State.ReviewedAt = DateTime.UtcNow;
+        if (command.Notes != null) _state.State.Notes = command.Notes;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public async Task<TimeOffSnapshot> RejectAsync(RespondToTimeOffCommand command)
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status != TimeOffStatus.Pending)
+            throw new InvalidOperationException("Request is not pending");
+
+        _state.State.Status = TimeOffStatus.Rejected;
+        _state.State.ReviewedByUserId = command.ReviewedByUserId;
+        _state.State.ReviewedAt = DateTime.UtcNow;
+        if (command.Notes != null) _state.State.Notes = command.Notes;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public async Task<TimeOffSnapshot> CancelAsync()
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status == TimeOffStatus.Rejected ||
+            _state.State.Status == TimeOffStatus.Cancelled)
+            throw new InvalidOperationException("Cannot cancel this request");
+
+        _state.State.Status = TimeOffStatus.Cancelled;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public Task<TimeOffStatus> GetStatusAsync()
+    {
+        return Task.FromResult(_state.State.Status);
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_state.State.TimeOffRequestId == Guid.Empty)
+            throw new InvalidOperationException("Time off grain not initialized");
+    }
+
+    private TimeOffSnapshot CreateSnapshot()
+    {
+        return new TimeOffSnapshot(
+            _state.State.TimeOffRequestId,
+            _state.State.EmployeeId,
+            _state.State.EmployeeName,
+            _state.State.Type,
+            _state.State.StartDate,
+            _state.State.EndDate,
+            _state.State.TotalDays,
+            _state.State.IsPaid,
+            _state.State.Status,
+            _state.State.RequestedAt,
+            _state.State.ReviewedByUserId,
+            _state.State.ReviewedAt,
+            _state.State.Reason,
+            _state.State.Notes);
+    }
+}
