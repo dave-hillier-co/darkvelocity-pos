@@ -122,10 +122,10 @@ public class MenuEngineeringGrainTests
 
         // Assert
         report.TotalMenuItems.Should().Be(4);
-        report.StarCount.Should().BeGreaterOrEqualTo(1);
-        report.PlowhorseCount.Should().BeGreaterOrEqualTo(1);
-        report.PuzzleCount.Should().BeGreaterOrEqualTo(1);
-        report.DogCount.Should().BeGreaterOrEqualTo(1);
+        report.StarCount.Should().BeGreaterThanOrEqualTo(1);
+        report.PlowhorseCount.Should().BeGreaterThanOrEqualTo(1);
+        report.PuzzleCount.Should().BeGreaterThanOrEqualTo(1);
+        report.DogCount.Should().BeGreaterThanOrEqualTo(1);
     }
 
     [Fact]

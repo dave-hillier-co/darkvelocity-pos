@@ -245,11 +245,11 @@ public class GiftCardGrainTests
 
         // Act
         var newBalance = await grain.RefundToCardAsync(new RefundToGiftCardCommand(
-            15m,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Partial refund"));
+            Amount: 15m,
+            OriginalPaymentId: Guid.NewGuid(),
+            SiteId: Guid.NewGuid(),
+            PerformedBy: Guid.NewGuid(),
+            Notes: "Partial refund"));
 
         // Assert
         newBalance.Should().Be(85m); // 100 - 30 + 15

@@ -183,7 +183,7 @@ public class AccountingStreamTests
             var expiredEvent = receivedEvents.OfType<GiftCardExpiredEvent>().FirstOrDefault();
             Assert.NotNull(expiredEvent);
             Assert.Equal(cardId, expiredEvent.CardId);
-            Assert.Equal(75m, expiredEvent.RemainingBalance); // Breakage amount
+            Assert.Equal(75m, expiredEvent.ExpiredBalance); // Breakage amount
             Assert.Equal("GC-EXPIRE", expiredEvent.CardNumber);
         }
         finally
@@ -225,7 +225,7 @@ public class AccountingStreamTests
                 GrossSpend: 162m,
                 DiscountAmount: 10m,
                 ItemCount: 5,
-                TransactionDate: DateTime.UtcNow));
+                TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
             await Task.Delay(500);
 
@@ -281,7 +281,7 @@ public class AccountingStreamTests
                 GrossSpend: 648m,
                 DiscountAmount: 0m,
                 ItemCount: 15,
-                TransactionDate: DateTime.UtcNow));
+                TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
             await Task.Delay(500);
 
@@ -290,7 +290,7 @@ public class AccountingStreamTests
             Assert.Equal(customerId, tierChangedEvent.CustomerId);
             Assert.Equal("Bronze", tierChangedEvent.OldTier);
             Assert.Equal("Silver", tierChangedEvent.NewTier);
-            Assert.Equal(600m, tierChangedEvent.LifetimeSpend);
+            Assert.Equal(600m, tierChangedEvent.CumulativeSpend);
         }
         finally
         {
@@ -332,14 +332,14 @@ public class AccountingStreamTests
                 GrossSpend: 324m,
                 DiscountAmount: 0m,
                 ItemCount: 8,
-                TransactionDate: DateTime.UtcNow));
+                TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
             receivedEvents.Clear();
 
             // Redeem points
-            await grain.RedeemPointsAsync(new RedeemPointsCommand(
-                OrderId: orderId,
+            await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(
                 Points: 100,
+                OrderId: orderId,
                 RewardType: "Discount"));
 
             await Task.Delay(500);
@@ -347,7 +347,7 @@ public class AccountingStreamTests
             var redeemedEvent = receivedEvents.OfType<LoyaltyPointsRedeemedEvent>().FirstOrDefault();
             Assert.NotNull(redeemedEvent);
             Assert.Equal(customerId, redeemedEvent.CustomerId);
-            Assert.Equal(100, redeemedEvent.Points);
+            Assert.Equal(100, redeemedEvent.PointsRedeemed);
             Assert.Equal(1.00m, redeemedEvent.DiscountValue);
             Assert.Equal(200, redeemedEvent.RemainingPoints);
             Assert.Equal(orderId, redeemedEvent.OrderId);
@@ -391,7 +391,7 @@ public class AccountingStreamTests
                 GrossSpend: 216m,
                 DiscountAmount: 0m,
                 ItemCount: 5,
-                TransactionDate: DateTime.UtcNow));
+                TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
             receivedEvents.Clear();
 
@@ -405,7 +405,7 @@ public class AccountingStreamTests
             var reversedEvent = receivedEvents.OfType<CustomerSpendReversedEvent>().FirstOrDefault();
             Assert.NotNull(reversedEvent);
             Assert.Equal(customerId, reversedEvent.CustomerId);
-            Assert.Equal(200m, reversedEvent.Amount);
+            Assert.Equal(200m, reversedEvent.ReversedAmount);
             Assert.Equal("Order refund", reversedEvent.Reason);
             Assert.Equal(orderId, reversedEvent.OrderId);
         }

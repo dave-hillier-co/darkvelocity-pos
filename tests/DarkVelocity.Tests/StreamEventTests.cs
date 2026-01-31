@@ -268,8 +268,10 @@ public class StreamEventTests
                 GrainKeys.Order(orgId, siteId, orderId));
 
             await grain.CreateAsync(new CreateOrderCommand(
-                Type: OrderType.DineIn,
-                CreatedBy: Guid.NewGuid()));
+                OrganizationId: orgId,
+                SiteId: siteId,
+                CreatedBy: Guid.NewGuid(),
+                Type: OrderType.DineIn));
 
             await grain.AddLineAsync(new AddLineCommand(
                 MenuItemId: Guid.NewGuid(),
@@ -335,8 +337,10 @@ public class StreamEventTests
                 GrainKeys.Order(orgId, siteId, orderId));
 
             await grain.CreateAsync(new CreateOrderCommand(
-                Type: OrderType.DineIn,
-                CreatedBy: Guid.NewGuid()));
+                OrganizationId: orgId,
+                SiteId: siteId,
+                CreatedBy: Guid.NewGuid(),
+                Type: OrderType.DineIn));
 
             await grain.AddLineAsync(new AddLineCommand(
                 MenuItemId: Guid.NewGuid(),

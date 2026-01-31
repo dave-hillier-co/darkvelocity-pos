@@ -237,7 +237,7 @@ public class CostingGrainTests
             AffectedRecipeCount: 1));
 
         // Act
-        var ackCommand = new AcknowledgeAlertCommand(
+        var ackCommand = new AcknowledgeCostAlertCommand(
             AcknowledgedByUserId: Guid.NewGuid(),
             Notes: "Menu price will be adjusted",
             ActionTaken: CostAlertAction.MenuUpdated);

@@ -1,5 +1,6 @@
 using DarkVelocity.Host;
 using DarkVelocity.Host.Grains;
+using DarkVelocity.Host.State;
 using Orleans.TestingHost;
 
 namespace DarkVelocity.Tests;
@@ -55,10 +56,10 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 108m,
             DiscountAmount: 0m,
             ItemCount: 3,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         Assert.Equal(100, result.PointsEarned); // 100 * 1.0 * 1.0 = 100
-        Assert.Equal(100, result.NewPointsBalance);
+        Assert.Equal(100, result.TotalPoints);
         Assert.Equal("Bronze", result.NewTier);
         Assert.False(result.TierChanged);
 
@@ -87,7 +88,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 432m,
             DiscountAmount: 0m,
             ItemCount: 10,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var state1 = await grain.GetStateAsync();
         Assert.Equal("Bronze", state1.CurrentTier);
@@ -100,7 +101,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 162m,
             DiscountAmount: 0m,
             ItemCount: 5,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         Assert.True(result.TierChanged);
         Assert.Equal("Silver", result.NewTier);
@@ -131,7 +132,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 648m,
             DiscountAmount: 0m,
             ItemCount: 15,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var state = await grain.GetStateAsync();
         Assert.Equal("Silver", state.CurrentTier);
@@ -144,7 +145,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 108m,
             DiscountAmount: 0m,
             ItemCount: 3,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         // 100 * 1.0 * 1.25 = 125 points
         Assert.Equal(125, result.PointsEarned);
@@ -171,15 +172,15 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 540m,
             DiscountAmount: 0m,
             ItemCount: 10,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var pointsBefore = await grain.GetAvailablePointsAsync();
         Assert.Equal(500, pointsBefore);
 
         // Redeem points
-        var result = await grain.RedeemPointsAsync(new RedeemPointsCommand(
-            OrderId: orderId,
+        var result = await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(
             Points: 100,
+            OrderId: orderId,
             RewardType: "Discount"));
 
         Assert.Equal(1.00m, result.DiscountValue); // 100 points = $1.00
@@ -203,9 +204,9 @@ public class CustomerSpendProjectionGrainTests
 
         // Try to redeem points without having any
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            grain.RedeemPointsAsync(new RedeemPointsCommand(
-                OrderId: orderId,
+            grain.RedeemPointsAsync(new RedeemSpendPointsCommand(
                 Points: 100,
+                OrderId: orderId,
                 RewardType: "Discount")));
     }
 
@@ -230,7 +231,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 216m,
             DiscountAmount: 0m,
             ItemCount: 5,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var stateBefore = await grain.GetStateAsync();
         Assert.Equal(200m, stateBefore.LifetimeSpend);
@@ -268,7 +269,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 648m,
             DiscountAmount: 0m,
             ItemCount: 15,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var state1 = await grain.GetStateAsync();
         Assert.Equal("Silver", state1.CurrentTier);
@@ -303,14 +304,14 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 810m,
             DiscountAmount: 0m,
             ItemCount: 20,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var snapshot = await grain.GetSnapshotAsync();
 
         Assert.Equal(customerId, snapshot.CustomerId);
         Assert.Equal(750m, snapshot.LifetimeSpend);
         Assert.Equal("Silver", snapshot.CurrentTier);
-        Assert.Equal(1.25m, snapshot.CurrentTierMultiplier);
+        Assert.Equal(1.25m, snapshot.TierMultiplier);
         Assert.Equal(750m, snapshot.SpendToNextTier); // 1500 - 750 = 750 to Gold
         Assert.Equal("Gold", snapshot.NextTier);
         Assert.Equal(1, snapshot.LifetimeTransactions);
@@ -340,7 +341,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 216m,
             DiscountAmount: 0m,
             ItemCount: 5,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         Assert.True(await grain.HasSufficientPointsAsync(100));
         Assert.True(await grain.HasSufficientPointsAsync(200));
@@ -367,7 +368,7 @@ public class CustomerSpendProjectionGrainTests
             GrossSpend: 108m,
             DiscountAmount: 0m,
             ItemCount: 3,
-            TransactionDate: DateTime.UtcNow));
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
 
         var state1 = await grain.GetStateAsync();
         Assert.Equal("Bronze", state1.CurrentTier);
@@ -375,8 +376,8 @@ public class CustomerSpendProjectionGrainTests
         // Configure custom tiers with lower thresholds
         await grain.ConfigureTiersAsync(
         [
-            new LoyaltyTier { Name = "Starter", MinSpend = 0, MaxSpend = 50, PointsMultiplier = 1.0m, PointsPerDollar = 1.0m },
-            new LoyaltyTier { Name = "VIP", MinSpend = 50, MaxSpend = decimal.MaxValue, PointsMultiplier = 2.0m, PointsPerDollar = 1.0m }
+            new SpendTier { Name = "Starter", MinSpend = 0, MaxSpend = 50, PointsMultiplier = 1.0m, PointsPerDollar = 1.0m },
+            new SpendTier { Name = "VIP", MinSpend = 50, MaxSpend = decimal.MaxValue, PointsMultiplier = 2.0m, PointsPerDollar = 1.0m }
         ]);
 
         // Should now be VIP tier since spend ($100) > threshold ($50)
