@@ -5,73 +5,15 @@
     <Project Path="src/Gateway/ApiGateway/DarkVelocity.Gateway.csproj" />
   </Folder>
   <Folder Name="/src/Services/" />
-  <Folder Name="/src/Services/Auth/" />
-  <Folder Name="/src/Services/Auth/Auth.Api/">
-    <Project Path="src/Services/Auth/Auth.Api/DarkVelocity.Auth.Api.csproj" />
+  <Folder Name="/src/Services/Orleans/" />
+  <Folder Name="/src/Services/Orleans/Orleans.Abstractions/">
+    <Project Path="src/Services/Orleans/Orleans.Abstractions/DarkVelocity.Orleans.Abstractions.csproj" />
   </Folder>
-  <Folder Name="/src/Services/Costing/" />
-  <Folder Name="/src/Services/Costing/Costing.Api/">
-    <Project Path="src/Services/Costing/Costing.Api/DarkVelocity.Costing.Api.csproj" />
+  <Folder Name="/src/Services/Orleans/Orleans.Grains/">
+    <Project Path="src/Services/Orleans/Orleans.Grains/DarkVelocity.Orleans.Grains.csproj" />
   </Folder>
-  <Folder Name="/src/Services/Hardware/" />
-  <Folder Name="/src/Services/Hardware/Hardware.Api/">
-    <Project Path="src/Services/Hardware/Hardware.Api/DarkVelocity.Hardware.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Inventory/" />
-  <Folder Name="/src/Services/Inventory/Inventory.Api/">
-    <Project Path="src/Services/Inventory/Inventory.Api/DarkVelocity.Inventory.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Location/" />
-  <Folder Name="/src/Services/Location/Location.Api/">
-    <Project Path="src/Services/Location/Location.Api/DarkVelocity.Location.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Menu/" />
-  <Folder Name="/src/Services/Menu/Menu.Api/">
-    <Project Path="src/Services/Menu/Menu.Api/DarkVelocity.Menu.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Orders/" />
-  <Folder Name="/src/Services/Orders/Orders.Api/">
-    <Project Path="src/Services/Orders/Orders.Api/DarkVelocity.Orders.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Payments/" />
-  <Folder Name="/src/Services/Payments/Payments.Api/">
-    <Project Path="src/Services/Payments/Payments.Api/DarkVelocity.Payments.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Procurement/" />
-  <Folder Name="/src/Services/Procurement/Procurement.Api/">
-    <Project Path="src/Services/Procurement/Procurement.Api/DarkVelocity.Procurement.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Reporting/" />
-  <Folder Name="/src/Services/Reporting/Reporting.Api/">
-    <Project Path="src/Services/Reporting/Reporting.Api/DarkVelocity.Reporting.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Customers/" />
-  <Folder Name="/src/Services/Customers/Customers.Api/">
-    <Project Path="src/Services/Customers/Customers.Api/DarkVelocity.Customers.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/PaymentGateway/" />
-  <Folder Name="/src/Services/PaymentGateway/PaymentGateway.Api/">
-    <Project Path="src/Services/PaymentGateway/PaymentGateway.Api/DarkVelocity.PaymentGateway.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Accounting/" />
-  <Folder Name="/src/Services/Accounting/Accounting.Api/">
-    <Project Path="src/Services/Accounting/Accounting.Api/DarkVelocity.Accounting.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Booking/" />
-  <Folder Name="/src/Services/Booking/Booking.Api/">
-    <Project Path="src/Services/Booking/Booking.Api/DarkVelocity.Booking.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Customers/" />
-  <Folder Name="/src/Services/Customers/Customers.Api/">
-    <Project Path="src/Services/Customers/Customers.Api/DarkVelocity.Customers.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Labor/" />
-  <Folder Name="/src/Services/Labor/Labor.Api/">
-    <Project Path="src/Services/Labor/Labor.Api/DarkVelocity.Labor.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/Services/Fiscalisation/" />
-  <Folder Name="/src/Services/Fiscalisation/Fiscalisation.Api/">
-    <Project Path="src/Services/Fiscalisation/Fiscalisation.Api/DarkVelocity.Fiscalisation.Api.csproj" />
+  <Folder Name="/src/Services/Orleans/Orleans.Silo/">
+    <Project Path="src/Services/Orleans/Orleans.Silo/DarkVelocity.Orleans.Silo.csproj" />
   </Folder>
   <Folder Name="/src/Shared/" />
   <Folder Name="/src/Shared/Shared.Contracts/">
@@ -81,43 +23,10 @@
     <Project Path="src/Shared/Shared.Infrastructure/DarkVelocity.Shared.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/" />
-  <Folder Name="/tests/Auth.Tests/">
-    <Project Path="tests/Auth.Tests/DarkVelocity.Auth.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Costing.Tests/">
-    <Project Path="tests/Costing.Tests/DarkVelocity.Costing.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Hardware.Tests/">
-    <Project Path="tests/Hardware.Tests/DarkVelocity.Hardware.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Inventory.Tests/">
-    <Project Path="tests/Inventory.Tests/DarkVelocity.Inventory.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Location.Tests/">
-    <Project Path="tests/Location.Tests/DarkVelocity.Location.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Menu.Tests/">
-    <Project Path="tests/Menu.Tests/DarkVelocity.Menu.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Orders.Tests/">
-    <Project Path="tests/Orders.Tests/DarkVelocity.Orders.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Payments.Tests/">
-    <Project Path="tests/Payments.Tests/DarkVelocity.Payments.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Procurement.Tests/">
-    <Project Path="tests/Procurement.Tests/DarkVelocity.Procurement.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Reporting.Tests/">
-    <Project Path="tests/Reporting.Tests/DarkVelocity.Reporting.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/PaymentGateway.Tests/">
-    <Project Path="tests/PaymentGateway.Tests/DarkVelocity.PaymentGateway.Tests.csproj" />
+  <Folder Name="/tests/Orleans.Tests/">
+    <Project Path="tests/Orleans.Tests/DarkVelocity.Orleans.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Tests.Shared/">
     <Project Path="tests/Tests.Shared/DarkVelocity.Tests.Shared.csproj" />
-  </Folder>
-  <Folder Name="/tests/Accounting.Tests/">
-    <Project Path="tests/Accounting.Tests/DarkVelocity.Accounting.Tests.csproj" />
   </Folder>
 </Solution>
