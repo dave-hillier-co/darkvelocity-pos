@@ -103,6 +103,43 @@ public class DailySalesGrain : Grain, IDailySalesGrain
         await _state.WriteStateAsync();
     }
 
+    public async Task RecordSaleAsync(RecordSaleFromStreamCommand command)
+    {
+        EnsureInitialized();
+
+        // Update aggregated totals
+        _state.State.GrossSales += command.GrossSales;
+        _state.State.Discounts += command.Discounts;
+        _state.State.Tax += command.Tax;
+        _state.State.NetSales += command.GrossSales - command.Discounts;
+        _state.State.TheoreticalCOGS += command.TheoreticalCOGS;
+        _state.State.TransactionCount++;
+        _state.State.GuestCount += command.GuestCount;
+
+        // Parse channel (default to POS if unknown)
+        var channel = Enum.TryParse<SaleChannel>(command.Channel, true, out var parsedChannel)
+            ? parsedChannel
+            : SaleChannel.Pos;
+
+        // Update channel breakdown
+        if (!_state.State.SalesByChannel.TryGetValue(channel, out var channelTotal))
+            channelTotal = 0;
+        _state.State.SalesByChannel[channel] = channelTotal + (command.GrossSales - command.Discounts);
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public async Task RecordVoidAsync(Guid orderId, decimal voidAmount, string reason)
+    {
+        EnsureInitialized();
+
+        _state.State.Voids += voidAmount;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+    }
+
     public Task<DailySalesSnapshot> GetSnapshotAsync()
     {
         EnsureInitialized();
