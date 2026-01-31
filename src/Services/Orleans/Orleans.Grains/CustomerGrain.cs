@@ -61,7 +61,8 @@ public class CustomerGrain : Grain, ICustomerGrain
             _state.State.DisplayName,
             command.Email,
             command.Phone,
-            command.Source)
+            command.Source,
+            ReferredByCustomerId: null)
         {
             OrganizationId = command.OrganizationId
         });
@@ -116,13 +117,14 @@ public class CustomerGrain : Grain, ICustomerGrain
         _state.State.Version++;
         await _state.WriteStateAsync();
 
-        // Publish customer updated event
+        // Publish customer profile updated event
         if (changedFields.Count > 0)
         {
-            await GetCustomerStream().OnNextAsync(new CustomerUpdatedEvent(
+            await GetCustomerStream().OnNextAsync(new CustomerProfileUpdatedEvent(
                 _state.State.Id,
                 _state.State.DisplayName,
-                changedFields)
+                changedFields,
+                UpdatedBy: null)
             {
                 OrganizationId = _state.State.OrganizationId
             });
@@ -138,11 +140,11 @@ public class CustomerGrain : Grain, ICustomerGrain
             _state.State.Version++;
             await _state.WriteStateAsync();
 
-            // Publish customer tagged event
-            await GetCustomerStream().OnNextAsync(new CustomerTaggedEvent(
+            // Publish customer tag added event
+            await GetCustomerStream().OnNextAsync(new CustomerTagAddedEvent(
                 _state.State.Id,
                 tag,
-                IsAdded: true)
+                AddedBy: null)
             {
                 OrganizationId = _state.State.OrganizationId
             });
@@ -157,11 +159,11 @@ public class CustomerGrain : Grain, ICustomerGrain
             _state.State.Version++;
             await _state.WriteStateAsync();
 
-            // Publish customer tagged event
-            await GetCustomerStream().OnNextAsync(new CustomerTaggedEvent(
+            // Publish customer tag removed event
+            await GetCustomerStream().OnNextAsync(new CustomerTagRemovedEvent(
                 _state.State.Id,
                 tag,
-                IsAdded: false)
+                RemovedBy: null)
             {
                 OrganizationId = _state.State.OrganizationId
             });
@@ -203,13 +205,14 @@ public class CustomerGrain : Grain, ICustomerGrain
         _state.State.Version++;
         await _state.WriteStateAsync();
 
-        // Publish customer loyalty enrolled event
-        await GetCustomerStream().OnNextAsync(new CustomerLoyaltyEnrolledEvent(
+        // Publish customer enrolled in loyalty event
+        await GetCustomerStream().OnNextAsync(new CustomerEnrolledInLoyaltyEvent(
             _state.State.Id,
             command.ProgramId,
             command.MemberNumber,
             command.InitialTierId,
-            command.TierName)
+            command.TierName,
+            InitialPointsBalance: 0)
         {
             OrganizationId = _state.State.OrganizationId
         });
@@ -391,6 +394,11 @@ public class CustomerGrain : Grain, ICustomerGrain
     {
         EnsureExists();
 
+        // Calculate days since previous visit before updating
+        var daysSincePreviousVisit = _state.State.LastVisitAt.HasValue
+            ? (int)(DateTime.UtcNow - _state.State.LastVisitAt.Value).TotalDays
+            : 0;
+
         _state.State.Stats = _state.State.Stats with
         {
             TotalVisits = _state.State.Stats.TotalVisits + 1,
@@ -404,14 +412,15 @@ public class CustomerGrain : Grain, ICustomerGrain
         _state.State.Version++;
         await _state.WriteStateAsync();
 
-        // Publish customer visit recorded event
-        await GetCustomerStream().OnNextAsync(new CustomerVisitRecordedEvent(
+        // Publish customer visited event
+        await GetCustomerStream().OnNextAsync(new CustomerVisitedEvent(
             _state.State.Id,
             command.SiteId,
+            command.OrderId,
             command.SpendAmount,
             _state.State.Stats.TotalVisits,
             _state.State.Stats.TotalSpend,
-            _state.State.Stats.AverageCheck)
+            daysSincePreviousVisit)
         {
             OrganizationId = _state.State.OrganizationId
         });
