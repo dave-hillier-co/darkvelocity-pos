@@ -60,12 +60,12 @@ public class AlertNotificationSubscriberGrain : Grain, IGrainWithStringKey, IAsy
                     await HandleAlertTriggeredAsync(alertEvent);
                     break;
 
-                case LowStockAlertEvent lowStockEvent:
-                    await HandleLowStockAlertAsync(lowStockEvent);
+                case ReorderPointBreachedEvent reorderEvent:
+                    await HandleReorderPointBreachedAsync(reorderEvent);
                     break;
 
-                case OutOfStockEvent outOfStockEvent:
-                    await HandleOutOfStockAlertAsync(outOfStockEvent);
+                case StockDepletedEvent depletedEvent:
+                    await HandleStockDepletedAsync(depletedEvent);
                     break;
 
                 default:
@@ -149,15 +149,15 @@ public class AlertNotificationSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         return Task.CompletedTask;
     }
 
-    private Task HandleLowStockAlertAsync(LowStockAlertEvent evt)
+    private Task HandleReorderPointBreachedAsync(ReorderPointBreachedEvent evt)
     {
         _logger.LogWarning(
-            "[LOW STOCK] {IngredientName} at site {SiteId}: Current {CurrentQty}, Reorder point {ReorderPoint}, Par level {ParLevel}",
+            "[REORDER NEEDED] {IngredientName} at site {SiteId}: On hand {OnHand}, Reorder point {ReorderPoint}, Suggested order qty {OrderQty}",
             evt.IngredientName,
             evt.SiteId,
-            evt.CurrentQuantity,
+            evt.QuantityOnHand,
             evt.ReorderPoint,
-            evt.ParLevel);
+            evt.QuantityToOrder);
 
         // In production, this would:
         // 1. Add to procurement queue
@@ -167,13 +167,13 @@ public class AlertNotificationSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         return Task.CompletedTask;
     }
 
-    private Task HandleOutOfStockAlertAsync(OutOfStockEvent evt)
+    private Task HandleStockDepletedAsync(StockDepletedEvent evt)
     {
         _logger.LogError(
-            "[OUT OF STOCK] {IngredientName} at site {SiteId} since {OutOfStockSince}",
+            "[STOCK DEPLETED] {IngredientName} at site {SiteId} depleted at {DepletedAt}",
             evt.IngredientName,
             evt.SiteId,
-            evt.OutOfStockSince);
+            evt.DepletedAt);
 
         // In production, this would:
         // 1. Send URGENT notification to site manager

@@ -242,50 +242,102 @@ public sealed record StockConsumedEvent(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] string IngredientName,
-    [property: Id(3)] decimal Quantity,
+    [property: Id(3)] decimal QuantityConsumed,
     [property: Id(4)] string Unit,
-    [property: Id(5)] decimal TotalCost,
-    [property: Id(6)] Guid? OrderId,
-    [property: Id(7)] string ConsumptionReason
+    [property: Id(5)] decimal CostOfGoodsConsumed,
+    [property: Id(6)] decimal QuantityRemaining,
+    [property: Id(7)] Guid? OrderId,
+    [property: Id(8)] string Reason
 ) : StreamEvent;
 
 /// <summary>
-/// Published when stock is received.
+/// Published when stock is received into inventory.
 /// </summary>
 [GenerateSerializer]
 public sealed record StockReceivedEvent(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] string IngredientName,
-    [property: Id(3)] decimal Quantity,
+    [property: Id(3)] decimal QuantityReceived,
     [property: Id(4)] string Unit,
     [property: Id(5)] decimal UnitCost,
-    [property: Id(6)] string? BatchNumber,
-    [property: Id(7)] DateOnly? ExpiryDate
+    [property: Id(6)] decimal TotalQuantityOnHand,
+    [property: Id(7)] string? BatchNumber,
+    [property: Id(8)] DateOnly? ExpiryDate,
+    [property: Id(9)] Guid? SupplierId,
+    [property: Id(10)] Guid? DeliveryId
 ) : StreamEvent;
 
 /// <summary>
-/// Published when stock levels fall below threshold.
+/// Published when stock quantity fell below the reorder point threshold.
 /// </summary>
 [GenerateSerializer]
-public sealed record LowStockAlertEvent(
+public sealed record ReorderPointBreachedEvent(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] string IngredientName,
-    [property: Id(3)] decimal CurrentQuantity,
+    [property: Id(3)] decimal QuantityOnHand,
     [property: Id(4)] decimal ReorderPoint,
-    [property: Id(5)] decimal ParLevel
+    [property: Id(5)] decimal ParLevel,
+    [property: Id(6)] decimal QuantityToOrder
 ) : StreamEvent;
 
 /// <summary>
-/// Published when stock runs out completely.
+/// Published when stock was completely depleted.
 /// </summary>
 [GenerateSerializer]
-public sealed record OutOfStockEvent(
+public sealed record StockDepletedEvent(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] string IngredientName,
-    [property: Id(3)] DateTime OutOfStockSince
+    [property: Id(3)] DateTime DepletedAt,
+    [property: Id(4)] Guid? LastConsumingOrderId
+) : StreamEvent;
+
+/// <summary>
+/// Published when stock was adjusted (physical count variance).
+/// </summary>
+[GenerateSerializer]
+public sealed record StockAdjustedEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string IngredientName,
+    [property: Id(3)] decimal PreviousQuantity,
+    [property: Id(4)] decimal NewQuantity,
+    [property: Id(5)] decimal Variance,
+    [property: Id(6)] string Reason,
+    [property: Id(7)] Guid AdjustedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when stock was transferred between sites.
+/// </summary>
+[GenerateSerializer]
+public sealed record StockTransferredEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SourceSiteId,
+    [property: Id(2)] Guid DestinationSiteId,
+    [property: Id(3)] string IngredientName,
+    [property: Id(4)] decimal QuantityTransferred,
+    [property: Id(5)] string Unit,
+    [property: Id(6)] decimal UnitCost,
+    [property: Id(7)] Guid TransferId,
+    [property: Id(8)] Guid TransferredBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when stock was written off (waste, spoilage, expiry).
+/// </summary>
+[GenerateSerializer]
+public sealed record StockWrittenOffEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string IngredientName,
+    [property: Id(3)] decimal QuantityWrittenOff,
+    [property: Id(4)] decimal CostWrittenOff,
+    [property: Id(5)] string WriteOffCategory,
+    [property: Id(6)] string Reason,
+    [property: Id(7)] Guid RecordedBy
 ) : StreamEvent;
 
 #endregion
@@ -342,22 +394,26 @@ public sealed record AlertTriggeredEvent(
 
 #endregion
 
-#region Booking Deposit Stream Events
+#region Booking Stream Events
 
 /// <summary>
-/// Published when a deposit is required for a booking.
+/// Published when a booking was created.
 /// </summary>
 [GenerateSerializer]
-public sealed record BookingDepositRequiredEvent(
+public sealed record BookingCreatedEvent(
     [property: Id(0)] Guid BookingId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid? CustomerId,
-    [property: Id(3)] decimal Amount,
-    [property: Id(4)] DateTime RequiredBy
+    [property: Id(3)] string CustomerName,
+    [property: Id(4)] DateTime BookingDateTime,
+    [property: Id(5)] int PartySize,
+    [property: Id(6)] decimal? DepositRequired,
+    [property: Id(7)] DateTime? DepositDueBy,
+    [property: Id(8)] Guid CreatedBy
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a booking deposit is paid.
+/// Published when a booking deposit was paid.
 /// Triggers: Debit Cash, Credit Deposits Payable liability.
 /// </summary>
 [GenerateSerializer]
@@ -365,13 +421,14 @@ public sealed record BookingDepositPaidEvent(
     [property: Id(0)] Guid BookingId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid? CustomerId,
-    [property: Id(3)] decimal Amount,
+    [property: Id(3)] decimal AmountPaid,
     [property: Id(4)] string PaymentMethod,
-    [property: Id(5)] string? PaymentReference
+    [property: Id(5)] string? PaymentReference,
+    [property: Id(6)] decimal TotalDepositPaid
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a booking deposit is refunded.
+/// Published when a booking deposit was refunded.
 /// Triggers: Debit Deposits Payable, Credit Cash.
 /// </summary>
 [GenerateSerializer]
@@ -379,12 +436,13 @@ public sealed record BookingDepositRefundedEvent(
     [property: Id(0)] Guid BookingId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid? CustomerId,
-    [property: Id(3)] decimal Amount,
-    [property: Id(4)] string? Reason
+    [property: Id(3)] decimal AmountRefunded,
+    [property: Id(4)] string Reason,
+    [property: Id(5)] Guid RefundedBy
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a booking deposit is forfeited (no-show, late cancellation).
+/// Published when a booking deposit was forfeited (no-show, late cancellation).
 /// Triggers: Debit Deposits Payable, Credit Other Income.
 /// </summary>
 [GenerateSerializer]
@@ -392,21 +450,76 @@ public sealed record BookingDepositForfeitedEvent(
     [property: Id(0)] Guid BookingId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid? CustomerId,
-    [property: Id(3)] decimal Amount,
-    [property: Id(4)] string Reason
+    [property: Id(3)] decimal AmountForfeited,
+    [property: Id(4)] string ForfeitureReason,
+    [property: Id(5)] Guid ProcessedBy
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a booking deposit is applied to the final bill.
+/// Published when a booking deposit was applied to the final bill.
 /// Triggers: Debit Deposits Payable, Credit AR/Sales.
 /// </summary>
 [GenerateSerializer]
-public sealed record BookingDepositAppliedEvent(
+public sealed record BookingDepositAppliedToOrderEvent(
     [property: Id(0)] Guid BookingId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid OrderId,
     [property: Id(3)] Guid? CustomerId,
-    [property: Id(4)] decimal Amount
+    [property: Id(4)] decimal AmountApplied,
+    [property: Id(5)] decimal RemainingDeposit
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking was confirmed.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingConfirmedEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] DateTime BookingDateTime,
+    [property: Id(4)] string? ConfirmationMethod
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking was cancelled.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingCancelledEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] string CancellationReason,
+    [property: Id(4)] Guid? CancelledBy,
+    [property: Id(5)] decimal? DepositToRefund,
+    [property: Id(6)] decimal? DepositToForfeit
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking party was seated.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingSeatedEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] string? TableNumber,
+    [property: Id(4)] int ActualPartySize,
+    [property: Id(5)] DateTime SeatedAt,
+    [property: Id(6)] Guid? OrderId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a booking was marked as no-show.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingNoShowEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] DateTime OriginalBookingTime,
+    [property: Id(4)] decimal? DepositToForfeit,
+    [property: Id(5)] Guid MarkedBy
 ) : StreamEvent;
 
 #endregion
@@ -654,7 +767,7 @@ public sealed record PaymentVoidedEvent(
 #region Customer Lifecycle Stream Events
 
 /// <summary>
-/// Published when a customer is created.
+/// Published when a customer account was created.
 /// </summary>
 [GenerateSerializer]
 public sealed record CustomerCreatedEvent(
@@ -662,52 +775,100 @@ public sealed record CustomerCreatedEvent(
     [property: Id(1)] string DisplayName,
     [property: Id(2)] string? Email,
     [property: Id(3)] string? Phone,
-    [property: Id(4)] string Source
+    [property: Id(4)] string Source,
+    [property: Id(5)] Guid? ReferredByCustomerId
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a customer's profile is updated.
+/// Published when a customer profile was updated.
 /// </summary>
 [GenerateSerializer]
-public sealed record CustomerUpdatedEvent(
+public sealed record CustomerProfileUpdatedEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] string DisplayName,
-    [property: Id(2)] List<string> ChangedFields
+    [property: Id(2)] List<string> ChangedFields,
+    [property: Id(3)] Guid? UpdatedBy
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a customer enrolls in a loyalty program.
+/// Published when a customer enrolled in a loyalty program.
 /// </summary>
 [GenerateSerializer]
-public sealed record CustomerLoyaltyEnrolledEvent(
+public sealed record CustomerEnrolledInLoyaltyEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] Guid ProgramId,
     [property: Id(2)] string MemberNumber,
     [property: Id(3)] Guid InitialTierId,
-    [property: Id(4)] string TierName
+    [property: Id(4)] string TierName,
+    [property: Id(5)] int InitialPointsBalance
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a customer is tagged.
+/// Published when a tag was added to a customer.
 /// </summary>
 [GenerateSerializer]
-public sealed record CustomerTaggedEvent(
+public sealed record CustomerTagAddedEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] string Tag,
-    [property: Id(2)] bool IsAdded
+    [property: Id(2)] Guid? AddedBy
 ) : StreamEvent;
 
 /// <summary>
-/// Published when a customer visit is recorded.
+/// Published when a tag was removed from a customer.
 /// </summary>
 [GenerateSerializer]
-public sealed record CustomerVisitRecordedEvent(
+public sealed record CustomerTagRemovedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string Tag,
+    [property: Id(2)] Guid? RemovedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer visited a site.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerVisitedEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] Guid SiteId,
-    [property: Id(2)] decimal SpendAmount,
-    [property: Id(3)] int TotalVisits,
-    [property: Id(4)] decimal TotalSpend,
-    [property: Id(5)] decimal AverageCheck
+    [property: Id(2)] Guid? OrderId,
+    [property: Id(3)] decimal SpendAmount,
+    [property: Id(4)] int VisitNumber,
+    [property: Id(5)] decimal LifetimeSpend,
+    [property: Id(6)] int DaysSinceLastVisit
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer's segment classification changed.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerSegmentChangedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string PreviousSegment,
+    [property: Id(2)] string NewSegment,
+    [property: Id(3)] decimal LifetimeSpend,
+    [property: Id(4)] int TotalVisits
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer account was deactivated.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerDeactivatedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] string Reason,
+    [property: Id(2)] Guid? DeactivatedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when a customer account was merged into another.
+/// </summary>
+[GenerateSerializer]
+public sealed record CustomerMergedEvent(
+    [property: Id(0)] Guid SourceCustomerId,
+    [property: Id(1)] Guid TargetCustomerId,
+    [property: Id(2)] decimal CombinedLifetimeSpend,
+    [property: Id(3)] int CombinedVisits,
+    [property: Id(4)] Guid MergedBy
 ) : StreamEvent;
 
 #endregion

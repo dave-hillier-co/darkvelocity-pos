@@ -118,8 +118,11 @@ public class InventoryGrain : Grain, IInventoryGrain
             command.Quantity,
             _state.State.Unit,
             command.UnitCost,
+            _state.State.QuantityOnHand,
             command.BatchNumber,
-            command.ExpiryDate.HasValue ? DateOnly.FromDateTime(command.ExpiryDate.Value) : null)
+            command.ExpiryDate.HasValue ? DateOnly.FromDateTime(command.ExpiryDate.Value) : null,
+            command.SupplierId,
+            command.DeliveryId)
         {
             OrganizationId = _state.State.OrganizationId
         });
@@ -189,14 +192,15 @@ public class InventoryGrain : Grain, IInventoryGrain
             command.Quantity,
             _state.State.Unit,
             totalCost,
+            _state.State.QuantityAvailable,
             command.OrderId,
             command.Reason)
         {
             OrganizationId = _state.State.OrganizationId
         });
 
-        // Check for low stock alerts
-        await CheckAndPublishStockAlertsAsync(previousLevel);
+        // Check for stock level events
+        await CheckAndPublishStockAlertsAsync(previousLevel, command.OrderId);
 
         _logger.LogInformation(
             "Stock consumed for {IngredientName}: {Quantity} {Unit}. Remaining: {Remaining}",
@@ -208,46 +212,49 @@ public class InventoryGrain : Grain, IInventoryGrain
         return new ConsumptionResult(command.Quantity, totalCost, breakdown);
     }
 
-    private async Task CheckAndPublishStockAlertsAsync(StockLevel previousLevel)
+    private async Task CheckAndPublishStockAlertsAsync(StockLevel previousLevel, Guid? lastOrderId = null)
     {
         var currentLevel = _state.State.StockLevel;
 
-        // Publish low stock alert when crossing threshold
+        // Publish reorder point breached event when crossing threshold
         if (currentLevel == StockLevel.Low && previousLevel != StockLevel.Low)
         {
-            await GetAlertStream().OnNextAsync(new LowStockAlertEvent(
+            var quantityToOrder = _state.State.ParLevel - _state.State.QuantityAvailable;
+            await GetAlertStream().OnNextAsync(new ReorderPointBreachedEvent(
                 _state.State.IngredientId,
                 _state.State.SiteId,
                 _state.State.IngredientName,
                 _state.State.QuantityAvailable,
                 _state.State.ReorderPoint,
-                _state.State.ParLevel)
+                _state.State.ParLevel,
+                quantityToOrder > 0 ? quantityToOrder : 0)
             {
                 OrganizationId = _state.State.OrganizationId
             });
 
             _logger.LogWarning(
-                "Low stock alert for {IngredientName}: {Quantity} {Unit} (Reorder point: {ReorderPoint})",
+                "Reorder point breached for {IngredientName}: {Quantity} {Unit} (Reorder point: {ReorderPoint})",
                 _state.State.IngredientName,
                 _state.State.QuantityAvailable,
                 _state.State.Unit,
                 _state.State.ReorderPoint);
         }
 
-        // Publish out of stock alert
+        // Publish stock depleted event
         if (currentLevel == StockLevel.OutOfStock && previousLevel != StockLevel.OutOfStock)
         {
-            await GetAlertStream().OnNextAsync(new OutOfStockEvent(
+            await GetAlertStream().OnNextAsync(new StockDepletedEvent(
                 _state.State.IngredientId,
                 _state.State.SiteId,
                 _state.State.IngredientName,
-                DateTime.UtcNow)
+                DateTime.UtcNow,
+                lastOrderId)
             {
                 OrganizationId = _state.State.OrganizationId
             });
 
             _logger.LogError(
-                "OUT OF STOCK: {IngredientName} at site {SiteId}",
+                "Stock depleted: {IngredientName} at site {SiteId}",
                 _state.State.IngredientName,
                 _state.State.SiteId);
         }
