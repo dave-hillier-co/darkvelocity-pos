@@ -1,5 +1,5 @@
 using System.Text.Json;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

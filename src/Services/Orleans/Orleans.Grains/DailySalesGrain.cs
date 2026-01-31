@@ -1,8 +1,8 @@
-using DarkVelocity.Orleans.Abstractions.Costing;
-using DarkVelocity.Orleans.Abstractions.Grains;
-using DarkVelocity.Orleans.Abstractions.Projections;
-using DarkVelocity.Orleans.Abstractions.State;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Orleans.Grains.Costing;
+using DarkVelocity.Orleans.Grains.Grains;
+using DarkVelocity.Orleans.Grains.Projections;
+using DarkVelocity.Orleans.Grains.State;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Orleans.Grains;

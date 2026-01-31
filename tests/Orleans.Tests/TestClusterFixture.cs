@@ -1,4 +1,4 @@
-using DarkVelocity.Orleans.Abstractions.Streams;
+using DarkVelocity.Orleans.Grains.Streams;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans.TestingHost;

@@ -1,4 +1,4 @@
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Shared.Infrastructure.Events;
 
 namespace DarkVelocity.Shared.Infrastructure.Events;
 

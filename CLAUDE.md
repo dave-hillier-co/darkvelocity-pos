@@ -28,14 +28,12 @@ DarkVelocity POS is a full-featured Point of Sale system built with .NET 10 and 
 ```
 darkvelocity-pos/
 ├── src/
-│   ├── Gateway/ApiGateway/          # API Gateway service
+│   ├── Gateway/ApiGateway/          # API Gateway service (YARP reverse proxy)
 │   ├── Services/Orleans/
-│   │   ├── Orleans.Abstractions/    # Grain interfaces
-│   │   ├── Orleans.Grains/          # Grain implementations
-│   │   └── Orleans.Silo/            # Silo host
+│   │   ├── Orleans.Grains/          # Grain interfaces, state, and implementations
+│   │   └── Orleans.Silo/            # Silo host and API endpoints
 │   └── Shared/
-│       ├── Shared.Contracts/        # DTOs, events, HAL helpers
-│       └── Shared.Infrastructure/   # Base entities, common patterns
+│       └── Shared.Infrastructure/   # Base entities, events, DTOs, HAL helpers
 ├── tests/
 │   ├── Orleans.Tests/               # Orleans grain tests
 │   └── Tests.Shared/                # Shared test utilities

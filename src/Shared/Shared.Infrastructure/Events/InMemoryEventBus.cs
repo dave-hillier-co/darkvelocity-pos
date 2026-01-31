@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

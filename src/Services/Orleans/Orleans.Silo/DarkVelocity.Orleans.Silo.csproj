@@ -13,7 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Orleans.Abstractions\DarkVelocity.Orleans.Abstractions.csproj" />
     <ProjectReference Include="..\Orleans.Grains\DarkVelocity.Orleans.Grains.csproj" />
   </ItemGroup>
 

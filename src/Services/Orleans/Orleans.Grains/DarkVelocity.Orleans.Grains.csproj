@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Orleans.Abstractions\DarkVelocity.Orleans.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Infrastructure\DarkVelocity.Shared.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

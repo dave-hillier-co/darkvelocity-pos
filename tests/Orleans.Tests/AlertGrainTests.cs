@@ -1,4 +1,4 @@
-using DarkVelocity.Orleans.Abstractions.Grains;
+using DarkVelocity.Orleans.Grains.Grains;
 using FluentAssertions;
 
 namespace DarkVelocity.Orleans.Tests;

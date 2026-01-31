@@ -1,5 +1,5 @@
-using DarkVelocity.Orleans.Abstractions.Costing;
-using DarkVelocity.Orleans.Abstractions.State;
+using DarkVelocity.Orleans.Grains.Costing;
+using DarkVelocity.Orleans.Grains.State;
 using FluentAssertions;
 
 namespace DarkVelocity.Orleans.Tests;

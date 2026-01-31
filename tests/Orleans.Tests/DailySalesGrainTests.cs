@@ -1,6 +1,6 @@
-using DarkVelocity.Orleans.Abstractions.Costing;
-using DarkVelocity.Orleans.Abstractions.Grains;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Orleans.Grains.Costing;
+using DarkVelocity.Orleans.Grains.Grains;
+using DarkVelocity.Shared.Infrastructure.Events;
 using FluentAssertions;
 
 namespace DarkVelocity.Orleans.Tests;

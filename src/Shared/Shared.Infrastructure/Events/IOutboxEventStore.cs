@@ -1,5 +1,5 @@
 using System.Text.Json;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace DarkVelocity.Shared.Infrastructure.Events;

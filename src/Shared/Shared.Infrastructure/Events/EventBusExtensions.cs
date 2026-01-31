@@ -1,5 +1,5 @@
 using System.Reflection;
-using DarkVelocity.Shared.Contracts.Events;
+using DarkVelocity.Shared.Infrastructure.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DarkVelocity.Shared.Infrastructure.Events;

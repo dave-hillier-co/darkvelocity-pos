@@ -1,6 +1,6 @@
-using DarkVelocity.Orleans.Abstractions;
-using DarkVelocity.Orleans.Abstractions.Grains;
-using DarkVelocity.Orleans.Abstractions.Streams;
+using DarkVelocity.Orleans.Grains;
+using DarkVelocity.Orleans.Grains.Grains;
+using DarkVelocity.Orleans.Grains.Streams;
 using Microsoft.Extensions.Logging;
 using Orleans.Streams;
 
