@@ -61,7 +61,7 @@ public class CustomerGrain : Grain, ICustomerGrain
             _state.State.DisplayName,
             command.Email,
             command.Phone,
-            command.Source,
+            command.Source.ToString(),
             ReferredByCustomerId: null)
         {
             OrganizationId = command.OrganizationId

@@ -234,4 +234,98 @@ public static class GrainKeys
         var orgPart = firstColonIndex > 0 ? key[..firstColonIndex] : key;
         return Guid.Parse(orgPart);
     }
+
+    /// <summary>
+    /// Creates a key for a daily inventory snapshot grain.
+    /// </summary>
+    public static string DailyInventorySnapshot(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:inventory-snapshot:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a daily consumption grain.
+    /// </summary>
+    public static string DailyConsumption(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:consumption:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a daily waste grain.
+    /// </summary>
+    public static string DailyWaste(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:waste:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a period aggregation grain.
+    /// </summary>
+    public static string PeriodAggregation(Guid orgId, Guid siteId, Grains.PeriodType periodType, int year, int periodNumber)
+        => $"{orgId}:{siteId}:period:{periodType}:{year}:{periodNumber}";
+
+    /// <summary>
+    /// Creates a key for a site dashboard grain.
+    /// </summary>
+    public static string SiteDashboard(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:dashboard";
+
+    /// <summary>
+    /// Creates a key for an alert grain.
+    /// </summary>
+    public static string Alerts(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:alerts";
+
+    /// <summary>
+    /// Creates a key for a notification grain.
+    /// </summary>
+    public static string Notifications(Guid orgId)
+        => $"{orgId}:notifications";
+
+    /// <summary>
+    /// Creates a key for a menu engineering grain.
+    /// </summary>
+    public static string MenuEngineering(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:menu-engineering";
+
+    /// <summary>
+    /// Creates a key for a purchase order grain.
+    /// </summary>
+    public static string PurchaseOrder(Guid orgId, Guid orderId) => OrgEntity(orgId, "purchaseorder", orderId);
+
+    /// <summary>
+    /// Creates a key for a supplier grain.
+    /// </summary>
+    public static string Supplier(Guid orgId, Guid supplierId) => OrgEntity(orgId, "supplier", supplierId);
+
+    /// <summary>
+    /// Creates a key for an inventory item grain (deprecated - use Inventory instead).
+    /// </summary>
+    public static string InventoryItem(Guid orgId, Guid itemId) => OrgEntity(orgId, "inventoryitem", itemId);
+
+    /// <summary>
+    /// Creates a key for an inventory count grain.
+    /// </summary>
+    public static string InventoryCount(Guid orgId, Guid countId) => OrgEntity(orgId, "inventorycount", countId);
+
+    /// <summary>
+    /// Creates a key for a device grain.
+    /// </summary>
+    public static string Device(Guid orgId, Guid deviceId) => OrgEntity(orgId, "device", deviceId);
+
+    /// <summary>
+    /// Creates a key for a daily sales report grain.
+    /// </summary>
+    public static string DailySalesReport(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:salesreport:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a shift grain.
+    /// </summary>
+    public static string Shift(Guid orgId, Guid shiftId) => OrgEntity(orgId, "shift", shiftId);
+
+    /// <summary>
+    /// Creates a key for a menu category grain.
+    /// </summary>
+    public static string MenuCategory(Guid orgId, Guid categoryId) => OrgEntity(orgId, "menucategory", categoryId);
+
+    /// <summary>
+    /// Creates a key for a menu item grain.
+    /// </summary>
+    public static string MenuItem(Guid orgId, Guid itemId) => OrgEntity(orgId, "menuitem", itemId);
 }

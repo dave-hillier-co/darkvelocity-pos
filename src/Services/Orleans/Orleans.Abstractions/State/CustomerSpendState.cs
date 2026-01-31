@@ -4,7 +4,7 @@ namespace DarkVelocity.Orleans.Abstractions.State;
 /// Loyalty tier configuration with spend thresholds.
 /// </summary>
 [GenerateSerializer]
-public sealed class LoyaltyTier
+public sealed class SpendTier
 {
     [Id(0)] public string Name { get; set; } = "Bronze";
     [Id(1)] public decimal MinSpend { get; set; }

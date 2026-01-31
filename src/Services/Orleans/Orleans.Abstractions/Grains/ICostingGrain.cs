@@ -199,7 +199,7 @@ public record CreateCostAlertCommand(
     string? ImpactDescription,
     int AffectedRecipeCount);
 
-public record AcknowledgeAlertCommand(
+public record AcknowledgeCostAlertCommand(
     Guid AcknowledgedByUserId,
     string? Notes,
     CostAlertAction ActionTaken);
@@ -236,7 +236,7 @@ public interface ICostAlertGrain : IGrainWithStringKey
     Task<CostAlertSnapshot> GetSnapshotAsync();
     Task<bool> ExistsAsync();
 
-    Task<CostAlertSnapshot> AcknowledgeAsync(AcknowledgeAlertCommand command);
+    Task<CostAlertSnapshot> AcknowledgeAsync(AcknowledgeCostAlertCommand command);
     Task<bool> IsAcknowledgedAsync();
 }
 

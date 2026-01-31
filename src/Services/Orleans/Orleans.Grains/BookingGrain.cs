@@ -319,7 +319,8 @@ public class BookingGrain : Grain, IBookingGrain
                 _state.State.CustomerId,
                 depositAmount,
                 command.Method.ToString(),
-                command.PaymentReference)
+                command.PaymentReference,
+                depositAmount)
             {
                 OrganizationId = _state.State.OrganizationId
             });
@@ -365,7 +366,8 @@ public class BookingGrain : Grain, IBookingGrain
                 _state.State.SiteId,
                 _state.State.CustomerId,
                 depositAmount,
-                "No-show or late cancellation")
+                "No-show or late cancellation",
+                Guid.Empty)
             {
                 OrganizationId = _state.State.OrganizationId
             });
@@ -399,7 +401,8 @@ public class BookingGrain : Grain, IBookingGrain
                 _state.State.SiteId,
                 _state.State.CustomerId,
                 depositAmount,
-                reason)
+                reason,
+                refundedBy)
             {
                 OrganizationId = _state.State.OrganizationId
             });

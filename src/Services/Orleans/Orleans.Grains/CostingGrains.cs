@@ -618,7 +618,7 @@ public class CostAlertGrain : Grain, ICostAlertGrain
         return Task.FromResult(_state.State.Id != Guid.Empty);
     }
 
-    public async Task<CostAlertSnapshot> AcknowledgeAsync(AcknowledgeAlertCommand command)
+    public async Task<CostAlertSnapshot> AcknowledgeAsync(AcknowledgeCostAlertCommand command)
     {
         EnsureExists();
 

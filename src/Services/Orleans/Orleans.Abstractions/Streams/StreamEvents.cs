@@ -413,6 +413,18 @@ public sealed record BookingCreatedEvent(
 ) : StreamEvent;
 
 /// <summary>
+/// Published when a booking deposit is required.
+/// </summary>
+[GenerateSerializer]
+public sealed record BookingDepositRequiredEvent(
+    [property: Id(0)] Guid BookingId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid? CustomerId,
+    [property: Id(3)] decimal AmountRequired,
+    [property: Id(4)] DateTime RequiredBy
+) : StreamEvent;
+
+/// <summary>
 /// Published when a booking deposit was paid.
 /// Triggers: Debit Cash, Credit Deposits Payable liability.
 /// </summary>

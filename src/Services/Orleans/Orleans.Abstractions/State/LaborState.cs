@@ -3,47 +3,6 @@ using DarkVelocity.Orleans.Abstractions.Grains;
 namespace DarkVelocity.Orleans.Abstractions.State;
 
 // ============================================================================
-// Employee State
-// ============================================================================
-
-[GenerateSerializer]
-public sealed class EmployeeState
-{
-    [Id(0)] public Guid OrgId { get; set; }
-    [Id(1)] public Guid EmployeeId { get; set; }
-    [Id(2)] public Guid UserId { get; set; }
-    [Id(3)] public Guid LocationId { get; set; }
-    [Id(4)] public string EmployeeNumber { get; set; } = string.Empty;
-    [Id(5)] public string FirstName { get; set; } = string.Empty;
-    [Id(6)] public string LastName { get; set; } = string.Empty;
-    [Id(7)] public string Email { get; set; } = string.Empty;
-    [Id(8)] public string Phone { get; set; } = string.Empty;
-    [Id(9)] public DateTime? DateOfBirth { get; set; }
-    [Id(10)] public DateTime HireDate { get; set; }
-    [Id(11)] public DateTime? TerminationDate { get; set; }
-    [Id(12)] public EmploymentStatus Status { get; set; }
-    [Id(13)] public EmploymentType EmploymentType { get; set; }
-    [Id(14)] public decimal HourlyRate { get; set; }
-    [Id(15)] public decimal? SalaryAmount { get; set; }
-    [Id(16)] public decimal OvertimeRate { get; set; }
-    [Id(17)] public int MaxHoursPerWeek { get; set; }
-    [Id(18)] public int MinHoursPerWeek { get; set; }
-    [Id(19)] public Guid DefaultRoleId { get; set; }
-    [Id(20)] public List<EmployeeRoleState> Roles { get; set; } = [];
-    [Id(21)] public int Version { get; set; }
-}
-
-[GenerateSerializer]
-public sealed class EmployeeRoleState
-{
-    [Id(0)] public Guid RoleId { get; set; }
-    [Id(1)] public string RoleName { get; set; } = string.Empty;
-    [Id(2)] public decimal? HourlyRateOverride { get; set; }
-    [Id(3)] public bool IsPrimary { get; set; }
-    [Id(4)] public DateTime? CertifiedAt { get; set; }
-}
-
-// ============================================================================
 // Role State
 // ============================================================================
 

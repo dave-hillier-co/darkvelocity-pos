@@ -25,7 +25,7 @@ public record ReverseSpendCommand(
 /// <summary>
 /// Command to redeem loyalty points.
 /// </summary>
-public record RedeemPointsCommand(
+public record RedeemSpendPointsCommand(
     Guid OrderId,
     int Points,
     string RewardType);
@@ -87,7 +87,7 @@ public interface ICustomerSpendProjectionGrain : IGrainWithStringKey
     /// <summary>
     /// Redeems points for a discount.
     /// </summary>
-    Task<RedeemPointsResult> RedeemPointsAsync(RedeemPointsCommand command);
+    Task<RedeemPointsResult> RedeemPointsAsync(RedeemSpendPointsCommand command);
 
     /// <summary>
     /// Gets the current loyalty snapshot.
@@ -112,7 +112,7 @@ public interface ICustomerSpendProjectionGrain : IGrainWithStringKey
     /// <summary>
     /// Configures tier thresholds (typically done once per org).
     /// </summary>
-    Task ConfigureTiersAsync(List<LoyaltyTier> tiers);
+    Task ConfigureTiersAsync(List<SpendTier> tiers);
 
     /// <summary>
     /// Checks if the projection exists.

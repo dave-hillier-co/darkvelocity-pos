@@ -270,9 +270,9 @@ public class GiftCardAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAs
         _logger.LogInformation(
             "Gift card {CardNumber} expired with remaining balance {Amount:C}",
             evt.CardNumber,
-            evt.RemainingBalance);
+            evt.ExpiredBalance);
 
-        if (evt.RemainingBalance <= 0)
+        if (evt.ExpiredBalance <= 0)
             return; // No accounting entry needed for zero balance
 
         var journalEntryId = Guid.NewGuid();
@@ -283,7 +283,7 @@ public class GiftCardAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAs
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, GiftCardLiabilityAccountCode)));
 
         await liabilityGrain.PostDebitAsync(new PostDebitCommand(
-            Amount: evt.RemainingBalance,
+            Amount: evt.ExpiredBalance,
             Description: $"Gift card expired - {evt.CardNumber}",
             PerformedBy: performedBy,
             ReferenceType: "GiftCardExpiration",
@@ -295,7 +295,7 @@ public class GiftCardAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAs
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, BreakageIncomeAccountCode)));
 
         await breakageGrain.PostCreditAsync(new PostCreditCommand(
-            Amount: evt.RemainingBalance,
+            Amount: evt.ExpiredBalance,
             Description: $"Gift card breakage income - {evt.CardNumber}",
             PerformedBy: performedBy,
             ReferenceType: "GiftCardExpiration",

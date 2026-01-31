@@ -68,7 +68,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
                     await HandleDepositPaidAsync(paidEvent);
                     break;
 
-                case BookingDepositAppliedEvent appliedEvent:
+                case BookingDepositAppliedToOrderEvent appliedEvent:
                     await HandleDepositAppliedAsync(appliedEvent);
                     break;
 
@@ -108,7 +108,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         _logger.LogInformation(
             "Booking deposit paid for {BookingId}: {Amount:C}",
             evt.BookingId,
-            evt.Amount);
+            evt.AmountPaid);
 
         var journalEntryId = Guid.NewGuid();
         var performedBy = Guid.Empty; // System action
@@ -118,7 +118,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CashAccountCode)));
 
         await cashGrain.PostDebitAsync(new PostDebitCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountPaid,
             Description: $"Booking deposit received - {evt.BookingId}",
             PerformedBy: performedBy,
             ReferenceNumber: evt.PaymentReference,
@@ -131,7 +131,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CustomerDepositsAccountCode)));
 
         await depositsGrain.PostCreditAsync(new PostCreditCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountPaid,
             Description: $"Booking deposit received - {evt.BookingId}",
             PerformedBy: performedBy,
             ReferenceNumber: evt.PaymentReference,
@@ -144,12 +144,12 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             journalEntryId);
     }
 
-    private async Task HandleDepositAppliedAsync(BookingDepositAppliedEvent evt)
+    private async Task HandleDepositAppliedAsync(BookingDepositAppliedToOrderEvent evt)
     {
         _logger.LogInformation(
             "Booking deposit applied for {BookingId}: {Amount:C} to order {OrderId}",
             evt.BookingId,
-            evt.Amount,
+            evt.AmountApplied,
             evt.OrderId);
 
         var journalEntryId = Guid.NewGuid();
@@ -160,7 +160,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CustomerDepositsAccountCode)));
 
         await depositsGrain.PostDebitAsync(new PostDebitCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountApplied,
             Description: $"Deposit applied to order {evt.OrderId}",
             PerformedBy: performedBy,
             ReferenceType: "OrderPayment",
@@ -172,7 +172,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, SalesRevenueAccountCode)));
 
         await salesGrain.PostCreditAsync(new PostCreditCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountApplied,
             Description: $"Deposit applied to order {evt.OrderId}",
             PerformedBy: performedBy,
             ReferenceType: "OrderPayment",
@@ -189,7 +189,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         _logger.LogInformation(
             "Booking deposit refunded for {BookingId}: {Amount:C}",
             evt.BookingId,
-            evt.Amount);
+            evt.AmountRefunded);
 
         var journalEntryId = Guid.NewGuid();
         var performedBy = Guid.Empty;
@@ -199,7 +199,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CustomerDepositsAccountCode)));
 
         await depositsGrain.PostDebitAsync(new PostDebitCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountRefunded,
             Description: $"Booking deposit refunded - {evt.BookingId}. Reason: {evt.Reason}",
             PerformedBy: performedBy,
             ReferenceType: "BookingRefund",
@@ -211,7 +211,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CashAccountCode)));
 
         await cashGrain.PostCreditAsync(new PostCreditCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountRefunded,
             Description: $"Booking deposit refunded - {evt.BookingId}. Reason: {evt.Reason}",
             PerformedBy: performedBy,
             ReferenceType: "BookingRefund",
@@ -228,8 +228,8 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         _logger.LogInformation(
             "Booking deposit forfeited for {BookingId}: {Amount:C}. Reason: {Reason}",
             evt.BookingId,
-            evt.Amount,
-            evt.Reason);
+            evt.AmountForfeited,
+            evt.ForfeitureReason);
 
         var journalEntryId = Guid.NewGuid();
         var performedBy = Guid.Empty;
@@ -239,8 +239,8 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, CustomerDepositsAccountCode)));
 
         await depositsGrain.PostDebitAsync(new PostDebitCommand(
-            Amount: evt.Amount,
-            Description: $"Booking deposit forfeited - {evt.BookingId}. Reason: {evt.Reason}",
+            Amount: evt.AmountForfeited,
+            Description: $"Booking deposit forfeited - {evt.BookingId}. Reason: {evt.ForfeitureReason}",
             PerformedBy: performedBy,
             ReferenceType: "BookingForfeiture",
             ReferenceId: evt.BookingId,
@@ -251,7 +251,7 @@ public class BookingAccountingSubscriberGrain : Grain, IGrainWithStringKey, IAsy
             GrainKeys.Account(evt.OrganizationId, GetAccountId(evt.OrganizationId, OtherIncomeAccountCode)));
 
         await incomeGrain.PostCreditAsync(new PostCreditCommand(
-            Amount: evt.Amount,
+            Amount: evt.AmountForfeited,
             Description: $"Forfeited booking deposit - {evt.BookingId}",
             PerformedBy: performedBy,
             ReferenceType: "BookingForfeiture",

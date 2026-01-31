@@ -4,193 +4,7 @@ using Orleans.Runtime;
 
 namespace DarkVelocity.Orleans.Grains;
 
-// ============================================================================
-// Employee Grain
-// ============================================================================
-
-/// <summary>
-/// Grain for employee management.
-/// Manages employee profile, roles, and employment status.
-/// </summary>
-public class EmployeeGrain : Grain, IEmployeeGrain
-{
-    private readonly IPersistentState<EmployeeState> _state;
-
-    public EmployeeGrain(
-        [PersistentState("employee", "OrleansStorage")]
-        IPersistentState<EmployeeState> state)
-    {
-        _state = state;
-    }
-
-    public async Task<EmployeeSnapshot> CreateAsync(CreateEmployeeCommand command)
-    {
-        if (_state.State.EmployeeId != Guid.Empty)
-            throw new InvalidOperationException("Employee already exists");
-
-        var key = this.GetPrimaryKeyString();
-        var parts = key.Split(':');
-        var orgId = Guid.Parse(parts[0]);
-        var employeeId = Guid.Parse(parts[2]);
-
-        _state.State = new EmployeeState
-        {
-            OrgId = orgId,
-            EmployeeId = employeeId,
-            UserId = command.UserId,
-            LocationId = command.LocationId,
-            EmployeeNumber = command.EmployeeNumber,
-            FirstName = command.FirstName,
-            LastName = command.LastName,
-            Email = command.Email,
-            Phone = command.Phone,
-            DateOfBirth = command.DateOfBirth,
-            HireDate = command.HireDate,
-            Status = EmploymentStatus.Active,
-            EmploymentType = command.EmploymentType,
-            HourlyRate = command.HourlyRate,
-            SalaryAmount = command.SalaryAmount,
-            OvertimeRate = command.OvertimeRate,
-            MaxHoursPerWeek = command.MaxHoursPerWeek,
-            MinHoursPerWeek = command.MinHoursPerWeek,
-            DefaultRoleId = command.DefaultRoleId,
-            Version = 1
-        };
-
-        await _state.WriteStateAsync();
-        return CreateSnapshot();
-    }
-
-    public async Task<EmployeeSnapshot> UpdateAsync(UpdateEmployeeCommand command)
-    {
-        EnsureInitialized();
-
-        if (command.FirstName != null) _state.State.FirstName = command.FirstName;
-        if (command.LastName != null) _state.State.LastName = command.LastName;
-        if (command.Email != null) _state.State.Email = command.Email;
-        if (command.Phone != null) _state.State.Phone = command.Phone;
-        if (command.Status.HasValue) _state.State.Status = command.Status.Value;
-        if (command.EmploymentType.HasValue) _state.State.EmploymentType = command.EmploymentType.Value;
-        if (command.HourlyRate.HasValue) _state.State.HourlyRate = command.HourlyRate.Value;
-        if (command.SalaryAmount.HasValue) _state.State.SalaryAmount = command.SalaryAmount.Value;
-        if (command.OvertimeRate.HasValue) _state.State.OvertimeRate = command.OvertimeRate.Value;
-        if (command.MaxHoursPerWeek.HasValue) _state.State.MaxHoursPerWeek = command.MaxHoursPerWeek.Value;
-        if (command.MinHoursPerWeek.HasValue) _state.State.MinHoursPerWeek = command.MinHoursPerWeek.Value;
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-        return CreateSnapshot();
-    }
-
-    public async Task TerminateAsync(TerminateEmployeeCommand command)
-    {
-        EnsureInitialized();
-
-        _state.State.Status = EmploymentStatus.Terminated;
-        _state.State.TerminationDate = command.TerminationDate;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-    }
-
-    public async Task AssignRoleAsync(AssignRoleCommand command)
-    {
-        EnsureInitialized();
-
-        var existingRole = _state.State.Roles.FirstOrDefault(r => r.RoleId == command.RoleId);
-        if (existingRole != null)
-        {
-            existingRole.HourlyRateOverride = command.HourlyRateOverride;
-            existingRole.IsPrimary = command.IsPrimary;
-        }
-        else
-        {
-            _state.State.Roles.Add(new EmployeeRoleState
-            {
-                RoleId = command.RoleId,
-                HourlyRateOverride = command.HourlyRateOverride,
-                IsPrimary = command.IsPrimary,
-                CertifiedAt = DateTime.UtcNow
-            });
-        }
-
-        if (command.IsPrimary)
-        {
-            foreach (var role in _state.State.Roles.Where(r => r.RoleId != command.RoleId))
-                role.IsPrimary = false;
-        }
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-    }
-
-    public async Task RemoveRoleAsync(Guid roleId)
-    {
-        EnsureInitialized();
-
-        _state.State.Roles.RemoveAll(r => r.RoleId == roleId);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-    }
-
-    public Task<EmployeeSnapshot> GetSnapshotAsync()
-    {
-        EnsureInitialized();
-        return Task.FromResult(CreateSnapshot());
-    }
-
-    public Task<bool> IsActiveAsync()
-    {
-        return Task.FromResult(_state.State.Status == EmploymentStatus.Active);
-    }
-
-    public Task<decimal> GetEffectiveHourlyRateAsync(Guid roleId)
-    {
-        EnsureInitialized();
-
-        var role = _state.State.Roles.FirstOrDefault(r => r.RoleId == roleId);
-        var rate = role?.HourlyRateOverride ?? _state.State.HourlyRate;
-
-        return Task.FromResult(rate);
-    }
-
-    private EmployeeSnapshot CreateSnapshot()
-    {
-        return new EmployeeSnapshot(
-            EmployeeId: _state.State.EmployeeId,
-            UserId: _state.State.UserId,
-            LocationId: _state.State.LocationId,
-            EmployeeNumber: _state.State.EmployeeNumber,
-            FirstName: _state.State.FirstName,
-            LastName: _state.State.LastName,
-            Email: _state.State.Email,
-            Phone: _state.State.Phone,
-            DateOfBirth: _state.State.DateOfBirth,
-            HireDate: _state.State.HireDate,
-            TerminationDate: _state.State.TerminationDate,
-            Status: _state.State.Status,
-            EmploymentType: _state.State.EmploymentType,
-            HourlyRate: _state.State.HourlyRate,
-            SalaryAmount: _state.State.SalaryAmount,
-            OvertimeRate: _state.State.OvertimeRate,
-            MaxHoursPerWeek: _state.State.MaxHoursPerWeek,
-            MinHoursPerWeek: _state.State.MinHoursPerWeek,
-            DefaultRoleId: _state.State.DefaultRoleId,
-            Roles: _state.State.Roles.Select(r => new EmployeeRoleAssignment(
-                RoleId: r.RoleId,
-                RoleName: r.RoleName,
-                HourlyRateOverride: r.HourlyRateOverride,
-                IsPrimary: r.IsPrimary,
-                CertifiedAt: r.CertifiedAt)).ToList());
-    }
-
-    private void EnsureInitialized()
-    {
-        if (_state.State.EmployeeId == Guid.Empty)
-            throw new InvalidOperationException("Employee grain not initialized");
-    }
-}
+// Note: EmployeeGrain is defined in EmployeeGrain.cs
 
 // ============================================================================
 // Role Grain
@@ -524,7 +338,7 @@ public class TimeEntryGrain : Grain, ITimeEntryGrain
         _state = state;
     }
 
-    public async Task<TimeEntrySnapshot> ClockInAsync(ClockInCommand command)
+    public async Task<TimeEntrySnapshot> ClockInAsync(TimeEntryClockInCommand command)
     {
         if (_state.State.TimeEntryId != Guid.Empty)
             throw new InvalidOperationException("Time entry already exists");
@@ -553,7 +367,7 @@ public class TimeEntryGrain : Grain, ITimeEntryGrain
         return CreateSnapshot();
     }
 
-    public async Task<TimeEntrySnapshot> ClockOutAsync(ClockOutCommand command)
+    public async Task<TimeEntrySnapshot> ClockOutAsync(TimeEntryClockOutCommand command)
     {
         EnsureInitialized();
 

@@ -118,7 +118,7 @@ public class CustomerSpendSubscriberGrain : Grain, IGrainWithStringKey, IAsyncOb
         _logger.LogInformation(
             "Customer {CustomerId} spend reversed: {Amount:C}. Reason: {Reason}",
             evt.CustomerId,
-            evt.Amount,
+            evt.ReversedAmount,
             evt.Reason);
 
         // Could trigger notifications or alerts for refund patterns
@@ -131,7 +131,7 @@ public class CustomerSpendSubscriberGrain : Grain, IGrainWithStringKey, IAsyncOb
         _logger.LogInformation(
             "Customer {CustomerId} redeemed {Points} points for {DiscountValue:C}",
             evt.CustomerId,
-            evt.Points,
+            evt.PointsRedeemed,
             evt.DiscountValue);
 
         // Record the loyalty redemption expense in accounting
@@ -149,7 +149,7 @@ public class CustomerSpendSubscriberGrain : Grain, IGrainWithStringKey, IAsyncOb
 
         await expenseGrain.PostDebitAsync(new PostDebitCommand(
             Amount: evt.DiscountValue,
-            Description: $"Loyalty points redeemed - {evt.Points} points for order {evt.OrderId}",
+            Description: $"Loyalty points redeemed - {evt.PointsRedeemed} points for order {evt.OrderId}",
             PerformedBy: performedBy,
             ReferenceType: "LoyaltyRedemption",
             ReferenceId: evt.OrderId,
@@ -161,7 +161,7 @@ public class CustomerSpendSubscriberGrain : Grain, IGrainWithStringKey, IAsyncOb
 
         await liabilityGrain.PostCreditAsync(new PostCreditCommand(
             Amount: evt.DiscountValue,
-            Description: $"Loyalty points redeemed - {evt.Points} points for order {evt.OrderId}",
+            Description: $"Loyalty points redeemed - {evt.PointsRedeemed} points for order {evt.OrderId}",
             PerformedBy: performedBy,
             ReferenceType: "LoyaltyRedemption",
             ReferenceId: evt.OrderId,
@@ -179,7 +179,7 @@ public class CustomerSpendSubscriberGrain : Grain, IGrainWithStringKey, IAsyncOb
             evt.CustomerId,
             evt.OldTier,
             evt.NewTier,
-            evt.LifetimeSpend);
+            evt.CumulativeSpend);
 
         // Could trigger:
         // - Congratulatory email/notification

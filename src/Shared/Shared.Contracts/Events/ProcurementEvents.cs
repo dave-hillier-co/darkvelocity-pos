@@ -1,35 +1,5 @@
 namespace DarkVelocity.Shared.Contracts.Events;
 
-public sealed record PurchaseOrderCreated(
-    Guid PurchaseOrderId,
-    Guid SupplierId,
-    Guid LocationId,
-    string OrderNumber
-) : IntegrationEvent
-{
-    public override string EventType => "procurement.po.created";
-}
-
-public sealed record PurchaseOrderSubmitted(
-    Guid PurchaseOrderId,
-    decimal OrderTotal,
-    DateTime ExpectedDeliveryDate
-) : IntegrationEvent
-{
-    public override string EventType => "procurement.po.submitted";
-}
-
-public sealed record DeliveryReceived(
-    Guid DeliveryId,
-    Guid? PurchaseOrderId,
-    Guid SupplierId,
-    Guid LocationId,
-    string DeliveryNumber
-) : IntegrationEvent
-{
-    public override string EventType => "procurement.delivery.received";
-}
-
 public sealed record DeliveryLineReceived(
     Guid DeliveryId,
     Guid DeliveryLineId,

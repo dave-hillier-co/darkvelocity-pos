@@ -1,4 +1,5 @@
 using DarkVelocity.Orleans.Abstractions.Costing;
+using DarkVelocity.Orleans.Abstractions.Grains;
 using DarkVelocity.Orleans.Abstractions.Projections;
 using DarkVelocity.Shared.Contracts.Events;
 
@@ -260,12 +261,4 @@ public sealed class VarianceBreakdownState
 // Enums
 // ============================================================================
 
-[GenerateSerializer]
-public enum PeriodType
-{
-    Daily,
-    Weekly,
-    FourWeek,
-    Monthly,
-    Yearly
-}
+// Note: PeriodType enum is defined in Grains/IReportingGrain.cs

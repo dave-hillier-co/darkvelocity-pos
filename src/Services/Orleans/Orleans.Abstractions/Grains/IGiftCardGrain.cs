@@ -45,6 +45,7 @@ public record RefundToGiftCardCommand(
     Guid OriginalPaymentId,
     Guid SiteId,
     Guid PerformedBy,
+    Guid? OriginalOrderId = null,
     string? Notes = null);
 
 public record AdjustGiftCardCommand(

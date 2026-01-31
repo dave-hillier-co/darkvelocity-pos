@@ -340,7 +340,7 @@ public class PaymentGrain : Grain, IPaymentGrain
             _state.State.CashierId,
             _state.State.DrawerId,
             _state.State.GatewayReference,
-            _state.State.CardInfo?.LastFour)
+            _state.State.CardInfo?.MaskedNumber)
         {
             OrganizationId = _state.State.OrganizationId
         });
@@ -437,7 +437,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         _state.State.Transactions.Add(new DrawerTransaction
         {
             Id = Guid.NewGuid(),
-            Type = DrawerTransactionType.CashPaidOut,
+            Type = DrawerTransactionType.CashPayout,
             Amount = command.Amount,
             Description = command.Reason,
             Timestamp = DateTime.UtcNow

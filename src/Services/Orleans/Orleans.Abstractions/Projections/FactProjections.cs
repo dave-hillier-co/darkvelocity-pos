@@ -40,14 +40,14 @@ public sealed record SalesFact
     [Id(18)] public decimal? ActualCOGS { get; init; }
     [Id(19)] public decimal? COGSVariance { get; init; }
 
-    // Derived
-    [Id(20)] public decimal GrossProfit => NetSales - (ActualCOGS ?? TheoreticalCOGS);
-    [Id(21)] public decimal GrossProfitPercent => NetSales > 0 ? GrossProfit / NetSales * 100 : 0;
+    // Derived (not serialized - computed on access)
+    public decimal GrossProfit => NetSales - (ActualCOGS ?? TheoreticalCOGS);
+    public decimal GrossProfitPercent => NetSales > 0 ? GrossProfit / NetSales * 100 : 0;
 
     // Period tracking
-    [Id(22)] public required int WeekNumber { get; init; }
-    [Id(23)] public required int PeriodNumber { get; init; } // 4-week period (1-13)
-    [Id(24)] public required int FiscalYear { get; init; }
+    [Id(20)] public required int WeekNumber { get; init; }
+    [Id(21)] public required int PeriodNumber { get; init; } // 4-week period (1-13)
+    [Id(22)] public required int FiscalYear { get; init; }
 }
 
 // ============================================================================
@@ -137,19 +137,19 @@ public sealed record ConsumptionFact
     [Id(10)] public required decimal ActualQuantity { get; init; }
     [Id(11)] public required decimal ActualCost { get; init; }
 
-    // Variance
-    [Id(12)] public decimal VarianceQuantity => ActualQuantity - TheoreticalQuantity;
-    [Id(13)] public decimal VarianceCost => ActualCost - TheoreticalCost;
-    [Id(14)] public decimal VariancePercent => TheoreticalCost > 0 ? VarianceCost / TheoreticalCost * 100 : 0;
+    // Variance (computed - not serialized)
+    public decimal VarianceQuantity => ActualQuantity - TheoreticalQuantity;
+    public decimal VarianceCost => ActualCost - TheoreticalCost;
+    public decimal VariancePercent => TheoreticalCost > 0 ? VarianceCost / TheoreticalCost * 100 : 0;
 
     // Costing
-    [Id(15)] public required CostingMethod CostingMethod { get; init; }
-    [Id(16)] public Guid? BatchId { get; init; }
+    [Id(12)] public required CostingMethod CostingMethod { get; init; }
+    [Id(13)] public Guid? BatchId { get; init; }
 
     // Reference
-    [Id(17)] public Guid? OrderId { get; init; }
-    [Id(18)] public Guid? MenuItemId { get; init; }
-    [Id(19)] public Guid? RecipeVersionId { get; init; }
+    [Id(14)] public Guid? OrderId { get; init; }
+    [Id(15)] public Guid? MenuItemId { get; init; }
+    [Id(16)] public Guid? RecipeVersionId { get; init; }
 }
 
 // ============================================================================
@@ -256,11 +256,13 @@ public sealed record SalesMetrics
 
     // Transactions
     [Id(11)] public required int TransactionCount { get; init; }
-    [Id(12)] public decimal AverageTicketValue => TransactionCount > 0 ? NetSales / TransactionCount : 0;
 
     // Covers
-    [Id(13)] public required int CoversServed { get; init; }
-    [Id(14)] public decimal RevenuePerCover => CoversServed > 0 ? NetSales / CoversServed : 0;
+    [Id(12)] public required int CoversServed { get; init; }
+
+    // Computed (not serialized)
+    public decimal AverageTicketValue => TransactionCount > 0 ? NetSales / TransactionCount : 0;
+    public decimal RevenuePerCover => CoversServed > 0 ? NetSales / CoversServed : 0;
 }
 
 /// <summary>
@@ -280,22 +282,22 @@ public sealed record GrossProfitMetrics
 
     // Actual COGS (from inventory movements)
     [Id(6)] public required decimal ActualCOGS { get; init; }
-    [Id(7)] public decimal ActualCOGSPercent => NetSales > 0 ? ActualCOGS / NetSales * 100 : 0;
-    [Id(8)] public decimal ActualGrossProfit => NetSales - ActualCOGS;
-    [Id(9)] public decimal ActualGrossProfitPercent => NetSales > 0 ? ActualGrossProfit / NetSales * 100 : 0;
 
     // Theoretical COGS (from recipes)
-    [Id(10)] public required decimal TheoreticalCOGS { get; init; }
-    [Id(11)] public decimal TheoreticalCOGSPercent => NetSales > 0 ? TheoreticalCOGS / NetSales * 100 : 0;
-    [Id(12)] public decimal TheoreticalGrossProfit => NetSales - TheoreticalCOGS;
-    [Id(13)] public decimal TheoreticalGrossProfitPercent => NetSales > 0 ? TheoreticalGrossProfit / NetSales * 100 : 0;
-
-    // Variance
-    [Id(14)] public decimal Variance => ActualCOGS - TheoreticalCOGS;
-    [Id(15)] public decimal VariancePercent => TheoreticalCOGS > 0 ? Variance / TheoreticalCOGS * 100 : 0;
+    [Id(7)] public required decimal TheoreticalCOGS { get; init; }
 
     // Costing method used
-    [Id(16)] public required CostingMethod CostingMethod { get; init; }
+    [Id(8)] public required CostingMethod CostingMethod { get; init; }
+
+    // Computed (not serialized)
+    public decimal ActualCOGSPercent => NetSales > 0 ? ActualCOGS / NetSales * 100 : 0;
+    public decimal ActualGrossProfit => NetSales - ActualCOGS;
+    public decimal ActualGrossProfitPercent => NetSales > 0 ? ActualGrossProfit / NetSales * 100 : 0;
+    public decimal TheoreticalCOGSPercent => NetSales > 0 ? TheoreticalCOGS / NetSales * 100 : 0;
+    public decimal TheoreticalGrossProfit => NetSales - TheoreticalCOGS;
+    public decimal TheoreticalGrossProfitPercent => NetSales > 0 ? TheoreticalGrossProfit / NetSales * 100 : 0;
+    public decimal Variance => ActualCOGS - TheoreticalCOGS;
+    public decimal VariancePercent => TheoreticalCOGS > 0 ? Variance / TheoreticalCOGS * 100 : 0;
 }
 
 /// <summary>
@@ -310,13 +312,15 @@ public sealed record VarianceBreakdown
 
     [Id(3)] public required decimal TheoreticalUsage { get; init; }
     [Id(4)] public required decimal ActualUsage { get; init; }
-    [Id(5)] public decimal UsageVariance => ActualUsage - TheoreticalUsage;
 
-    [Id(6)] public required decimal TheoreticalCost { get; init; }
-    [Id(7)] public required decimal ActualCost { get; init; }
-    [Id(8)] public decimal CostVariance => ActualCost - TheoreticalCost;
+    [Id(5)] public required decimal TheoreticalCost { get; init; }
+    [Id(6)] public required decimal ActualCost { get; init; }
 
-    [Id(9)] public VarianceReason? LikelyReason { get; init; }
+    [Id(7)] public VarianceReason? LikelyReason { get; init; }
+
+    // Computed (not serialized)
+    public decimal UsageVariance => ActualUsage - TheoreticalUsage;
+    public decimal CostVariance => ActualCost - TheoreticalCost;
 }
 
 public enum VarianceReason
@@ -361,9 +365,11 @@ public sealed record StockHealthMetrics
     // Par compliance
     [Id(14)] public required int ItemsAtPar { get; init; }
     [Id(15)] public required int TotalTrackedItems { get; init; }
-    [Id(16)] public decimal ParCompliancePercent => TotalTrackedItems > 0 ? (decimal)ItemsAtPar / TotalTrackedItems * 100 : 0;
 
     // Aged stock
-    [Id(17)] public required decimal AgedStockValue { get; init; } // Batches > 30 days
-    [Id(18)] public decimal AgedStockPercent => TotalStockValue > 0 ? AgedStockValue / TotalStockValue * 100 : 0;
+    [Id(16)] public required decimal AgedStockValue { get; init; } // Batches > 30 days
+
+    // Computed (not serialized)
+    public decimal ParCompliancePercent => TotalTrackedItems > 0 ? (decimal)ItemsAtPar / TotalTrackedItems * 100 : 0;
+    public decimal AgedStockPercent => TotalStockValue > 0 ? AgedStockValue / TotalStockValue * 100 : 0;
 }

@@ -1,114 +1,12 @@
 namespace DarkVelocity.Orleans.Abstractions.Grains;
 
-// ============================================================================
-// Employee Grain
-// ============================================================================
-
-public enum EmploymentStatus
-{
-    Active,
-    OnLeave,
-    Terminated
-}
-
-public enum EmploymentType
-{
-    FullTime,
-    PartTime,
-    Casual,
-    Contractor
-}
+// Note: IEmployeeGrain and related types are defined in IEmployeeGrain.cs
 
 public enum Department
 {
     FrontOfHouse,
     BackOfHouse,
     Management
-}
-
-public record CreateEmployeeCommand(
-    Guid UserId,
-    Guid LocationId,
-    string EmployeeNumber,
-    string FirstName,
-    string LastName,
-    string Email,
-    string Phone,
-    DateTime? DateOfBirth,
-    DateTime HireDate,
-    EmploymentType EmploymentType,
-    decimal HourlyRate,
-    decimal? SalaryAmount,
-    decimal OvertimeRate,
-    int MaxHoursPerWeek,
-    int MinHoursPerWeek,
-    Guid DefaultRoleId);
-
-public record UpdateEmployeeCommand(
-    string? FirstName,
-    string? LastName,
-    string? Email,
-    string? Phone,
-    EmploymentStatus? Status,
-    EmploymentType? EmploymentType,
-    decimal? HourlyRate,
-    decimal? SalaryAmount,
-    decimal? OvertimeRate,
-    int? MaxHoursPerWeek,
-    int? MinHoursPerWeek);
-
-public record TerminateEmployeeCommand(
-    DateTime TerminationDate,
-    string Reason);
-
-public record AssignRoleCommand(
-    Guid RoleId,
-    decimal? HourlyRateOverride,
-    bool IsPrimary);
-
-public record EmployeeSnapshot(
-    Guid EmployeeId,
-    Guid UserId,
-    Guid LocationId,
-    string EmployeeNumber,
-    string FirstName,
-    string LastName,
-    string Email,
-    string Phone,
-    DateTime? DateOfBirth,
-    DateTime HireDate,
-    DateTime? TerminationDate,
-    EmploymentStatus Status,
-    EmploymentType EmploymentType,
-    decimal HourlyRate,
-    decimal? SalaryAmount,
-    decimal OvertimeRate,
-    int MaxHoursPerWeek,
-    int MinHoursPerWeek,
-    Guid DefaultRoleId,
-    IReadOnlyList<EmployeeRoleAssignment> Roles);
-
-public record EmployeeRoleAssignment(
-    Guid RoleId,
-    string RoleName,
-    decimal? HourlyRateOverride,
-    bool IsPrimary,
-    DateTime? CertifiedAt);
-
-/// <summary>
-/// Grain for employee management.
-/// Key: "{orgId}:employee:{employeeId}"
-/// </summary>
-public interface IEmployeeGrain : IGrainWithStringKey
-{
-    Task<EmployeeSnapshot> CreateAsync(CreateEmployeeCommand command);
-    Task<EmployeeSnapshot> UpdateAsync(UpdateEmployeeCommand command);
-    Task TerminateAsync(TerminateEmployeeCommand command);
-    Task AssignRoleAsync(AssignRoleCommand command);
-    Task RemoveRoleAsync(Guid roleId);
-    Task<EmployeeSnapshot> GetSnapshotAsync();
-    Task<bool> IsActiveAsync();
-    Task<decimal> GetEffectiveHourlyRateAsync(Guid roleId);
 }
 
 // ============================================================================
@@ -267,7 +165,7 @@ public enum TimeEntryStatus
     Disputed
 }
 
-public record ClockInCommand(
+public record TimeEntryClockInCommand(
     Guid EmployeeId,
     Guid LocationId,
     Guid RoleId,
@@ -275,7 +173,7 @@ public record ClockInCommand(
     ClockMethod Method,
     string? Notes);
 
-public record ClockOutCommand(
+public record TimeEntryClockOutCommand(
     ClockMethod Method,
     string? Notes);
 
@@ -324,8 +222,8 @@ public record TimeEntrySnapshot(
 /// </summary>
 public interface ITimeEntryGrain : IGrainWithStringKey
 {
-    Task<TimeEntrySnapshot> ClockInAsync(ClockInCommand command);
-    Task<TimeEntrySnapshot> ClockOutAsync(ClockOutCommand command);
+    Task<TimeEntrySnapshot> ClockInAsync(TimeEntryClockInCommand command);
+    Task<TimeEntrySnapshot> ClockOutAsync(TimeEntryClockOutCommand command);
     Task AddBreakAsync(AddBreakCommand command);
     Task<TimeEntrySnapshot> AdjustAsync(AdjustTimeEntryCommand command);
     Task<TimeEntrySnapshot> ApproveAsync(ApproveTimeEntryCommand command);

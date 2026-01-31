@@ -115,6 +115,7 @@ public class OrderEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
                 line.Quantity,
                 "unit",
                 line.LineTotal * 0.3m, // Estimated COGS at 30%
+                0, // QuantityRemaining - would be calculated from inventory
                 evt.OrderId,
                 "Order completion")
             {

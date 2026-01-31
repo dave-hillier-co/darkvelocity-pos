@@ -16,7 +16,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
     private IAsyncStream<IStreamEvent>? _spendStream;
 
     // Default tier configuration - can be customized per org
-    private static readonly List<LoyaltyTier> DefaultTiers =
+    private static readonly List<SpendTier> DefaultTiers =
     [
         new() { Name = "Bronze", MinSpend = 0, MaxSpend = 500, PointsMultiplier = 1.0m, PointsPerDollar = 1.0m },
         new() { Name = "Silver", MinSpend = 500, MaxSpend = 1500, PointsMultiplier = 1.25m, PointsPerDollar = 1.0m },
@@ -24,7 +24,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         new() { Name = "Platinum", MinSpend = 5000, MaxSpend = decimal.MaxValue, PointsMultiplier = 2.0m, PointsPerDollar = 1.0m }
     ];
 
-    private List<LoyaltyTier> _tiers = DefaultTiers;
+    private List<SpendTier> _tiers = DefaultTiers;
 
     public CustomerSpendProjectionGrain(
         [PersistentState("customerspend", "OrleansStorage")]
@@ -229,7 +229,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         }
     }
 
-    public async Task<RedeemPointsResult> RedeemPointsAsync(RedeemPointsCommand command)
+    public async Task<RedeemPointsResult> RedeemPointsAsync(RedeemSpendPointsCommand command)
     {
         EnsureExists();
 
@@ -303,7 +303,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
     public Task<bool> HasSufficientPointsAsync(int points)
         => Task.FromResult(_state.State.AvailablePoints >= points);
 
-    public async Task ConfigureTiersAsync(List<LoyaltyTier> tiers)
+    public async Task ConfigureTiersAsync(List<SpendTier> tiers)
     {
         _tiers = tiers.OrderBy(t => t.MinSpend).ToList();
         UpdateTierStatus();
@@ -319,7 +319,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
             throw new InvalidOperationException("Customer spend projection not initialized");
     }
 
-    private LoyaltyTier GetCurrentTier()
+    private SpendTier GetCurrentTier()
     {
         return _tiers.LastOrDefault(t => _state.State.LifetimeSpend >= t.MinSpend)
             ?? _tiers[0];

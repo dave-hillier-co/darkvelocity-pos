@@ -116,10 +116,10 @@ public class DailySalesGrain : Grain, IDailySalesGrain
         _state.State.TransactionCount++;
         _state.State.GuestCount += command.GuestCount;
 
-        // Parse channel (default to POS if unknown)
+        // Parse channel (default to DineIn if unknown)
         var channel = Enum.TryParse<SaleChannel>(command.Channel, true, out var parsedChannel)
             ? parsedChannel
-            : SaleChannel.Pos;
+            : SaleChannel.DineIn;
 
         // Update channel breakdown
         if (!_state.State.SalesByChannel.TryGetValue(channel, out var channelTotal))
