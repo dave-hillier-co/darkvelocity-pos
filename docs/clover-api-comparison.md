@@ -577,6 +577,262 @@ This section compares Clover API capabilities against DarkVelocity's **actual ba
 
 ---
 
+## Missing from DarkVelocity Grains (Clover Has)
+
+This section identifies capabilities Clover provides that are **not implemented at the grain level** in DarkVelocity.
+
+### 1. Menu Items - Missing Fields
+
+| Clover Field | Purpose | DarkVelocity Gap |
+|--------------|---------|------------------|
+| `priceType` | FIXED, PER_UNIT, VARIABLE pricing | Only fixed `Price` decimal |
+| `unitName` | Unit for per-unit pricing ("lb", "oz", "hr") | ❌ Not implemented |
+| `alternateName` | Alternative display name | ❌ Not implemented |
+| `code` | Internal item code (separate from SKU) | ❌ Not implemented (only `Sku`) |
+| `colorCode` | Hex color for item display | ❌ Items don't have color (categories do) |
+| `priceWithoutVat` | Base price for VAT merchants | ❌ Not implemented |
+| `autoManage` | Auto-unavailable when stock=0 | ❌ Not implemented |
+| `available` | Temporary unavailability flag | ❌ Only `IsActive` (permanent) |
+| `isRevenue` | Counts toward revenue | ❌ Not implemented |
+| `defaultTaxRates` | Tax rate associations | ❌ Not on item (site-level only) |
+| `cost` | Item cost on item itself | Uses `TheoreticalCost` from recipes instead |
+
+**DarkVelocity has:** `MenuItemId`, `CategoryId`, `Name`, `Description`, `Price`, `ImageUrl`, `Sku`, `IsActive`, `TrackInventory`, `TheoreticalCost`, `Modifiers`
+
+### 2. Item Variants / Attributes
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Item Groups | Parent item for variants | ❌ Not implemented |
+| Attributes | Variant dimensions (Size, Color) | ❌ Not implemented |
+| Options | Attribute values (Small, Medium, Large) | ❌ Not implemented |
+| Variant SKUs | Auto-generated variant SKUs | ❌ Not implemented |
+
+**Impact:** Cannot create "T-Shirt" with Size (S/M/L) and Color (Red/Blue) variants that auto-generate 6 items.
+
+### 3. Customer - Missing Fields
+
+| Clover Field | Purpose | DarkVelocity Gap |
+|--------------|---------|------------------|
+| `marketingAllowed` | General marketing consent | Has `EmailOptIn`/`SmsOptIn` but no general flag |
+| `cards` | Stored payment methods | ❌ No card-on-file on customer |
+| Multiple emails | Array of email addresses | ❌ Single `Email` only |
+| Multiple phones | Array of phone numbers | ❌ Single `Phone` only |
+| `metadata.businessName` | B2B customer company | ❌ Not implemented |
+| `customerSince` | Customer creation date | Has `CreatedAt` ✓ |
+
+**DarkVelocity has better:** Loyalty integration, rewards, referrals, dietary preferences, allergens, customer segmentation, visit stats
+
+### 4. Payment - Missing Capabilities
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Signature capture | Store customer signature | ❌ Not implemented |
+| Card-on-file | Tokenized cards per customer | ❌ Not implemented |
+| Increment auth | Increase pre-auth amount | ❌ Not implemented |
+| Device tip read | Read tip from terminal | ❌ Not implemented |
+| Tender types | Custom payment methods CRUD | ❌ Enum only |
+
+**DarkVelocity has:** `AdjustTipAsync` for tip after payment, but no device interaction for tip entry
+
+### 5. Merchant/Organization - Missing Features
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Opening hours | Business hours per day | ❌ Not implemented |
+| Tip suggestions | Suggested tip percentages | ❌ Not implemented |
+| Properties | Key-value merchant settings | ❌ Not implemented |
+| Gateway config | Payment gateway settings | ❌ Not exposed |
+| Order types CRUD | Custom order types | ❌ Enum only (`DineIn`, `Takeout`, etc.) |
+| Tender types CRUD | Custom payment methods | ❌ Enum only |
+
+### 6. Device Interactions - Missing
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| `POST /device/ping` | Check device online | ❌ Not implemented |
+| `POST /device/message` | Display message on device | ❌ Not implemented |
+| `POST /device/signature` | Capture signature | ❌ Not implemented |
+| `POST /device/tip` | Prompt for tip amount | ❌ Not implemented |
+| `POST /device/confirmation` | Yes/No prompt | ❌ Not implemented |
+| `POST /device/input` | Custom text input | ❌ Not implemented |
+| `POST /device/custom_activity` | Launch custom app | ❌ Not implemented |
+| `POST /device/cancel` | Cancel current operation | ❌ Not implemented |
+| `POST /device/reset` | Reset device state | ❌ Not implemented |
+
+**Note:** These are Clover-specific terminal interactions. DarkVelocity uses standard payment gateways, so some don't apply.
+
+### 7. Printing - Missing
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Print event status | Get status by print ID | ❌ Not implemented |
+| Receipt delivery | Track receipt sent | ❌ Not implemented |
+
+### 8. Notifications - Missing
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| App notifications | Push to specific device | ❌ Not implemented (has SignalR broadcast) |
+
+### 9. Tokenization - Missing
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Card tokenization | `POST /v1/tokens` | ❌ Not implemented |
+| Apple Pay tokens | Mobile wallet tokens | ❌ Not implemented |
+| Google Pay tokens | Mobile wallet tokens | ❌ Not implemented |
+| ACH tokens | Bank account tokens | ❌ Not implemented |
+
+**Note:** Tokenization is typically handled by payment gateway (Stripe, Adyen, etc.), not the POS system.
+
+### 10. Recurring/Subscriptions - Missing
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Plans | Subscription plan definitions | ❌ Not implemented |
+| Subscriptions | Customer subscription management | ❌ Not implemented |
+| Recurring billing | Automated charge schedules | ❌ Not implemented |
+
+### 11. App Billing - N/A
+
+| Clover Feature | Purpose | DarkVelocity Gap |
+|----------------|---------|------------------|
+| Metered events | Usage-based app billing | N/A - Not an app marketplace |
+| Billing info | App subscription status | N/A - Not an app marketplace |
+
+---
+
+## Gap Analysis Summary
+
+### Critical Gaps (Affects core POS workflows)
+
+| Gap | Impact | Effort |
+|-----|--------|--------|
+| Item variants/attributes | Can't sell products with options (clothing, etc.) | High |
+| Price types (PER_UNIT, VARIABLE) | Can't do weigh scale or open-price items | Medium |
+| Item availability flag | Can't temporarily 86 items without deactivating | Low |
+| Opening hours | No business hour validation | Low |
+
+### Important Gaps (Common use cases)
+
+| Gap | Impact | Effort |
+|-----|--------|--------|
+| Card-on-file / tokenization | No stored payment methods | Medium-High |
+| Tip suggestions configuration | No configurable tip presets | Low |
+| Signature capture | No signature on payments | Medium |
+| Multiple customer emails/phones | Limited customer contact info | Low |
+
+### Minor Gaps (Edge cases / Clover-specific)
+
+| Gap | Impact | Effort |
+|-----|--------|--------|
+| Device display/input | Clover hardware specific | N/A |
+| App billing | Marketplace specific | N/A |
+| Recurring payments | B2B/subscription use case | Medium |
+
+---
+
+## Payload Field Comparison
+
+### MenuItem: Clover vs DarkVelocity
+
+```
+Clover                          DarkVelocity
+─────────────────────────────── ───────────────────────────────
+id                              MenuItemId ✓
+name                            Name ✓
+alternateName                   ❌ Missing
+price                           Price ✓
+priceType                       ❌ Missing (fixed only)
+unitName                        ❌ Missing
+cost                            TheoreticalCost (from recipe)
+sku                             Sku ✓
+code                            ❌ Missing
+hidden                          ❌ Missing
+available                       ❌ Missing
+isRevenue                       ❌ Missing
+colorCode                       ❌ Missing (category has Color)
+priceWithoutVat                 ❌ Missing
+defaultTaxRates                 ❌ Missing
+autoManage                      ❌ Missing
+modifiedTime                    ❌ Missing (has Version)
+itemGroup                       ❌ Missing
+categories                      CategoryId ✓
+modifierGroups                  Modifiers ✓
+tags                            ❌ Missing
+─                               ImageUrl ✓ (DV extra)
+─                               Description ✓ (DV extra)
+─                               TrackInventory ✓ (DV extra)
+─                               RecipeId ✓ (DV extra)
+─                               AccountingGroupId ✓ (DV extra)
+```
+
+### Customer: Clover vs DarkVelocity
+
+```
+Clover                          DarkVelocity
+─────────────────────────────── ───────────────────────────────
+id                              Id ✓
+firstName                       FirstName ✓
+lastName                        LastName ✓
+emailAddresses[]                Contact.Email (single) ⚠️
+phoneNumbers[]                  Contact.Phone (single) ⚠️
+addresses[]                     Contact.Address ✓
+cards[]                         ❌ Missing
+marketingAllowed                EmailOptIn + SmsOptIn (separate) ⚠️
+metadata.businessName           ❌ Missing
+customerSince                   CreatedAt ✓
+─                               DisplayName ✓ (DV extra)
+─                               DateOfBirth ✓ (DV extra)
+─                               Anniversary ✓ (DV extra)
+─                               Gender ✓ (DV extra)
+─                               AvatarUrl ✓ (DV extra)
+─                               Preferences ✓ (DV extra)
+─                               Tags ✓ (DV extra)
+─                               Source ✓ (DV extra)
+─                               ExternalIds ✓ (DV extra)
+─                               Loyalty ✓ (DV extra - built-in)
+─                               Rewards ✓ (DV extra)
+─                               Stats ✓ (DV extra)
+─                               Notes ✓ (DV extra)
+─                               ReferralCode ✓ (DV extra)
+```
+
+### Payment: Clover vs DarkVelocity
+
+```
+Clover                          DarkVelocity
+─────────────────────────────── ───────────────────────────────
+id                              Id ✓
+order.id                        OrderId ✓
+amount                          Amount ✓
+tipAmount                       TipAmount ✓
+tender.label                    Method (enum) ⚠️
+result                          Status ✓
+employee.id                     CashierId ✓
+cardTransaction.authCode        AuthorizationCode ✓
+cardTransaction.last4           CardInfo.MaskedNumber ✓
+cardTransaction.cardType        CardInfo.Brand ✓
+cardTransaction.entryType       CardInfo.EntryMethod ✓
+signature                       ❌ Missing
+externalPaymentId               GatewayReference ✓
+─                               TotalAmount ✓ (DV extra)
+─                               Currency ✓ (DV extra)
+─                               CustomerId ✓ (DV extra)
+─                               DrawerId ✓ (DV extra)
+─                               AvsResult ✓ (DV extra)
+─                               CvvResult ✓ (DV extra)
+─                               AmountTendered ✓ (DV extra - cash)
+─                               ChangeGiven ✓ (DV extra - cash)
+─                               GiftCardId ✓ (DV extra)
+─                               LoyaltyPointsRedeemed ✓ (DV extra)
+─                               Refunds[] ✓ (DV extra)
+─                               BatchId ✓ (DV extra)
+```
+
+---
+
 ## Features DarkVelocity Has That Clover Lacks
 
 | Feature | Description |
