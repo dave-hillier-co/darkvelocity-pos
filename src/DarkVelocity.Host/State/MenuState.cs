@@ -66,6 +66,18 @@ public sealed class MenuItemModifierOptionState
     [Id(1)] public string Name { get; set; } = string.Empty;
     [Id(2)] public decimal Price { get; set; }
     [Id(3)] public bool IsDefault { get; set; }
+
+    /// <summary>
+    /// Serving size for inventory consumption (e.g., 568 for a UK pint, 125 for small wine glass).
+    /// When null, uses the base recipe quantity (multiplier of 1.0).
+    /// </summary>
+    [Id(4)] public decimal? ServingSize { get; set; }
+
+    /// <summary>
+    /// Unit of measure for serving size (e.g., "ml", "g", "oz", "cl").
+    /// Should match the inventory tracking unit for the ingredient.
+    /// </summary>
+    [Id(5)] public string? ServingUnit { get; set; }
 }
 
 // ============================================================================

@@ -85,12 +85,18 @@ public record MenuItemModifier(
     [property: Id(5)] int MaxSelections,
     [property: Id(6)] IReadOnlyList<MenuItemModifierOption> Options);
 
+/// <summary>
+/// Modifier option with optional serving size for inventory consumption.
+/// ServingSize/ServingUnit enable accurate beverage inventory tracking (e.g., pint=568ml, half=284ml).
+/// </summary>
 [GenerateSerializer]
 public record MenuItemModifierOption(
     [property: Id(0)] Guid OptionId,
     [property: Id(1)] string Name,
     [property: Id(2)] decimal Price,
-    [property: Id(3)] bool IsDefault);
+    [property: Id(3)] bool IsDefault,
+    [property: Id(4)] decimal? ServingSize = null,
+    [property: Id(5)] string? ServingUnit = null);
 
 [GenerateSerializer]
 public record MenuItemSnapshot(

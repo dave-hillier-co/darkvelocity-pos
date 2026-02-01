@@ -224,7 +224,9 @@ public class MenuItemGrain : Grain, IMenuItemGrain
                 OptionId = o.OptionId,
                 Name = o.Name,
                 Price = o.Price,
-                IsDefault = o.IsDefault
+                IsDefault = o.IsDefault,
+                ServingSize = o.ServingSize,
+                ServingUnit = o.ServingUnit
             }).ToList();
         }
         else
@@ -242,7 +244,9 @@ public class MenuItemGrain : Grain, IMenuItemGrain
                     OptionId = o.OptionId,
                     Name = o.Name,
                     Price = o.Price,
-                    IsDefault = o.IsDefault
+                    IsDefault = o.IsDefault,
+                    ServingSize = o.ServingSize,
+                    ServingUnit = o.ServingUnit
                 }).ToList()
             });
         }
@@ -300,7 +304,9 @@ public class MenuItemGrain : Grain, IMenuItemGrain
                     OptionId: o.OptionId,
                     Name: o.Name,
                     Price: o.Price,
-                    IsDefault: o.IsDefault)).ToList())).ToList());
+                    IsDefault: o.IsDefault,
+                    ServingSize: o.ServingSize,
+                    ServingUnit: o.ServingUnit)).ToList())).ToList());
     }
 
     private void EnsureInitialized()
