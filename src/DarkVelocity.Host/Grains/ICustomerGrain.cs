@@ -64,7 +64,19 @@ public record RedeemRewardCommand(
 public record RecordVisitCommand(
     [property: Id(0)] Guid SiteId,
     [property: Id(1)] Guid? OrderId,
-    [property: Id(2)] decimal SpendAmount);
+    [property: Id(2)] decimal SpendAmount,
+    [property: Id(3)] string? SiteName = null,
+    [property: Id(4)] Guid? BookingId = null,
+    [property: Id(5)] int PartySize = 1,
+    [property: Id(6)] int PointsEarned = 0,
+    [property: Id(7)] string? Notes = null);
+
+[GenerateSerializer]
+public record UpdatePreferencesCommand(
+    [property: Id(0)] List<string>? DietaryRestrictions = null,
+    [property: Id(1)] List<string>? Allergens = null,
+    [property: Id(2)] string? SeatingPreference = null,
+    [property: Id(3)] string? Notes = null);
 
 [GenerateSerializer]
 public record CustomerCreatedResult([property: Id(0)] Guid Id, [property: Id(1)] string DisplayName, [property: Id(2)] DateTime CreatedAt);
@@ -112,6 +124,19 @@ public interface ICustomerGrain : IGrainWithStringKey
     // GDPR
     Task DeleteAsync();
     Task AnonymizeAsync();
+
+    // Visit History
+    Task<IReadOnlyList<CustomerVisitRecord>> GetVisitHistoryAsync(int limit = 50);
+    Task<IReadOnlyList<CustomerVisitRecord>> GetVisitsBySiteAsync(Guid siteId, int limit = 20);
+    Task<CustomerVisitRecord?> GetLastVisitAsync();
+
+    // Preferences
+    Task UpdatePreferencesAsync(UpdatePreferencesCommand command);
+    Task AddDietaryRestrictionAsync(string restriction);
+    Task RemoveDietaryRestrictionAsync(string restriction);
+    Task AddAllergenAsync(string allergen);
+    Task RemoveAllergenAsync(string allergen);
+    Task SetSeatingPreferenceAsync(string preference);
 
     // Queries
     Task<bool> ExistsAsync();

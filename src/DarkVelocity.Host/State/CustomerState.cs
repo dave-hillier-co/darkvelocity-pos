@@ -145,6 +145,9 @@ public sealed class CustomerState
     [Id(20)] public Guid? ReferredBy { get; set; }
     [Id(21)] public int SuccessfulReferrals { get; set; }
 
+    // Visit History (recent visits, limited to last 50)
+    [Id(27)] public List<CustomerVisitRecord> VisitHistory { get; set; } = [];
+
     // Timestamps
     [Id(22)] public DateTime CreatedAt { get; set; }
     [Id(23)] public DateTime? UpdatedAt { get; set; }
@@ -152,4 +155,19 @@ public sealed class CustomerState
     [Id(25)] public List<Guid> MergedFrom { get; set; } = [];
 
     [Id(26)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public record CustomerVisitRecord
+{
+    [Id(0)] public Guid Id { get; init; }
+    [Id(1)] public Guid SiteId { get; init; }
+    [Id(2)] public string? SiteName { get; init; }
+    [Id(3)] public DateTime VisitedAt { get; init; }
+    [Id(4)] public Guid? OrderId { get; init; }
+    [Id(5)] public Guid? BookingId { get; init; }
+    [Id(6)] public decimal SpendAmount { get; init; }
+    [Id(7)] public int PartySize { get; init; }
+    [Id(8)] public int PointsEarned { get; init; }
+    [Id(9)] public string? Notes { get; init; }
 }

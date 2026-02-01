@@ -58,7 +58,12 @@ app.MapOAuthEndpoints()
    .MapInventoryEndpoints()
    .MapBookingEndpoints()
    .MapEmployeeEndpoints()
-   .MapSearchEndpoints();
+   .MapSearchEndpoints()
+   .MapTableEndpoints()
+   .MapFloorPlanEndpoints()
+   .MapWaitlistEndpoints()
+   .MapAvailabilityEndpoints()
+   .MapWebhookEndpoints();
 
 app.Run();
 
