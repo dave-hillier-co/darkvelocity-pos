@@ -1809,3 +1809,6 @@ public record UpdateEmployeeRequest(
 public record ClockInRequest(Guid SiteId, Guid? ShiftId = null);
 public record ClockOutRequest(string? Notes = null);
 public record AssignRoleRequest(Guid RoleId, string RoleName, string Department, bool IsPrimary = false, decimal? HourlyRateOverride = null);
+
+// Expose Program class for WebApplicationFactory integration testing
+public partial class Program { }
