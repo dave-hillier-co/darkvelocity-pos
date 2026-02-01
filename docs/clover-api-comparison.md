@@ -599,16 +599,40 @@ This section identifies capabilities Clover provides that are **not implemented 
 
 **DarkVelocity has:** `MenuItemId`, `CategoryId`, `Name`, `Description`, `Price`, `ImageUrl`, `Sku`, `IsActive`, `TrackInventory`, `TheoreticalCost`, `Modifiers`
 
-### 2. Item Variants / Attributes
+### 2. Item Variants / Attributes (Retail Feature)
 
-| Clover Feature | Purpose | DarkVelocity Gap |
-|----------------|---------|------------------|
+| Clover Feature | Purpose | DarkVelocity Status |
+|----------------|---------|---------------------|
 | Item Groups | Parent item for variants | ❌ Not implemented |
 | Attributes | Variant dimensions (Size, Color) | ❌ Not implemented |
 | Options | Attribute values (Small, Medium, Large) | ❌ Not implemented |
 | Variant SKUs | Auto-generated variant SKUs | ❌ Not implemented |
 
-**Impact:** Cannot create "T-Shirt" with Size (S/M/L) and Color (Red/Blue) variants that auto-generate 6 items.
+**Note: This is a RETAIL pattern, not needed for F&B.**
+
+For F&B, DarkVelocity uses **modifiers with options** which is the correct approach:
+
+```
+"House Lager" (base item @ £5.00)
+└── Modifier: "Size" (required, min=1, max=1)
+    ├── Option: "Half Pint" (price: -£1.50) → £3.50
+    ├── Option: "Pint" (price: £0.00, default) → £5.00
+    └── Option: "Pitcher" (price: +£8.00) → £13.00
+
+"House Red Wine" (base item @ £6.50)
+└── Modifier: "Glass Size" (required)
+    ├── Option: "125ml" (price: -£1.50) → £5.00
+    ├── Option: "175ml" (price: £0.00, default) → £6.50
+    └── Option: "250ml" (price: +£2.00) → £8.50
+```
+
+**Why modifiers are better for F&B:**
+- Same product, different portion - no separate SKU/inventory needed
+- Price adjustment from base, not separate prices
+- Recipe costing works (same recipe, scaled quantity)
+- Kitchen display shows "Lager (Pint)" not a different item
+
+**Retail variants only needed for:** T-Shirts (Size × Color = 12 SKUs), shoes, apparel with distinct inventory per variant.
 
 ### 3. Customer - Missing Fields
 
@@ -707,12 +731,17 @@ This section identifies capabilities Clover provides that are **not implemented 
 
 ### Critical Gaps (Affects core POS workflows)
 
-| Gap | Impact | Effort |
-|-----|--------|--------|
-| Item variants/attributes | Can't sell products with options (clothing, etc.) | High |
-| Price types (PER_UNIT, VARIABLE) | Can't do weigh scale or open-price items | Medium |
-| Item availability flag | Can't temporarily 86 items without deactivating | Low |
-| Opening hours | No business hour validation | Low |
+| Gap | Impact | Effort | F&B Relevance |
+|-----|--------|--------|---------------|
+| Price types (PER_UNIT, VARIABLE) | Can't do weigh scale or open-price items | Medium | Medium (deli, cheese counters) |
+| Item availability flag | Can't temporarily 86 items without deactivating | Low | **High** (kitchen runs out) |
+| Opening hours | No business hour validation | Low | Low |
+
+### Not a Gap for F&B
+
+| Clover Feature | Why Not Needed |
+|----------------|----------------|
+| Item variants/attributes | F&B uses modifiers for sizes (Pint/Half, 125ml/175ml/250ml). Variants are for retail (T-Shirt Size × Color = distinct SKUs with separate inventory). DarkVelocity's modifier system handles this correctly. |
 
 ### Important Gaps (Common use cases)
 
