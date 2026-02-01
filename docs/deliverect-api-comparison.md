@@ -292,30 +292,194 @@ IWebhookEndpointState {
 
 ---
 
-## 6. API Endpoint Comparison
+## 6. Grain Interface vs Deliverect Functionality Comparison
 
-### Deliverect POS Endpoints
-| Endpoint | Method | DarkVelocity Equivalent |
-|----------|--------|------------------------|
-| `/products/{accountId}` | POST | Menu sync grain (partial) |
-| `/order-status` | POST | Need to implement |
-| `/inventory` | POST | Inventory grain exists |
-| `/accounts` | GET | Organization grain |
-| `/locations` | GET | Site grain |
-| `/channels` | GET | DeliveryPlatform grain |
-| `/allergens-tags` | GET | Need to implement |
+This section maps Deliverect API capabilities to existing DarkVelocity Orleans grain interfaces.
 
-### DarkVelocity Unique Endpoints
-| Endpoint | Purpose | Deliverect Equivalent |
-|----------|---------|----------------------|
-| `/api/oauth/*` | Social login | N/A |
-| `/api/device/*` | Device auth | N/A (different use case) |
-| `/api/auth/pin` | Staff PIN | N/A |
-| `/api/stations/*` | KDS stations | KDS API scope |
+### 6.1 Delivery Platform Management
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Connect to channel | `IDeliveryPlatformGrain` | `ConnectAsync(ConnectDeliveryPlatformCommand)` | ✅ Exists |
+| Disconnect channel | `IDeliveryPlatformGrain` | `DisconnectAsync()` | ✅ Exists |
+| Pause/Resume orders | `IDeliveryPlatformGrain` | `PauseAsync()` / `ResumeAsync()` | ✅ Exists |
+| Map locations to stores | `IDeliveryPlatformGrain` | `AddLocationMappingAsync(PlatformLocationMapping)` | ✅ Exists |
+| Track order stats | `IDeliveryPlatformGrain` | `RecordOrderAsync(decimal)` | ✅ Exists |
+| Store API credentials | `IDeliveryPlatformGrain` | `ApiCredentialsEncrypted` in command | ✅ Exists |
+| Webhook secret storage | `IDeliveryPlatformGrain` | `WebhookSecret` in command | ✅ Exists |
+
+**Gap:** No method to validate incoming webhooks using stored secret.
+
+### 6.2 External Order Management
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Receive order webhook | `IExternalOrderGrain` | `CreateAsync(CreateExternalOrderCommand)` | ✅ Exists |
+| Accept order | `IExternalOrderGrain` | `AcceptAsync(DateTime? estimatedPickupAt)` | ✅ Exists |
+| Reject order | `IExternalOrderGrain` | `RejectAsync(string reason)` | ✅ Exists |
+| Mark preparing | `IExternalOrderGrain` | `SetPreparingAsync()` | ✅ Exists |
+| Mark ready | `IExternalOrderGrain` | `SetReadyAsync()` | ✅ Exists |
+| Mark picked up | `IExternalOrderGrain` | `SetPickedUpAsync()` | ✅ Exists |
+| Mark delivered | `IExternalOrderGrain` | `SetDeliveredAsync()` | ✅ Exists |
+| Cancel order | `IExternalOrderGrain` | `CancelAsync(string reason)` | ✅ Exists |
+| Link to internal order | `IExternalOrderGrain` | `LinkInternalOrderAsync(Guid internalOrderId)` | ✅ Exists |
+| Retry failed order | `IExternalOrderGrain` | `IncrementRetryAsync()` | ✅ Exists |
+| Store delivery address | `ExternalOrderCustomer` | `DeliveryAddress` field | ⚠️ Partial (single string) |
+| Scheduled pickup time | - | - | ❌ Missing |
+| Scheduled delivery time | - | - | ❌ Missing |
+| Courier tracking | - | - | ❌ Missing |
+| ASAP vs scheduled flag | - | - | ❌ Missing |
+| Channel display ID | - | - | ❌ Missing |
+| Discount breakdown | - | - | ❌ Missing |
+| Packaging preferences | - | - | ❌ Missing |
+
+**Current `ExternalOrderCustomer` record:**
+```csharp
+public record ExternalOrderCustomer(
+    string Name,
+    string? Phone,
+    string? DeliveryAddress);  // Single string, not structured
+```
+
+**Deliverect requires structured address:**
+```json
+{
+  "street": "123 Main St",
+  "postalCode": "12345",
+  "city": "Anytown",
+  "country": "US",
+  "extraAddressInfo": "Apt 4B"
+}
+```
+
+### 6.3 Menu Synchronization
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Start menu sync | `IMenuSyncGrain` | `StartAsync(StartMenuSyncCommand)` | ✅ Exists |
+| Record item synced | `IMenuSyncGrain` | `RecordItemSyncedAsync(MenuItemMappingRecord)` | ✅ Exists |
+| Record item failed | `IMenuSyncGrain` | `RecordItemFailedAsync(Guid, string)` | ✅ Exists |
+| Complete sync | `IMenuSyncGrain` | `CompleteAsync()` | ✅ Exists |
+| PLU → MenuItem mapping | `MenuItemMappingRecord` | `InternalMenuItemId` ↔ `PlatformItemId` | ✅ Exists |
+| Price override per platform | `MenuItemMappingRecord` | `PriceOverride` | ✅ Exists |
+| Availability/snooze | `MenuItemMappingRecord` | `IsAvailable` | ✅ Exists |
+| Multi-tax rates | `IMenuItemGrain` | - | ❌ Missing |
+| Product tags/allergens | `IMenuItemGrain` | - | ❌ Missing |
+| Image URL | `IMenuItemGrain` | `ImageUrl` in `CreateMenuItemCommand` | ✅ Exists |
+| Category mapping | `MenuItemMappingRecord` | `PlatformCategoryId` | ✅ Exists |
+
+**Current `IMenuItemGrain` interface:**
+```csharp
+public interface IMenuItemGrain : IGrainWithStringKey
+{
+    Task<MenuItemSnapshot> CreateAsync(CreateMenuItemCommand command);
+    Task<MenuItemSnapshot> UpdateAsync(UpdateMenuItemCommand command);
+    Task DeactivateAsync();
+    Task<MenuItemSnapshot> GetSnapshotAsync();
+    Task<decimal> GetPriceAsync();
+    Task AddModifierAsync(MenuItemModifier modifier);
+    Task RemoveModifierAsync(Guid modifierId);
+    Task UpdateCostAsync(decimal theoreticalCost);
+}
+```
+
+**Missing for Deliverect:**
+- `SetSnoozedAsync(bool snoozed, TimeSpan? duration)` - Temporarily unavailable
+- `UpdateTaxRatesAsync(decimal deliveryTax, decimal takeawayTax, decimal eatInTax)`
+- `AddProductTagAsync(int tagId)` / `RemoveProductTagAsync(int tagId)`
+
+### 6.4 Kitchen Display System (KDS)
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Create kitchen ticket | `IKitchenTicketGrain` | `CreateAsync(CreateKitchenTicketCommand)` | ✅ Exists |
+| Add items to ticket | `IKitchenTicketGrain` | `AddItemAsync(AddTicketItemCommand)` | ✅ Exists |
+| Start preparation | `IKitchenTicketGrain` | `StartAsync()` | ✅ Exists |
+| Bump ticket (complete) | `IKitchenTicketGrain` | `BumpAsync(Guid bumpedBy)` | ✅ Exists |
+| Rush/VIP priority | `IKitchenTicketGrain` | `MarkRushAsync()` / `MarkVipAsync()` | ✅ Exists |
+| Station routing | `IKitchenStationGrain` | `ReceiveTicketAsync(Guid ticketId)` | ✅ Exists |
+| Prep time tracking | `IKitchenTicketGrain` | `GetTimingsAsync()` | ✅ Exists |
+
+**KDS integration is well-aligned with Deliverect's KDS API scope.**
+
+### 6.5 Inventory Integration
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Update stock levels | `IInventoryGrain` | `AdjustQuantityAsync(AdjustQuantityCommand)` | ✅ Exists |
+| Check availability | `IInventoryGrain` | `HasSufficientStockAsync(decimal)` | ✅ Exists |
+| Consume for order | `IInventoryGrain` | `ConsumeForOrderAsync(Guid, decimal, Guid?)` | ✅ Exists |
+| Batch/lot tracking | `IInventoryGrain` | `ReceiveBatchAsync(ReceiveBatchCommand)` | ✅ Exists |
+| Expiry tracking | `IInventoryGrain` | `WriteOffExpiredBatchesAsync(Guid)` | ✅ Exists |
+| Stock level alerts | `IInventoryGrain` | `GetStockLevelAsync()` returns `StockLevel` enum | ✅ Exists |
+
+**Inventory grain is feature-complete for Deliverect integration.**
+
+### 6.6 Store/Location Management
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Get store info | `ISiteGrain` | `GetStateAsync()` | ✅ Exists |
+| Open/close store | `ISiteGrain` | `OpenAsync()` / `CloseAsync()` | ✅ Exists |
+| Temporary closure | `ISiteGrain` | `CloseTemporarilyAsync(string reason)` | ✅ Exists |
+| Operating hours | `ISiteGrain` | `OperatingHours` in `UpdateSiteCommand` | ✅ Exists |
+| Address/timezone | `ISiteGrain` | `Address`, `Timezone` in `CreateSiteCommand` | ✅ Exists |
+| Currency | `ISiteGrain` | `Currency` in `CreateSiteCommand` | ✅ Exists |
+
+**Store management is well-aligned.**
+
+### 6.7 Payment/Payout Management
+
+| Deliverect Capability | DarkVelocity Grain | Grain Method | Status |
+|----------------------|-------------------|--------------|--------|
+| Platform payouts | `IPlatformPayoutGrain` | `CreateAsync(CreatePayoutCommand)` | ✅ Exists |
+| Payout status tracking | `IPlatformPayoutGrain` | `SetProcessingAsync()`, `CompleteAsync()` | ✅ Exists |
+| Fee breakdown | `CreatePayoutCommand` | `GrossAmount`, `PlatformFees`, `NetAmount` | ✅ Exists |
+| Period tracking | `CreatePayoutCommand` | `PeriodStart`, `PeriodEnd` | ✅ Exists |
+
+### 6.8 Webhooks (Outbound to Deliverect)
+
+| Deliverect Requirement | DarkVelocity Grain | Status |
+|-----------------------|-------------------|--------|
+| Webhook endpoint storage | `IWebhookEndpointGrain` | ✅ Exists |
+| Event subscription | `EnabledEvents` list | ✅ Exists |
+| HMAC signing | `Secret` field | ✅ Exists |
+| Delivery tracking | `RecentDeliveries` | ✅ Exists |
+| Retry on failure | - | ⚠️ Need implementation |
+
+**Missing:** Outbound HTTP client to POST status updates to Deliverect's API.
 
 ---
 
-## 7. Integration Architecture Recommendations
+## 7. Gap Summary by Priority
+
+### Critical Gaps (Block Integration)
+| Gap | Affected Grain | Required Change |
+|-----|---------------|-----------------|
+| No outbound status callback | `IExternalOrderGrain` | Add `NotifyPlatformAsync()` or event subscriber |
+| No HMAC validation for inbound webhooks | New | Add webhook validation middleware |
+| No M2M authentication | Auth system | Add `client_credentials` OAuth grant |
+
+### High Priority Gaps (Feature Parity)
+| Gap | Affected Grain | Required Change |
+|-----|---------------|-----------------|
+| Structured delivery address | `ExternalOrderCustomer` | Change `DeliveryAddress` from `string` to record |
+| Scheduled pickup/delivery times | `IExternalOrderGrain` | Add `ScheduledPickupAt`, `ScheduledDeliveryAt` |
+| Courier tracking | `IExternalOrderGrain` | Add `CourierInfo` record and methods |
+| Discount provider tracking | `IExternalOrderGrain` | Add `Discounts` with restaurant/channel attribution |
+| Menu item snooze | `IMenuItemGrain` | Add `SetSnoozedAsync(bool, TimeSpan?)` |
+
+### Medium Priority Gaps (Nice to Have)
+| Gap | Affected Grain | Required Change |
+|-----|---------------|-----------------|
+| Product tags/allergens | `IMenuItemGrain` | Add `ProductTags` collection |
+| Multi-context tax rates | `IMenuItemGrain` | Add delivery/takeaway/eatIn tax fields |
+| Packaging preferences | `IExternalOrderGrain` | Add `PackagingPreferences` record |
+| ASAP delivery flag | `IExternalOrderGrain` | Add `IsAsapDelivery` boolean |
+
+---
+
+## 8. Integration Architecture Recommendations
 
 ### Option A: Direct Deliverect Integration
 ```
