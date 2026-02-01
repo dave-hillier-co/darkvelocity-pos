@@ -33,13 +33,15 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetSpendStream()
     {
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.CustomerSpendStreamNamespace, _state.State.OrganizationId.ToString());
-        _spendStream = streamProvider.GetStream<IStreamEvent>(streamId);
-
-        return base.OnActivateAsync(cancellationToken);
+        if (_spendStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.CustomerSpendStreamNamespace, _state.State.OrganizationId.ToString());
+            _spendStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _spendStream!;
     }
 
     public async Task InitializeAsync(Guid organizationId, Guid customerId)
@@ -119,9 +121,9 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         await _state.WriteStateAsync();
 
         // Publish spend recorded event
-        if (_spendStream != null)
+        if (GetSpendStream() != null)
         {
-            await _spendStream.OnNextAsync(new CustomerSpendRecordedEvent(
+            await GetSpendStream().OnNextAsync(new CustomerSpendRecordedEvent(
                 _state.State.CustomerId,
                 command.SiteId,
                 command.OrderId,
@@ -136,7 +138,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
             });
 
             // Publish points earned event
-            await _spendStream.OnNextAsync(new LoyaltyPointsEarnedEvent(
+            await GetSpendStream().OnNextAsync(new LoyaltyPointsEarnedEvent(
                 _state.State.CustomerId,
                 command.OrderId,
                 command.NetSpend,
@@ -151,7 +153,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
             // Publish tier change event if applicable
             if (tierChanged)
             {
-                await _spendStream.OnNextAsync(new CustomerTierChangedEvent(
+                await GetSpendStream().OnNextAsync(new CustomerTierChangedEvent(
                     _state.State.CustomerId,
                     oldTier,
                     _state.State.CurrentTier,
@@ -201,9 +203,9 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         await _state.WriteStateAsync();
 
         // Publish spend reversed event
-        if (_spendStream != null)
+        if (GetSpendStream() != null)
         {
-            await _spendStream.OnNextAsync(new CustomerSpendReversedEvent(
+            await GetSpendStream().OnNextAsync(new CustomerSpendReversedEvent(
                 _state.State.CustomerId,
                 originalTx?.SiteId ?? Guid.Empty,
                 command.OrderId,
@@ -216,7 +218,7 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
             // Check for tier demotion
             if (_state.State.CurrentTier != oldTier)
             {
-                await _spendStream.OnNextAsync(new CustomerTierChangedEvent(
+                await GetSpendStream().OnNextAsync(new CustomerTierChangedEvent(
                     _state.State.CustomerId,
                     oldTier,
                     _state.State.CurrentTier,
@@ -262,9 +264,9 @@ public class CustomerSpendProjectionGrain : Grain, ICustomerSpendProjectionGrain
         await _state.WriteStateAsync();
 
         // Publish redemption event - triggers accounting
-        if (_spendStream != null)
+        if (GetSpendStream() != null)
         {
-            await _spendStream.OnNextAsync(new LoyaltyPointsRedeemedEvent(
+            await GetSpendStream().OnNextAsync(new LoyaltyPointsRedeemedEvent(
                 _state.State.CustomerId,
                 command.OrderId,
                 command.Points,

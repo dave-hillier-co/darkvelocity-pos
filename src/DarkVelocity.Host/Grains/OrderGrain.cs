@@ -21,19 +21,26 @@ public class OrderGrain : Grain, IOrderGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetOrderStream()
     {
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+        if (_orderStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, _state.State.OrganizationId.ToString());
+            _orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+        }
+        return _orderStream!;
+    }
 
-        // Order events stream (for inventory consumption, kitchen updates, etc.)
-        var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, _state.State.OrganizationId.ToString());
-        _orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
-
-        // Sales events stream (for daily aggregations)
-        var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, _state.State.OrganizationId.ToString());
-        _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
-
-        return base.OnActivateAsync(cancellationToken);
+    private IAsyncStream<IStreamEvent> GetSalesStream()
+    {
+        if (_salesStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, _state.State.OrganizationId.ToString());
+            _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
+        }
+        return _salesStream!;
     }
 
     public async Task<OrderCreatedResult> CreateAsync(CreateOrderCommand command)
@@ -66,9 +73,9 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish order created event
-        if (_orderStream != null)
+        if (GetOrderStream() != null)
         {
-            await _orderStream.OnNextAsync(new OrderCreatedEvent(
+            await GetOrderStream().OnNextAsync(new OrderCreatedEvent(
                 orderId,
                 siteId,
                 orderNumber,
@@ -121,9 +128,9 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish line added event
-        if (_orderStream != null)
+        if (GetOrderStream() != null)
         {
-            await _orderStream.OnNextAsync(new OrderLineAddedEvent(
+            await GetOrderStream().OnNextAsync(new OrderLineAddedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 lineId,
@@ -216,7 +223,7 @@ public class OrderGrain : Grain, IOrderGrain
         if (!_state.State.Lines.Any(l => l.Status == OrderLineStatus.Pending))
             throw new InvalidOperationException("No pending items to send");
 
-        foreach (var line in _state.State.Lines.Where(l => l.Status == OrderLineStatus.Pending))
+        foreach (var line in _state.State.Lines.Where(l => l.Status == OrderLineStatus.Pending).ToList())
         {
             var index = _state.State.Lines.FindIndex(l => l.Id == line.Id);
             _state.State.Lines[index] = line with
@@ -434,9 +441,9 @@ public class OrderGrain : Grain, IOrderGrain
             .ToList();
 
         // Publish order completed event (triggers inventory consumption)
-        if (_orderStream != null)
+        if (GetOrderStream() != null)
         {
-            await _orderStream.OnNextAsync(new OrderCompletedEvent(
+            await GetOrderStream().OnNextAsync(new OrderCompletedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.OrderNumber,
@@ -453,9 +460,9 @@ public class OrderGrain : Grain, IOrderGrain
         }
 
         // Publish sale recorded event (triggers sales aggregation)
-        if (_salesStream != null)
+        if (GetSalesStream() != null)
         {
-            await _salesStream.OnNextAsync(new SaleRecordedEvent(
+            await GetSalesStream().OnNextAsync(new SaleRecordedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 DateOnly.FromDateTime(_state.State.ClosedAt.Value),
@@ -490,9 +497,9 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish order voided event
-        if (_orderStream != null)
+        if (GetOrderStream() != null)
         {
-            await _orderStream.OnNextAsync(new OrderVoidedEvent(
+            await GetOrderStream().OnNextAsync(new OrderVoidedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.OrderNumber,
@@ -505,9 +512,9 @@ public class OrderGrain : Grain, IOrderGrain
         }
 
         // Publish void recorded event for sales aggregation
-        if (_salesStream != null)
+        if (GetSalesStream() != null)
         {
-            await _salesStream.OnNextAsync(new VoidRecordedEvent(
+            await GetSalesStream().OnNextAsync(new VoidRecordedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 DateOnly.FromDateTime(DateTime.UtcNow),

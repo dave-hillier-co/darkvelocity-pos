@@ -76,7 +76,7 @@ public record Alert
     [Id(14)] public Guid? ResolvedBy { get; init; }
     [Id(15)] public string? ResolutionNotes { get; init; }
     [Id(16)] public DateTime? SnoozedUntil { get; init; }
-    [Id(17)] public IReadOnlyDictionary<string, object>? Metadata { get; init; }
+    [Id(17)] public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 }
 
 [GenerateSerializer]
@@ -87,7 +87,7 @@ public record CreateAlertCommand(
     [property: Id(3)] string Message,
     [property: Id(4)] Guid? EntityId = null,
     [property: Id(5)] string? EntityType = null,
-    [property: Id(6)] Dictionary<string, object>? Metadata = null);
+    [property: Id(6)] Dictionary<string, string>? Metadata = null);
 
 [GenerateSerializer]
 public record AcknowledgeAlertCommand(
@@ -189,7 +189,7 @@ public static class AlertRules
             Threshold = -3.0m,
             SecondaryMetric = "GrossProfitPercentLastWeek"
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromHours(24)
     };
 
@@ -207,7 +207,7 @@ public static class AlertRules
             Operator = ComparisonOperator.GreaterThan,
             Threshold = 15.0m
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromHours(24)
     };
 
@@ -226,7 +226,7 @@ public static class AlertRules
             Threshold = 0, // Dynamic - uses ReorderPoint
             SecondaryMetric = "ReorderPoint"
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromHours(4)
     };
 
@@ -244,7 +244,7 @@ public static class AlertRules
             Operator = ComparisonOperator.LessThanOrEqual,
             Threshold = 0
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromHours(1)
     };
 
@@ -262,7 +262,7 @@ public static class AlertRules
             Operator = ComparisonOperator.LessThanOrEqual,
             Threshold = 3
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromHours(24)
     };
 
@@ -280,7 +280,7 @@ public static class AlertRules
             Operator = ComparisonOperator.GreaterThan,
             Threshold = 10.0m
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromDays(7)
     };
 
@@ -298,7 +298,7 @@ public static class AlertRules
             Operator = ComparisonOperator.LessThan,
             Threshold = 0
         },
-        Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
         CooldownPeriod = TimeSpan.FromMinutes(30)
     };
 

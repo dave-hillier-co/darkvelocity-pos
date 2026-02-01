@@ -449,6 +449,9 @@ public class AccountGrain : Grain, IAccountGrain
 
         var closingBalance = command.ClosingBalance ?? _state.State.Balance;
 
+        // Entry count excludes Opening entries (not real activity)
+        var activityEntries = periodEntries.Count(e => e.EntryType != JournalEntryType.Opening);
+
         var summary = new AccountPeriodSummary
         {
             Year = command.Year,
@@ -457,7 +460,7 @@ public class AccountGrain : Grain, IAccountGrain
             TotalDebits = periodDebits,
             TotalCredits = periodCredits,
             ClosingBalance = closingBalance,
-            EntryCount = periodEntries.Count
+            EntryCount = activityEntries
         };
 
         _state.State.PeriodSummaries.Add(summary);

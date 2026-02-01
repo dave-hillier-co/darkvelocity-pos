@@ -19,14 +19,15 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetEmployeeStream()
     {
-        // Get the stream for publishing employee events
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.EmployeeStreamNamespace, _state.State.OrganizationId.ToString());
-        _employeeStream = streamProvider.GetStream<IStreamEvent>(streamId);
-
-        return base.OnActivateAsync(cancellationToken);
+        if (_employeeStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.EmployeeStreamNamespace, _state.State.OrganizationId.ToString());
+            _employeeStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _employeeStream!;
     }
 
     public async Task<EmployeeCreatedResult> CreateAsync(CreateEmployeeCommand command)
@@ -58,9 +59,9 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         await _state.WriteStateAsync();
 
         // Publish employee created event
-        if (_employeeStream != null)
+        if (GetEmployeeStream() != null)
         {
-            await _employeeStream.OnNextAsync(new EmployeeCreatedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeCreatedEvent(
                 employeeId,
                 command.UserId,
                 command.DefaultSiteId,
@@ -128,7 +129,7 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         // Publish employee updated event
         if (_employeeStream != null && changedFields.Count > 0)
         {
-            await _employeeStream.OnNextAsync(new EmployeeUpdatedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeUpdatedEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 changedFields)
@@ -255,7 +256,7 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         // Publish status change event
         if (_employeeStream != null && oldStatus != EmployeeStatus.Active)
         {
-            await _employeeStream.OnNextAsync(new EmployeeStatusChangedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeStatusChangedEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 oldStatus,
@@ -280,7 +281,7 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         // Publish status change event
         if (_employeeStream != null && oldStatus != EmployeeStatus.Inactive)
         {
-            await _employeeStream.OnNextAsync(new EmployeeStatusChangedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeStatusChangedEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 oldStatus,
@@ -304,7 +305,7 @@ public class EmployeeGrain : Grain, IEmployeeGrain
 
         if (_employeeStream != null && oldStatus != EmployeeStatus.OnLeave)
         {
-            await _employeeStream.OnNextAsync(new EmployeeStatusChangedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeStatusChangedEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 oldStatus,
@@ -339,9 +340,9 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         await _state.WriteStateAsync();
 
         // Publish termination event
-        if (_employeeStream != null)
+        if (GetEmployeeStream() != null)
         {
-            await _employeeStream.OnNextAsync(new EmployeeTerminatedEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeTerminatedEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 terminationDate,
@@ -380,9 +381,9 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         await _state.WriteStateAsync();
 
         // Publish clock in event
-        if (_employeeStream != null)
+        if (GetEmployeeStream() != null)
         {
-            await _employeeStream.OnNextAsync(new EmployeeClockedInEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeClockedInEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 command.SiteId,
@@ -422,9 +423,9 @@ public class EmployeeGrain : Grain, IEmployeeGrain
         await _state.WriteStateAsync();
 
         // Publish clock out event
-        if (_employeeStream != null)
+        if (GetEmployeeStream() != null)
         {
-            await _employeeStream.OnNextAsync(new EmployeeClockedOutEvent(
+            await GetEmployeeStream().OnNextAsync(new EmployeeClockedOutEvent(
                 _state.State.Id,
                 _state.State.UserId,
                 entry.SiteId,

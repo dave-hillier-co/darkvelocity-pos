@@ -19,13 +19,15 @@ public class BookingGrain : Grain, IBookingGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetBookingStream()
     {
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.BookingStreamNamespace, _state.State.OrganizationId.ToString());
-        _bookingStream = streamProvider.GetStream<IStreamEvent>(streamId);
-
-        return base.OnActivateAsync(cancellationToken);
+        if (_bookingStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.BookingStreamNamespace, _state.State.OrganizationId.ToString());
+            _bookingStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _bookingStream!;
     }
 
     public async Task<BookingRequestedResult> RequestAsync(RequestBookingCommand command)
@@ -273,9 +275,9 @@ public class BookingGrain : Grain, IBookingGrain
         await _state.WriteStateAsync();
 
         // Publish deposit required event
-        if (_bookingStream != null)
+        if (GetBookingStream() != null)
         {
-            await _bookingStream.OnNextAsync(new BookingDepositRequiredEvent(
+            await GetBookingStream().OnNextAsync(new BookingDepositRequiredEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.CustomerId,
@@ -311,9 +313,9 @@ public class BookingGrain : Grain, IBookingGrain
         await _state.WriteStateAsync();
 
         // Publish deposit paid event - triggers accounting journal entry
-        if (_bookingStream != null)
+        if (GetBookingStream() != null)
         {
-            await _bookingStream.OnNextAsync(new BookingDepositPaidEvent(
+            await GetBookingStream().OnNextAsync(new BookingDepositPaidEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.CustomerId,
@@ -359,9 +361,9 @@ public class BookingGrain : Grain, IBookingGrain
         await _state.WriteStateAsync();
 
         // Publish deposit forfeited event - converts liability to income
-        if (_bookingStream != null)
+        if (GetBookingStream() != null)
         {
-            await _bookingStream.OnNextAsync(new BookingDepositForfeitedEvent(
+            await GetBookingStream().OnNextAsync(new BookingDepositForfeitedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.CustomerId,
@@ -394,9 +396,9 @@ public class BookingGrain : Grain, IBookingGrain
         await _state.WriteStateAsync();
 
         // Publish deposit refunded event - reverses the liability
-        if (_bookingStream != null)
+        if (GetBookingStream() != null)
         {
-            await _bookingStream.OnNextAsync(new BookingDepositRefundedEvent(
+            await GetBookingStream().OnNextAsync(new BookingDepositRefundedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.CustomerId,

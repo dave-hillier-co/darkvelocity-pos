@@ -249,6 +249,11 @@ public class MenuEngineeringGrain : Grain, IMenuEngineeringGrain
                 var totalCost = items.Sum(i => i.TheoreticalCost * i.UnitsSold);
                 var totalContribution = totalRevenue - totalCost;
 
+                // Calculate average per-unit contribution margin for profitability comparison
+                var avgPerUnitContributionMargin = items.Count > 0
+                    ? items.Average(i => i.SellingPrice - i.TheoreticalCost)
+                    : 0;
+
                 return new CategoryAnalysisRecord
                 {
                     Category = g.Key,
@@ -257,7 +262,7 @@ public class MenuEngineeringGrain : Grain, IMenuEngineeringGrain
                     TotalRevenue = totalRevenue,
                     TotalCost = totalCost,
                     TotalContribution = totalContribution,
-                    AverageContributionMargin = items.Count > 0 ? totalContribution / items.Count : 0,
+                    AverageContributionMargin = avgPerUnitContributionMargin,
                     AverageContributionMarginPercent = totalRevenue > 0 ? totalContribution / totalRevenue * 100 : 0,
                     AverageSellingPrice = items.Count > 0 ? items.Average(i => i.SellingPrice) : 0,
                     AverageUnitsSold = items.Count > 0 ? (decimal)totalUnits / items.Count : 0

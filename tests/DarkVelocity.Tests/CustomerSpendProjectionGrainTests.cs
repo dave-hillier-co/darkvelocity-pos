@@ -60,8 +60,9 @@ public class CustomerSpendProjectionGrainTests
 
         Assert.Equal(100, result.PointsEarned); // 100 * 1.0 * 1.0 = 100
         Assert.Equal(100, result.TotalPoints);
-        Assert.Equal("Bronze", result.NewTier);
+        Assert.Equal("Bronze", result.CurrentTier);
         Assert.False(result.TierChanged);
+        Assert.Null(result.NewTier); // No tier change
 
         var state = await grain.GetStateAsync();
         Assert.Equal(100m, state.LifetimeSpend);

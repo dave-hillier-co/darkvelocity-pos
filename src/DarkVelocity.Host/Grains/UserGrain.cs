@@ -21,14 +21,15 @@ public class UserGrain : Grain, IUserGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetUserStream()
     {
-        // Get the stream for publishing user events
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.UserStreamNamespace, _state.State.OrganizationId.ToString());
-        _userStream = streamProvider.GetStream<IStreamEvent>(streamId);
-
-        return base.OnActivateAsync(cancellationToken);
+        if (_userStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.UserStreamNamespace, _state.State.OrganizationId.ToString());
+            _userStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _userStream!;
     }
 
     public async Task<UserCreatedResult> CreateAsync(CreateUserCommand command)
@@ -57,9 +58,9 @@ public class UserGrain : Grain, IUserGrain
         await _state.WriteStateAsync();
 
         // Publish user created event to stream
-        if (_userStream != null)
+        if (GetUserStream() != null)
         {
-            await _userStream.OnNextAsync(new UserCreatedEvent(
+            await GetUserStream().OnNextAsync(new UserCreatedEvent(
                 userId,
                 command.Email,
                 command.DisplayName,
@@ -112,7 +113,7 @@ public class UserGrain : Grain, IUserGrain
         // Publish user updated event to stream
         if (_userStream != null && changedFields.Count > 0)
         {
-            await _userStream.OnNextAsync(new UserUpdatedEvent(
+            await GetUserStream().OnNextAsync(new UserUpdatedEvent(
                 _state.State.Id,
                 command.DisplayName,
                 command.FirstName,
@@ -175,9 +176,9 @@ public class UserGrain : Grain, IUserGrain
             await _state.WriteStateAsync();
 
             // Publish site access granted event
-            if (_userStream != null)
+            if (GetUserStream() != null)
             {
-                await _userStream.OnNextAsync(new UserSiteAccessGrantedEvent(
+                await GetUserStream().OnNextAsync(new UserSiteAccessGrantedEvent(
                     _state.State.Id,
                     siteId)
                 {
@@ -198,9 +199,9 @@ public class UserGrain : Grain, IUserGrain
             await _state.WriteStateAsync();
 
             // Publish site access revoked event
-            if (_userStream != null)
+            if (GetUserStream() != null)
             {
-                await _userStream.OnNextAsync(new UserSiteAccessRevokedEvent(
+                await GetUserStream().OnNextAsync(new UserSiteAccessRevokedEvent(
                     _state.State.Id,
                     siteId)
                 {
@@ -254,7 +255,7 @@ public class UserGrain : Grain, IUserGrain
         // Publish status changed event
         if (_userStream != null && oldStatus != UserStatus.Active)
         {
-            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+            await GetUserStream().OnNextAsync(new UserStatusChangedEvent(
                 _state.State.Id,
                 oldStatus,
                 UserStatus.Active,
@@ -279,7 +280,7 @@ public class UserGrain : Grain, IUserGrain
         // Publish status changed event
         if (_userStream != null && oldStatus != UserStatus.Inactive)
         {
-            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+            await GetUserStream().OnNextAsync(new UserStatusChangedEvent(
                 _state.State.Id,
                 oldStatus,
                 UserStatus.Inactive,
@@ -304,7 +305,7 @@ public class UserGrain : Grain, IUserGrain
         // Publish status changed event
         if (_userStream != null && oldStatus != UserStatus.Locked)
         {
-            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+            await GetUserStream().OnNextAsync(new UserStatusChangedEvent(
                 _state.State.Id,
                 oldStatus,
                 UserStatus.Locked,
@@ -330,7 +331,7 @@ public class UserGrain : Grain, IUserGrain
         // Publish status changed event
         if (_userStream != null && oldStatus != UserStatus.Active)
         {
-            await _userStream.OnNextAsync(new UserStatusChangedEvent(
+            await GetUserStream().OnNextAsync(new UserStatusChangedEvent(
                 _state.State.Id,
                 oldStatus,
                 UserStatus.Active,

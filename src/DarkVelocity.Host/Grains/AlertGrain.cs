@@ -85,7 +85,7 @@ public class AlertGrain : Grain, IAlertGrain
             EntityType = command.EntityType,
             TriggeredAt = now,
             Status = AlertStatus.Active,
-            Metadata = command.Metadata?.ToDictionary(kv => kv.Key, kv => kv.Value.ToString() ?? string.Empty)
+            Metadata = command.Metadata
         };
 
         _state.State.Alerts.Add(alertRecord);
@@ -263,7 +263,7 @@ public class AlertGrain : Grain, IAlertGrain
                 SecondaryMetric = r.SecondaryMetric,
                 SecondaryThreshold = r.SecondaryThreshold
             },
-            Actions = [new AlertAction { ActionType = AlertActionType.CreateAlert }],
+            Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
             CooldownPeriod = r.CooldownPeriod
         }).ToList();
 
@@ -338,7 +338,7 @@ public class AlertGrain : Grain, IAlertGrain
             ResolvedBy = record.ResolvedBy,
             ResolutionNotes = record.ResolutionNotes,
             SnoozedUntil = record.SnoozedUntil,
-            Metadata = record.Metadata?.ToDictionary(kv => kv.Key, kv => (object)kv.Value)
+            Metadata = record.Metadata
         };
     }
 }

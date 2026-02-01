@@ -169,25 +169,36 @@ public class MenuEngineeringGrainTests
         var grain = _fixture.Cluster.GrainFactory.GetGrain<IMenuEngineeringGrain>(GetGrainKey(orgId, siteId));
         await grain.InitializeAsync(new InitializeMenuEngineeringCommand(orgId, siteId, "Main Street"));
 
-        // Add high margin, high popularity item (Star)
+        // Need 3+ items so classification works (relative to average)
+        // Star: high popularity (200 > avg 133), high margin ($15 > avg $7.33)
         await grain.RecordItemSalesAsync(new RecordItemSalesCommand(
             ProductId: Guid.NewGuid(),
             ProductName: "Star Item",
             Category: "Mains",
             SellingPrice: 20.00m,
-            TheoreticalCost: 5.00m,
+            TheoreticalCost: 5.00m, // $15 margin
             UnitsSold: 200,
             TotalRevenue: 4000.00m));
 
-        // Add low margin, high popularity item (Plowhorse)
+        // Plowhorse: high popularity (180 > avg 133), low margin ($4 < avg $7.33)
         await grain.RecordItemSalesAsync(new RecordItemSalesCommand(
             ProductId: Guid.NewGuid(),
             ProductName: "Plowhorse Item",
             Category: "Mains",
             SellingPrice: 10.00m,
-            TheoreticalCost: 6.00m,
-            UnitsSold: 150,
-            TotalRevenue: 1500.00m));
+            TheoreticalCost: 6.00m, // $4 margin
+            UnitsSold: 180,
+            TotalRevenue: 1800.00m));
+
+        // Dog: low popularity (20 < avg 133), low margin ($3 < avg $7.33)
+        await grain.RecordItemSalesAsync(new RecordItemSalesCommand(
+            ProductId: Guid.NewGuid(),
+            ProductName: "Dog Item",
+            Category: "Mains",
+            SellingPrice: 8.00m,
+            TheoreticalCost: 5.00m, // $3 margin
+            UnitsSold: 20,
+            TotalRevenue: 160.00m));
 
         await grain.AnalyzeAsync(new AnalyzeMenuCommand(DateTime.Today.AddDays(-30), DateTime.Today));
 
@@ -262,20 +273,39 @@ public class MenuEngineeringGrainTests
         var grain = _fixture.Cluster.GrainFactory.GetGrain<IMenuEngineeringGrain>(GetGrainKey(orgId, siteId));
         await grain.InitializeAsync(new InitializeMenuEngineeringCommand(orgId, siteId, "Main Street"));
 
-        // Low margin item
+        // The grain only suggests if margin is 5+ points below target AND price change is <= 15%
+        // For item with 62% margin and target 68%:
+        //   - 62 < 68 - 5 = 62 < 63 is TRUE (triggers suggestion)
+        //   - Price = $10, Cost = $3.80
+        //   - Target price = $3.80 / 0.32 = $11.875 = 18.75% increase (exceeds 15%)
+        //
+        // For item with 62% margin and target 66%:
+        //   - 62 < 66 - 5 = 62 < 61 is FALSE (doesn't trigger)
+        //
+        // The constraints are very tight. Let's use margin = 57% with target = 65%:
+        //   - 57 < 65 - 5 = 57 < 60 is TRUE
+        //   - Price = $10, Cost = $4.30
+        //   - Target price = $4.30 / 0.35 = $12.29 = 22.9% (too high)
+        //
+        // With higher price and lower target gap:
+        // Price = $20, Cost = $7 (65% margin), Target = 72%
+        //   - 65 < 72 - 5 = 65 < 67 is TRUE
+        //   - Target price = $7 / 0.28 = $25 = 25% increase (too high)
+        //
+        // The 15% max price change is very restrictive. Let's test with higher limit:
         await grain.RecordItemSalesAsync(new RecordItemSalesCommand(
             ProductId: Guid.NewGuid(),
             ProductName: "Low Margin Burger",
             Category: "Mains",
             SellingPrice: 10.00m,
-            TheoreticalCost: 5.00m, // 50% margin
+            TheoreticalCost: 4.00m, // 60% margin
             UnitsSold: 100,
             TotalRevenue: 1000.00m));
 
         await grain.AnalyzeAsync(new AnalyzeMenuCommand(DateTime.Today.AddDays(-30), DateTime.Today));
 
-        // Act
-        var suggestions = await grain.GetPriceSuggestionsAsync(targetMarginPercent: 70m);
+        // Act - use higher maxPriceChangePercent to allow larger price changes
+        var suggestions = await grain.GetPriceSuggestionsAsync(targetMarginPercent: 70m, maxPriceChangePercent: 50m);
 
         // Assert
         suggestions.Should().NotBeEmpty();
@@ -323,18 +353,19 @@ public class MenuEngineeringGrainTests
         // Act
         await grain.SetTargetMarginAsync(75m);
 
-        // Add item and check suggestions reflect new target
+        // Add item with 65% margin - below new 75% target (triggers at margin < 70%)
         await grain.RecordItemSalesAsync(new RecordItemSalesCommand(
             ProductId: Guid.NewGuid(),
             ProductName: "Item",
             Category: "Mains",
             SellingPrice: 10.00m,
-            TheoreticalCost: 3.00m, // 70% margin
+            TheoreticalCost: 3.50m, // 65% margin
             UnitsSold: 100,
             TotalRevenue: 1000.00m));
 
         await grain.AnalyzeAsync(new AnalyzeMenuCommand(DateTime.Today.AddDays(-30), DateTime.Today));
-        var suggestions = await grain.GetPriceSuggestionsAsync(targetMarginPercent: 75m);
+        // Use higher maxPriceChangePercent to allow suggestions
+        var suggestions = await grain.GetPriceSuggestionsAsync(targetMarginPercent: 75m, maxPriceChangePercent: 50m);
 
         // Assert - should suggest price increase to hit 75%
         suggestions.Should().NotBeEmpty();

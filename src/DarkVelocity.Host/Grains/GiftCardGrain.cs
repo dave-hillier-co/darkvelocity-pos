@@ -21,13 +21,15 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         _state = state;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    private IAsyncStream<IStreamEvent> GetGiftCardStream()
     {
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, _state.State.OrganizationId.ToString());
-        _giftCardStream = streamProvider.GetStream<IStreamEvent>(streamId);
-
-        return base.OnActivateAsync(cancellationToken);
+        if (_giftCardStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, _state.State.OrganizationId.ToString());
+            _giftCardStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _giftCardStream!;
     }
 
     public async Task<GiftCardCreatedResult> CreateAsync(CreateGiftCardCommand command)
@@ -94,9 +96,9 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         await _state.WriteStateAsync();
 
         // Publish gift card activated event - triggers accounting: Debit Cash, Credit GC Liability
-        if (_giftCardStream != null)
+        if (GetGiftCardStream() != null)
         {
-            await _giftCardStream.OnNextAsync(new GiftCardActivatedEvent(
+            await GetGiftCardStream().OnNextAsync(new GiftCardActivatedEvent(
                 _state.State.Id,
                 command.SiteId,
                 _state.State.CardNumber,
@@ -163,9 +165,9 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         await _state.WriteStateAsync();
 
         // Publish gift card redeemed event - triggers accounting: Debit GC Liability, Credit Sales Revenue
-        if (_giftCardStream != null)
+        if (GetGiftCardStream() != null)
         {
-            await _giftCardStream.OnNextAsync(new GiftCardRedeemedEvent(
+            await GetGiftCardStream().OnNextAsync(new GiftCardRedeemedEvent(
                 _state.State.Id,
                 command.SiteId,
                 _state.State.CardNumber,
@@ -215,9 +217,9 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         await _state.WriteStateAsync();
 
         // Publish gift card reloaded event - triggers accounting: Debit Cash, Credit GC Liability
-        if (_giftCardStream != null)
+        if (GetGiftCardStream() != null)
         {
-            await _giftCardStream.OnNextAsync(new GiftCardReloadedEvent(
+            await GetGiftCardStream().OnNextAsync(new GiftCardReloadedEvent(
                 _state.State.Id,
                 command.SiteId,
                 _state.State.CardNumber,
@@ -267,7 +269,7 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         // Publish refund applied event - triggers accounting: Debit Refund Expense, Credit GC Liability
         if (_giftCardStream != null && command.OriginalOrderId != null)
         {
-            await _giftCardStream.OnNextAsync(new GiftCardRefundAppliedEvent(
+            await GetGiftCardStream().OnNextAsync(new GiftCardRefundAppliedEvent(
                 _state.State.Id,
                 command.SiteId,
                 _state.State.CardNumber,
@@ -361,7 +363,7 @@ public class GiftCardGrain : Grain, IGiftCardGrain
         // Publish gift card expired event - triggers accounting: Debit GC Liability, Credit Breakage Income
         if (_giftCardStream != null && previousBalance > 0)
         {
-            await _giftCardStream.OnNextAsync(new GiftCardExpiredEvent(
+            await GetGiftCardStream().OnNextAsync(new GiftCardExpiredEvent(
                 _state.State.Id,
                 _state.State.ActivationSiteId ?? Guid.Empty,
                 _state.State.CardNumber,
