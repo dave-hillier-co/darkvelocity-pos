@@ -1,98 +1,120 @@
 import { apiClient } from './client'
+import type { HalResource } from '../types'
 
-const API_BASE = '/api/locations'
+// Payment method enum matching backend
+export type PaymentMethodType = 'Cash' | 'Card' | 'GiftCard' | 'StoreCredit' | 'External'
 
-export interface PaymentMethod {
-  id: string
-  name: string
-  methodType: 'cash' | 'card' | 'voucher' | 'other'
-  isActive: boolean
-  requiresConfirmation: boolean
+// Card info matching backend
+export interface CardInfo {
+  lastFour: string
+  brand: string
+  expiryMonth: number
+  expiryYear: number
+  cardholderName?: string
 }
 
-export interface CreatePaymentRequest {
+// Request types matching backend contracts
+export interface InitiatePaymentRequest {
   orderId: string
-  paymentMethodId: string
+  method: PaymentMethodType
   amount: number
+  cashierId: string
+  customerId?: string
+  drawerId?: string
+}
+
+export interface CompleteCashRequest {
+  amountTendered: number
   tipAmount?: number
-  receivedAmount?: number
-  reference?: string
 }
 
-export interface Payment {
-  id: string
-  orderId: string
-  paymentMethodId: string
-  paymentMethodName: string
+export interface CompleteCardRequest {
+  gatewayReference: string
+  authorizationCode: string
+  cardInfo: CardInfo
+  gatewayName: string
+  tipAmount?: number
+}
+
+export interface VoidPaymentRequest {
+  voidedBy: string
+  reason: string
+}
+
+export interface RefundPaymentRequest {
   amount: number
-  tipAmount: number
-  receivedAmount: number
-  changeAmount: number
-  status: 'pending' | 'completed' | 'failed' | 'refunded'
-  stripePaymentIntentId?: string
+  reason: string
+  issuedBy: string
+}
+
+// Response types
+export interface InitiatePaymentResult {
+  id: string
   createdAt: string
 }
 
-export interface Receipt {
-  id: string
-  paymentId: string
-  receiptNumber: string
-  receiptData: {
-    header: string[]
-    lines: Array<{
-      name: string
-      quantity: number
-      unitPrice: number
-      total: number
-    }>
-    subtotal: number
-    tax: number
-    total: number
-    footer: string[]
-  }
-  printedAt?: string
+export interface CashPaymentResult {
+  totalAmount: number
+  amountTendered: number
+  changeAmount: number
+  tipAmount: number
 }
 
-export async function getPaymentMethods(locationId: string): Promise<PaymentMethod[]> {
-  const response = await apiClient.get<{ _embedded?: { items: PaymentMethod[] } }>(
-    `${API_BASE}/${locationId}/payment-methods`
-  )
-  return response._embedded?.items ?? []
+export interface CardPaymentResult {
+  totalAmount: number
+  authorizationCode: string
+  lastFour: string
+  tipAmount: number
 }
 
-export async function createPayment(
-  locationId: string,
-  request: CreatePaymentRequest
-): Promise<Payment> {
-  return apiClient.post<Payment>(`${API_BASE}/${locationId}/payments`, request)
-}
-
-export async function getPayment(locationId: string, paymentId: string): Promise<Payment> {
-  return apiClient.get<Payment>(`${API_BASE}/${locationId}/payments/${paymentId}`)
-}
-
-export async function getReceipt(paymentId: string): Promise<Receipt> {
-  return apiClient.get<Receipt>(`/api/payments/${paymentId}/receipt`)
-}
-
-export async function printReceipt(paymentId: string, printerId: string): Promise<void> {
-  await apiClient.post(`/api/payments/${paymentId}/print`, { printerId })
-}
-
-// Stripe integration
-export interface CreatePaymentIntentRequest {
+export interface RefundResult {
+  refundId: string
   amount: number
-  currency?: string
+  issuedAt: string
+}
+
+export interface PaymentState {
+  id: string
   orderId: string
+  method: PaymentMethodType
+  amount: number
+  tipAmount: number
+  totalAmount: number
+  status: 'Pending' | 'Completed' | 'Voided' | 'Refunded' | 'PartiallyRefunded'
+  cashierId: string
+  customerId?: string
+  cardInfo?: CardInfo
+  createdAt: string
+  completedAt?: string
 }
 
-export interface PaymentIntent {
-  clientSecret: string
-  paymentIntentId: string
+// API functions
+export async function initiatePayment(request: InitiatePaymentRequest): Promise<InitiatePaymentResult & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath('/payments')
+  return apiClient.post<InitiatePaymentResult & HalResource>(endpoint, request)
 }
 
-export async function createPaymentIntent(
-  request: CreatePaymentIntentRequest
-): Promise<PaymentIntent> {
-  return apiClient.post<PaymentIntent>('/api/stripe/create-payment-intent', request)
+export async function getPayment(paymentId: string): Promise<PaymentState & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/payments/${paymentId}`)
+  return apiClient.get<PaymentState & HalResource>(endpoint)
+}
+
+export async function completeCashPayment(paymentId: string, request: CompleteCashRequest): Promise<CashPaymentResult & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/payments/${paymentId}/complete-cash`)
+  return apiClient.post<CashPaymentResult & HalResource>(endpoint, request)
+}
+
+export async function completeCardPayment(paymentId: string, request: CompleteCardRequest): Promise<CardPaymentResult & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/payments/${paymentId}/complete-card`)
+  return apiClient.post<CardPaymentResult & HalResource>(endpoint, request)
+}
+
+export async function voidPayment(paymentId: string, request: VoidPaymentRequest): Promise<{ message: string }> {
+  const endpoint = apiClient.buildOrgSitePath(`/payments/${paymentId}/void`)
+  return apiClient.post(endpoint, request)
+}
+
+export async function refundPayment(paymentId: string, request: RefundPaymentRequest): Promise<RefundResult & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/payments/${paymentId}/refund`)
+  return apiClient.post<RefundResult & HalResource>(endpoint, request)
 }

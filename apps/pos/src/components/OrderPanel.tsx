@@ -20,7 +20,7 @@ export default function OrderPanel() {
           <p>Select an item from the menu to start</p>
         </header>
         <footer style={{ marginTop: 'auto', paddingTop: '1rem' }}>
-          <small>Logged in as {user?.firstName} {user?.lastName}</small>
+          <small>Logged in as {user?.displayName}</small>
           <button className="secondary outline" onClick={logout}>
             Log Out
           </button>
@@ -78,7 +78,7 @@ export default function OrderPanel() {
           <div className="order-total-row discount-row">
             <span>
               Discounts
-              {order.orderDiscountReason && <small> ({order.orderDiscountReason})</small>}
+              {order.discounts.length > 0 && <small> ({order.discounts.map(d => d.name).join(', ')})</small>}
             </span>
             <span>-{formatCurrency(order.discountTotal)}</span>
           </div>
@@ -105,7 +105,7 @@ export default function OrderPanel() {
       )}
 
       <footer style={{ marginTop: '1rem' }}>
-        <small>Logged in as {user?.firstName} {user?.lastName}</small>
+        <small>Logged in as {user?.displayName}</small>
         <button className="secondary outline" onClick={logout}>
           Log Out
         </button>

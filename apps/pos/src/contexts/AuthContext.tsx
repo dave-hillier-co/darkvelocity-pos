@@ -115,6 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [state.accessToken, state.refreshToken, state.user, state.sessionId])
 
+  // Set tenant context when device auth changes
+  useEffect(() => {
+    if (organizationId && siteId) {
+      apiClient.setTenantContext({ orgId: organizationId, siteId })
+    } else {
+      apiClient.setTenantContext(null)
+    }
+  }, [organizationId, siteId])
+
   async function loginWithPin(pin: string) {
     if (!isDeviceAuthenticated || !organizationId || !siteId || !deviceId) {
       dispatch({ type: 'AUTH_FAILED', payload: 'Device not authenticated' })
@@ -144,12 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Build user object from response
       const user: User = {
         id: data.userId,
-        username: data.displayName,
-        firstName: data.displayName.split(' ')[0] || data.displayName,
-        lastName: data.displayName.split(' ').slice(1).join(' ') || '',
-        userGroupName: 'Staff',
-        homeLocationId: siteId,
-        isActive: true,
+        displayName: data.displayName,
       }
 
       apiClient.setToken(data.accessToken)

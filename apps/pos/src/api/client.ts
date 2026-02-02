@@ -1,10 +1,38 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
+export interface TenantContext {
+  orgId: string
+  siteId: string
+}
+
 class ApiClient {
   private accessToken: string | null = null
+  private tenantContext: TenantContext | null = null
 
   setToken(token: string | null) {
     this.accessToken = token
+  }
+
+  setTenantContext(context: TenantContext | null) {
+    this.tenantContext = context
+  }
+
+  getTenantContext(): TenantContext | null {
+    return this.tenantContext
+  }
+
+  buildOrgSitePath(path: string): string {
+    if (!this.tenantContext) {
+      throw new Error('Tenant context not set')
+    }
+    return `/api/orgs/${this.tenantContext.orgId}/sites/${this.tenantContext.siteId}${path}`
+  }
+
+  buildOrgPath(path: string): string {
+    if (!this.tenantContext) {
+      throw new Error('Tenant context not set')
+    }
+    return `/api/orgs/${this.tenantContext.orgId}${path}`
   }
 
   private async request<T>(

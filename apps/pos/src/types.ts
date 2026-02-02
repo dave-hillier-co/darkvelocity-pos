@@ -1,15 +1,24 @@
-// Auth types
-export interface User {
-  id: string
-  username: string
-  firstName: string
-  lastName: string
-  email?: string
-  userGroupName: string
-  homeLocationId: string
-  isActive: boolean
+// Tenant context
+export interface TenantContext {
+  orgId: string
+  siteId: string
 }
 
+// Auth types - matches PinLoginResponse from backend
+export interface User {
+  id: string
+  displayName: string
+}
+
+export interface PinLoginResponse {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  userId: string
+  displayName: string
+}
+
+// Legacy LoginResponse for compatibility
 export interface LoginResponse {
   accessToken: string
   refreshToken: string
@@ -17,13 +26,19 @@ export interface LoginResponse {
   user: User
 }
 
-// Menu types
+// Menu types - matches backend MenuItemGrain snapshots
 export interface MenuItem {
   id: string
   name: string
   price: number
   categoryId: string
-  accountingGroupId: string
+  accountingGroupId?: string
+  recipeId?: string
+  description?: string
+  imageUrl?: string
+  sku?: string
+  isActive: boolean
+  trackInventory: boolean
 }
 
 export interface MenuCategory {
@@ -31,33 +46,103 @@ export interface MenuCategory {
   name: string
   displayOrder: number
   color?: string
+  description?: string
+  itemCount?: number
 }
 
-// Order types
+// Order types - matches backend OrderGrain state
+export type OrderType = 'DirectSale' | 'TableService' | 'Tab' | 'Delivery' | 'TakeOut'
+export type OrderStatus = 'Open' | 'Sent' | 'InProgress' | 'Ready' | 'Closed' | 'Voided'
+
+export interface OrderLineModifier {
+  id: string
+  name: string
+  price: number
+}
+
 export interface OrderLine {
   id: string
   menuItemId: string
   itemName: string
   quantity: number
   unitPrice: number
+  notes?: string
+  modifiers?: OrderLineModifier[]
   discountAmount: number
   discountReason?: string
   lineTotal: number
   sentAt?: string
 }
 
+export interface OrderDiscount {
+  id: string
+  name: string
+  type: 'Percentage' | 'FixedAmount'
+  value: number
+  appliedBy: string
+  reason?: string
+}
+
 export interface Order {
   id: string
   orderNumber: string
-  orderType: 'direct_sale' | 'table_service'
-  status: 'open' | 'completed' | 'voided'
+  type: OrderType
+  status: OrderStatus
+  tableId?: string
+  tableNumber?: string
+  customerId?: string
+  guestCount?: number
   lines: OrderLine[]
+  discounts: OrderDiscount[]
   subtotal: number
   taxTotal: number
   discountTotal: number
   grandTotal: number
-  orderDiscountAmount?: number
-  orderDiscountReason?: string
+  createdAt: string
+  sentAt?: string
+  closedAt?: string
+}
+
+// Backend request/response types
+export interface CreateOrderRequest {
+  createdBy: string
+  type: OrderType
+  tableId?: string
+  tableNumber?: string
+  customerId?: string
+  guestCount?: number
+}
+
+export interface AddLineRequest {
+  menuItemId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  notes?: string
+  modifiers?: OrderLineModifier[]
+}
+
+export interface SendOrderRequest {
+  sentBy: string
+}
+
+export interface CloseOrderRequest {
+  closedBy: string
+}
+
+export interface VoidOrderRequest {
+  voidedBy: string
+  reason: string
+}
+
+export interface ApplyDiscountRequest {
+  name: string
+  type: 'Percentage' | 'FixedAmount'
+  value: number
+  appliedBy: string
+  discountId?: string
+  reason?: string
+  approvedBy?: string
 }
 
 // HAL types

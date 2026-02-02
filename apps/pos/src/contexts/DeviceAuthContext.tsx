@@ -21,16 +21,6 @@ interface DeviceCodeResponse {
   interval: number
 }
 
-interface DeviceTokenResponse {
-  accessToken: string
-  refreshToken: string
-  deviceId: string
-  organizationId: string
-  siteId: string
-  expiresIn: number
-  tokenType: string
-}
-
 interface DeviceAuthContextValue extends DeviceAuthState {
   requestDeviceCode: () => Promise<DeviceCodeResponse>
   pollForToken: (deviceCode: string, userCode: string, interval: number) => void

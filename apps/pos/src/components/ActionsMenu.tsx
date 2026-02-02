@@ -114,7 +114,7 @@ export default function ActionsMenu({ onClose }: ActionsMenuProps) {
                 onClick={() => setShowOrderDiscount(true)}
               >
                 Apply Order Discount
-                {order.orderDiscountAmount ? ` (${formatCurrency(order.orderDiscountAmount)})` : ''}
+                {order.discounts.length > 0 ? ` (${formatCurrency(order.discounts.reduce((sum, d) => sum + (d.type === 'FixedAmount' ? d.value : 0), 0))})` : ''}
               </button>
             </li>
             <li>

@@ -1,87 +1,80 @@
 import { apiClient } from './client'
-import type { Order, OrderLine } from '../types'
+import type {
+  Order,
+  OrderLine,
+  CreateOrderRequest,
+  AddLineRequest,
+  SendOrderRequest,
+  CloseOrderRequest,
+  VoidOrderRequest,
+  ApplyDiscountRequest,
+  HalResource,
+} from '../types'
 
-const API_BASE = '/api/locations'
+// Response types with HAL links
+export interface OrderResponse extends Order, HalResource {}
+export interface OrderLineResponse extends OrderLine, HalResource {}
 
-export interface CreateOrderRequest {
-  orderType: Order['orderType']
-  userId?: string
+export interface CreateOrderResult {
+  id: string
+  orderNumber: string
+  createdAt: string
 }
 
-export interface AddLineRequest {
-  menuItemId: string
-  itemName: string
-  quantity: number
-  unitPrice: number
+export interface OrderTotals {
+  subtotal: number
+  discountTotal: number
+  taxTotal: number
+  grandTotal: number
 }
 
-export interface OrderResponse extends Order {
-  _links: Record<string, { href: string }>
+export async function createOrder(request: CreateOrderRequest): Promise<CreateOrderResult & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath('/orders')
+  return apiClient.post<CreateOrderResult & HalResource>(endpoint, request)
 }
 
-export async function createOrder(
-  locationId: string,
-  request: CreateOrderRequest
-): Promise<Order> {
-  return apiClient.post<OrderResponse>(`${API_BASE}/${locationId}/orders`, request)
+export async function getOrder(orderId: string): Promise<OrderResponse> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}`)
+  return apiClient.get<OrderResponse>(endpoint)
 }
 
-export async function getOrder(locationId: string, orderId: string): Promise<Order> {
-  return apiClient.get<OrderResponse>(`${API_BASE}/${locationId}/orders/${orderId}`)
+export async function addOrderLine(orderId: string, request: AddLineRequest): Promise<OrderLineResponse> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/lines`)
+  return apiClient.post<OrderLineResponse>(endpoint, request)
 }
 
-export async function addOrderLine(
-  locationId: string,
-  orderId: string,
-  request: AddLineRequest
-): Promise<OrderLine> {
-  return apiClient.post<OrderLine>(
-    `${API_BASE}/${locationId}/orders/${orderId}/lines`,
-    request
-  )
+export async function getOrderLines(orderId: string): Promise<OrderLine[]> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/lines`)
+  const response = await apiClient.get<{ _embedded?: { items: OrderLine[] } }>(endpoint)
+  return response._embedded?.items ?? []
 }
 
-export async function updateOrderLine(
-  locationId: string,
-  orderId: string,
-  lineId: string,
-  updates: Partial<Pick<OrderLine, 'quantity' | 'discountAmount'>>
-): Promise<OrderLine> {
-  return apiClient.patch<OrderLine>(
-    `${API_BASE}/${locationId}/orders/${orderId}/lines/${lineId}`,
-    updates
-  )
+export async function removeOrderLine(orderId: string, lineId: string): Promise<void> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/lines/${lineId}`)
+  await apiClient.delete(endpoint)
 }
 
-export async function removeOrderLine(
-  locationId: string,
-  orderId: string,
-  lineId: string
-): Promise<void> {
-  await apiClient.delete(`${API_BASE}/${locationId}/orders/${orderId}/lines/${lineId}`)
+export async function sendOrder(orderId: string, request: SendOrderRequest): Promise<{ status: string; sentAt: string }> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/send`)
+  return apiClient.post(endpoint, request)
 }
 
-export async function sendOrder(locationId: string, orderId: string): Promise<Order> {
-  return apiClient.post<OrderResponse>(
-    `${API_BASE}/${locationId}/orders/${orderId}/send`,
-    {}
-  )
+export async function closeOrder(orderId: string, request: CloseOrderRequest): Promise<{ message: string }> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/close`)
+  return apiClient.post(endpoint, request)
 }
 
-export async function voidOrder(
-  locationId: string,
-  orderId: string,
-  reason: string
-): Promise<Order> {
-  return apiClient.post<OrderResponse>(
-    `${API_BASE}/${locationId}/orders/${orderId}/void`,
-    { reason }
-  )
+export async function voidOrder(orderId: string, request: VoidOrderRequest): Promise<{ message: string }> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/void`)
+  return apiClient.post(endpoint, request)
 }
 
-export async function completeOrder(locationId: string, orderId: string): Promise<Order> {
-  return apiClient.post<OrderResponse>(
-    `${API_BASE}/${locationId}/orders/${orderId}/complete`,
-    {}
-  )
+export async function applyDiscount(orderId: string, request: ApplyDiscountRequest): Promise<OrderTotals & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/discounts`)
+  return apiClient.post(endpoint, request)
+}
+
+export async function getOrderTotals(orderId: string): Promise<OrderTotals & HalResource> {
+  const endpoint = apiClient.buildOrgSitePath(`/orders/${orderId}/totals`)
+  return apiClient.get(endpoint)
 }

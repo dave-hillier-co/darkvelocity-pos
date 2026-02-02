@@ -2,11 +2,11 @@ import { apiClient } from './client'
 
 export interface Category {
   id: string
-  locationId: string
   name: string
+  description?: string
   displayOrder: number
-  color: string
-  isActive: boolean
+  color?: string
+  itemCount?: number
   _links: {
     self: { href: string }
     items: { href: string }
@@ -15,14 +15,16 @@ export interface Category {
 
 export interface MenuItem {
   id: string
-  locationId: string
   categoryId: string
-  accountingGroupId: string
+  accountingGroupId?: string
+  recipeId?: string
   name: string
-  description: string
+  description?: string
   price: number
-  imageUrl: string | null
+  imageUrl?: string
+  sku?: string
   isActive: boolean
+  trackInventory: boolean
   _links: {
     self: { href: string }
     category: { href: string }
@@ -36,69 +38,103 @@ export interface HalCollection<T> {
   _links: {
     self: { href: string }
   }
-  total: number
+  total?: number
+  count: number
 }
 
-export async function getCategories(locationId: string): Promise<HalCollection<Category>> {
-  return apiClient.get(`/api/locations/${locationId}/categories`)
+// Categories - at org level
+export async function getCategories(): Promise<Category[]> {
+  try {
+    const endpoint = apiClient.buildOrgPath('/menu/categories')
+    const response = await apiClient.get<HalCollection<Category>>(endpoint)
+    return response._embedded?.items ?? []
+  } catch {
+    return []
+  }
 }
 
-export async function getCategory(locationId: string, categoryId: string): Promise<Category> {
-  return apiClient.get(`/api/locations/${locationId}/categories/${categoryId}`)
+export async function getCategory(categoryId: string): Promise<Category> {
+  const endpoint = apiClient.buildOrgPath(`/menu/categories/${categoryId}`)
+  return apiClient.get<Category>(endpoint)
 }
 
-export async function createCategory(locationId: string, data: {
-  name: string
-  displayOrder?: number
-  color?: string
-}): Promise<Category> {
-  return apiClient.post(`/api/locations/${locationId}/categories`, data)
-}
-
-export async function updateCategory(locationId: string, categoryId: string, data: {
-  name?: string
-  displayOrder?: number
-  color?: string
-  isActive?: boolean
-}): Promise<Category> {
-  return apiClient.put(`/api/locations/${locationId}/categories/${categoryId}`, data)
-}
-
-export async function deleteCategory(locationId: string, categoryId: string): Promise<void> {
-  return apiClient.delete(`/api/locations/${locationId}/categories/${categoryId}`)
-}
-
-export async function getMenuItems(locationId: string, categoryId?: string): Promise<HalCollection<MenuItem>> {
-  const url = categoryId
-    ? `/api/locations/${locationId}/categories/${categoryId}/items`
-    : `/api/locations/${locationId}/items`
-  return apiClient.get(url)
-}
-
-export async function getMenuItem(locationId: string, itemId: string): Promise<MenuItem> {
-  return apiClient.get(`/api/locations/${locationId}/items/${itemId}`)
-}
-
-export async function createMenuItem(locationId: string, data: {
-  categoryId: string
-  accountingGroupId: string
+export async function createCategory(data: {
+  locationId: string
   name: string
   description?: string
-  price: number
-}): Promise<MenuItem> {
-  return apiClient.post(`/api/locations/${locationId}/items`, data)
+  displayOrder: number
+  color?: string
+}): Promise<Category> {
+  const endpoint = apiClient.buildOrgPath('/menu/categories')
+  return apiClient.post<Category>(endpoint, data)
 }
 
-export async function updateMenuItem(locationId: string, itemId: string, data: {
+export async function updateCategory(categoryId: string, data: {
+  name?: string
+  description?: string
+  displayOrder?: number
+  color?: string
+}): Promise<Category> {
+  const endpoint = apiClient.buildOrgPath(`/menu/categories/${categoryId}`)
+  return apiClient.patch<Category>(endpoint, data)
+}
+
+export async function deleteCategory(categoryId: string): Promise<void> {
+  const endpoint = apiClient.buildOrgPath(`/menu/categories/${categoryId}`)
+  return apiClient.delete(endpoint)
+}
+
+// Menu Items - at org level
+export async function getMenuItems(categoryId?: string): Promise<MenuItem[]> {
+  try {
+    const endpoint = categoryId
+      ? apiClient.buildOrgPath(`/menu/categories/${categoryId}/items`)
+      : apiClient.buildOrgPath('/menu/items')
+    const response = await apiClient.get<HalCollection<MenuItem>>(endpoint)
+    return response._embedded?.items ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function getMenuItem(itemId: string): Promise<MenuItem> {
+  const endpoint = apiClient.buildOrgPath(`/menu/items/${itemId}`)
+  return apiClient.get<MenuItem>(endpoint)
+}
+
+export async function createMenuItem(data: {
+  locationId: string
+  categoryId: string
+  name: string
+  price: number
+  accountingGroupId?: string
+  recipeId?: string
+  description?: string
+  imageUrl?: string
+  sku?: string
+  trackInventory: boolean
+}): Promise<MenuItem> {
+  const endpoint = apiClient.buildOrgPath('/menu/items')
+  return apiClient.post<MenuItem>(endpoint, data)
+}
+
+export async function updateMenuItem(itemId: string, data: {
   categoryId?: string
+  accountingGroupId?: string
+  recipeId?: string
   name?: string
   description?: string
   price?: number
+  imageUrl?: string
+  sku?: string
   isActive?: boolean
+  trackInventory?: boolean
 }): Promise<MenuItem> {
-  return apiClient.put(`/api/locations/${locationId}/items/${itemId}`, data)
+  const endpoint = apiClient.buildOrgPath(`/menu/items/${itemId}`)
+  return apiClient.patch<MenuItem>(endpoint, data)
 }
 
-export async function deleteMenuItem(locationId: string, itemId: string): Promise<void> {
-  return apiClient.delete(`/api/locations/${locationId}/items/${itemId}`)
+export async function deleteMenuItem(itemId: string): Promise<void> {
+  const endpoint = apiClient.buildOrgPath(`/menu/items/${itemId}`)
+  return apiClient.delete(endpoint)
 }

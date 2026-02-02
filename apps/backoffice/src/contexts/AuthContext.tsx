@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { apiClient } from '../api/client'
 
 interface User {
   id: string
   displayName: string
   email?: string
   organizationId: string
+  siteId?: string
   roles: string[]
 }
 
@@ -111,6 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [])
+
+  // Set API client token and tenant context when auth state changes
+  useEffect(() => {
+    if (state.accessToken) {
+      apiClient.setToken(state.accessToken)
+    } else {
+      apiClient.setToken(null)
+    }
+
+    if (state.user?.organizationId) {
+      // For backoffice, use the org's default site or a selected site
+      // The siteId can come from user selection or URL params
+      const siteId = state.user.siteId || '00000000-0000-0000-0000-000000000001'
+      apiClient.setTenantContext({
+        orgId: state.user.organizationId,
+        siteId,
+      })
+    } else {
+      apiClient.setTenantContext(null)
+    }
+  }, [state.accessToken, state.user])
 
   const loginWithGoogle = useCallback(() => {
     const returnUrl = encodeURIComponent(window.location.origin)

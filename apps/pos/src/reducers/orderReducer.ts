@@ -1,7 +1,8 @@
-import type { Order, OrderLine, MenuItem } from '../types'
+import type { Order, OrderLine, MenuItem, OrderType, OrderStatus } from '../types'
 
 export type OrderAction =
-  | { type: 'ORDER_CREATED'; payload: { orderType: Order['orderType'] } }
+  | { type: 'ORDER_CREATED'; payload: { orderType: OrderType; orderId?: string; orderNumber?: string } }
+  | { type: 'ORDER_LOADED'; payload: { order: Order } }
   | { type: 'ITEM_ADDED'; payload: { item: MenuItem; quantity: number } }
   | { type: 'ITEM_REMOVED'; payload: { lineId: string } }
   | { type: 'QUANTITY_CHANGED'; payload: { lineId: string; quantity: number } }
@@ -16,7 +17,10 @@ export type OrderAction =
   | { type: 'LINES_REMOVED'; payload: { lineIds: string[] } }
   | { type: 'UNSENT_ITEMS_CLEARED' }
   | { type: 'ORDER_DISCOUNT_APPLIED'; payload: { amount: number; reason?: string } }
-  | { type: 'ORDER_SENT'; payload: { sentAt: string } }
+  | { type: 'ORDER_SENT'; payload: { sentAt: string; status?: OrderStatus } }
+  | { type: 'LINE_ADDED_FROM_SERVER'; payload: { line: OrderLine } }
+  | { type: 'STATUS_CHANGED'; payload: { status: OrderStatus } }
+  | { type: 'TOTALS_UPDATED'; payload: { subtotal: number; taxTotal: number; discountTotal: number; grandTotal: number } }
 
 export interface OrderState {
   order: Order | null
@@ -24,6 +28,8 @@ export interface OrderState {
   keypadValue: string
   editMode: boolean
   selectedLineIds: string[]
+  isSyncing: boolean
+  syncError: string | null
 }
 
 export const initialOrderState: OrderState = {
@@ -32,6 +38,8 @@ export const initialOrderState: OrderState = {
   keypadValue: '',
   editMode: false,
   selectedLineIds: [],
+  isSyncing: false,
+  syncError: null,
 }
 
 function generateId(): string {
@@ -46,7 +54,7 @@ function calculateTotals(lines: OrderLine[], orderDiscountAmount = 0): Pick<Orde
   const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0)
   const lineDiscounts = lines.reduce((sum, line) => sum + line.discountAmount, 0)
   const discountTotal = lineDiscounts + orderDiscountAmount
-  const taxRate = 0.20 // 20% VAT - should come from accounting groups
+  const taxRate = 0.20 // 20% VAT - should come from site config
   const taxTotal = (subtotal - discountTotal) * taxRate
   const grandTotal = subtotal - discountTotal + taxTotal
 
@@ -61,20 +69,33 @@ function calculateTotals(lines: OrderLine[], orderDiscountAmount = 0): Pick<Orde
 export function orderReducer(state: OrderState, action: OrderAction): OrderState {
   switch (action.type) {
     case 'ORDER_CREATED': {
+      const { orderType, orderId, orderNumber } = action.payload
       return {
         ...state,
         order: {
-          id: generateId(),
-          orderNumber: generateOrderNumber(),
-          orderType: action.payload.orderType,
-          status: 'open',
+          id: orderId || generateId(),
+          orderNumber: orderNumber || generateOrderNumber(),
+          type: orderType,
+          status: 'Open',
           lines: [],
+          discounts: [],
           subtotal: 0,
           taxTotal: 0,
           discountTotal: 0,
           grandTotal: 0,
+          createdAt: new Date().toISOString(),
         },
         selectedLineId: null,
+        syncError: null,
+      }
+    }
+
+    case 'ORDER_LOADED': {
+      return {
+        ...state,
+        order: action.payload.order,
+        selectedLineId: null,
+        syncError: null,
       }
     }
 
@@ -83,13 +104,12 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
 
       const { item, quantity } = action.payload
       const existingLine = state.order.lines.find(
-        (line) => line.menuItemId === item.id && line.discountAmount === 0
+        (line) => line.menuItemId === item.id && line.discountAmount === 0 && !line.sentAt
       )
 
       let newLines: OrderLine[]
 
       if (existingLine) {
-        // Increase quantity of existing line
         newLines = state.order.lines.map((line) =>
           line.id === existingLine.id
             ? {
@@ -100,7 +120,6 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
             : line
         )
       } else {
-        // Add new line
         const newLine: OrderLine = {
           id: generateId(),
           menuItemId: item.id,
@@ -113,12 +132,30 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
         newLines = [...state.order.lines, newLine]
       }
 
+      const totals = calculateTotals(newLines, state.order.discounts.reduce((sum, d) => sum + (d.type === 'FixedAmount' ? d.value : 0), 0))
+
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
+        },
+      }
+    }
+
+    case 'LINE_ADDED_FROM_SERVER': {
+      if (!state.order) return state
+
+      const newLines = [...state.order.lines, action.payload.line]
+      const totals = calculateTotals(newLines)
+
+      return {
+        ...state,
+        order: {
+          ...state.order,
+          lines: newLines,
+          ...totals,
         },
       }
     }
@@ -127,13 +164,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
       if (!state.order) return state
 
       const newLines = state.order.lines.filter((line) => line.id !== action.payload.lineId)
+      const totals = calculateTotals(newLines)
 
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
         },
         selectedLineId: state.selectedLineId === action.payload.lineId ? null : state.selectedLineId,
       }
@@ -145,14 +183,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
       const { lineId, quantity } = action.payload
 
       if (quantity <= 0) {
-        // Remove line if quantity is 0 or less
         const newLines = state.order.lines.filter((line) => line.id !== lineId)
+        const totals = calculateTotals(newLines)
         return {
           ...state,
           order: {
             ...state.order,
             lines: newLines,
-            ...calculateTotals(newLines, state.order.orderDiscountAmount),
+            ...totals,
           },
           selectedLineId: state.selectedLineId === lineId ? null : state.selectedLineId,
         }
@@ -168,12 +206,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
           : line
       )
 
+      const totals = calculateTotals(newLines)
+
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
         },
       }
     }
@@ -194,12 +234,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
           : line
       )
 
+      const totals = calculateTotals(newLines)
+
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
         },
       }
     }
@@ -215,7 +257,35 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
         ...state,
         order: {
           ...state.order,
-          status: 'completed',
+          status: 'Closed',
+          closedAt: new Date().toISOString(),
+        },
+      }
+    }
+
+    case 'STATUS_CHANGED': {
+      if (!state.order) return state
+
+      return {
+        ...state,
+        order: {
+          ...state.order,
+          status: action.payload.status,
+        },
+      }
+    }
+
+    case 'TOTALS_UPDATED': {
+      if (!state.order) return state
+
+      return {
+        ...state,
+        order: {
+          ...state.order,
+          subtotal: action.payload.subtotal,
+          taxTotal: action.payload.taxTotal,
+          discountTotal: action.payload.discountTotal,
+          grandTotal: action.payload.grandTotal,
         },
       }
     }
@@ -266,13 +336,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
 
       const { lineIds } = action.payload
       const newLines = state.order.lines.filter((line) => !lineIds.includes(line.id))
+      const totals = calculateTotals(newLines)
 
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
         },
         selectedLineIds: [],
         editMode: false,
@@ -283,13 +354,14 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
       if (!state.order) return state
 
       const newLines = state.order.lines.filter((line) => line.sentAt != null)
+      const totals = calculateTotals(newLines)
 
       return {
         ...state,
         order: {
           ...state.order,
           lines: newLines,
-          ...calculateTotals(newLines, state.order.orderDiscountAmount),
+          ...totals,
         },
       }
     }
@@ -298,14 +370,25 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
       if (!state.order) return state
 
       const { amount, reason } = action.payload
+      const newDiscount = {
+        id: generateId(),
+        name: reason || 'Manual Discount',
+        type: 'FixedAmount' as const,
+        value: amount,
+        appliedBy: 'current-user',
+        reason,
+      }
+
+      const discounts = [...state.order.discounts, newDiscount]
+      const totalDiscountAmount = discounts.reduce((sum, d) => sum + (d.type === 'FixedAmount' ? d.value : 0), 0)
+      const totals = calculateTotals(state.order.lines, totalDiscountAmount)
 
       return {
         ...state,
         order: {
           ...state.order,
-          orderDiscountAmount: amount,
-          orderDiscountReason: reason,
-          ...calculateTotals(state.order.lines, amount),
+          discounts,
+          ...totals,
         },
       }
     }
@@ -313,7 +396,7 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
     case 'ORDER_SENT': {
       if (!state.order) return state
 
-      const { sentAt } = action.payload
+      const { sentAt, status } = action.payload
       const newLines = state.order.lines.map((line) =>
         line.sentAt ? line : { ...line, sentAt }
       )
@@ -323,6 +406,8 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
         order: {
           ...state.order,
           lines: newLines,
+          status: status || 'Sent',
+          sentAt,
         },
       }
     }

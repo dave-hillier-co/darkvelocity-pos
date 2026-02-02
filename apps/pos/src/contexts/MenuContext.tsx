@@ -20,24 +20,22 @@ const sampleCategories: MenuCategory[] = [
 ]
 
 const sampleItems: MenuItem[] = [
-  { id: '1', name: 'Burger', price: 12.50, categoryId: '1', accountingGroupId: '1' },
-  { id: '2', name: 'Fish & Chips', price: 14.00, categoryId: '1', accountingGroupId: '1' },
-  { id: '3', name: 'Caesar Salad', price: 9.50, categoryId: '1', accountingGroupId: '1' },
-  { id: '4', name: 'Steak', price: 24.00, categoryId: '1', accountingGroupId: '1' },
-  { id: '5', name: 'Pasta', price: 11.00, categoryId: '1', accountingGroupId: '1' },
-  { id: '6', name: 'Pizza', price: 13.50, categoryId: '1', accountingGroupId: '1' },
-  { id: '7', name: 'Cola', price: 3.00, categoryId: '2', accountingGroupId: '2' },
-  { id: '8', name: 'Beer', price: 5.50, categoryId: '2', accountingGroupId: '2' },
-  { id: '9', name: 'Wine (Glass)', price: 7.00, categoryId: '2', accountingGroupId: '2' },
-  { id: '10', name: 'Coffee', price: 3.50, categoryId: '2', accountingGroupId: '2' },
-  { id: '11', name: 'Orange Juice', price: 4.00, categoryId: '2', accountingGroupId: '2' },
-  { id: '12', name: 'Water', price: 2.00, categoryId: '2', accountingGroupId: '2' },
-  { id: '13', name: 'Cheesecake', price: 6.50, categoryId: '3', accountingGroupId: '1' },
-  { id: '14', name: 'Ice Cream', price: 5.00, categoryId: '3', accountingGroupId: '1' },
-  { id: '15', name: 'Brownie', price: 5.50, categoryId: '3', accountingGroupId: '1' },
+  { id: '1', name: 'Burger', price: 12.50, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '2', name: 'Fish & Chips', price: 14.00, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '3', name: 'Caesar Salad', price: 9.50, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '4', name: 'Steak', price: 24.00, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '5', name: 'Pasta', price: 11.00, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '6', name: 'Pizza', price: 13.50, categoryId: '1', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '7', name: 'Cola', price: 3.00, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '8', name: 'Beer', price: 5.50, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '9', name: 'Wine (Glass)', price: 7.00, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '10', name: 'Coffee', price: 3.50, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '11', name: 'Orange Juice', price: 4.00, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '12', name: 'Water', price: 2.00, categoryId: '2', accountingGroupId: '2', isActive: true, trackInventory: false },
+  { id: '13', name: 'Cheesecake', price: 6.50, categoryId: '3', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '14', name: 'Ice Cream', price: 5.00, categoryId: '3', accountingGroupId: '1', isActive: true, trackInventory: false },
+  { id: '15', name: 'Brownie', price: 5.50, categoryId: '3', accountingGroupId: '1', isActive: true, trackInventory: false },
 ]
-
-const LOCATION_ID = 'default-location'
 
 export function MenuProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<MenuCategory[]>(sampleCategories)
@@ -50,7 +48,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      const menuData = await menuApi.getFullMenu(LOCATION_ID)
+      const menuData = await menuApi.getFullMenu()
 
       setCategories(menuData.categories)
       setItems(menuData.items)
