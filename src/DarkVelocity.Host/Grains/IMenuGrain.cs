@@ -49,6 +49,25 @@ public interface IMenuCategoryGrain : IGrainWithStringKey
 // Menu Item Grain
 // ============================================================================
 
+/// <summary>
+/// Tax rates that vary by order context (delivery, takeaway, dine-in).
+/// Required for delivery platform integrations like Deliverect.
+/// </summary>
+[GenerateSerializer]
+public record ContextualTaxRates(
+    [property: Id(0)] decimal DeliveryTaxPercent,
+    [property: Id(1)] decimal TakeawayTaxPercent,
+    [property: Id(2)] decimal DineInTaxPercent);
+
+/// <summary>
+/// Product tag for allergens, dietary info, etc.
+/// Tags are defined by the platform (e.g., Deliverect tag IDs).
+/// </summary>
+[GenerateSerializer]
+public record ProductTag(
+    [property: Id(0)] int TagId,
+    [property: Id(1)] string Name);
+
 [GenerateSerializer]
 public record CreateMenuItemCommand(
     [property: Id(0)] Guid LocationId,
@@ -60,7 +79,9 @@ public record CreateMenuItemCommand(
     [property: Id(6)] decimal Price,
     [property: Id(7)] string? ImageUrl,
     [property: Id(8)] string? Sku,
-    [property: Id(9)] bool TrackInventory);
+    [property: Id(9)] bool TrackInventory,
+    [property: Id(10)] ContextualTaxRates? TaxRates = null,
+    [property: Id(11)] IReadOnlyList<ProductTag>? ProductTags = null);
 
 [GenerateSerializer]
 public record UpdateMenuItemCommand(
@@ -73,7 +94,8 @@ public record UpdateMenuItemCommand(
     [property: Id(6)] string? ImageUrl,
     [property: Id(7)] string? Sku,
     [property: Id(8)] bool? IsActive,
-    [property: Id(9)] bool? TrackInventory);
+    [property: Id(9)] bool? TrackInventory,
+    [property: Id(10)] ContextualTaxRates? TaxRates = null);
 
 [GenerateSerializer]
 public record MenuItemModifier(
@@ -115,7 +137,11 @@ public record MenuItemSnapshot(
     [property: Id(12)] bool TrackInventory,
     [property: Id(13)] decimal? TheoreticalCost,
     [property: Id(14)] decimal? CostPercent,
-    [property: Id(15)] IReadOnlyList<MenuItemModifier> Modifiers);
+    [property: Id(15)] IReadOnlyList<MenuItemModifier> Modifiers,
+    [property: Id(16)] ContextualTaxRates? TaxRates,
+    [property: Id(17)] IReadOnlyList<ProductTag>? ProductTags,
+    [property: Id(18)] bool IsSnoozed,
+    [property: Id(19)] DateTime? SnoozedUntil);
 
 /// <summary>
 /// Grain for menu item management.
@@ -131,6 +157,26 @@ public interface IMenuItemGrain : IGrainWithStringKey
     Task AddModifierAsync(MenuItemModifier modifier);
     Task RemoveModifierAsync(Guid modifierId);
     Task UpdateCostAsync(decimal theoreticalCost);
+
+    /// <summary>
+    /// Temporarily snooze (disable) item for delivery platforms.
+    /// </summary>
+    Task SetSnoozedAsync(bool snoozed, TimeSpan? duration = null);
+
+    /// <summary>
+    /// Add a product tag (allergen, dietary info, etc.)
+    /// </summary>
+    Task AddProductTagAsync(ProductTag tag);
+
+    /// <summary>
+    /// Remove a product tag.
+    /// </summary>
+    Task RemoveProductTagAsync(int tagId);
+
+    /// <summary>
+    /// Update contextual tax rates for delivery/takeaway/dine-in.
+    /// </summary>
+    Task UpdateTaxRatesAsync(ContextualTaxRates rates);
 }
 
 // ============================================================================

@@ -98,6 +98,14 @@ cd apps/backoffice && npm install && npm run dev
 - Past tense for domain events: `OrderOpened`, `PaymentApplied`, `StockConsumed`
 - Events describe facts that occurred, not commands
 
+### External System Integration
+- **Never use "Create" for external data**: You cannot command external systems into existence
+- External orders, payouts, webhooks are *observed facts*, not commands
+- Use `Received` suffix: `ExternalOrderReceived`, `PayoutReceived`, `WebhookReceived`
+- Grain methods use `ReceiveAsync()` not `CreateAsync()` for external data
+- Example: `IExternalOrderGrain.ReceiveAsync(ExternalOrderReceived order)`
+- This applies to any data originating from third parties (Deliverect, UberEats, payment processors)
+
 ### Frontend State
 - React Context + useReducer with past-tense actions
 - Action types: `ITEM_ADDED`, `STATUS_CHANGED` (not `ADD_ITEM`, `CHANGE_STATUS`)

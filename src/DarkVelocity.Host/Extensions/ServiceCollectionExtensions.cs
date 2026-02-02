@@ -1,4 +1,5 @@
 using DarkVelocity.Host.Auth;
+using DarkVelocity.Host.Payments;
 using DarkVelocity.Host.Search;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -57,10 +58,17 @@ public static class ServiceCollectionExtensions
             options.ClientSecret = oauthSettings.Microsoft.ClientSecret;
             options.CallbackPath = "/signin-microsoft";
             options.SaveTokens = true;
-        });
+        })
+        .AddApiKeyAuth();
 
         services.AddAuthorization();
 
+        return services;
+    }
+
+    public static IServiceCollection AddPaymentGatewayServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ICardValidationService, CardValidationService>();
         return services;
     }
 

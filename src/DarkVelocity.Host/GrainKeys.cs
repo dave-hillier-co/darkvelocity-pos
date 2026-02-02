@@ -346,6 +346,22 @@ public static class GrainKeys
     public static string UserLookup(Guid orgId) => $"{orgId}:userlookup";
 
     /// <summary>
+    /// Creates a key for a channel grain.
+    /// </summary>
+    public static string Channel(Guid orgId, Guid channelId) => OrgEntity(orgId, "channel", channelId);
+
+    /// <summary>
+    /// Creates a key for a status mapping grain (per platform type).
+    /// </summary>
+    public static string StatusMapping(Guid orgId, Grains.DeliveryPlatformType platformType)
+        => $"{orgId}:statusmapping:{platformType}";
+
+    /// <summary>
+    /// Creates a key for the channel registry grain (one per org).
+    /// </summary>
+    public static string ChannelRegistry(Guid orgId) => $"{orgId}:channelregistry";
+
+    /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
     public static string GenerateUserCode()

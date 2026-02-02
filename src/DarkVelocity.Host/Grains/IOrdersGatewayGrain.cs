@@ -1,11 +1,40 @@
 namespace DarkVelocity.Host.Grains;
 
 // ============================================================================
+// Channel Integration Types
+// ============================================================================
+
+/// <summary>
+/// Defines how a channel integrates with the POS system.
+/// </summary>
+public enum IntegrationType
+{
+    /// <summary>
+    /// Direct API integration with delivery platforms (UberEats, Deliveroo, JustEat).
+    /// We implement their specific API contracts.
+    /// </summary>
+    Direct,
+
+    /// <summary>
+    /// Integration through an aggregator service (Deliverect, Otter).
+    /// Aggregator normalizes multiple platform APIs into a single interface.
+    /// </summary>
+    Aggregator,
+
+    /// <summary>
+    /// Internal channels (local website, kiosk, phone orders).
+    /// We control the full stack with no external dependencies.
+    /// </summary>
+    Internal
+}
+
+// ============================================================================
 // Delivery Platform Grain
 // ============================================================================
 
 public enum DeliveryPlatformType
 {
+    // Direct integrations
     UberEats,
     DoorDash,
     Deliveroo,
@@ -13,6 +42,16 @@ public enum DeliveryPlatformType
     Wolt,
     GrubHub,
     Postmates,
+
+    // Aggregator platforms
+    Deliverect,
+    Otter,
+
+    // Internal channels
+    LocalWebsite,
+    Kiosk,
+    PhoneOrder,
+
     Custom
 }
 
@@ -27,11 +66,12 @@ public enum DeliveryPlatformStatus
 [GenerateSerializer]
 public record ConnectDeliveryPlatformCommand(
     [property: Id(0)] DeliveryPlatformType PlatformType,
-    [property: Id(1)] string Name,
-    [property: Id(2)] string? ApiCredentialsEncrypted,
-    [property: Id(3)] string? WebhookSecret,
-    [property: Id(4)] string? MerchantId,
-    [property: Id(5)] string? Settings);
+    [property: Id(1)] IntegrationType IntegrationType,
+    [property: Id(2)] string Name,
+    [property: Id(3)] string? ApiCredentialsEncrypted,
+    [property: Id(4)] string? WebhookSecret,
+    [property: Id(5)] string? MerchantId,
+    [property: Id(6)] string? Settings);
 
 [GenerateSerializer]
 public record UpdateDeliveryPlatformCommand(
@@ -52,15 +92,16 @@ public record PlatformLocationMapping(
 public record DeliveryPlatformSnapshot(
     [property: Id(0)] Guid DeliveryPlatformId,
     [property: Id(1)] DeliveryPlatformType PlatformType,
-    [property: Id(2)] string Name,
-    [property: Id(3)] DeliveryPlatformStatus Status,
-    [property: Id(4)] string? MerchantId,
-    [property: Id(5)] DateTime? ConnectedAt,
-    [property: Id(6)] DateTime? LastSyncAt,
-    [property: Id(7)] DateTime? LastOrderAt,
-    [property: Id(8)] IReadOnlyList<PlatformLocationMapping> Locations,
-    [property: Id(9)] int TotalOrdersToday,
-    [property: Id(10)] decimal TotalRevenueToday);
+    [property: Id(2)] IntegrationType IntegrationType,
+    [property: Id(3)] string Name,
+    [property: Id(4)] DeliveryPlatformStatus Status,
+    [property: Id(5)] string? MerchantId,
+    [property: Id(6)] DateTime? ConnectedAt,
+    [property: Id(7)] DateTime? LastSyncAt,
+    [property: Id(8)] DateTime? LastOrderAt,
+    [property: Id(9)] IReadOnlyList<PlatformLocationMapping> Locations,
+    [property: Id(10)] int TotalOrdersToday,
+    [property: Id(11)] decimal TotalRevenueToday);
 
 /// <summary>
 /// Grain for delivery platform management.
@@ -100,14 +141,51 @@ public enum ExternalOrderStatus
 public enum ExternalOrderType
 {
     Delivery,
-    Pickup
+    Pickup,
+    DineIn
 }
+
+[GenerateSerializer]
+public record DeliveryAddress(
+    [property: Id(0)] string Street,
+    [property: Id(1)] string? PostalCode,
+    [property: Id(2)] string City,
+    [property: Id(3)] string Country,
+    [property: Id(4)] string? ExtraAddressInfo);
 
 [GenerateSerializer]
 public record ExternalOrderCustomer(
     [property: Id(0)] string Name,
     [property: Id(1)] string? Phone,
-    [property: Id(2)] string? DeliveryAddress);
+    [property: Id(2)] string? Email,
+    [property: Id(3)] DeliveryAddress? DeliveryAddress);
+
+[GenerateSerializer]
+public record CourierInfo(
+    [property: Id(0)] string? FirstName,
+    [property: Id(1)] string? LastName,
+    [property: Id(2)] string? PhoneNumber,
+    [property: Id(3)] string? Provider,
+    [property: Id(4)] int? Status);
+
+public enum DiscountProvider
+{
+    Restaurant,
+    Channel
+}
+
+[GenerateSerializer]
+public record ExternalOrderDiscount(
+    [property: Id(0)] string Type,
+    [property: Id(1)] DiscountProvider Provider,
+    [property: Id(2)] string Name,
+    [property: Id(3)] decimal Amount);
+
+[GenerateSerializer]
+public record PackagingPreferences(
+    [property: Id(0)] bool IncludeCutlery,
+    [property: Id(1)] bool IsReusable,
+    [property: Id(2)] decimal? BagFee);
 
 [GenerateSerializer]
 public record ExternalOrderItem(
@@ -125,25 +203,36 @@ public record ExternalOrderModifier(
     [property: Id(0)] string Name,
     [property: Id(1)] decimal Price);
 
+/// <summary>
+/// Represents an order received from an external delivery platform.
+/// This is an observed fact, not a command - the order already exists on the platform.
+/// </summary>
 [GenerateSerializer]
-public record CreateExternalOrderCommand(
+public record ExternalOrderReceived(
     [property: Id(0)] Guid LocationId,
     [property: Id(1)] Guid DeliveryPlatformId,
     [property: Id(2)] string PlatformOrderId,
     [property: Id(3)] string PlatformOrderNumber,
-    [property: Id(4)] ExternalOrderType OrderType,
-    [property: Id(5)] DateTime PlacedAt,
-    [property: Id(6)] ExternalOrderCustomer Customer,
-    [property: Id(7)] IReadOnlyList<ExternalOrderItem> Items,
-    [property: Id(8)] decimal Subtotal,
-    [property: Id(9)] decimal DeliveryFee,
-    [property: Id(10)] decimal ServiceFee,
-    [property: Id(11)] decimal Tax,
-    [property: Id(12)] decimal Tip,
-    [property: Id(13)] decimal Total,
-    [property: Id(14)] string Currency,
-    [property: Id(15)] string? SpecialInstructions,
-    [property: Id(16)] string? PlatformRawPayload);
+    [property: Id(4)] string? ChannelDisplayId,
+    [property: Id(5)] ExternalOrderType OrderType,
+    [property: Id(6)] DateTime PlacedAt,
+    [property: Id(7)] DateTime? ScheduledPickupAt,
+    [property: Id(8)] DateTime? ScheduledDeliveryAt,
+    [property: Id(9)] bool IsAsapDelivery,
+    [property: Id(10)] ExternalOrderCustomer Customer,
+    [property: Id(11)] CourierInfo? Courier,
+    [property: Id(12)] IReadOnlyList<ExternalOrderItem> Items,
+    [property: Id(13)] decimal Subtotal,
+    [property: Id(14)] decimal DeliveryFee,
+    [property: Id(15)] decimal ServiceFee,
+    [property: Id(16)] decimal Tax,
+    [property: Id(17)] decimal Tip,
+    [property: Id(18)] decimal Total,
+    [property: Id(19)] string Currency,
+    [property: Id(20)] IReadOnlyList<ExternalOrderDiscount>? Discounts,
+    [property: Id(21)] PackagingPreferences? Packaging,
+    [property: Id(22)] string? SpecialInstructions,
+    [property: Id(23)] string? PlatformRawPayload);
 
 [GenerateSerializer]
 public record ExternalOrderSnapshot(
@@ -152,25 +241,32 @@ public record ExternalOrderSnapshot(
     [property: Id(2)] Guid DeliveryPlatformId,
     [property: Id(3)] string PlatformOrderId,
     [property: Id(4)] string PlatformOrderNumber,
-    [property: Id(5)] Guid? InternalOrderId,
-    [property: Id(6)] ExternalOrderStatus Status,
-    [property: Id(7)] ExternalOrderType OrderType,
-    [property: Id(8)] DateTime PlacedAt,
-    [property: Id(9)] DateTime? AcceptedAt,
-    [property: Id(10)] DateTime? EstimatedPickupAt,
-    [property: Id(11)] DateTime? ActualPickupAt,
-    [property: Id(12)] ExternalOrderCustomer Customer,
-    [property: Id(13)] IReadOnlyList<ExternalOrderItem> Items,
-    [property: Id(14)] decimal Subtotal,
-    [property: Id(15)] decimal DeliveryFee,
-    [property: Id(16)] decimal ServiceFee,
-    [property: Id(17)] decimal Tax,
-    [property: Id(18)] decimal Tip,
-    [property: Id(19)] decimal Total,
-    [property: Id(20)] string Currency,
-    [property: Id(21)] string? SpecialInstructions,
-    [property: Id(22)] string? ErrorMessage,
-    [property: Id(23)] int RetryCount);
+    [property: Id(5)] string? ChannelDisplayId,
+    [property: Id(6)] Guid? InternalOrderId,
+    [property: Id(7)] ExternalOrderStatus Status,
+    [property: Id(8)] ExternalOrderType OrderType,
+    [property: Id(9)] DateTime PlacedAt,
+    [property: Id(10)] DateTime? ScheduledPickupAt,
+    [property: Id(11)] DateTime? ScheduledDeliveryAt,
+    [property: Id(12)] bool IsAsapDelivery,
+    [property: Id(13)] DateTime? AcceptedAt,
+    [property: Id(14)] DateTime? EstimatedPickupAt,
+    [property: Id(15)] DateTime? ActualPickupAt,
+    [property: Id(16)] ExternalOrderCustomer Customer,
+    [property: Id(17)] CourierInfo? Courier,
+    [property: Id(18)] IReadOnlyList<ExternalOrderItem> Items,
+    [property: Id(19)] decimal Subtotal,
+    [property: Id(20)] decimal DeliveryFee,
+    [property: Id(21)] decimal ServiceFee,
+    [property: Id(22)] decimal Tax,
+    [property: Id(23)] decimal Tip,
+    [property: Id(24)] decimal Total,
+    [property: Id(25)] string Currency,
+    [property: Id(26)] IReadOnlyList<ExternalOrderDiscount>? Discounts,
+    [property: Id(27)] PackagingPreferences? Packaging,
+    [property: Id(28)] string? SpecialInstructions,
+    [property: Id(29)] string? ErrorMessage,
+    [property: Id(30)] int RetryCount);
 
 /// <summary>
 /// Grain for external order management.
@@ -178,7 +274,10 @@ public record ExternalOrderSnapshot(
 /// </summary>
 public interface IExternalOrderGrain : IGrainWithStringKey
 {
-    Task<ExternalOrderSnapshot> CreateAsync(CreateExternalOrderCommand command);
+    /// <summary>
+    /// Records an order received from an external delivery platform.
+    /// </summary>
+    Task<ExternalOrderSnapshot> ReceiveAsync(ExternalOrderReceived order);
     Task<ExternalOrderSnapshot> AcceptAsync(DateTime? estimatedPickupAt);
     Task<ExternalOrderSnapshot> RejectAsync(string reason);
     Task SetPreparingAsync();
@@ -190,6 +289,11 @@ public interface IExternalOrderGrain : IGrainWithStringKey
     Task<ExternalOrderSnapshot> GetSnapshotAsync();
     Task MarkFailedAsync(string errorMessage);
     Task IncrementRetryAsync();
+
+    /// <summary>
+    /// Updates courier information received from the delivery platform.
+    /// </summary>
+    Task UpdateCourierAsync(CourierInfo courier);
 }
 
 // ============================================================================
@@ -255,8 +359,12 @@ public enum PayoutStatus
     Failed
 }
 
+/// <summary>
+/// Represents a payout received/reported from an external delivery platform.
+/// This is an observed fact - the payout was initiated by the platform.
+/// </summary>
 [GenerateSerializer]
-public record CreatePayoutCommand(
+public record PayoutReceived(
     [property: Id(0)] Guid DeliveryPlatformId,
     [property: Id(1)] Guid LocationId,
     [property: Id(2)] DateTime PeriodStart,
@@ -288,7 +396,10 @@ public record PayoutSnapshot(
 /// </summary>
 public interface IPlatformPayoutGrain : IGrainWithStringKey
 {
-    Task<PayoutSnapshot> CreateAsync(CreatePayoutCommand command);
+    /// <summary>
+    /// Records a payout received from an external delivery platform.
+    /// </summary>
+    Task<PayoutSnapshot> ReceiveAsync(PayoutReceived payout);
     Task SetProcessingAsync();
     Task CompleteAsync(DateTime processedAt);
     Task FailAsync(string reason);

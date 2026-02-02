@@ -1,3 +1,4 @@
+using DarkVelocity.Host.Payments;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,9 @@ public class TestSiloConfigurator : ISiloConfigurator
 
         // Add memory stream provider for pub/sub testing with implicit subscription support
         siloBuilder.AddMemoryStreams(StreamConstants.DefaultStreamProvider);
+
+        // Add payment gateway services
+        siloBuilder.Services.AddSingleton<ICardValidationService, CardValidationService>();
 
         siloBuilder.Services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning));
     }

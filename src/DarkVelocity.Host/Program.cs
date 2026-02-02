@@ -22,7 +22,8 @@ builder.Services
     .AddSwaggerDocumentation()
     .AddJwtAuthentication(builder.Configuration)
     .AddCorsPolicy()
-    .AddSearchServices(builder.Configuration);
+    .AddSearchServices(builder.Configuration)
+    .AddPaymentGatewayServices();
 
 var app = builder.Build();
 
@@ -63,7 +64,9 @@ app.MapOAuthEndpoints()
    .MapFloorPlanEndpoints()
    .MapWaitlistEndpoints()
    .MapAvailabilityEndpoints()
-   .MapWebhookEndpoints();
+   .MapWebhookEndpoints()
+   .MapPaymentGatewayEndpoints()
+   .MapChannelEndpoints();
 
 app.Run();
 
