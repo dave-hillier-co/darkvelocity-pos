@@ -39,8 +39,6 @@ This document defines the technical architecture for DarkVelocity, a complete re
 
 ## System Architecture
 
-Aligned with K-Series architecture from spec:
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                       BACK OFFICE                                │
