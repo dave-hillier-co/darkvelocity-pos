@@ -61,7 +61,8 @@ app.MapOAuthEndpoints()
    .MapEmployeeEndpoints()
    .MapSearchEndpoints()
    .MapPaymentGatewayEndpoints()
-   .MapChannelEndpoints();
+   .MapChannelEndpoints()
+   .MapBatchEndpoints();
 
 app.Run();
 
