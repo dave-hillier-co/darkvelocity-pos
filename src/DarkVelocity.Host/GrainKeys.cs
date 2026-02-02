@@ -401,6 +401,43 @@ public static class GrainKeys
     public static string MenuRegistry(Guid orgId) => $"{orgId}:menuregistry";
 
     /// <summary>
+    /// Creates a key for a purchase document grain (invoice or receipt).
+    /// </summary>
+    public static string PurchaseDocument(Guid orgId, Guid siteId, Guid documentId)
+        => SiteEntity(orgId, siteId, "purchase-doc", documentId);
+
+    /// <summary>
+    /// Creates a key for a vendor item mapping grain using vendor GUID.
+    /// </summary>
+    public static string VendorItemMapping(Guid orgId, Guid vendorId)
+        => OrgEntity(orgId, "vendor-mapping", vendorId);
+
+    /// <summary>
+    /// Creates a key for a vendor item mapping grain using vendor name/ID string.
+    /// Used for retail stores (e.g., "costco", "walmart").
+    /// </summary>
+    public static string VendorItemMapping(Guid orgId, string vendorId)
+        => $"{orgId}:vendor-mapping:{vendorId.ToLowerInvariant()}";
+
+    /// <summary>
+    /// Creates a key for an expense grain.
+    /// </summary>
+    public static string Expense(Guid orgId, Guid siteId, Guid expenseId)
+        => SiteEntity(orgId, siteId, "expense", expenseId);
+
+    /// <summary>
+    /// Creates a key for an email inbox grain (one per site).
+    /// </summary>
+    public static string EmailInbox(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:email-inbox";
+
+    /// <summary>
+    /// Creates a key for an expense index grain (one per site).
+    /// </summary>
+    public static string ExpenseIndex(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:expense-index";
+
+    /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
     public static string GenerateUserCode()

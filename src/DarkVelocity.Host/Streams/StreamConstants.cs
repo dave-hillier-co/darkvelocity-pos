@@ -74,4 +74,9 @@ public static class StreamConstants
     /// Stream namespace for device and authentication events.
     /// </summary>
     public const string DeviceStreamNamespace = "device-events";
+
+    /// <summary>
+    /// Stream namespace for purchase document events (invoice/receipt confirmation).
+    /// </summary>
+    public const string PurchaseDocumentStreamNamespace = "purchase-document-events";
 }
