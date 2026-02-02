@@ -1,6 +1,6 @@
-# Lightspeed K-Series Clone - Architecture
+# DarkVelocity - Architecture
 
-This document defines the technical architecture for implementing a Lightspeed Restaurant K-Series clone. It complements the functional specification at `~/repos/lightspeed-k-series-spec/spec.md`.
+This document defines the technical architecture for DarkVelocity, a complete restaurant and bar management solution. DarkVelocity provides point of sale, kitchen display systems, table and floor management, reservations and bookings, inventory and procurement, customer loyalty, gift cards, staff scheduling, and back-office reporting. It complements the functional specification at `spec.md`.
 
 ---
 

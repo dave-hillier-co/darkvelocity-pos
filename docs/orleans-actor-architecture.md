@@ -1,6 +1,6 @@
 # Orleans Actor Architecture Design
 
-This document outlines a proposed redesign of DarkVelocity POS using Microsoft Orleans virtual actor framework. The goal is to leverage Orleans' automatic distribution, single-writer consistency, and event-driven patterns while maintaining the rich domain model.
+This document outlines the architecture of DarkVelocity using Microsoft Orleans virtual actor framework. DarkVelocity is a complete restaurant and bar management solution providing point of sale, kitchen display systems, table and floor management, reservations and bookings, inventory and procurement, customer loyalty, gift cards, staff scheduling, and back-office reporting. The architecture leverages Orleans' automatic distribution, single-writer consistency, and event-driven patterns while maintaining the rich domain model.
 
 ## Table of Contents
 

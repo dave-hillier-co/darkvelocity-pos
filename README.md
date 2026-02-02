@@ -1,6 +1,8 @@
-# DarkVelocity POS
+# DarkVelocity
 
-A Point of Sale system built with .NET 10, Microsoft Orleans, and React.
+A complete restaurant and bar management solution built with .NET 10, Microsoft Orleans, and React.
+
+DarkVelocity provides everything hospitality businesses need to run their operations: point of sale, kitchen display systems, table and floor management, reservations and bookings, inventory and procurement, customer loyalty, gift cards, staff scheduling, and back-office reporting.
 
 ## Tech Stack
 
