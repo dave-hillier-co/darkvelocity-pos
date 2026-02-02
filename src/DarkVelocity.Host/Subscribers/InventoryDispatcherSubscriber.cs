@@ -7,10 +7,10 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to inventory-events stream and routes consumption requests to InventoryGrain.
+/// Subscribes to inventory-events stream and routes consumption derived events to InventoryGrain.
 /// This dispatcher handles the routing complexity of compound grain keys (org:site:ingredientId).
 ///
-/// Listens to: inventory-events stream (InventoryConsumptionRequestedEvent, InventoryConsumptionReversalRequestedEvent)
+/// Listens to: inventory-events stream (InventoryConsumptionDerivedEvent, InventoryConsumptionReversalDerivedEvent)
 /// Routes to: InventoryGrain (keyed by org:site:ingredientId)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.InventoryStreamNamespace)]
@@ -60,12 +60,12 @@ public class InventoryDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IA
         {
             switch (item)
             {
-                case InventoryConsumptionRequestedEvent consumptionRequest:
-                    await HandleInventoryConsumptionRequestedAsync(consumptionRequest);
+                case InventoryConsumptionDerivedEvent consumptionDerived:
+                    await HandleInventoryConsumptionDerivedAsync(consumptionDerived);
                     break;
 
-                case InventoryConsumptionReversalRequestedEvent reversalRequest:
-                    await HandleInventoryConsumptionReversalRequestedAsync(reversalRequest);
+                case InventoryConsumptionReversalDerivedEvent reversalDerived:
+                    await HandleInventoryConsumptionReversalDerivedAsync(reversalDerived);
                     break;
 
                 // Ignore events that are outputs from InventoryGrain
@@ -93,7 +93,7 @@ public class InventoryDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IA
         return Task.CompletedTask;
     }
 
-    private async Task HandleInventoryConsumptionRequestedAsync(InventoryConsumptionRequestedEvent evt)
+    private async Task HandleInventoryConsumptionDerivedAsync(InventoryConsumptionDerivedEvent evt)
     {
         _logger.LogInformation(
             "Routing inventory consumption to InventoryGrain: Ingredient {IngredientId}, Order {OrderNumber}, Quantity {Quantity}",
@@ -142,10 +142,10 @@ public class InventoryDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IA
         }
     }
 
-    private async Task HandleInventoryConsumptionReversalRequestedAsync(InventoryConsumptionReversalRequestedEvent evt)
+    private async Task HandleInventoryConsumptionReversalDerivedAsync(InventoryConsumptionReversalDerivedEvent evt)
     {
         _logger.LogInformation(
-            "Inventory consumption reversal requested for order {OrderId} - this requires movement lookup",
+            "Inventory consumption reversal derived for order {OrderId} - this requires movement lookup",
             evt.OrderId);
 
         // In a full implementation:
@@ -161,7 +161,7 @@ public class InventoryDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IA
         await Task.CompletedTask;
     }
 
-    private async Task PublishStockAlertAsync(InventoryConsumptionRequestedEvent evt)
+    private async Task PublishStockAlertAsync(InventoryConsumptionDerivedEvent evt)
     {
         if (_alertStream != null)
         {

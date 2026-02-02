@@ -996,15 +996,15 @@ public sealed record DeviceSessionEndedEvent(
 
 #endregion
 
-#region Integration Events (Cross-Domain Requests)
+#region Integration Events (Cross-Domain Facts)
 
 /// <summary>
-/// Published when loyalty spend needs to be recorded for a customer.
+/// Published when customer spend was derived from an order completion.
 /// This is an integration event that decouples Order domain from Loyalty domain.
 /// The LoyaltyDispatcher routes this to the appropriate CustomerSpendProjectionGrain.
 /// </summary>
 [GenerateSerializer]
-public sealed record LoyaltySpendRequestedEvent(
+public sealed record CustomerSpendDerivedEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] Guid OrderId,
     [property: Id(2)] Guid SiteId,
@@ -1018,10 +1018,10 @@ public sealed record LoyaltySpendRequestedEvent(
 ) : StreamEvent;
 
 /// <summary>
-/// Published when loyalty spend needs to be reversed (order voided).
+/// Published when customer spend reversal was derived from an order void.
 /// </summary>
 [GenerateSerializer]
-public sealed record LoyaltySpendReversalRequestedEvent(
+public sealed record CustomerSpendReversalDerivedEvent(
     [property: Id(0)] Guid CustomerId,
     [property: Id(1)] Guid OrderId,
     [property: Id(2)] decimal Amount,
@@ -1029,12 +1029,12 @@ public sealed record LoyaltySpendReversalRequestedEvent(
 ) : StreamEvent;
 
 /// <summary>
-/// Published when inventory consumption is requested for an order line.
+/// Published when inventory consumption was derived from an order line.
 /// This is an integration event that decouples Order domain from Inventory domain.
 /// The InventoryDispatcher routes this to the appropriate InventoryGrain.
 /// </summary>
 [GenerateSerializer]
-public sealed record InventoryConsumptionRequestedEvent(
+public sealed record InventoryConsumptionDerivedEvent(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid OrderId,
@@ -1047,10 +1047,10 @@ public sealed record InventoryConsumptionRequestedEvent(
 ) : StreamEvent;
 
 /// <summary>
-/// Published when inventory consumption needs to be reversed (order voided).
+/// Published when inventory consumption reversal was derived from an order void.
 /// </summary>
 [GenerateSerializer]
-public sealed record InventoryConsumptionReversalRequestedEvent(
+public sealed record InventoryConsumptionReversalDerivedEvent(
     [property: Id(0)] Guid OrderId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] string Reason

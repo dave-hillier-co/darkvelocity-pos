@@ -6,11 +6,11 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to order completion events and publishes inventory consumption requests.
+/// Subscribes to order completion events and publishes inventory consumption derived events.
 /// This decouples the Order domain from the Inventory domain via pub/sub.
 ///
 /// Listens to: order-events stream (OrderCompletedEvent, OrderVoidedEvent)
-/// Publishes to: inventory-events stream (InventoryConsumptionRequestedEvent, InventoryConsumptionReversalRequestedEvent)
+/// Publishes to: inventory-events stream (InventoryConsumptionDerivedEvent, InventoryConsumptionReversalDerivedEvent)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
@@ -111,14 +111,14 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
                 continue;
             }
 
-            // Publish inventory consumption request
+            // Publish inventory consumption derived event
             // The InventoryDispatcher will route this to the appropriate InventoryGrain
             if (_inventoryStream != null)
             {
                 // For now, use ProductId as ingredient ID (simplified)
                 // In a full implementation, we would look up the recipe and publish
-                // consumption requests for each ingredient
-                await _inventoryStream.OnNextAsync(new InventoryConsumptionRequestedEvent(
+                // consumption events for each ingredient
+                await _inventoryStream.OnNextAsync(new InventoryConsumptionDerivedEvent(
                     IngredientId: line.ProductId,
                     SiteId: evt.SiteId,
                     OrderId: evt.OrderId,
@@ -145,14 +145,14 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
     private async Task HandleOrderVoidedAsync(OrderVoidedEvent evt)
     {
         _logger.LogInformation(
-            "Publishing inventory consumption reversal for order {OrderNumber}",
+            "Deriving inventory consumption reversal for order {OrderNumber}",
             evt.OrderNumber);
 
-        // Publish inventory consumption reversal request
+        // Publish inventory consumption reversal derived event
         // The InventoryDispatcher will handle looking up original consumptions
         if (_inventoryStream != null)
         {
-            await _inventoryStream.OnNextAsync(new InventoryConsumptionReversalRequestedEvent(
+            await _inventoryStream.OnNextAsync(new InventoryConsumptionReversalDerivedEvent(
                 OrderId: evt.OrderId,
                 SiteId: evt.SiteId,
                 Reason: evt.Reason)
@@ -162,7 +162,7 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
         }
 
         _logger.LogInformation(
-            "Published InventoryConsumptionReversalRequestedEvent for order {OrderNumber}",
+            "Published InventoryConsumptionReversalDerivedEvent for order {OrderNumber}",
             evt.OrderNumber);
     }
 }

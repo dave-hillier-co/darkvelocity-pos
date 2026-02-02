@@ -7,10 +7,10 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to customer-spend-events stream and routes loyalty requests to CustomerSpendProjectionGrain.
+/// Subscribes to customer-spend-events stream and routes derived spend events to CustomerSpendProjectionGrain.
 /// This dispatcher handles the routing complexity of compound grain keys (org:customerId).
 ///
-/// Listens to: customer-spend-events stream (LoyaltySpendRequestedEvent, LoyaltySpendReversalRequestedEvent)
+/// Listens to: customer-spend-events stream (CustomerSpendDerivedEvent, CustomerSpendReversalDerivedEvent)
 /// Routes to: CustomerSpendProjectionGrain (keyed by org:customerId)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.CustomerSpendStreamNamespace)]
@@ -55,12 +55,12 @@ public class LoyaltyDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         {
             switch (item)
             {
-                case LoyaltySpendRequestedEvent spendRequest:
-                    await HandleLoyaltySpendRequestedAsync(spendRequest);
+                case CustomerSpendDerivedEvent spendDerived:
+                    await HandleCustomerSpendDerivedAsync(spendDerived);
                     break;
 
-                case LoyaltySpendReversalRequestedEvent reversalRequest:
-                    await HandleLoyaltySpendReversalRequestedAsync(reversalRequest);
+                case CustomerSpendReversalDerivedEvent reversalDerived:
+                    await HandleCustomerSpendReversalDerivedAsync(reversalDerived);
                     break;
 
                 // Ignore events that are outputs from CustomerSpendProjectionGrain
@@ -88,10 +88,10 @@ public class LoyaltyDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         return Task.CompletedTask;
     }
 
-    private async Task HandleLoyaltySpendRequestedAsync(LoyaltySpendRequestedEvent evt)
+    private async Task HandleCustomerSpendDerivedAsync(CustomerSpendDerivedEvent evt)
     {
         _logger.LogInformation(
-            "Routing loyalty spend request to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderId}",
+            "Routing customer spend to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderId}",
             evt.CustomerId,
             evt.OrderId);
 
@@ -140,10 +140,10 @@ public class LoyaltyDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IAsy
         }
     }
 
-    private async Task HandleLoyaltySpendReversalRequestedAsync(LoyaltySpendReversalRequestedEvent evt)
+    private async Task HandleCustomerSpendReversalDerivedAsync(CustomerSpendReversalDerivedEvent evt)
     {
         _logger.LogInformation(
-            "Routing loyalty spend reversal to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderId}",
+            "Routing customer spend reversal to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderId}",
             evt.CustomerId,
             evt.OrderId);
 
@@ -159,7 +159,7 @@ public class LoyaltyDispatcherSubscriberGrain : Grain, IGrainWithStringKey, IAsy
                 Reason: evt.Reason));
 
             _logger.LogInformation(
-                "Reversed loyalty spend for customer {CustomerId}, order {OrderId}. Amount: {Amount:C}",
+                "Reversed customer spend for customer {CustomerId}, order {OrderId}. Amount: {Amount:C}",
                 evt.CustomerId,
                 evt.OrderId,
                 evt.Amount);

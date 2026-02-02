@@ -6,11 +6,11 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to order completion events and publishes loyalty spend requests.
+/// Subscribes to order completion events and publishes customer spend derived events.
 /// This decouples the Order domain from the Loyalty domain via pub/sub.
 ///
 /// Listens to: order-events stream (OrderCompletedEvent, OrderVoidedEvent)
-/// Publishes to: customer-spend-events stream (LoyaltySpendRequestedEvent, LoyaltySpendReversalRequestedEvent)
+/// Publishes to: customer-spend-events stream (CustomerSpendDerivedEvent, CustomerSpendReversalDerivedEvent)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
@@ -103,18 +103,18 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         }
 
         _logger.LogInformation(
-            "Publishing loyalty spend request for order {OrderNumber} to customer {CustomerId}. Spend: {Total:C}",
+            "Deriving customer spend for order {OrderNumber}, customer {CustomerId}. Spend: {Total:C}",
             evt.OrderNumber,
             evt.CustomerId,
             evt.Total);
 
         var transactionDate = evt.BusinessDate ?? DateOnly.FromDateTime(evt.OccurredAt);
 
-        // Publish loyalty spend request to customer-spend stream
+        // Publish customer spend derived event to customer-spend stream
         // The LoyaltyDispatcher will route this to the appropriate CustomerSpendProjectionGrain
         if (_customerSpendStream != null)
         {
-            await _customerSpendStream.OnNextAsync(new LoyaltySpendRequestedEvent(
+            await _customerSpendStream.OnNextAsync(new CustomerSpendDerivedEvent(
                 CustomerId: evt.CustomerId.Value,
                 OrderId: evt.OrderId,
                 SiteId: evt.SiteId,
@@ -131,7 +131,7 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         }
 
         _logger.LogInformation(
-            "Published LoyaltySpendRequestedEvent for order {OrderNumber} to customer-spend stream",
+            "Published CustomerSpendDerivedEvent for order {OrderNumber} to customer-spend stream",
             evt.OrderNumber);
     }
 
@@ -147,14 +147,14 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         }
 
         _logger.LogInformation(
-            "Publishing loyalty spend reversal for order {OrderNumber}, customer {CustomerId}",
+            "Deriving customer spend reversal for order {OrderNumber}, customer {CustomerId}",
             evt.OrderNumber,
             evt.CustomerId);
 
-        // Publish loyalty spend reversal request to customer-spend stream
+        // Publish customer spend reversal derived event to customer-spend stream
         if (_customerSpendStream != null)
         {
-            await _customerSpendStream.OnNextAsync(new LoyaltySpendReversalRequestedEvent(
+            await _customerSpendStream.OnNextAsync(new CustomerSpendReversalDerivedEvent(
                 CustomerId: evt.CustomerId.Value,
                 OrderId: evt.OrderId,
                 Amount: evt.VoidedAmount,
@@ -165,7 +165,7 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         }
 
         _logger.LogInformation(
-            "Published LoyaltySpendReversalRequestedEvent for order {OrderNumber} to customer-spend stream",
+            "Published CustomerSpendReversalDerivedEvent for order {OrderNumber} to customer-spend stream",
             evt.OrderNumber);
     }
 }
