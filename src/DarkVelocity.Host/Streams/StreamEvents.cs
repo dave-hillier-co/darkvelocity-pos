@@ -187,6 +187,7 @@ public sealed record OrderLineAddedEvent(
 
 /// <summary>
 /// Published when an order is finalized/completed.
+/// This is the single source of truth for order completion.
 /// Subscribers: Loyalty (points), Inventory (consumption), Reporting (aggregation).
 /// </summary>
 [GenerateSerializer]
@@ -204,7 +205,8 @@ public sealed record OrderCompletedEvent(
     [property: Id(10)] Guid? CustomerId = null,
     [property: Id(11)] string? CustomerName = null,
     [property: Id(12)] int GuestCount = 1,
-    [property: Id(13)] string Channel = "DineIn"
+    [property: Id(13)] string Channel = "DineIn",
+    [property: Id(14)] DateOnly? BusinessDate = null
 ) : StreamEvent;
 
 /// <summary>
@@ -241,6 +243,7 @@ public sealed record KitchenLineItem(
 
 /// <summary>
 /// Published when an order is voided.
+/// Subscribers: Sales (aggregation), Kitchen (ticket cancellation).
 /// </summary>
 [GenerateSerializer]
 public sealed record OrderVoidedEvent(
@@ -249,7 +252,9 @@ public sealed record OrderVoidedEvent(
     [property: Id(2)] string OrderNumber,
     [property: Id(3)] decimal VoidedAmount,
     [property: Id(4)] string Reason,
-    [property: Id(5)] Guid VoidedByUserId
+    [property: Id(5)] Guid VoidedByUserId,
+    [property: Id(6)] DateOnly? BusinessDate = null,
+    [property: Id(7)] Guid? CustomerId = null
 ) : StreamEvent;
 
 /// <summary>
@@ -987,6 +992,68 @@ public sealed record DeviceSessionEndedEvent(
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid UserId,
     [property: Id(3)] string? Reason
+) : StreamEvent;
+
+#endregion
+
+#region Integration Events (Cross-Domain Requests)
+
+/// <summary>
+/// Published when loyalty spend needs to be recorded for a customer.
+/// This is an integration event that decouples Order domain from Loyalty domain.
+/// The LoyaltyDispatcher routes this to the appropriate CustomerSpendProjectionGrain.
+/// </summary>
+[GenerateSerializer]
+public sealed record LoyaltySpendRequestedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid OrderId,
+    [property: Id(2)] Guid SiteId,
+    [property: Id(3)] decimal NetSpend,
+    [property: Id(4)] decimal GrossSpend,
+    [property: Id(5)] decimal DiscountAmount,
+    [property: Id(6)] decimal TaxAmount,
+    [property: Id(7)] int ItemCount,
+    [property: Id(8)] DateOnly TransactionDate,
+    [property: Id(9)] string OrderNumber
+) : StreamEvent;
+
+/// <summary>
+/// Published when loyalty spend needs to be reversed (order voided).
+/// </summary>
+[GenerateSerializer]
+public sealed record LoyaltySpendReversalRequestedEvent(
+    [property: Id(0)] Guid CustomerId,
+    [property: Id(1)] Guid OrderId,
+    [property: Id(2)] decimal Amount,
+    [property: Id(3)] string Reason
+) : StreamEvent;
+
+/// <summary>
+/// Published when inventory consumption is requested for an order line.
+/// This is an integration event that decouples Order domain from Inventory domain.
+/// The InventoryDispatcher routes this to the appropriate InventoryGrain.
+/// </summary>
+[GenerateSerializer]
+public sealed record InventoryConsumptionRequestedEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] string OrderNumber,
+    [property: Id(4)] Guid LineId,
+    [property: Id(5)] string ProductName,
+    [property: Id(6)] decimal Quantity,
+    [property: Id(7)] Guid? RecipeId,
+    [property: Id(8)] Guid? PerformedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when inventory consumption needs to be reversed (order voided).
+/// </summary>
+[GenerateSerializer]
+public sealed record InventoryConsumptionReversalRequestedEvent(
+    [property: Id(0)] Guid OrderId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string Reason
 ) : StreamEvent;
 
 #endregion

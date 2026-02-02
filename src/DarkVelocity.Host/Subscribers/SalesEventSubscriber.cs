@@ -7,13 +7,18 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Implicit stream subscriber that aggregates sales events into daily sales grains.
+/// Subscribes to order completion events and derives sales events for aggregation.
+/// This decouples the Order domain from the Sales/Reporting domain via pub/sub.
+///
+/// Listens to: order-events stream (OrderCompletedEvent, OrderVoidedEvent)
+/// Publishes to: sales-events stream (SaleRecordedEvent, VoidRecordedEvent)
 /// </summary>
-[ImplicitStreamSubscription(StreamConstants.SalesStreamNamespace)]
+[ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class SalesEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
 {
     private readonly ILogger<SalesEventSubscriberGrain> _logger;
     private StreamSubscriptionHandle<IStreamEvent>? _subscription;
+    private IAsyncStream<IStreamEvent>? _salesStream;
 
     public SalesEventSubscriberGrain(ILogger<SalesEventSubscriberGrain> logger)
     {
@@ -23,10 +28,15 @@ public class SalesEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
     public override async Task OnActivateAsync(CancellationToken cancellationToken)
     {
         var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.SalesStreamNamespace, this.GetPrimaryKeyString());
-        var stream = streamProvider.GetStream<IStreamEvent>(streamId);
 
-        _subscription = await stream.SubscribeAsync(this);
+        // Subscribe to order-events stream
+        var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, this.GetPrimaryKeyString());
+        var orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+        _subscription = await orderStream.SubscribeAsync(this);
+
+        // Get sales stream for publishing derived events
+        var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, this.GetPrimaryKeyString());
+        _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
 
         _logger.LogInformation(
             "SalesEventSubscriber activated for organization {OrgId}",
@@ -51,16 +61,16 @@ public class SalesEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
         {
             switch (item)
             {
-                case SaleRecordedEvent saleEvent:
-                    await HandleSaleRecordedAsync(saleEvent);
+                case OrderCompletedEvent completedEvent:
+                    await HandleOrderCompletedAsync(completedEvent);
                     break;
 
-                case VoidRecordedEvent voidEvent:
-                    await HandleVoidRecordedAsync(voidEvent);
+                case OrderVoidedEvent voidedEvent:
+                    await HandleOrderVoidedAsync(voidedEvent);
                     break;
 
                 default:
-                    _logger.LogDebug("Ignoring unhandled event type: {EventType}", item.GetType().Name);
+                    // Ignore other order events (OrderCreatedEvent, OrderLineAddedEvent, etc.)
                     break;
             }
         }
@@ -82,52 +92,68 @@ public class SalesEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
         return Task.CompletedTask;
     }
 
-    private async Task HandleSaleRecordedAsync(SaleRecordedEvent evt)
+    private async Task HandleOrderCompletedAsync(OrderCompletedEvent evt)
     {
-        _logger.LogInformation(
-            "Sale recorded: Order {OrderId}, Net Sales {NetSales:C}",
-            evt.OrderId,
-            evt.NetSales);
-
-        // Get the daily sales grain for this site and date
-        var dailySalesKey = GrainKeys.DailySales(evt.OrganizationId, evt.SiteId, evt.BusinessDate);
-        var dailySalesGrain = GrainFactory.GetGrain<IDailySalesGrain>(dailySalesKey);
-
-        // Record the sale in the daily aggregation
-        await dailySalesGrain.RecordSaleAsync(new RecordSaleFromStreamCommand(
-            OrderId: evt.OrderId,
-            GrossSales: evt.GrossSales,
-            Discounts: evt.DiscountAmount,
-            Tax: evt.Tax,
-            GuestCount: evt.GuestCount,
-            ItemCount: evt.ItemCount,
-            Channel: evt.Channel,
-            TheoreticalCOGS: evt.TheoreticalCOGS));
+        var businessDate = evt.BusinessDate ?? DateOnly.FromDateTime(evt.OccurredAt);
+        var netSales = evt.Subtotal - evt.DiscountAmount;
+        var itemCount = evt.Lines.Sum(l => l.Quantity);
 
         _logger.LogInformation(
-            "Aggregated sale to daily sales for site {SiteId} on {BusinessDate}",
-            evt.SiteId,
-            evt.BusinessDate);
+            "Deriving sale from order {OrderNumber}: Net Sales {NetSales:C}",
+            evt.OrderNumber,
+            netSales);
+
+        // Derive and publish SaleRecordedEvent to sales stream
+        // This allows DailySalesGrain to subscribe independently
+        if (_salesStream != null)
+        {
+            await _salesStream.OnNextAsync(new SaleRecordedEvent(
+                OrderId: evt.OrderId,
+                SiteId: evt.SiteId,
+                BusinessDate: businessDate,
+                GrossSales: evt.Subtotal,
+                DiscountAmount: evt.DiscountAmount,
+                NetSales: netSales,
+                Tax: evt.Tax,
+                TheoreticalCOGS: 0m, // Would be calculated from recipes if available
+                ItemCount: itemCount,
+                GuestCount: evt.GuestCount,
+                Channel: evt.Channel)
+            {
+                OrganizationId = evt.OrganizationId
+            });
+        }
+
+        _logger.LogInformation(
+            "Published SaleRecordedEvent for order {OrderNumber} to sales stream",
+            evt.OrderNumber);
     }
 
-    private async Task HandleVoidRecordedAsync(VoidRecordedEvent evt)
+    private async Task HandleOrderVoidedAsync(OrderVoidedEvent evt)
     {
-        _logger.LogInformation(
-            "Void recorded: Order {OrderId}, Amount {VoidAmount:C}, Reason: {Reason}",
-            evt.OrderId,
-            evt.VoidAmount,
-            evt.Reason);
-
-        // Get the daily sales grain for this site and date
-        var dailySalesKey = GrainKeys.DailySales(evt.OrganizationId, evt.SiteId, evt.BusinessDate);
-        var dailySalesGrain = GrainFactory.GetGrain<IDailySalesGrain>(dailySalesKey);
-
-        // Record the void in the daily aggregation
-        await dailySalesGrain.RecordVoidAsync(evt.OrderId, evt.VoidAmount, evt.Reason);
+        var businessDate = evt.BusinessDate ?? DateOnly.FromDateTime(evt.OccurredAt);
 
         _logger.LogInformation(
-            "Aggregated void to daily sales for site {SiteId} on {BusinessDate}",
-            evt.SiteId,
-            evt.BusinessDate);
+            "Deriving void from order {OrderNumber}: Amount {VoidAmount:C}",
+            evt.OrderNumber,
+            evt.VoidedAmount);
+
+        // Derive and publish VoidRecordedEvent to sales stream
+        if (_salesStream != null)
+        {
+            await _salesStream.OnNextAsync(new VoidRecordedEvent(
+                OrderId: evt.OrderId,
+                SiteId: evt.SiteId,
+                BusinessDate: businessDate,
+                VoidAmount: evt.VoidedAmount,
+                Reason: evt.Reason)
+            {
+                OrganizationId = evt.OrganizationId
+            });
+        }
+
+        _logger.LogInformation(
+            "Published VoidRecordedEvent for order {OrderNumber} to sales stream",
+            evt.OrderNumber);
     }
 }

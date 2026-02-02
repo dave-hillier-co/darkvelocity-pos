@@ -238,6 +238,10 @@ public class StreamEventTests
     [Fact]
     public async Task OrderGrain_PublishesOrderCompletedEvent_WhenClosed()
     {
+        // This test verifies the event-driven pub/sub chain:
+        // 1. OrderGrain publishes OrderCompletedEvent to order-events stream
+        // 2. SalesEventSubscriber receives it and derives SaleRecordedEvent to sales-events stream
+
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
@@ -285,17 +289,19 @@ public class StreamEventTests
             // Close the order
             await grain.CloseAsync(Guid.NewGuid());
 
-            // Wait for event propagation
-            await Task.Delay(500);
+            // Wait for event propagation (longer delay for subscriber chain)
+            await Task.Delay(1000);
 
             Assert.Contains(receivedEvents, e => e is OrderCreatedEvent);
             Assert.Contains(receivedEvents, e => e is OrderLineAddedEvent);
             Assert.Contains(receivedEvents, e => e is OrderCompletedEvent);
+            // SaleRecordedEvent is now derived by SalesEventSubscriber from OrderCompletedEvent
             Assert.Contains(receivedEvents, e => e is SaleRecordedEvent);
 
             var completedEvent = receivedEvents.OfType<OrderCompletedEvent>().First();
             Assert.Equal(orderId, completedEvent.OrderId);
             Assert.Single(completedEvent.Lines);
+            Assert.NotNull(completedEvent.BusinessDate); // New field for sales aggregation
         }
         finally
         {
@@ -307,6 +313,10 @@ public class StreamEventTests
     [Fact]
     public async Task OrderGrain_PublishesVoidEvents_WhenVoided()
     {
+        // This test verifies the event-driven pub/sub chain:
+        // 1. OrderGrain publishes OrderVoidedEvent to order-events stream
+        // 2. SalesEventSubscriber receives it and derives VoidRecordedEvent to sales-events stream
+
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
@@ -352,14 +362,16 @@ public class StreamEventTests
             var voidingUserId = Guid.NewGuid();
             await grain.VoidAsync(new VoidOrderCommand(voidingUserId, "Customer cancelled"));
 
-            // Wait for event propagation
-            await Task.Delay(500);
+            // Wait for event propagation (longer delay for subscriber chain)
+            await Task.Delay(1000);
 
             Assert.Contains(receivedEvents, e => e is OrderVoidedEvent);
+            // VoidRecordedEvent is now derived by SalesEventSubscriber from OrderVoidedEvent
             Assert.Contains(receivedEvents, e => e is VoidRecordedEvent);
 
             var voidEvent = receivedEvents.OfType<OrderVoidedEvent>().First();
             Assert.Equal("Customer cancelled", voidEvent.Reason);
+            Assert.NotNull(voidEvent.BusinessDate); // New field for sales aggregation
         }
         finally
         {
