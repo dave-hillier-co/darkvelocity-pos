@@ -456,6 +456,58 @@ public static class GrainKeys
     public static string ExpenseIndex(Guid orgId, Guid siteId)
         => $"{orgId}:{siteId}:expense-index";
 
+    // ============================================================================
+    // Generic Index Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for an index grain.
+    /// Format: org:{orgId}:index:{indexType}:{scope}
+    /// </summary>
+    /// <param name="orgId">The organization ID.</param>
+    /// <param name="indexType">The type of index (e.g., "orders", "expenses", "bookings").</param>
+    /// <param name="scope">The scope identifier (e.g., site ID, month "2024-01").</param>
+    /// <example>
+    /// GrainKeys.Index(orgId, "orders", siteId.ToString())  // org:abc:index:orders:site-123
+    /// GrainKeys.Index(orgId, "expenses", "2024-01")        // org:abc:index:expenses:2024-01
+    /// GrainKeys.Index(orgId, "bookings", siteId.ToString()) // org:abc:index:bookings:site-456
+    /// </example>
+    public static string Index(Guid orgId, string indexType, string scope)
+        => $"org:{orgId}:index:{indexType}:{scope}";
+
+    /// <summary>
+    /// Creates a key for an index grain scoped to a site.
+    /// Convenience overload for site-scoped indexes.
+    /// </summary>
+    public static string Index(Guid orgId, string indexType, Guid siteId)
+        => Index(orgId, indexType, siteId.ToString());
+
+    /// <summary>
+    /// Creates a key for a time-scoped index grain (e.g., monthly).
+    /// </summary>
+    public static string Index(Guid orgId, string indexType, int year, int month)
+        => Index(orgId, indexType, $"{year:D4}-{month:D2}");
+
+    /// <summary>
+    /// Creates a key for a date-scoped index grain (daily).
+    /// </summary>
+    public static string Index(Guid orgId, string indexType, DateOnly date)
+        => Index(orgId, indexType, date.ToString("yyyy-MM-dd"));
+
+    /// <summary>
+    /// Parses an index grain key.
+    /// </summary>
+    /// <returns>Tuple of (OrgId, IndexType, Scope).</returns>
+    /// <exception cref="ArgumentException">If the key format is invalid.</exception>
+    public static (Guid OrgId, string IndexType, string Scope) ParseIndex(string key)
+    {
+        var parts = key.Split(':');
+        if (parts.Length < 5 || parts[0] != "org" || parts[2] != "index")
+            throw new ArgumentException($"Invalid index key format: {key}");
+
+        return (Guid.Parse(parts[1]), parts[3], string.Join(":", parts[4..]));
+    }
+
     /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
