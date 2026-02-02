@@ -60,7 +60,8 @@ app.MapOAuthEndpoints()
    .MapBookingEndpoints()
    .MapEmployeeEndpoints()
    .MapSearchEndpoints()
-   .MapPaymentGatewayEndpoints();
+   .MapPaymentGatewayEndpoints()
+   .MapChannelEndpoints();
 
 app.Run();
 
