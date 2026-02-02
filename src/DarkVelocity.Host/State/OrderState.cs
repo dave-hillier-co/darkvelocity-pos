@@ -1,3 +1,5 @@
+using DarkVelocity.Host.Grains;
+
 namespace DarkVelocity.Host.State;
 
 public enum OrderStatus
@@ -21,7 +23,7 @@ public enum OrderType
 }
 
 [GenerateSerializer]
-public record OrderLine
+public record OrderLine : IDocumentLine
 {
     [Id(0)] public Guid Id { get; init; }
     [Id(1)] public Guid MenuItemId { get; init; }
@@ -41,6 +43,9 @@ public record OrderLine
     [Id(15)] public Guid? VoidedBy { get; init; }
     [Id(16)] public DateTime? VoidedAt { get; init; }
     [Id(17)] public string? VoidReason { get; init; }
+
+    // IDocumentLine implementation
+    decimal IDocumentLine.LineAmount => LineTotal;
 }
 
 public enum OrderLineStatus
@@ -106,7 +111,7 @@ public record OrderPaymentSummary
 }
 
 [GenerateSerializer]
-public sealed class OrderState
+public sealed class OrderState : IDocumentState<OrderLine>
 {
     [Id(0)] public Guid Id { get; set; }
     [Id(1)] public Guid OrganizationId { get; set; }

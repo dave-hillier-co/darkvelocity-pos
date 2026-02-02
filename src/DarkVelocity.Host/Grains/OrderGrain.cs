@@ -7,26 +7,30 @@ using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class OrderGrain : Grain, IOrderGrain
+public class OrderGrain : DocumentGrain<OrderState, OrderLine>, IOrderGrain
 {
-    private readonly IPersistentState<OrderState> _state;
     private IAsyncStream<IStreamEvent>? _orderStream;
     private IAsyncStream<IStreamEvent>? _salesStream;
     private static int _orderCounter = 1000;
 
     public OrderGrain(
         [PersistentState("order", "OrleansStorage")]
-        IPersistentState<OrderState> state)
+        IPersistentState<OrderState> state) : base(state)
     {
-        _state = state;
     }
+
+    protected override bool IsInitialized => State.State.Id != Guid.Empty;
+
+    protected override decimal GetDocumentTotal() => State.State.GrandTotal;
+
+    protected override void RecalculateTotals() => RecalculateTotalsInternal();
 
     private IAsyncStream<IStreamEvent> GetOrderStream()
     {
-        if (_orderStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_orderStream == null && State.State.OrganizationId != Guid.Empty)
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, _state.State.OrganizationId.ToString());
+            var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, State.State.OrganizationId.ToString());
             _orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
         }
         return _orderStream!;
@@ -34,10 +38,10 @@ public class OrderGrain : Grain, IOrderGrain
 
     private IAsyncStream<IStreamEvent> GetSalesStream()
     {
-        if (_salesStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_salesStream == null && State.State.OrganizationId != Guid.Empty)
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, _state.State.OrganizationId.ToString());
+            var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, State.State.OrganizationId.ToString());
             _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
         }
         return _salesStream!;
@@ -45,7 +49,7 @@ public class OrderGrain : Grain, IOrderGrain
 
     public async Task<OrderCreatedResult> CreateAsync(CreateOrderCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.State.Id != Guid.Empty)
             throw new InvalidOperationException("Order already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -53,7 +57,7 @@ public class OrderGrain : Grain, IOrderGrain
 
         var orderNumber = $"ORD-{Interlocked.Increment(ref _orderCounter):D6}";
 
-        _state.State = new OrderState
+        State.State = new OrderState
         {
             Id = orderId,
             OrganizationId = orgId,
@@ -70,7 +74,7 @@ public class OrderGrain : Grain, IOrderGrain
             Version = 1
         };
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
         // Publish order created event
         if (GetOrderStream() != null)
@@ -85,12 +89,12 @@ public class OrderGrain : Grain, IOrderGrain
             });
         }
 
-        return new OrderCreatedResult(orderId, orderNumber, _state.State.CreatedAt);
+        return new OrderCreatedResult(orderId, orderNumber, State.State.CreatedAt);
     }
 
     public Task<OrderState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State.State);
     }
 
     public async Task<AddLineResult> AddLineAsync(AddLineCommand command)
@@ -119,20 +123,20 @@ public class OrderGrain : Grain, IOrderGrain
             CreatedAt = DateTime.UtcNow
         };
 
-        _state.State.Lines.Add(line);
+        State.State.Lines.Add(line);
         RecalculateTotalsInternal();
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
         // Publish line added event
         if (GetOrderStream() != null)
         {
             await GetOrderStream().OnNextAsync(new OrderLineAddedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
+                State.State.Id,
+                State.State.SiteId,
                 lineId,
                 command.MenuItemId,
                 command.Name,
@@ -140,11 +144,11 @@ public class OrderGrain : Grain, IOrderGrain
                 command.UnitPrice,
                 lineTotal)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
-        return new AddLineResult(lineId, lineTotal, _state.State.GrandTotal);
+        return new AddLineResult(lineId, lineTotal, State.State.GrandTotal);
     }
 
     public async Task UpdateLineAsync(UpdateLineCommand command)
@@ -152,7 +156,7 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        var line = _state.State.Lines.FirstOrDefault(l => l.Id == command.LineId)
+        var line = State.State.Lines.FirstOrDefault(l => l.Id == command.LineId)
             ?? throw new InvalidOperationException("Line not found");
 
         var updatedLine = line with
@@ -163,14 +167,14 @@ public class OrderGrain : Grain, IOrderGrain
                         line.Modifiers.Sum(m => m.Price * m.Quantity)
         };
 
-        var index = _state.State.Lines.FindIndex(l => l.Id == command.LineId);
-        _state.State.Lines[index] = updatedLine;
+        var index = State.State.Lines.FindIndex(l => l.Id == command.LineId);
+        State.State.Lines[index] = updatedLine;
 
         RecalculateTotalsInternal();
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task VoidLineAsync(VoidLineCommand command)
@@ -178,7 +182,7 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        var line = _state.State.Lines.FirstOrDefault(l => l.Id == command.LineId)
+        var line = State.State.Lines.FirstOrDefault(l => l.Id == command.LineId)
             ?? throw new InvalidOperationException("Line not found");
 
         var voidedLine = line with
@@ -189,14 +193,14 @@ public class OrderGrain : Grain, IOrderGrain
             VoidReason = command.Reason
         };
 
-        var index = _state.State.Lines.FindIndex(l => l.Id == command.LineId);
-        _state.State.Lines[index] = voidedLine;
+        var index = State.State.Lines.FindIndex(l => l.Id == command.LineId);
+        State.State.Lines[index] = voidedLine;
 
         RecalculateTotalsInternal();
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task RemoveLineAsync(Guid lineId)
@@ -204,15 +208,15 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        var removed = _state.State.Lines.RemoveAll(l => l.Id == lineId);
+        var removed = State.State.Lines.RemoveAll(l => l.Id == lineId);
         if (removed == 0)
             throw new InvalidOperationException("Line not found");
 
         RecalculateTotalsInternal();
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task SendAsync(Guid sentBy)
@@ -220,13 +224,13 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        if (!_state.State.Lines.Any(l => l.Status == OrderLineStatus.Pending))
+        if (!State.State.Lines.Any(l => l.Status == OrderLineStatus.Pending))
             throw new InvalidOperationException("No pending items to send");
 
-        foreach (var line in _state.State.Lines.Where(l => l.Status == OrderLineStatus.Pending).ToList())
+        foreach (var line in State.State.Lines.Where(l => l.Status == OrderLineStatus.Pending).ToList())
         {
-            var index = _state.State.Lines.FindIndex(l => l.Id == line.Id);
-            _state.State.Lines[index] = line with
+            var index = State.State.Lines.FindIndex(l => l.Id == line.Id);
+            State.State.Lines[index] = line with
             {
                 Status = OrderLineStatus.Sent,
                 SentBy = sentBy,
@@ -234,12 +238,12 @@ public class OrderGrain : Grain, IOrderGrain
             };
         }
 
-        _state.State.Status = OrderStatus.Sent;
-        _state.State.SentAt = DateTime.UtcNow;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.Status = OrderStatus.Sent;
+        State.State.SentAt = DateTime.UtcNow;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public Task<OrderTotals> RecalculateTotalsAsync()
@@ -256,7 +260,7 @@ public class OrderGrain : Grain, IOrderGrain
 
         var discountAmount = command.Type switch
         {
-            DiscountType.Percentage => _state.State.Subtotal * (command.Value / 100m),
+            DiscountType.Percentage => State.State.Subtotal * (command.Value / 100m),
             DiscountType.FixedAmount => command.Value,
             _ => command.Value
         };
@@ -275,13 +279,13 @@ public class OrderGrain : Grain, IOrderGrain
             ApprovedBy = command.ApprovedBy
         };
 
-        _state.State.Discounts.Add(discount);
+        State.State.Discounts.Add(discount);
         RecalculateTotalsInternal();
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task RemoveDiscountAsync(Guid discountId)
@@ -289,13 +293,13 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        _state.State.Discounts.RemoveAll(d => d.Id == discountId);
+        State.State.Discounts.RemoveAll(d => d.Id == discountId);
         RecalculateTotalsInternal();
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task AddServiceChargeAsync(string name, decimal rate, bool isTaxable)
@@ -303,7 +307,7 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        var amount = _state.State.Subtotal * (rate / 100m);
+        var amount = State.State.Subtotal * (rate / 100m);
 
         var serviceCharge = new ServiceCharge
         {
@@ -314,37 +318,37 @@ public class OrderGrain : Grain, IOrderGrain
             IsTaxable = isTaxable
         };
 
-        _state.State.ServiceCharges.Add(serviceCharge);
+        State.State.ServiceCharges.Add(serviceCharge);
         RecalculateTotalsInternal();
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task AssignCustomerAsync(Guid customerId, string? customerName)
     {
         EnsureExists();
 
-        _state.State.CustomerId = customerId;
-        _state.State.CustomerName = customerName;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.CustomerId = customerId;
+        State.State.CustomerName = customerName;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task AssignServerAsync(Guid serverId, string serverName)
     {
         EnsureExists();
 
-        _state.State.ServerId = serverId;
-        _state.State.ServerName = serverName;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.ServerId = serverId;
+        State.State.ServerName = serverName;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task TransferTableAsync(Guid newTableId, string newTableNumber, Guid transferredBy)
@@ -352,12 +356,12 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        _state.State.TableId = newTableId;
-        _state.State.TableNumber = newTableNumber;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.TableId = newTableId;
+        State.State.TableNumber = newTableNumber;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task RecordPaymentAsync(Guid paymentId, decimal amount, decimal tipAmount, string method)
@@ -373,43 +377,43 @@ public class OrderGrain : Grain, IOrderGrain
             PaidAt = DateTime.UtcNow
         };
 
-        _state.State.Payments.Add(payment);
-        _state.State.PaidAmount += amount;
-        _state.State.TipTotal += tipAmount;
-        _state.State.BalanceDue = _state.State.GrandTotal - _state.State.PaidAmount;
+        State.State.Payments.Add(payment);
+        State.State.PaidAmount += amount;
+        State.State.TipTotal += tipAmount;
+        State.State.BalanceDue = State.State.GrandTotal - State.State.PaidAmount;
 
-        if (_state.State.BalanceDue <= 0)
-            _state.State.Status = OrderStatus.Paid;
-        else if (_state.State.PaidAmount > 0)
-            _state.State.Status = OrderStatus.PartiallyPaid;
+        if (State.State.BalanceDue <= 0)
+            State.State.Status = OrderStatus.Paid;
+        else if (State.State.PaidAmount > 0)
+            State.State.Status = OrderStatus.PartiallyPaid;
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task RemovePaymentAsync(Guid paymentId)
     {
         EnsureExists();
 
-        var payment = _state.State.Payments.FirstOrDefault(p => p.PaymentId == paymentId);
+        var payment = State.State.Payments.FirstOrDefault(p => p.PaymentId == paymentId);
         if (payment != null)
         {
-            _state.State.Payments.Remove(payment);
-            _state.State.PaidAmount -= payment.Amount;
-            _state.State.TipTotal -= payment.TipAmount;
-            _state.State.BalanceDue = _state.State.GrandTotal - _state.State.PaidAmount;
+            State.State.Payments.Remove(payment);
+            State.State.PaidAmount -= payment.Amount;
+            State.State.TipTotal -= payment.TipAmount;
+            State.State.BalanceDue = State.State.GrandTotal - State.State.PaidAmount;
 
-            if (_state.State.PaidAmount <= 0)
-                _state.State.Status = OrderStatus.Open;
-            else if (_state.State.BalanceDue > 0)
-                _state.State.Status = OrderStatus.PartiallyPaid;
+            if (State.State.PaidAmount <= 0)
+                State.State.Status = OrderStatus.Open;
+            else if (State.State.BalanceDue > 0)
+                State.State.Status = OrderStatus.PartiallyPaid;
 
-            _state.State.UpdatedAt = DateTime.UtcNow;
-            _state.State.Version++;
+            State.State.UpdatedAt = DateTime.UtcNow;
+            State.State.Version++;
 
-            await _state.WriteStateAsync();
+            await State.WriteStateAsync();
         }
     }
 
@@ -417,18 +421,18 @@ public class OrderGrain : Grain, IOrderGrain
     {
         EnsureExists();
 
-        if (_state.State.BalanceDue > 0)
+        if (State.State.BalanceDue > 0)
             throw new InvalidOperationException("Cannot close order with outstanding balance");
 
-        _state.State.Status = OrderStatus.Closed;
-        _state.State.ClosedAt = DateTime.UtcNow;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.Status = OrderStatus.Closed;
+        State.State.ClosedAt = DateTime.UtcNow;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
         // Build order line snapshots
-        var lineSnapshots = _state.State.Lines
+        var lineSnapshots = State.State.Lines
             .Where(l => l.Status != OrderLineStatus.Voided)
             .Select(l => new OrderLineSnapshot(
                 l.Id,
@@ -444,18 +448,18 @@ public class OrderGrain : Grain, IOrderGrain
         if (GetOrderStream() != null)
         {
             await GetOrderStream().OnNextAsync(new OrderCompletedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.OrderNumber,
-                _state.State.Subtotal,
-                _state.State.TaxTotal,
-                _state.State.GrandTotal,
-                _state.State.DiscountTotal,
+                State.State.Id,
+                State.State.SiteId,
+                State.State.OrderNumber,
+                State.State.Subtotal,
+                State.State.TaxTotal,
+                State.State.GrandTotal,
+                State.State.DiscountTotal,
                 lineSnapshots,
-                _state.State.ServerId,
-                _state.State.ServerName)
+                State.State.ServerId,
+                State.State.ServerName)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
@@ -463,19 +467,19 @@ public class OrderGrain : Grain, IOrderGrain
         if (GetSalesStream() != null)
         {
             await GetSalesStream().OnNextAsync(new SaleRecordedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                DateOnly.FromDateTime(_state.State.ClosedAt.Value),
-                _state.State.Subtotal,
-                _state.State.DiscountTotal,
-                _state.State.Subtotal - _state.State.DiscountTotal,
-                _state.State.TaxTotal,
+                State.State.Id,
+                State.State.SiteId,
+                DateOnly.FromDateTime(State.State.ClosedAt.Value),
+                State.State.Subtotal,
+                State.State.DiscountTotal,
+                State.State.Subtotal - State.State.DiscountTotal,
+                State.State.TaxTotal,
                 0m, // TheoreticalCOGS - would be calculated from recipes
                 lineSnapshots.Sum(l => l.Quantity),
-                _state.State.GuestCount,
-                _state.State.Type.ToString())
+                State.State.GuestCount,
+                State.State.Type.ToString())
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
     }
@@ -485,29 +489,29 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        var voidedAmount = _state.State.GrandTotal;
+        var voidedAmount = State.State.GrandTotal;
 
-        _state.State.Status = OrderStatus.Voided;
-        _state.State.VoidedBy = command.VoidedBy;
-        _state.State.VoidedAt = DateTime.UtcNow;
-        _state.State.VoidReason = command.Reason;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.Status = OrderStatus.Voided;
+        State.State.VoidedBy = command.VoidedBy;
+        State.State.VoidedAt = DateTime.UtcNow;
+        State.State.VoidReason = command.Reason;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
         // Publish order voided event
         if (GetOrderStream() != null)
         {
             await GetOrderStream().OnNextAsync(new OrderVoidedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.OrderNumber,
+                State.State.Id,
+                State.State.SiteId,
+                State.State.OrderNumber,
                 voidedAmount,
                 command.Reason,
                 command.VoidedBy)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
@@ -515,13 +519,13 @@ public class OrderGrain : Grain, IOrderGrain
         if (GetSalesStream() != null)
         {
             await GetSalesStream().OnNextAsync(new VoidRecordedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
+                State.State.Id,
+                State.State.SiteId,
                 DateOnly.FromDateTime(DateTime.UtcNow),
                 voidedAmount,
                 command.Reason)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
     }
@@ -530,63 +534,71 @@ public class OrderGrain : Grain, IOrderGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != OrderStatus.Closed && _state.State.Status != OrderStatus.Voided)
+        if (State.State.Status != OrderStatus.Closed && State.State.Status != OrderStatus.Voided)
             throw new InvalidOperationException("Can only reopen closed or voided orders");
 
-        _state.State.Status = OrderStatus.Open;
-        _state.State.ClosedAt = null;
-        _state.State.VoidedBy = null;
-        _state.State.VoidedAt = null;
-        _state.State.VoidReason = null;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.Status = OrderStatus.Open;
+        State.State.ClosedAt = null;
+        State.State.VoidedBy = null;
+        State.State.VoidedAt = null;
+        State.State.VoidReason = null;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
-    public Task<OrderStatus> GetStatusAsync() => Task.FromResult(_state.State.Status);
+    public Task<bool> ExistsAsync() => Task.FromResult(State.State.Id != Guid.Empty);
+    public Task<OrderStatus> GetStatusAsync() => Task.FromResult(State.State.Status);
     public Task<OrderTotals> GetTotalsAsync() => Task.FromResult(GetTotalsInternal());
-    public Task<IReadOnlyList<OrderLine>> GetLinesAsync() => Task.FromResult<IReadOnlyList<OrderLine>>(_state.State.Lines);
+    public Task<IReadOnlyList<OrderLine>> GetLinesAsync() => Task.FromResult<IReadOnlyList<OrderLine>>(State.State.Lines);
+
+    public Task<CloneOrderResult> CloneAsync(CloneOrderCommand command)
+    {
+        EnsureExists();
+        // Clone implementation would create a new order grain with copied lines
+        // This is a stub - full implementation would use grain factory
+        throw new NotImplementedException("Clone functionality not yet implemented");
+    }
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.State.Id == Guid.Empty)
             throw new InvalidOperationException("Order does not exist");
     }
 
     private void EnsureNotClosed()
     {
-        if (_state.State.Status is OrderStatus.Closed or OrderStatus.Voided)
+        if (State.State.Status is OrderStatus.Closed or OrderStatus.Voided)
             throw new InvalidOperationException("Order is closed or voided");
     }
 
     private void RecalculateTotalsInternal()
     {
-        var activeLines = _state.State.Lines.Where(l => l.Status != OrderLineStatus.Voided);
-        _state.State.Subtotal = activeLines.Sum(l => l.LineTotal);
-        _state.State.DiscountTotal = _state.State.Discounts.Sum(d => d.Amount);
-        _state.State.ServiceChargeTotal = _state.State.ServiceCharges.Sum(s => s.Amount);
+        var activeLines = State.State.Lines.Where(l => l.Status != OrderLineStatus.Voided);
+        State.State.Subtotal = activeLines.Sum(l => l.LineTotal);
+        State.State.DiscountTotal = State.State.Discounts.Sum(d => d.Amount);
+        State.State.ServiceChargeTotal = State.State.ServiceCharges.Sum(s => s.Amount);
 
         // Calculate tax (simplified - 10% tax rate)
-        var taxableAmount = _state.State.Subtotal - _state.State.DiscountTotal;
-        taxableAmount += _state.State.ServiceCharges.Where(s => s.IsTaxable).Sum(s => s.Amount);
-        _state.State.TaxTotal = taxableAmount * 0.10m;
+        var taxableAmount = State.State.Subtotal - State.State.DiscountTotal;
+        taxableAmount += State.State.ServiceCharges.Where(s => s.IsTaxable).Sum(s => s.Amount);
+        State.State.TaxTotal = taxableAmount * 0.10m;
 
-        _state.State.GrandTotal = _state.State.Subtotal
-            - _state.State.DiscountTotal
-            + _state.State.ServiceChargeTotal
-            + _state.State.TaxTotal;
+        State.State.GrandTotal = State.State.Subtotal
+            - State.State.DiscountTotal
+            + State.State.ServiceChargeTotal
+            + State.State.TaxTotal;
 
-        _state.State.BalanceDue = _state.State.GrandTotal - _state.State.PaidAmount;
+        State.State.BalanceDue = State.State.GrandTotal - State.State.PaidAmount;
     }
 
     private OrderTotals GetTotalsInternal() => new(
-        _state.State.Subtotal,
-        _state.State.DiscountTotal,
-        _state.State.ServiceChargeTotal,
-        _state.State.TaxTotal,
-        _state.State.GrandTotal,
-        _state.State.PaidAmount,
-        _state.State.BalanceDue);
+        State.State.Subtotal,
+        State.State.DiscountTotal,
+        State.State.ServiceChargeTotal,
+        State.State.TaxTotal,
+        State.State.GrandTotal,
+        State.State.PaidAmount,
+        State.State.BalanceDue);
 }
