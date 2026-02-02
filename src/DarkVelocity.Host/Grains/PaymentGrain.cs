@@ -346,6 +346,7 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>
         await ConfirmEvents();
 
         // Publish stream event for integration
+        // For gift card payments, the subscriber will credit the refund back to the gift card
         await PaymentStream!.OnNextAsync(new PaymentRefundedEvent(
             State.Id,
             State.SiteId,
@@ -355,7 +356,8 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>
             State.RefundedAmount,
             State.Method.ToString(),
             command.Reason,
-            command.IssuedBy)
+            command.IssuedBy,
+            State.GiftCardId)
         {
             OrganizationId = State.OrganizationId
         });
@@ -450,6 +452,9 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>
     private async Task PublishPaymentCompletedEventAsync()
     {
         // Publish payment completed event via stream for integration
+        // This replaces the direct grain call to OrderGrain.RecordPaymentAsync
+        // allowing multiple subscribers to react to payment completions
+        // For gift card payments, the subscriber will redeem from the gift card
         await PaymentStream!.OnNextAsync(new PaymentCompletedEvent(
             State.Id,
             State.SiteId,
@@ -462,7 +467,8 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>
             State.CashierId,
             State.DrawerId,
             State.GatewayReference,
-            State.CardInfo?.MaskedNumber)
+            State.CardInfo?.MaskedNumber,
+            State.GiftCardId)
         {
             OrganizationId = State.OrganizationId
         });
