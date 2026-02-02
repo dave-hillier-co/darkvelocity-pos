@@ -766,6 +766,7 @@ public sealed record PaymentInitiatedEvent(
 /// <summary>
 /// Published when a payment is completed (cash, card, or gift card).
 /// Triggers: Debit Cash/AR, Credit Sales Revenue.
+/// For gift card payments, triggers redemption on the gift card.
 /// </summary>
 [GenerateSerializer]
 public sealed record PaymentCompletedEvent(
@@ -780,12 +781,14 @@ public sealed record PaymentCompletedEvent(
     [property: Id(8)] Guid CashierId,
     [property: Id(9)] Guid? DrawerId,
     [property: Id(10)] string? GatewayReference,
-    [property: Id(11)] string? CardLastFour
+    [property: Id(11)] string? CardLastFour,
+    [property: Id(12)] Guid? GiftCardId = null
 ) : StreamEvent;
 
 /// <summary>
 /// Published when a payment is refunded.
 /// Triggers: Debit Refund Expense, Credit Cash/AR.
+/// For gift card payments, triggers refund credit on the gift card.
 /// </summary>
 [GenerateSerializer]
 public sealed record PaymentRefundedEvent(
@@ -797,7 +800,8 @@ public sealed record PaymentRefundedEvent(
     [property: Id(5)] decimal TotalRefundedAmount,
     [property: Id(6)] string Method,
     [property: Id(7)] string? Reason,
-    [property: Id(8)] Guid IssuedBy
+    [property: Id(8)] Guid IssuedBy,
+    [property: Id(9)] Guid? GiftCardId = null
 ) : StreamEvent;
 
 /// <summary>

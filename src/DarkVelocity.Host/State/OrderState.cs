@@ -150,5 +150,24 @@ public sealed class OrderState
     [Id(35)] public DateTime? VoidedAt { get; set; }
     [Id(36)] public string? VoidReason { get; set; }
 
-    [Id(37)] public int Version { get; set; }
+    // Version property removed - JournaledGrain provides this.Version automatically
+
+    /// <summary>
+    /// Recalculates all totals based on current lines, discounts, and service charges.
+    /// </summary>
+    public void RecalculateTotals()
+    {
+        var activeLines = Lines.Where(l => l.Status != OrderLineStatus.Voided);
+        Subtotal = activeLines.Sum(l => l.LineTotal);
+        DiscountTotal = Discounts.Sum(d => d.Amount);
+        ServiceChargeTotal = ServiceCharges.Sum(s => s.Amount);
+
+        // Calculate tax (simplified - 10% tax rate)
+        var taxableAmount = Subtotal - DiscountTotal;
+        taxableAmount += ServiceCharges.Where(s => s.IsTaxable).Sum(s => s.Amount);
+        TaxTotal = taxableAmount * 0.10m;
+
+        GrandTotal = Subtotal - DiscountTotal + ServiceChargeTotal + TaxTotal;
+        BalanceDue = GrandTotal - PaidAmount;
+    }
 }

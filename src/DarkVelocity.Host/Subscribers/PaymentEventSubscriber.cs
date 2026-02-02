@@ -125,6 +125,12 @@ public class PaymentEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
             evt.TipAmount,
             evt.Method);
 
+        // For gift card payments, redeem from the gift card
+        if (evt.Method == "GiftCard" && evt.GiftCardId.HasValue)
+        {
+            await RedeemFromGiftCardAsync(evt);
+        }
+
         // Create accounting journal entry
         var journalEntryId = Guid.NewGuid();
         var performedBy = evt.CashierId;
@@ -188,6 +194,12 @@ public class PaymentEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
             evt.PaymentId,
             evt.RefundAmount,
             evt.TotalRefundedAmount);
+
+        // For gift card payments, credit the refund back to the gift card
+        if (evt.Method == "GiftCard" && evt.GiftCardId.HasValue)
+        {
+            await RefundToGiftCardAsync(evt);
+        }
 
         var journalEntryId = Guid.NewGuid();
 
@@ -272,6 +284,87 @@ public class PaymentEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         _logger.LogInformation(
             "Created journal entry {JournalEntryId} for payment void reversal",
             journalEntryId);
+    }
+
+    /// <summary>
+    /// Redeems the payment amount from the gift card.
+    /// This decouples the payment domain from the gift card domain via events.
+    /// </summary>
+    private async Task RedeemFromGiftCardAsync(PaymentCompletedEvent evt)
+    {
+        _logger.LogInformation(
+            "Redeeming {Amount:C} from gift card {GiftCardId} for payment {PaymentId}",
+            evt.Amount,
+            evt.GiftCardId,
+            evt.PaymentId);
+
+        var giftCardGrain = GrainFactory.GetGrain<IGiftCardGrain>(
+            GrainKeys.GiftCard(evt.OrganizationId, evt.GiftCardId!.Value));
+
+        try
+        {
+            var result = await giftCardGrain.RedeemAsync(new RedeemGiftCardCommand(
+                Amount: evt.Amount,
+                OrderId: evt.OrderId,
+                PaymentId: evt.PaymentId,
+                SiteId: evt.SiteId,
+                PerformedBy: evt.CashierId));
+
+            _logger.LogInformation(
+                "Gift card {GiftCardId} redeemed {Amount:C}, remaining balance: {RemainingBalance:C}",
+                evt.GiftCardId,
+                result.AmountRedeemed,
+                result.RemainingBalance);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to redeem from gift card {GiftCardId} for payment {PaymentId}",
+                evt.GiftCardId,
+                evt.PaymentId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Credits the refund amount back to the gift card.
+    /// This decouples the payment domain from the gift card domain via events.
+    /// </summary>
+    private async Task RefundToGiftCardAsync(PaymentRefundedEvent evt)
+    {
+        _logger.LogInformation(
+            "Crediting refund {Amount:C} to gift card {GiftCardId} for payment {PaymentId}",
+            evt.RefundAmount,
+            evt.GiftCardId,
+            evt.PaymentId);
+
+        var giftCardGrain = GrainFactory.GetGrain<IGiftCardGrain>(
+            GrainKeys.GiftCard(evt.OrganizationId, evt.GiftCardId!.Value));
+
+        try
+        {
+            var newBalance = await giftCardGrain.RefundToCardAsync(new RefundToGiftCardCommand(
+                Amount: evt.RefundAmount,
+                OriginalPaymentId: evt.PaymentId,
+                SiteId: evt.SiteId,
+                PerformedBy: evt.IssuedBy,
+                OriginalOrderId: evt.OrderId,
+                Notes: evt.Reason));
+
+            _logger.LogInformation(
+                "Gift card {GiftCardId} credited {Amount:C}, new balance: {NewBalance:C}",
+                evt.GiftCardId,
+                evt.RefundAmount,
+                newBalance);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to refund to gift card {GiftCardId} for payment {PaymentId}",
+                evt.GiftCardId,
+                evt.PaymentId);
+            throw;
+        }
     }
 
     private static Guid GetAccountId(Guid orgId, string accountCode)

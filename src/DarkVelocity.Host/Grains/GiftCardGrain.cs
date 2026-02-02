@@ -19,7 +19,7 @@ public record GiftCardTransactionContext(
 
 public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>, IGiftCardGrain
 {
-    private IAsyncStream<IStreamEvent>? _giftCardStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _giftCardStream;
 
     public GiftCardGrain(
         [PersistentState("giftcard", "OrleansStorage")]
@@ -28,6 +28,28 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
     }
 
     protected override bool IsInitialized => State.State.Id != Guid.Empty;
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        if (State.State.OrganizationId != Guid.Empty)
+        {
+            InitializeStream();
+        }
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    private void InitializeStream()
+    {
+        var orgId = State.State.OrganizationId;
+        _giftCardStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
+    }
+
+    private IAsyncStream<IStreamEvent>? GiftCardStream => _giftCardStream?.Value;
 
     protected override GiftCardTransaction CreateTransaction(
         decimal amount,
@@ -64,17 +86,6 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         State.State.UpdatedAt = DateTime.UtcNow;
     }
 
-    private IAsyncStream<IStreamEvent> GetGiftCardStream()
-    {
-        if (_giftCardStream == null && State.State.OrganizationId != Guid.Empty)
-        {
-            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, State.State.OrganizationId.ToString());
-            _giftCardStream = streamProvider.GetStream<IStreamEvent>(streamId);
-        }
-        return _giftCardStream!;
-    }
-
     public async Task<GiftCardCreatedResult> CreateAsync(CreateGiftCardCommand command)
     {
         if (State.State.Id != Guid.Empty)
@@ -100,6 +111,7 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         };
 
         await State.WriteStateAsync();
+        InitializeStream();
 
         return new GiftCardCreatedResult(cardId, command.CardNumber, State.State.CreatedAt);
     }
@@ -133,9 +145,9 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
                 PerformedBy: command.ActivatedBy));
 
         // Publish gift card activated event
-        if (GetGiftCardStream() != null)
+        if (GiftCardStream != null)
         {
-            await GetGiftCardStream().OnNextAsync(new GiftCardActivatedEvent(
+            await GiftCardStream.OnNextAsync(new GiftCardActivatedEvent(
                 State.State.Id,
                 command.SiteId,
                 State.State.CardNumber,
@@ -187,9 +199,9 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         State.State.LastUsedSiteId = command.SiteId;
 
         // Publish gift card redeemed event
-        if (GetGiftCardStream() != null)
+        if (GiftCardStream != null)
         {
-            await GetGiftCardStream().OnNextAsync(new GiftCardRedeemedEvent(
+            await GiftCardStream.OnNextAsync(new GiftCardRedeemedEvent(
                 State.State.Id,
                 command.SiteId,
                 State.State.CardNumber,
@@ -226,9 +238,9 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         State.State.LastUsedSiteId = command.SiteId;
 
         // Publish gift card reloaded event
-        if (GetGiftCardStream() != null)
+        if (GiftCardStream != null)
         {
-            await GetGiftCardStream().OnNextAsync(new GiftCardReloadedEvent(
+            await GiftCardStream.OnNextAsync(new GiftCardReloadedEvent(
                 State.State.Id,
                 command.SiteId,
                 State.State.CardNumber,
@@ -265,7 +277,7 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         // Publish refund applied event
         if (_giftCardStream != null && command.OriginalOrderId != null)
         {
-            await GetGiftCardStream().OnNextAsync(new GiftCardRefundAppliedEvent(
+            await GiftCardStream.OnNextAsync(new GiftCardRefundAppliedEvent(
                 State.State.Id,
                 command.SiteId,
                 State.State.CardNumber,
@@ -340,7 +352,7 @@ public class GiftCardGrain : LedgerGrainBase<GiftCardState, GiftCardTransaction>
         // Publish gift card expired event
         if (_giftCardStream != null && previousBalance > 0)
         {
-            await GetGiftCardStream().OnNextAsync(new GiftCardExpiredEvent(
+            await GiftCardStream.OnNextAsync(new GiftCardExpiredEvent(
                 State.State.Id,
                 State.State.ActivationSiteId ?? Guid.Empty,
                 State.State.CardNumber,

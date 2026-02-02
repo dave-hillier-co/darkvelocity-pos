@@ -1,30 +1,166 @@
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
+using Orleans.EventSourcing;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Host.Grains;
 
 /// <summary>
 /// Orleans grain for managing accounts with full journal entry tracking.
-/// Implements double-entry accounting with complete audit trail.
+/// Implements double-entry accounting with complete audit trail using event sourcing.
 /// </summary>
-public class AccountGrain : Grain, IAccountGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class AccountGrain : JournaledGrain<AccountState, IAccountJournaledEvent>, IAccountGrain
 {
-    private readonly IPersistentState<AccountState> _state;
     private const int MaxJournalEntries = 500;
 
-    public AccountGrain(
-        [PersistentState("account", "OrleansStorage")]
-        IPersistentState<AccountState> state)
+    protected override void TransitionState(AccountState state, IAccountJournaledEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case AccountCreatedJournaledEvent e:
+                state.Id = e.AccountId;
+                state.OrganizationId = e.OrganizationId;
+                state.AccountCode = e.AccountCode;
+                state.Name = e.AccountName;
+                state.AccountType = Enum.Parse<AccountType>(e.AccountType);
+                state.ParentAccountId = e.ParentAccountCode != null ? Guid.Empty : null; // Note: actual parent lookup done in CreateAsync
+                state.IsActive = e.IsActive;
+                state.CreatedAt = e.OccurredAt;
+                break;
+
+            case AccountDebitedJournaledEvent e:
+                var debitBalanceChange = IsDebitNormalBalance(state.AccountType)
+                    ? e.Amount
+                    : -e.Amount;
+                state.Balance = e.NewBalance;
+                state.TotalDebits += e.Amount;
+                state.TotalEntryCount++;
+                state.LastEntryAt = e.OccurredAt;
+                AddJournalEntryToState(state, new AccountJournalEntry
+                {
+                    Id = e.EntryId,
+                    Timestamp = e.OccurredAt,
+                    EntryType = JournalEntryType.Debit,
+                    Status = JournalEntryStatus.Posted,
+                    Amount = e.Amount,
+                    BalanceAfter = e.NewBalance,
+                    Description = e.Description,
+                    ReferenceType = e.ReferenceType,
+                    ReferenceId = e.ReferenceId,
+                    PerformedBy = e.PerformedBy
+                });
+                break;
+
+            case AccountCreditedJournaledEvent e:
+                state.Balance = e.NewBalance;
+                state.TotalCredits += e.Amount;
+                state.TotalEntryCount++;
+                state.LastEntryAt = e.OccurredAt;
+                AddJournalEntryToState(state, new AccountJournalEntry
+                {
+                    Id = e.EntryId,
+                    Timestamp = e.OccurredAt,
+                    EntryType = JournalEntryType.Credit,
+                    Status = JournalEntryStatus.Posted,
+                    Amount = e.Amount,
+                    BalanceAfter = e.NewBalance,
+                    Description = e.Description,
+                    ReferenceType = e.ReferenceType,
+                    ReferenceId = e.ReferenceId,
+                    PerformedBy = e.PerformedBy
+                });
+                break;
+
+            case AccountEntryReversedJournaledEvent e:
+                state.Balance = e.NewBalance;
+                state.TotalEntryCount++;
+                state.LastEntryAt = e.OccurredAt;
+
+                // Update original entry status
+                var originalIndex = state.JournalEntries.FindIndex(je => je.Id == e.OriginalEntryId);
+                if (originalIndex >= 0)
+                {
+                    state.JournalEntries[originalIndex] = state.JournalEntries[originalIndex] with
+                    {
+                        Status = JournalEntryStatus.Reversed,
+                        ReversalEntryId = e.ReversalEntryId
+                    };
+                }
+
+                AddJournalEntryToState(state, new AccountJournalEntry
+                {
+                    Id = e.ReversalEntryId,
+                    Timestamp = e.OccurredAt,
+                    EntryType = JournalEntryType.Reversal,
+                    Status = JournalEntryStatus.Posted,
+                    Amount = e.Amount,
+                    BalanceAfter = e.NewBalance,
+                    Description = $"Reversal: {e.Reason}",
+                    PerformedBy = e.ReversedBy,
+                    ReversedEntryId = e.OriginalEntryId
+                });
+                break;
+
+            case AccountUpdatedJournaledEvent e:
+                if (e.AccountName != null)
+                    state.Name = e.AccountName;
+                if (e.IsActive.HasValue)
+                    state.IsActive = e.IsActive.Value;
+                state.LastModifiedAt = e.OccurredAt;
+                break;
+
+            case AccountPeriodClosedJournaledEvent e:
+                var periodSummary = new AccountPeriodSummary
+                {
+                    Year = e.Year,
+                    Month = e.Month,
+                    ClosingBalance = e.ClosingBalance
+                };
+                state.PeriodSummaries.Add(periodSummary);
+                state.LastEntryAt = e.OccurredAt;
+
+                // Move to next period
+                if (e.Month == 12)
+                {
+                    state.CurrentPeriodYear = e.Year + 1;
+                    state.CurrentPeriodMonth = 1;
+                }
+                else
+                {
+                    state.CurrentPeriodMonth = e.Month + 1;
+                }
+                break;
+        }
+    }
+
+    private static void AddJournalEntryToState(AccountState state, AccountJournalEntry entry)
+    {
+        state.JournalEntries.Add(entry);
+
+        // Keep only the most recent entries to prevent state bloat
+        if (state.JournalEntries.Count > MaxJournalEntries)
+        {
+            var cutoff = DateTime.UtcNow.AddMonths(-12);
+            var toRemove = state.JournalEntries
+                .Where(e => e.Timestamp < cutoff)
+                .OrderBy(e => e.Timestamp)
+                .Take(state.JournalEntries.Count - MaxJournalEntries)
+                .ToList();
+
+            foreach (var old in toRemove)
+            {
+                state.JournalEntries.Remove(old);
+            }
+        }
     }
 
     #region Lifecycle
 
     public async Task<CreateAccountResult> CreateAsync(CreateAccountCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.Id != Guid.Empty)
             throw new InvalidOperationException("Account already exists");
 
         if (string.IsNullOrWhiteSpace(command.AccountCode))
@@ -35,35 +171,41 @@ public class AccountGrain : Grain, IAccountGrain
 
         var now = DateTime.UtcNow;
 
-        _state.State = new AccountState
+        RaiseEvent(new AccountCreatedJournaledEvent
         {
-            Id = command.AccountId,
+            AccountId = command.AccountId,
             OrganizationId = command.OrganizationId,
             AccountCode = command.AccountCode,
-            Name = command.Name,
-            AccountType = command.AccountType,
-            SubType = command.SubType,
-            Description = command.Description,
-            ParentAccountId = command.ParentAccountId,
-            IsSystemAccount = command.IsSystemAccount,
+            AccountName = command.Name,
+            AccountType = command.AccountType.ToString(),
+            ParentAccountCode = null, // Simplified for event
             IsActive = true,
-            TaxCode = command.TaxCode,
-            ExternalReference = command.ExternalReference,
-            Currency = command.Currency,
-            Balance = 0,
-            CreatedAt = now,
-            CreatedBy = command.CreatedBy,
-            CurrentPeriodYear = now.Year,
-            CurrentPeriodMonth = now.Month,
-            Version = 1
-        };
+            OccurredAt = now
+        });
+        await ConfirmEvents();
+
+        // Set additional properties not in the event
+        State.SubType = command.SubType;
+        State.Description = command.Description;
+        State.ParentAccountId = command.ParentAccountId;
+        State.IsSystemAccount = command.IsSystemAccount;
+        State.TaxCode = command.TaxCode;
+        State.ExternalReference = command.ExternalReference;
+        State.Currency = command.Currency;
+        State.CreatedBy = command.CreatedBy;
+        State.CurrentPeriodYear = now.Year;
+        State.CurrentPeriodMonth = now.Month;
 
         // Record opening balance if provided
         if (command.OpeningBalance != 0)
         {
+            var entryId = Guid.NewGuid();
+            var newBalance = command.OpeningBalance;
+
+            // Add opening entry
             var entry = new AccountJournalEntry
             {
-                Id = Guid.NewGuid(),
+                Id = entryId,
                 Timestamp = now,
                 EntryType = JournalEntryType.Opening,
                 Status = JournalEntryStatus.Posted,
@@ -73,101 +215,108 @@ public class AccountGrain : Grain, IAccountGrain
                 PerformedBy = command.CreatedBy
             };
 
-            _state.State.Balance = command.OpeningBalance;
-            _state.State.JournalEntries.Add(entry);
-            _state.State.TotalEntryCount = 1;
-            _state.State.LastEntryAt = now;
+            State.Balance = command.OpeningBalance;
+            State.JournalEntries.Add(entry);
+            State.TotalEntryCount = 1;
+            State.LastEntryAt = now;
 
             // Track as debit or credit based on sign and account type
-            if (IsDebitNormalBalance(_state.State.AccountType))
+            if (IsDebitNormalBalance(State.AccountType))
             {
                 if (command.OpeningBalance > 0)
-                    _state.State.TotalDebits = command.OpeningBalance;
+                    State.TotalDebits = command.OpeningBalance;
                 else
-                    _state.State.TotalCredits = Math.Abs(command.OpeningBalance);
+                    State.TotalCredits = Math.Abs(command.OpeningBalance);
             }
             else
             {
                 if (command.OpeningBalance > 0)
-                    _state.State.TotalCredits = command.OpeningBalance;
+                    State.TotalCredits = command.OpeningBalance;
                 else
-                    _state.State.TotalDebits = Math.Abs(command.OpeningBalance);
+                    State.TotalDebits = Math.Abs(command.OpeningBalance);
             }
         }
 
-        await _state.WriteStateAsync();
-
         return new CreateAccountResult(
-            _state.State.Id,
-            _state.State.AccountCode,
-            _state.State.Balance);
+            State.Id,
+            State.AccountCode,
+            State.Balance);
     }
 
     public Task<AccountState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State);
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.Id != Guid.Empty);
+        return Task.FromResult(State.Id != Guid.Empty);
     }
 
     public async Task UpdateAsync(UpdateAccountCommand command)
     {
         EnsureExists();
 
-        if (command.Name != null)
-            _state.State.Name = command.Name;
+        RaiseEvent(new AccountUpdatedJournaledEvent
+        {
+            AccountId = State.Id,
+            AccountName = command.Name,
+            IsActive = null,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
+        // Set additional properties not in the event
         if (command.Description != null)
-            _state.State.Description = command.Description;
+            State.Description = command.Description;
         if (command.SubType != null)
-            _state.State.SubType = command.SubType;
+            State.SubType = command.SubType;
         if (command.TaxCode != null)
-            _state.State.TaxCode = command.TaxCode;
+            State.TaxCode = command.TaxCode;
         if (command.ExternalReference != null)
-            _state.State.ExternalReference = command.ExternalReference;
+            State.ExternalReference = command.ExternalReference;
         if (command.ParentAccountId.HasValue)
-            _state.State.ParentAccountId = command.ParentAccountId;
-
-        _state.State.LastModifiedAt = DateTime.UtcNow;
-        _state.State.LastModifiedBy = command.UpdatedBy;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+            State.ParentAccountId = command.ParentAccountId;
+        State.LastModifiedBy = command.UpdatedBy;
     }
 
     public async Task ActivateAsync(Guid activatedBy)
     {
         EnsureExists();
 
-        if (_state.State.IsActive)
+        if (State.IsActive)
             throw new InvalidOperationException("Account is already active");
 
-        _state.State.IsActive = true;
-        _state.State.LastModifiedAt = DateTime.UtcNow;
-        _state.State.LastModifiedBy = activatedBy;
-        _state.State.Version++;
+        RaiseEvent(new AccountUpdatedJournaledEvent
+        {
+            AccountId = State.Id,
+            IsActive = true,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
+        State.LastModifiedBy = activatedBy;
     }
 
     public async Task DeactivateAsync(Guid deactivatedBy)
     {
         EnsureExists();
 
-        if (!_state.State.IsActive)
+        if (!State.IsActive)
             throw new InvalidOperationException("Account is already deactivated");
 
-        if (_state.State.IsSystemAccount)
+        if (State.IsSystemAccount)
             throw new InvalidOperationException("System accounts cannot be deactivated");
 
-        _state.State.IsActive = false;
-        _state.State.LastModifiedAt = DateTime.UtcNow;
-        _state.State.LastModifiedBy = deactivatedBy;
-        _state.State.Version++;
+        RaiseEvent(new AccountUpdatedJournaledEvent
+        {
+            AccountId = State.Id,
+            IsActive = false,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
+        State.LastModifiedBy = deactivatedBy;
     }
 
     #endregion
@@ -186,38 +335,39 @@ public class AccountGrain : Grain, IAccountGrain
         var entryId = Guid.NewGuid();
 
         // Debit increases balance for Asset/Expense, decreases for Liability/Equity/Revenue
-        var balanceChange = IsDebitNormalBalance(_state.State.AccountType)
+        var balanceChange = IsDebitNormalBalance(State.AccountType)
             ? command.Amount
             : -command.Amount;
 
-        var newBalance = _state.State.Balance + balanceChange;
+        var newBalance = State.Balance + balanceChange;
 
-        var entry = new AccountJournalEntry
+        RaiseEvent(new AccountDebitedJournaledEvent
         {
-            Id = entryId,
-            Timestamp = now,
-            EntryType = JournalEntryType.Debit,
-            Status = JournalEntryStatus.Posted,
+            AccountId = State.Id,
+            EntryId = entryId,
             Amount = command.Amount,
-            BalanceAfter = newBalance,
+            NewBalance = newBalance,
             Description = command.Description,
-            ReferenceNumber = command.ReferenceNumber,
             ReferenceType = command.ReferenceType,
             ReferenceId = command.ReferenceId,
-            AccountingJournalEntryId = command.AccountingJournalEntryId,
             PerformedBy = command.PerformedBy,
-            CostCenterId = command.CostCenterId,
-            Notes = command.Notes
-        };
+            OccurredAt = now
+        });
+        await ConfirmEvents();
 
-        _state.State.Balance = newBalance;
-        _state.State.TotalDebits += command.Amount;
-        _state.State.TotalEntryCount++;
-        _state.State.LastEntryAt = now;
-        AddJournalEntry(entry);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        // Set additional properties on the journal entry (not stored in event)
+        var lastEntry = State.JournalEntries.LastOrDefault();
+        if (lastEntry != null && lastEntry.Id == entryId)
+        {
+            var index = State.JournalEntries.Count - 1;
+            State.JournalEntries[index] = lastEntry with
+            {
+                ReferenceNumber = command.ReferenceNumber,
+                AccountingJournalEntryId = command.AccountingJournalEntryId,
+                CostCenterId = command.CostCenterId,
+                Notes = command.Notes
+            };
+        }
 
         return new PostEntryResult(entryId, command.Amount, newBalance, JournalEntryType.Debit);
     }
@@ -234,38 +384,39 @@ public class AccountGrain : Grain, IAccountGrain
         var entryId = Guid.NewGuid();
 
         // Credit decreases balance for Asset/Expense, increases for Liability/Equity/Revenue
-        var balanceChange = IsDebitNormalBalance(_state.State.AccountType)
+        var balanceChange = IsDebitNormalBalance(State.AccountType)
             ? -command.Amount
             : command.Amount;
 
-        var newBalance = _state.State.Balance + balanceChange;
+        var newBalance = State.Balance + balanceChange;
 
-        var entry = new AccountJournalEntry
+        RaiseEvent(new AccountCreditedJournaledEvent
         {
-            Id = entryId,
-            Timestamp = now,
-            EntryType = JournalEntryType.Credit,
-            Status = JournalEntryStatus.Posted,
+            AccountId = State.Id,
+            EntryId = entryId,
             Amount = command.Amount,
-            BalanceAfter = newBalance,
+            NewBalance = newBalance,
             Description = command.Description,
-            ReferenceNumber = command.ReferenceNumber,
             ReferenceType = command.ReferenceType,
             ReferenceId = command.ReferenceId,
-            AccountingJournalEntryId = command.AccountingJournalEntryId,
             PerformedBy = command.PerformedBy,
-            CostCenterId = command.CostCenterId,
-            Notes = command.Notes
-        };
+            OccurredAt = now
+        });
+        await ConfirmEvents();
 
-        _state.State.Balance = newBalance;
-        _state.State.TotalCredits += command.Amount;
-        _state.State.TotalEntryCount++;
-        _state.State.LastEntryAt = now;
-        AddJournalEntry(entry);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        // Set additional properties on the journal entry (not stored in event)
+        var lastEntry = State.JournalEntries.LastOrDefault();
+        if (lastEntry != null && lastEntry.Id == entryId)
+        {
+            var index = State.JournalEntries.Count - 1;
+            State.JournalEntries[index] = lastEntry with
+            {
+                ReferenceNumber = command.ReferenceNumber,
+                AccountingJournalEntryId = command.AccountingJournalEntryId,
+                CostCenterId = command.CostCenterId,
+                Notes = command.Notes
+            };
+        }
 
         return new PostEntryResult(entryId, command.Amount, newBalance, JournalEntryType.Credit);
     }
@@ -277,48 +428,53 @@ public class AccountGrain : Grain, IAccountGrain
 
         var now = DateTime.UtcNow;
         var entryId = Guid.NewGuid();
-        var adjustment = command.NewBalance - _state.State.Balance;
+        var adjustment = command.NewBalance - State.Balance;
 
         if (adjustment == 0)
             throw new InvalidOperationException("New balance is the same as current balance");
 
-        var entry = new AccountJournalEntry
+        // Use debit or credit event based on adjustment direction
+        if ((adjustment > 0 && IsDebitNormalBalance(State.AccountType)) ||
+            (adjustment < 0 && !IsDebitNormalBalance(State.AccountType)))
         {
-            Id = entryId,
-            Timestamp = now,
-            EntryType = JournalEntryType.Adjustment,
-            Status = JournalEntryStatus.Posted,
-            Amount = Math.Abs(adjustment),
-            BalanceAfter = command.NewBalance,
-            Description = command.Reason,
-            PerformedBy = command.AdjustedBy,
-            ApprovedBy = command.ApprovedBy,
-            Notes = command.Notes
-        };
-
-        // Track as debit or credit based on adjustment direction and account type
-        if (adjustment > 0)
-        {
-            if (IsDebitNormalBalance(_state.State.AccountType))
-                _state.State.TotalDebits += Math.Abs(adjustment);
-            else
-                _state.State.TotalCredits += Math.Abs(adjustment);
+            RaiseEvent(new AccountDebitedJournaledEvent
+            {
+                AccountId = State.Id,
+                EntryId = entryId,
+                Amount = Math.Abs(adjustment),
+                NewBalance = command.NewBalance,
+                Description = command.Reason,
+                PerformedBy = command.AdjustedBy,
+                OccurredAt = now
+            });
         }
         else
         {
-            if (IsDebitNormalBalance(_state.State.AccountType))
-                _state.State.TotalCredits += Math.Abs(adjustment);
-            else
-                _state.State.TotalDebits += Math.Abs(adjustment);
+            RaiseEvent(new AccountCreditedJournaledEvent
+            {
+                AccountId = State.Id,
+                EntryId = entryId,
+                Amount = Math.Abs(adjustment),
+                NewBalance = command.NewBalance,
+                Description = command.Reason,
+                PerformedBy = command.AdjustedBy,
+                OccurredAt = now
+            });
         }
+        await ConfirmEvents();
 
-        _state.State.Balance = command.NewBalance;
-        _state.State.TotalEntryCount++;
-        _state.State.LastEntryAt = now;
-        AddJournalEntry(entry);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        // Update the last entry to be an adjustment type
+        var lastEntry = State.JournalEntries.LastOrDefault();
+        if (lastEntry != null && lastEntry.Id == entryId)
+        {
+            var index = State.JournalEntries.Count - 1;
+            State.JournalEntries[index] = lastEntry with
+            {
+                EntryType = JournalEntryType.Adjustment,
+                ApprovedBy = command.ApprovedBy,
+                Notes = command.Notes
+            };
+        }
 
         return new PostEntryResult(entryId, Math.Abs(adjustment), command.NewBalance, JournalEntryType.Adjustment);
     }
@@ -328,7 +484,7 @@ public class AccountGrain : Grain, IAccountGrain
         EnsureExists();
         EnsureActive();
 
-        var originalEntry = _state.State.JournalEntries.FirstOrDefault(e => e.Id == command.EntryId)
+        var originalEntry = State.JournalEntries.FirstOrDefault(e => e.Id == command.EntryId)
             ?? throw new InvalidOperationException("Entry not found");
 
         if (originalEntry.Status == JournalEntryStatus.Reversed)
@@ -344,20 +500,20 @@ public class AccountGrain : Grain, IAccountGrain
         decimal balanceChange;
         if (originalEntry.EntryType == JournalEntryType.Debit)
         {
-            balanceChange = IsDebitNormalBalance(_state.State.AccountType)
+            balanceChange = IsDebitNormalBalance(State.AccountType)
                 ? -originalEntry.Amount
                 : originalEntry.Amount;
         }
         else if (originalEntry.EntryType == JournalEntryType.Credit)
         {
-            balanceChange = IsDebitNormalBalance(_state.State.AccountType)
+            balanceChange = IsDebitNormalBalance(State.AccountType)
                 ? originalEntry.Amount
                 : -originalEntry.Amount;
         }
         else
         {
             // For adjustments, we need to determine the original direction
-            var previousEntry = _state.State.JournalEntries
+            var previousEntry = State.JournalEntries
                 .Where(e => e.Timestamp < originalEntry.Timestamp)
                 .OrderByDescending(e => e.Timestamp)
                 .FirstOrDefault();
@@ -367,39 +523,20 @@ public class AccountGrain : Grain, IAccountGrain
             balanceChange = -originalAdjustment;
         }
 
-        var newBalance = _state.State.Balance + balanceChange;
+        var newBalance = State.Balance + balanceChange;
 
-        var reversalEntry = new AccountJournalEntry
+        RaiseEvent(new AccountEntryReversedJournaledEvent
         {
-            Id = reversalId,
-            Timestamp = now,
-            EntryType = JournalEntryType.Reversal,
-            Status = JournalEntryStatus.Posted,
+            AccountId = State.Id,
+            OriginalEntryId = command.EntryId,
+            ReversalEntryId = reversalId,
             Amount = originalEntry.Amount,
-            BalanceAfter = newBalance,
-            Description = $"Reversal: {command.Reason}",
-            ReferenceNumber = originalEntry.ReferenceNumber,
-            ReferenceType = originalEntry.ReferenceType,
-            ReferenceId = originalEntry.ReferenceId,
-            PerformedBy = command.ReversedBy,
-            ReversedEntryId = command.EntryId
-        };
-
-        // Update original entry status
-        var originalIndex = _state.State.JournalEntries.FindIndex(e => e.Id == command.EntryId);
-        _state.State.JournalEntries[originalIndex] = originalEntry with
-        {
-            Status = JournalEntryStatus.Reversed,
-            ReversalEntryId = reversalId
-        };
-
-        _state.State.Balance = newBalance;
-        _state.State.TotalEntryCount++;
-        _state.State.LastEntryAt = now;
-        AddJournalEntry(reversalEntry);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+            NewBalance = newBalance,
+            Reason = command.Reason,
+            ReversedBy = command.ReversedBy,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
 
         return new ReverseEntryResult(reversalId, command.EntryId, originalEntry.Amount, newBalance);
     }
@@ -409,15 +546,15 @@ public class AccountGrain : Grain, IAccountGrain
         EnsureExists();
 
         // Check if period matches current period
-        if (command.Year != _state.State.CurrentPeriodYear ||
-            command.Month != _state.State.CurrentPeriodMonth)
+        if (command.Year != State.CurrentPeriodYear ||
+            command.Month != State.CurrentPeriodMonth)
         {
             throw new InvalidOperationException(
-                $"Cannot close period {command.Year}-{command.Month}. Current period is {_state.State.CurrentPeriodYear}-{_state.State.CurrentPeriodMonth}");
+                $"Cannot close period {command.Year}-{command.Month}. Current period is {State.CurrentPeriodYear}-{State.CurrentPeriodMonth}");
         }
 
         // Check if period summary already exists
-        if (_state.State.PeriodSummaries.Any(s => s.Year == command.Year && s.Month == command.Month))
+        if (State.PeriodSummaries.Any(s => s.Year == command.Year && s.Month == command.Month))
         {
             throw new InvalidOperationException($"Period {command.Year}-{command.Month} is already closed");
         }
@@ -427,12 +564,12 @@ public class AccountGrain : Grain, IAccountGrain
         var periodEnd = periodStart.AddMonths(1);
 
         // Get entries for this period
-        var periodEntries = _state.State.JournalEntries
+        var periodEntries = State.JournalEntries
             .Where(e => e.Timestamp >= periodStart && e.Timestamp < periodEnd && e.Status == JournalEntryStatus.Posted)
             .ToList();
 
         // Find opening balance (balance at start of period)
-        var priorEntries = _state.State.JournalEntries
+        var priorEntries = State.JournalEntries
             .Where(e => e.Timestamp < periodStart)
             .OrderByDescending(e => e.Timestamp)
             .FirstOrDefault();
@@ -447,60 +584,43 @@ public class AccountGrain : Grain, IAccountGrain
             .Where(e => e.EntryType == JournalEntryType.Credit)
             .Sum(e => e.Amount);
 
-        var closingBalance = command.ClosingBalance ?? _state.State.Balance;
+        var closingBalance = command.ClosingBalance ?? State.Balance;
 
         // Entry count excludes Opening entries (not real activity)
         var activityEntries = periodEntries.Count(e => e.EntryType != JournalEntryType.Opening);
 
-        var summary = new AccountPeriodSummary
+        RaiseEvent(new AccountPeriodClosedJournaledEvent
         {
+            AccountId = State.Id,
             Year = command.Year,
             Month = command.Month,
-            OpeningBalance = openingBalance,
-            TotalDebits = periodDebits,
-            TotalCredits = periodCredits,
             ClosingBalance = closingBalance,
-            EntryCount = activityEntries
-        };
+            ClosedBy = command.ClosedBy,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
 
-        _state.State.PeriodSummaries.Add(summary);
-
-        // Record period close entry if there's any adjustment
-        if (command.ClosingBalance.HasValue && command.ClosingBalance.Value != _state.State.Balance)
+        // Update the period summary with full details
+        var lastSummary = State.PeriodSummaries.LastOrDefault();
+        if (lastSummary != null && lastSummary.Year == command.Year && lastSummary.Month == command.Month)
         {
-            var adjustmentEntry = new AccountJournalEntry
+            var index = State.PeriodSummaries.Count - 1;
+            State.PeriodSummaries[index] = lastSummary with
             {
-                Id = Guid.NewGuid(),
-                Timestamp = now,
-                EntryType = JournalEntryType.PeriodClose,
-                Status = JournalEntryStatus.Posted,
-                Amount = Math.Abs(command.ClosingBalance.Value - _state.State.Balance),
-                BalanceAfter = command.ClosingBalance.Value,
-                Description = $"Period close adjustment for {command.Year}-{command.Month:D2}",
-                PerformedBy = command.ClosedBy
+                OpeningBalance = openingBalance,
+                TotalDebits = periodDebits,
+                TotalCredits = periodCredits,
+                EntryCount = activityEntries
             };
-
-            _state.State.Balance = command.ClosingBalance.Value;
-            _state.State.TotalEntryCount++;
-            _state.State.LastEntryAt = now;
-            AddJournalEntry(adjustmentEntry);
         }
 
-        // Move to next period
-        if (command.Month == 12)
+        // Handle closing balance adjustment
+        if (command.ClosingBalance.HasValue && command.ClosingBalance.Value != State.Balance)
         {
-            _state.State.CurrentPeriodYear = command.Year + 1;
-            _state.State.CurrentPeriodMonth = 1;
-        }
-        else
-        {
-            _state.State.CurrentPeriodMonth = command.Month + 1;
+            State.Balance = command.ClosingBalance.Value;
         }
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-
-        return summary;
+        return State.PeriodSummaries.Last(s => s.Year == command.Year && s.Month == command.Month);
     }
 
     #endregion
@@ -509,16 +629,16 @@ public class AccountGrain : Grain, IAccountGrain
 
     public Task<decimal> GetBalanceAsync()
     {
-        return Task.FromResult(_state.State.Balance);
+        return Task.FromResult(State.Balance);
     }
 
     public Task<AccountBalance> GetBalanceInfoAsync()
     {
         return Task.FromResult(new AccountBalance(
-            _state.State.Balance,
-            _state.State.TotalDebits,
-            _state.State.TotalCredits,
-            _state.State.LastEntryAt));
+            State.Balance,
+            State.TotalDebits,
+            State.TotalCredits,
+            State.LastEntryAt));
     }
 
     public Task<AccountSummary> GetSummaryAsync()
@@ -526,21 +646,21 @@ public class AccountGrain : Grain, IAccountGrain
         EnsureExists();
 
         return Task.FromResult(new AccountSummary(
-            _state.State.Id,
-            _state.State.AccountCode,
-            _state.State.Name,
-            _state.State.AccountType,
-            _state.State.Balance,
-            _state.State.TotalDebits,
-            _state.State.TotalCredits,
-            _state.State.TotalEntryCount,
-            _state.State.LastEntryAt,
-            _state.State.IsActive));
+            State.Id,
+            State.AccountCode,
+            State.Name,
+            State.AccountType,
+            State.Balance,
+            State.TotalDebits,
+            State.TotalCredits,
+            State.TotalEntryCount,
+            State.LastEntryAt,
+            State.IsActive));
     }
 
     public Task<IReadOnlyList<AccountJournalEntry>> GetRecentEntriesAsync(int count = 50)
     {
-        var entries = _state.State.JournalEntries
+        var entries = State.JournalEntries
             .OrderByDescending(e => e.Timestamp)
             .Take(count)
             .ToList();
@@ -550,7 +670,7 @@ public class AccountGrain : Grain, IAccountGrain
 
     public Task<IReadOnlyList<AccountJournalEntry>> GetEntriesInRangeAsync(DateTime from, DateTime to)
     {
-        var entries = _state.State.JournalEntries
+        var entries = State.JournalEntries
             .Where(e => e.Timestamp >= from && e.Timestamp <= to)
             .OrderByDescending(e => e.Timestamp)
             .ToList();
@@ -560,13 +680,13 @@ public class AccountGrain : Grain, IAccountGrain
 
     public Task<AccountJournalEntry?> GetEntryAsync(Guid entryId)
     {
-        var entry = _state.State.JournalEntries.FirstOrDefault(e => e.Id == entryId);
+        var entry = State.JournalEntries.FirstOrDefault(e => e.Id == entryId);
         return Task.FromResult(entry);
     }
 
     public Task<IReadOnlyList<AccountJournalEntry>> GetEntriesByReferenceAsync(string referenceType, Guid referenceId)
     {
-        var entries = _state.State.JournalEntries
+        var entries = State.JournalEntries
             .Where(e => e.ReferenceType == referenceType && e.ReferenceId == referenceId)
             .OrderByDescending(e => e.Timestamp)
             .ToList();
@@ -577,8 +697,8 @@ public class AccountGrain : Grain, IAccountGrain
     public Task<IReadOnlyList<AccountPeriodSummary>> GetPeriodSummariesAsync(int? year = null)
     {
         var summaries = year.HasValue
-            ? _state.State.PeriodSummaries.Where(s => s.Year == year.Value).ToList()
-            : _state.State.PeriodSummaries.ToList();
+            ? State.PeriodSummaries.Where(s => s.Year == year.Value).ToList()
+            : State.PeriodSummaries.ToList();
 
         return Task.FromResult<IReadOnlyList<AccountPeriodSummary>>(summaries);
     }
@@ -586,7 +706,7 @@ public class AccountGrain : Grain, IAccountGrain
     public Task<decimal> GetBalanceAtAsync(DateTime pointInTime)
     {
         // Find the most recent entry before or at the point in time
-        var entry = _state.State.JournalEntries
+        var entry = State.JournalEntries
             .Where(e => e.Timestamp <= pointInTime)
             .OrderByDescending(e => e.Timestamp)
             .FirstOrDefault();
@@ -600,13 +720,13 @@ public class AccountGrain : Grain, IAccountGrain
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.Id == Guid.Empty)
             throw new InvalidOperationException("Account not found");
     }
 
     private void EnsureActive()
     {
-        if (!_state.State.IsActive)
+        if (!State.IsActive)
             throw new InvalidOperationException("Account is not active");
     }
 
@@ -618,28 +738,6 @@ public class AccountGrain : Grain, IAccountGrain
     private static bool IsDebitNormalBalance(AccountType accountType)
     {
         return accountType == AccountType.Asset || accountType == AccountType.Expense;
-    }
-
-    private void AddJournalEntry(AccountJournalEntry entry)
-    {
-        _state.State.JournalEntries.Add(entry);
-
-        // Keep only the most recent entries to prevent state bloat
-        if (_state.State.JournalEntries.Count > MaxJournalEntries)
-        {
-            // Keep posted/reversed entries that aren't too old
-            var cutoff = DateTime.UtcNow.AddMonths(-12);
-            var toRemove = _state.State.JournalEntries
-                .Where(e => e.Timestamp < cutoff)
-                .OrderBy(e => e.Timestamp)
-                .Take(_state.State.JournalEntries.Count - MaxJournalEntries)
-                .ToList();
-
-            foreach (var old in toRemove)
-            {
-                _state.State.JournalEntries.Remove(old);
-            }
-        }
     }
 
     #endregion

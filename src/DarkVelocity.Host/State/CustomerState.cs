@@ -153,8 +153,6 @@ public sealed class CustomerState
     [Id(23)] public DateTime? UpdatedAt { get; set; }
     [Id(24)] public DateTime? LastVisitAt { get; set; }
     [Id(25)] public List<Guid> MergedFrom { get; set; } = [];
-
-    [Id(26)] public int Version { get; set; }
 }
 
 [GenerateSerializer]

@@ -10,7 +10,7 @@ public class PaymentIntentGrain : Grain, IPaymentIntentGrain
 {
     private readonly IPersistentState<PaymentIntentState> _state;
     private readonly IGrainFactory _grainFactory;
-    private IAsyncStream<IIntegrationEvent>? _eventStream;
+    private Lazy<IAsyncStream<IIntegrationEvent>>? _eventStream;
 
     public PaymentIntentGrain(
         [PersistentState("paymentIntent", "OrleansStorage")]
@@ -20,6 +20,28 @@ public class PaymentIntentGrain : Grain, IPaymentIntentGrain
         _state = state;
         _grainFactory = grainFactory;
     }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        if (_state.State.AccountId != Guid.Empty)
+        {
+            InitializeStream();
+        }
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    private void InitializeStream()
+    {
+        var accountId = _state.State.AccountId;
+        _eventStream = new Lazy<IAsyncStream<IIntegrationEvent>>(() =>
+        {
+            var streamProvider = this.GetStreamProvider("StreamProvider");
+            var streamId = StreamId.Create("PaymentIntents", accountId.ToString());
+            return streamProvider.GetStream<IIntegrationEvent>(streamId);
+        });
+    }
+
+    private IAsyncStream<IIntegrationEvent>? EventStream => _eventStream?.Value;
 
     public async Task<PaymentIntentSnapshot> CreateAsync(CreatePaymentIntentCommand command)
     {
@@ -53,6 +75,7 @@ public class PaymentIntentGrain : Grain, IPaymentIntentGrain
         };
 
         await _state.WriteStateAsync();
+        InitializeStream();
 
         var snapshot = GetSnapshot();
 
@@ -445,16 +468,12 @@ public class PaymentIntentGrain : Grain, IPaymentIntentGrain
 
     private async Task PublishEventAsync(IIntegrationEvent @event)
     {
-        if (_eventStream == null)
-        {
-            var streamProvider = this.GetStreamProvider("StreamProvider");
-            var streamId = StreamId.Create("PaymentIntents", _state.State.AccountId.ToString());
-            _eventStream = streamProvider.GetStream<IIntegrationEvent>(streamId);
-        }
+        if (EventStream == null)
+            return;
 
         try
         {
-            await _eventStream.OnNextAsync(@event);
+            await EventStream.OnNextAsync(@event);
         }
         catch
         {

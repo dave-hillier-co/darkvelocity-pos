@@ -10,6 +10,12 @@ builder.Host.UseOrleans(siloBuilder =>
     siloBuilder.UseLocalhostClustering();
     siloBuilder.AddMemoryGrainStorageAsDefault();
     siloBuilder.AddMemoryGrainStorage("PersistentStorage");
+    siloBuilder.AddMemoryGrainStorage("OrleansStorage");
+
+    // Log consistency provider for JournaledGrain event sourcing
+    siloBuilder.AddLogStorageBasedLogConsistencyProvider("LogStorage");
+    siloBuilder.AddMemoryGrainStorage("LogStorage");
+
     siloBuilder.AddMemoryStreams("StreamProvider");
     siloBuilder.UseDashboard(options =>
     {

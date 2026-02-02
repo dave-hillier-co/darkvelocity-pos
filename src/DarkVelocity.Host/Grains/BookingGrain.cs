@@ -1,39 +1,182 @@
 using DarkVelocity.Host;
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
+using Orleans.EventSourcing;
 using Orleans.Runtime;
 using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class BookingGrain : Grain, IBookingGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class BookingGrain : JournaledGrain<BookingState, IBookingJournaledEvent>, IBookingGrain
 {
-    private readonly IPersistentState<BookingState> _state;
-    private IAsyncStream<IStreamEvent>? _bookingStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _bookingStream;
 
-    public BookingGrain(
-        [PersistentState("booking", "OrleansStorage")]
-        IPersistentState<BookingState> state)
+    protected override void TransitionState(BookingState state, IBookingJournaledEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case BookingCreatedJournaledEvent e:
+                state.Id = e.BookingId;
+                state.OrganizationId = e.OrganizationId;
+                state.SiteId = e.SiteId;
+                state.Status = BookingStatus.Requested;
+                state.RequestedTime = e.BookingDateTime;
+                state.PartySize = e.PartySize;
+                state.Guest = new GuestInfo
+                {
+                    Name = e.CustomerName,
+                    Email = e.CustomerEmail,
+                    Phone = e.CustomerPhone
+                };
+                state.CustomerId = e.CustomerId;
+                state.SpecialRequests = e.SpecialRequests;
+                state.Source = !string.IsNullOrEmpty(e.Source) && Enum.TryParse<BookingSource>(e.Source, out var source) ? source : BookingSource.Direct;
+                state.CreatedAt = e.OccurredAt;
+                break;
+
+            case BookingConfirmedJournaledEvent e:
+                state.Status = BookingStatus.Confirmed;
+                state.ConfirmedTime = state.RequestedTime;
+                state.ConfirmedAt = e.OccurredAt;
+                break;
+
+            case BookingModifiedJournaledEvent e:
+                if (e.NewDateTime.HasValue)
+                {
+                    state.RequestedTime = e.NewDateTime.Value;
+                    if (state.ConfirmedTime.HasValue)
+                        state.ConfirmedTime = e.NewDateTime.Value;
+                }
+                if (e.NewPartySize.HasValue)
+                    state.PartySize = e.NewPartySize.Value;
+                if (e.NewSpecialRequests != null)
+                    state.SpecialRequests = e.NewSpecialRequests;
+                break;
+
+            case BookingCancelledJournaledEvent e:
+                state.Status = BookingStatus.Cancelled;
+                state.CancelledAt = e.OccurredAt;
+                state.CancellationReason = e.Reason;
+                state.CancelledBy = e.CancelledBy;
+                break;
+
+            case BookingDepositRequiredJournaledEvent e:
+                state.Deposit = new DepositInfo
+                {
+                    Amount = e.AmountRequired,
+                    Status = DepositStatus.Required,
+                    RequiredAt = e.DueBy
+                };
+                state.Status = BookingStatus.PendingDeposit;
+                break;
+
+            case BookingDepositPaidJournaledEvent e:
+                if (state.Deposit != null)
+                {
+                    state.Deposit = state.Deposit with
+                    {
+                        Status = DepositStatus.Paid,
+                        PaidAt = e.OccurredAt,
+                        PaymentMethod = Enum.TryParse<PaymentMethod>(e.PaymentMethod, out var pm) ? pm : PaymentMethod.Cash,
+                        PaymentReference = e.PaymentReference
+                    };
+                }
+                break;
+
+            case BookingDepositRefundedJournaledEvent e:
+                if (state.Deposit != null)
+                {
+                    state.Deposit = state.Deposit with
+                    {
+                        Status = DepositStatus.Refunded,
+                        RefundedAt = e.OccurredAt,
+                        RefundReason = e.Reason
+                    };
+                }
+                break;
+
+            case BookingDepositForfeitedJournaledEvent e:
+                if (state.Deposit != null)
+                {
+                    state.Deposit = state.Deposit with
+                    {
+                        Status = DepositStatus.Forfeited,
+                        ForfeitedAt = e.OccurredAt
+                    };
+                }
+                break;
+
+            case BookingGuestArrivedJournaledEvent e:
+                state.Status = BookingStatus.Arrived;
+                state.ArrivedAt = e.OccurredAt;
+                if (e.ActualPartySize.HasValue)
+                    state.PartySize = e.ActualPartySize.Value;
+                break;
+
+            case BookingSeatedJournaledEvent e:
+                state.Status = BookingStatus.Seated;
+                state.SeatedAt = e.OccurredAt;
+                state.SeatedBy = e.SeatedBy;
+                if (e.TableId.HasValue)
+                {
+                    if (!state.TableAssignments.Any(t => t.TableId == e.TableId.Value))
+                    {
+                        state.TableAssignments.Add(new TableAssignment
+                        {
+                            TableId = e.TableId.Value,
+                            TableNumber = e.TableNumber ?? "",
+                            AssignedAt = e.OccurredAt
+                        });
+                    }
+                }
+                break;
+
+            case BookingTableAssignedJournaledEvent e:
+                state.TableAssignments.Add(new TableAssignment
+                {
+                    TableId = e.TableId,
+                    TableNumber = e.TableNumber,
+                    AssignedAt = e.OccurredAt
+                });
+                break;
+
+            case BookingLinkedToOrderJournaledEvent e:
+                state.LinkedOrderId = e.OrderId;
+                break;
+
+            case BookingDepartedJournaledEvent e:
+                state.Status = BookingStatus.Completed;
+                state.DepartedAt = e.OccurredAt;
+                break;
+
+            case BookingNoShowJournaledEvent e:
+                state.Status = BookingStatus.NoShow;
+                break;
+        }
     }
 
-    private IAsyncStream<IStreamEvent> GetBookingStream()
+    private IAsyncStream<IStreamEvent>? GetBookingStream()
     {
-        if (_bookingStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_bookingStream == null && State.OrganizationId != Guid.Empty)
         {
-            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.BookingStreamNamespace, _state.State.OrganizationId.ToString());
-            _bookingStream = streamProvider.GetStream<IStreamEvent>(streamId);
+            var orgId = State.OrganizationId;
+            _bookingStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
+            {
+                var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+                var streamId = StreamId.Create(StreamConstants.BookingStreamNamespace, orgId.ToString());
+                return streamProvider.GetStream<IStreamEvent>(streamId);
+            });
         }
-        return _bookingStream!;
+        return _bookingStream?.Value;
     }
 
     public async Task<BookingRequestedResult> RequestAsync(RequestBookingCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.Id != Guid.Empty)
             throw new InvalidOperationException("Booking already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -41,49 +184,54 @@ public class BookingGrain : Grain, IBookingGrain
 
         var confirmationCode = GenerateConfirmationCode();
 
-        _state.State = new BookingState
+        RaiseEvent(new BookingCreatedJournaledEvent
         {
-            Id = bookingId,
+            BookingId = bookingId,
             OrganizationId = command.OrganizationId,
             SiteId = command.SiteId,
-            ConfirmationCode = confirmationCode,
-            Status = BookingStatus.Requested,
-            RequestedTime = command.RequestedTime,
-            Duration = command.Duration ?? TimeSpan.FromMinutes(90),
-            PartySize = command.PartySize,
-            Guest = command.Guest,
+            CustomerName = command.Guest.Name,
+            CustomerEmail = command.Guest.Email,
+            CustomerPhone = command.Guest.Phone,
             CustomerId = command.CustomerId,
+            BookingDateTime = command.RequestedTime,
+            PartySize = command.PartySize,
             SpecialRequests = command.SpecialRequests,
-            Occasion = command.Occasion,
-            Source = command.Source,
-            ExternalRef = command.ExternalRef,
-            CreatedAt = DateTime.UtcNow,
-            Version = 1
-        };
+            Source = command.Source.ToString(),
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
+        // Set additional properties not in the event
+        State.ConfirmationCode = confirmationCode;
+        State.Duration = command.Duration ?? TimeSpan.FromMinutes(90);
+        State.Occasion = command.Occasion;
+        State.ExternalRef = command.ExternalRef;
 
-        return new BookingRequestedResult(bookingId, confirmationCode, _state.State.CreatedAt);
+        return new BookingRequestedResult(bookingId, confirmationCode, State.CreatedAt);
     }
 
-    public Task<BookingState> GetStateAsync() => Task.FromResult(_state.State);
+    public Task<BookingState> GetStateAsync() => Task.FromResult(State);
 
     public async Task<BookingConfirmedResult> ConfirmAsync(DateTime? confirmedTime = null)
     {
         EnsureExists();
         EnsureStatus(BookingStatus.Requested, BookingStatus.PendingDeposit);
 
-        if (_state.State.Deposit != null && _state.State.Deposit.Status == DepositStatus.Required)
+        if (State.Deposit != null && State.Deposit.Status == DepositStatus.Required)
             throw new InvalidOperationException("Deposit required but not paid");
 
-        _state.State.ConfirmedTime = confirmedTime ?? _state.State.RequestedTime;
-        _state.State.ConfirmedAt = DateTime.UtcNow;
-        _state.State.Status = BookingStatus.Confirmed;
-        _state.State.Version++;
+        RaiseEvent(new BookingConfirmedJournaledEvent
+        {
+            BookingId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
+        // Set confirmed time if different from requested
+        if (confirmedTime.HasValue)
+            State.ConfirmedTime = confirmedTime.Value;
 
-        return new BookingConfirmedResult(_state.State.ConfirmedTime.Value, _state.State.ConfirmationCode);
+        return new BookingConfirmedResult(State.ConfirmedTime!.Value, State.ConfirmationCode);
     }
 
     public async Task ModifyAsync(ModifyBookingCommand command)
@@ -91,71 +239,66 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Requested, BookingStatus.Confirmed);
 
-        if (command.NewTime != null)
+        RaiseEvent(new BookingModifiedJournaledEvent
         {
-            _state.State.RequestedTime = command.NewTime.Value;
-            if (_state.State.ConfirmedTime != null)
-                _state.State.ConfirmedTime = command.NewTime.Value;
-        }
+            BookingId = State.Id,
+            NewDateTime = command.NewTime,
+            NewPartySize = command.NewPartySize,
+            NewSpecialRequests = command.SpecialRequests,
+            ModifiedBy = Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        if (command.NewPartySize != null)
-            _state.State.PartySize = command.NewPartySize.Value;
-
+        // Set duration if specified
         if (command.NewDuration != null)
-            _state.State.Duration = command.NewDuration.Value;
-
-        if (command.SpecialRequests != null)
-            _state.State.SpecialRequests = command.SpecialRequests;
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            State.Duration = command.NewDuration.Value;
     }
 
     public async Task CancelAsync(CancelBookingCommand command)
     {
         EnsureExists();
 
-        if (_state.State.Status == BookingStatus.Cancelled)
+        if (State.Status == BookingStatus.Cancelled)
             throw new InvalidOperationException("Booking already cancelled");
 
-        if (_state.State.Status == BookingStatus.Completed)
+        if (State.Status == BookingStatus.Completed)
             throw new InvalidOperationException("Cannot cancel completed booking");
 
-        _state.State.Status = BookingStatus.Cancelled;
-        _state.State.CancelledAt = DateTime.UtcNow;
-        _state.State.CancellationReason = command.Reason;
-        _state.State.CancelledBy = command.CancelledBy;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new BookingCancelledJournaledEvent
+        {
+            BookingId = State.Id,
+            Reason = command.Reason,
+            CancelledBy = command.CancelledBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AssignTableAsync(AssignTableCommand command)
     {
         EnsureExists();
 
-        var assignment = new TableAssignment
+        RaiseEvent(new BookingTableAssignedJournaledEvent
         {
+            BookingId = State.Id,
             TableId = command.TableId,
             TableNumber = command.TableNumber,
-            Capacity = command.Capacity,
-            AssignedAt = DateTime.UtcNow
-        };
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.TableAssignments.Add(assignment);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        // Set capacity (not in event)
+        var lastAssignment = State.TableAssignments.Last();
+        var index = State.TableAssignments.Count - 1;
+        State.TableAssignments[index] = lastAssignment with { Capacity = command.Capacity };
     }
 
     public async Task ClearTableAssignmentAsync()
     {
         EnsureExists();
 
-        _state.State.TableAssignments.Clear();
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        State.TableAssignments.Clear();
     }
 
     public async Task<DateTime> RecordArrivalAsync(RecordArrivalCommand command)
@@ -163,14 +306,16 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Confirmed);
 
-        _state.State.Status = BookingStatus.Arrived;
-        _state.State.ArrivedAt = DateTime.UtcNow;
-        _state.State.CheckedInBy = command.CheckedInBy;
-        _state.State.Version++;
+        RaiseEvent(new BookingGuestArrivedJournaledEvent
+        {
+            BookingId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
+        State.CheckedInBy = command.CheckedInBy;
 
-        return _state.State.ArrivedAt.Value;
+        return State.ArrivedAt!.Value;
     }
 
     public async Task SeatGuestAsync(SeatGuestCommand command)
@@ -178,22 +323,16 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Arrived, BookingStatus.Confirmed);
 
-        if (!_state.State.TableAssignments.Any(t => t.TableId == command.TableId))
+        RaiseEvent(new BookingSeatedJournaledEvent
         {
-            _state.State.TableAssignments.Add(new TableAssignment
-            {
-                TableId = command.TableId,
-                TableNumber = command.TableNumber,
-                AssignedAt = DateTime.UtcNow
-            });
-        }
-
-        _state.State.Status = BookingStatus.Seated;
-        _state.State.SeatedAt = DateTime.UtcNow;
-        _state.State.SeatedBy = command.SeatedBy;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+            BookingId = State.Id,
+            TableId = command.TableId,
+            TableNumber = command.TableNumber,
+            ActualPartySize = State.PartySize,
+            SeatedBy = command.SeatedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task RecordDepartureAsync(RecordDepartureCommand command)
@@ -201,13 +340,22 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Seated);
 
-        _state.State.Status = BookingStatus.Completed;
-        _state.State.DepartedAt = DateTime.UtcNow;
         if (command.OrderId != null)
-            _state.State.LinkedOrderId = command.OrderId;
-        _state.State.Version++;
+        {
+            RaiseEvent(new BookingLinkedToOrderJournaledEvent
+            {
+                BookingId = State.Id,
+                OrderId = command.OrderId.Value,
+                OccurredAt = DateTime.UtcNow
+            });
+        }
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new BookingDepartedJournaledEvent
+        {
+            BookingId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task MarkNoShowAsync(Guid? markedBy = null)
@@ -215,47 +363,48 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Confirmed);
 
-        _state.State.Status = BookingStatus.NoShow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new BookingNoShowJournaledEvent
+        {
+            BookingId = State.Id,
+            MarkedBy = markedBy ?? Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AddSpecialRequestAsync(string request)
     {
         EnsureExists();
 
-        if (string.IsNullOrEmpty(_state.State.SpecialRequests))
-            _state.State.SpecialRequests = request;
-        else
-            _state.State.SpecialRequests += $"; {request}";
+        var newRequests = string.IsNullOrEmpty(State.SpecialRequests)
+            ? request
+            : $"{State.SpecialRequests}; {request}";
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new BookingModifiedJournaledEvent
+        {
+            BookingId = State.Id,
+            NewSpecialRequests = newRequests,
+            ModifiedBy = Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AddNoteAsync(string note, Guid addedBy)
     {
         EnsureExists();
 
-        if (string.IsNullOrEmpty(_state.State.Notes))
-            _state.State.Notes = note;
+        if (string.IsNullOrEmpty(State.Notes))
+            State.Notes = note;
         else
-            _state.State.Notes += $"\n{note}";
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            State.Notes += $"\n{note}";
     }
 
     public async Task AddTagAsync(string tag)
     {
         EnsureExists();
 
-        if (_state.State.Tags.TryAddTag(tag))
-        {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
-        }
+        State.Tags.TryAddTag(tag);
     }
 
     public async Task RequireDepositAsync(RequireDepositCommand command)
@@ -263,28 +412,26 @@ public class BookingGrain : Grain, IBookingGrain
         EnsureExists();
         EnsureStatus(BookingStatus.Requested);
 
-        _state.State.Deposit = new DepositInfo
+        RaiseEvent(new BookingDepositRequiredJournaledEvent
         {
-            Amount = command.Amount,
-            Status = DepositStatus.Required,
-            RequiredAt = command.RequiredBy
-        };
-        _state.State.Status = BookingStatus.PendingDeposit;
-        _state.State.Version++;
+            BookingId = State.Id,
+            AmountRequired = command.Amount,
+            DueBy = command.RequiredBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-
-        // Publish deposit required event
+        // Publish stream event for integration
         if (GetBookingStream() != null)
         {
-            await GetBookingStream().OnNextAsync(new BookingDepositRequiredEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.CustomerId,
+            await GetBookingStream()!.OnNextAsync(new BookingDepositRequiredEvent(
+                State.Id,
+                State.SiteId,
+                State.CustomerId,
                 command.Amount,
                 command.RequiredBy)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -293,38 +440,38 @@ public class BookingGrain : Grain, IBookingGrain
     {
         EnsureExists();
 
-        if (_state.State.Deposit == null)
+        if (State.Deposit == null)
             throw new InvalidOperationException("No deposit required");
 
-        if (_state.State.Deposit.Status != DepositStatus.Required)
-            throw new InvalidOperationException($"Deposit is not required: {_state.State.Deposit.Status}");
+        if (State.Deposit.Status != DepositStatus.Required)
+            throw new InvalidOperationException($"Deposit is not required: {State.Deposit.Status}");
 
-        var depositAmount = _state.State.Deposit.Amount;
+        var depositAmount = State.Deposit.Amount;
 
-        _state.State.Deposit = _state.State.Deposit with
+        RaiseEvent(new BookingDepositPaidJournaledEvent
         {
-            Status = DepositStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            PaymentMethod = command.Method,
-            PaymentReference = command.PaymentReference
-        };
-        _state.State.Version++;
+            BookingId = State.Id,
+            PaymentId = Guid.NewGuid(),
+            Amount = depositAmount,
+            PaymentMethod = command.Method.ToString(),
+            PaymentReference = command.PaymentReference,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-
-        // Publish deposit paid event - triggers accounting journal entry
+        // Publish stream event for integration
         if (GetBookingStream() != null)
         {
-            await GetBookingStream().OnNextAsync(new BookingDepositPaidEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.CustomerId,
+            await GetBookingStream()!.OnNextAsync(new BookingDepositPaidEvent(
+                State.Id,
+                State.SiteId,
+                State.CustomerId,
                 depositAmount,
                 command.Method.ToString(),
                 command.PaymentReference,
                 depositAmount)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -333,45 +480,43 @@ public class BookingGrain : Grain, IBookingGrain
     {
         EnsureExists();
 
-        if (_state.State.Deposit == null)
+        if (State.Deposit == null)
             throw new InvalidOperationException("No deposit required");
 
-        _state.State.Deposit = _state.State.Deposit with { Status = DepositStatus.Waived };
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        State.Deposit = State.Deposit with { Status = DepositStatus.Waived };
     }
 
     public async Task ForfeitDepositAsync()
     {
         EnsureExists();
 
-        if (_state.State.Deposit == null || _state.State.Deposit.Status != DepositStatus.Paid)
+        if (State.Deposit == null || State.Deposit.Status != DepositStatus.Paid)
             throw new InvalidOperationException("No paid deposit to forfeit");
 
-        var depositAmount = _state.State.Deposit.Amount;
+        var depositAmount = State.Deposit.Amount;
 
-        _state.State.Deposit = _state.State.Deposit with
+        RaiseEvent(new BookingDepositForfeitedJournaledEvent
         {
-            Status = DepositStatus.Forfeited,
-            ForfeitedAt = DateTime.UtcNow
-        };
-        _state.State.Version++;
+            BookingId = State.Id,
+            Amount = depositAmount,
+            Reason = "No-show or late cancellation",
+            ProcessedBy = Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-
-        // Publish deposit forfeited event - converts liability to income
+        // Publish stream event for integration
         if (GetBookingStream() != null)
         {
-            await GetBookingStream().OnNextAsync(new BookingDepositForfeitedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.CustomerId,
+            await GetBookingStream()!.OnNextAsync(new BookingDepositForfeitedEvent(
+                State.Id,
+                State.SiteId,
+                State.CustomerId,
                 depositAmount,
                 "No-show or late cancellation",
                 Guid.Empty)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -380,33 +525,33 @@ public class BookingGrain : Grain, IBookingGrain
     {
         EnsureExists();
 
-        if (_state.State.Deposit == null || _state.State.Deposit.Status != DepositStatus.Paid)
+        if (State.Deposit == null || State.Deposit.Status != DepositStatus.Paid)
             throw new InvalidOperationException("No paid deposit to refund");
 
-        var depositAmount = _state.State.Deposit.Amount;
+        var depositAmount = State.Deposit.Amount;
 
-        _state.State.Deposit = _state.State.Deposit with
+        RaiseEvent(new BookingDepositRefundedJournaledEvent
         {
-            Status = DepositStatus.Refunded,
-            RefundedAt = DateTime.UtcNow,
-            RefundReason = reason
-        };
-        _state.State.Version++;
+            BookingId = State.Id,
+            Amount = depositAmount,
+            Reason = reason,
+            RefundedBy = refundedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-
-        // Publish deposit refunded event - reverses the liability
+        // Publish stream event for integration
         if (GetBookingStream() != null)
         {
-            await GetBookingStream().OnNextAsync(new BookingDepositRefundedEvent(
-                _state.State.Id,
-                _state.State.SiteId,
-                _state.State.CustomerId,
+            await GetBookingStream()!.OnNextAsync(new BookingDepositRefundedEvent(
+                State.Id,
+                State.SiteId,
+                State.CustomerId,
                 depositAmount,
                 reason,
                 refundedBy)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -415,27 +560,30 @@ public class BookingGrain : Grain, IBookingGrain
     {
         EnsureExists();
 
-        _state.State.LinkedOrderId = orderId;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new BookingLinkedToOrderJournaledEvent
+        {
+            BookingId = State.Id,
+            OrderId = orderId,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
-    public Task<BookingStatus> GetStatusAsync() => Task.FromResult(_state.State.Status);
+    public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);
+    public Task<BookingStatus> GetStatusAsync() => Task.FromResult(State.Status);
     public Task<bool> RequiresDepositAsync() =>
-        Task.FromResult(_state.State.Deposit != null && _state.State.Deposit.Status == DepositStatus.Required);
+        Task.FromResult(State.Deposit != null && State.Deposit.Status == DepositStatus.Required);
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.Id == Guid.Empty)
             throw new InvalidOperationException("Booking does not exist");
     }
 
     private void EnsureStatus(params BookingStatus[] allowedStatuses)
     {
-        if (!allowedStatuses.Contains(_state.State.Status))
-            throw new InvalidOperationException($"Invalid status. Expected one of [{string.Join(", ", allowedStatuses)}], got {_state.State.Status}");
+        if (!allowedStatuses.Contains(State.Status))
+            throw new InvalidOperationException($"Invalid status. Expected one of [{string.Join(", ", allowedStatuses)}], got {State.Status}");
     }
 
     private static string GenerateConfirmationCode()

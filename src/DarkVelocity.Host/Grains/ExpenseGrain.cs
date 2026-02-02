@@ -1,7 +1,9 @@
 using DarkVelocity.Host.Events;
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Logging;
+using Orleans.EventSourcing;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -10,74 +12,143 @@ namespace DarkVelocity.Host.Grains;
 /// <summary>
 /// Grain representing an expense record.
 /// </summary>
-public class ExpenseGrain : Grain, IExpenseGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class ExpenseGrain : JournaledGrain<ExpenseState, IExpenseJournaledEvent>, IExpenseGrain
 {
-    private readonly IPersistentState<ExpenseState> _state;
     private readonly IGrainFactory _grainFactory;
     private readonly ILogger<ExpenseGrain> _logger;
-    private IAsyncStream<DomainEvent>? _eventStream;
+    private Lazy<IAsyncStream<DomainEvent>>? _eventStream;
 
     public ExpenseGrain(
-        [PersistentState("expense", "purchases")]
-        IPersistentState<ExpenseState> state,
         IGrainFactory grainFactory,
         ILogger<ExpenseGrain> logger)
     {
-        _state = state;
         _grainFactory = grainFactory;
         _logger = logger;
     }
 
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        if (_state.State.OrganizationId != Guid.Empty)
+        _eventStream = new Lazy<IAsyncStream<DomainEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            _eventStream = streamProvider.GetStream<DomainEvent>(
+            return streamProvider.GetStream<DomainEvent>(
                 StreamConstants.PurchaseDocumentStreamNamespace,
-                _state.State.OrganizationId.ToString());
-        }
+                State.OrganizationId.ToString());
+        });
 
         return base.OnActivateAsync(cancellationToken);
     }
 
+    protected override void TransitionState(ExpenseState state, IExpenseJournaledEvent @event)
+    {
+        switch (@event)
+        {
+            case ExpenseCreatedJournaledEvent e:
+                state.ExpenseId = e.ExpenseId;
+                state.OrganizationId = e.OrganizationId;
+                state.SiteId = e.SiteId;
+                state.Description = e.Description;
+                state.Amount = e.Amount;
+                state.Category = Enum.TryParse<ExpenseCategory>(e.Category, out var cat) ? cat : ExpenseCategory.Other;
+                state.VendorId = e.VendorId;
+                state.VendorName = e.VendorName;
+                state.ExpenseDate = e.ExpenseDate;
+                state.DocumentUrl = e.ReceiptUrl;
+                state.Status = ExpenseStatus.Pending;
+                state.CreatedAt = e.OccurredAt;
+                state.CreatedBy = e.SubmittedBy;
+                break;
+
+            case ExpenseUpdatedJournaledEvent e:
+                if (e.Description != null) state.Description = e.Description;
+                if (e.Amount.HasValue) state.Amount = e.Amount.Value;
+                if (e.Category != null && Enum.TryParse<ExpenseCategory>(e.Category, out var updCat))
+                    state.Category = updCat;
+                if (e.ExpenseDate.HasValue) state.ExpenseDate = e.ExpenseDate.Value;
+                if (e.ReceiptUrl != null) state.DocumentUrl = e.ReceiptUrl;
+                state.UpdatedAt = e.OccurredAt;
+                state.UpdatedBy = e.UpdatedBy;
+                break;
+
+            case ExpenseApprovedJournaledEvent e:
+                state.Status = ExpenseStatus.Approved;
+                state.ApprovedBy = e.ApprovedBy;
+                state.ApprovedAt = e.OccurredAt;
+                if (e.Notes != null)
+                    state.Notes = (state.Notes ?? "") + $"\nApproval note: {e.Notes}";
+                break;
+
+            case ExpenseRejectedJournaledEvent e:
+                state.Status = ExpenseStatus.Rejected;
+                state.Notes = (state.Notes ?? "") + $"\nRejection reason: {e.Reason}";
+                break;
+
+            case ExpensePaidJournaledEvent e:
+                state.Status = ExpenseStatus.Paid;
+                if (e.ReferenceNumber != null) state.ReferenceNumber = e.ReferenceNumber;
+                if (e.PaymentMethod != null && Enum.TryParse<PaymentMethod>(e.PaymentMethod, out var pm))
+                    state.PaymentMethod = pm;
+                break;
+
+            case ExpenseVoidedJournaledEvent e:
+                state.Status = ExpenseStatus.Voided;
+                state.Notes = (state.Notes ?? "") + $"\nVoided: {e.Reason}";
+                break;
+
+            case ExpenseCancelledJournaledEvent e:
+                state.Status = ExpenseStatus.Voided;
+                state.Notes = (state.Notes ?? "") + $"\nCancelled: {e.Reason}";
+                break;
+
+            case ExpenseReceiptAttachedJournaledEvent e:
+                state.DocumentUrl = e.ReceiptUrl;
+                state.DocumentFilename = e.FileName;
+                break;
+
+            case ExpenseRecurrenceSetJournaledEvent e:
+                state.IsRecurring = true;
+                state.RecurrencePattern = new RecurrencePattern
+                {
+                    Frequency = Enum.TryParse<RecurrenceFrequency>(e.Frequency, out var freq) ? freq : RecurrenceFrequency.Monthly,
+                    Interval = e.Interval
+                };
+                break;
+        }
+    }
+
     public async Task<ExpenseSnapshot> RecordAsync(RecordExpenseCommand command)
     {
-        if (_state.State.ExpenseId != Guid.Empty)
+        if (State.ExpenseId != Guid.Empty)
             throw new InvalidOperationException("Expense already exists");
 
-        _state.State = new ExpenseState
+        RaiseEvent(new ExpenseCreatedJournaledEvent
         {
             ExpenseId = command.ExpenseId,
             OrganizationId = command.OrganizationId,
             SiteId = command.SiteId,
-            Category = command.Category,
-            CustomCategory = command.CustomCategory,
             Description = command.Description,
             Amount = command.Amount,
-            Currency = command.Currency,
-            ExpenseDate = command.ExpenseDate,
+            Category = command.Category.ToString(),
             VendorId = command.VendorId,
             VendorName = command.VendorName,
-            PaymentMethod = command.PaymentMethod,
-            ReferenceNumber = command.ReferenceNumber,
-            TaxAmount = command.TaxAmount,
-            IsTaxDeductible = command.IsTaxDeductible,
-            Notes = command.Notes,
-            Tags = command.Tags?.ToList() ?? [],
-            Status = ExpenseStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = command.RecordedBy,
-            Version = 1
-        };
+            ExpenseDate = command.ExpenseDate,
+            ReceiptUrl = null,
+            SubmittedBy = command.RecordedBy,
+            OccurredAt = DateTime.UtcNow
+        });
 
-        await _state.WriteStateAsync();
+        // Apply additional fields that aren't in the journaled event
+        State.Currency = command.Currency;
+        State.CustomCategory = command.CustomCategory;
+        State.PaymentMethod = command.PaymentMethod;
+        State.ReferenceNumber = command.ReferenceNumber;
+        State.TaxAmount = command.TaxAmount;
+        State.IsTaxDeductible = command.IsTaxDeductible;
+        State.Notes = command.Notes;
+        State.Tags = command.Tags?.ToList() ?? [];
 
-        // Initialize event stream
-        var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        _eventStream = streamProvider.GetStream<DomainEvent>(
-            StreamConstants.PurchaseDocumentStreamNamespace,
-            _state.State.OrganizationId.ToString());
+        await ConfirmEvents();
 
         // Register with index
         await RegisterWithIndexAsync();
@@ -114,56 +185,48 @@ public class ExpenseGrain : Grain, IExpenseGrain
         EnsureExists();
         EnsureModifiable();
 
-        if (command.Category.HasValue)
-            _state.State.Category = command.Category.Value;
-        if (command.CustomCategory != null)
-            _state.State.CustomCategory = command.CustomCategory;
-        if (command.Description != null)
-            _state.State.Description = command.Description;
-        if (command.Amount.HasValue)
-            _state.State.Amount = command.Amount.Value;
-        if (command.ExpenseDate.HasValue)
-            _state.State.ExpenseDate = command.ExpenseDate.Value;
-        if (command.VendorId.HasValue)
-            _state.State.VendorId = command.VendorId;
-        if (command.VendorName != null)
-            _state.State.VendorName = command.VendorName;
-        if (command.PaymentMethod.HasValue)
-            _state.State.PaymentMethod = command.PaymentMethod;
-        if (command.ReferenceNumber != null)
-            _state.State.ReferenceNumber = command.ReferenceNumber;
-        if (command.TaxAmount.HasValue)
-            _state.State.TaxAmount = command.TaxAmount;
-        if (command.IsTaxDeductible.HasValue)
-            _state.State.IsTaxDeductible = command.IsTaxDeductible.Value;
-        if (command.Notes != null)
-            _state.State.Notes = command.Notes;
-        if (command.Tags != null)
-            _state.State.Tags = command.Tags.ToList();
+        RaiseEvent(new ExpenseUpdatedJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            Description = command.Description,
+            Amount = command.Amount,
+            Category = command.Category?.ToString(),
+            ExpenseDate = command.ExpenseDate,
+            ReceiptUrl = null,
+            UpdatedBy = command.UpdatedBy,
+            OccurredAt = DateTime.UtcNow
+        });
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.UpdatedBy = command.UpdatedBy;
-        _state.State.Version++;
+        // Apply additional fields
+        if (command.CustomCategory != null) State.CustomCategory = command.CustomCategory;
+        if (command.VendorId.HasValue) State.VendorId = command.VendorId;
+        if (command.VendorName != null) State.VendorName = command.VendorName;
+        if (command.PaymentMethod.HasValue) State.PaymentMethod = command.PaymentMethod;
+        if (command.ReferenceNumber != null) State.ReferenceNumber = command.ReferenceNumber;
+        if (command.TaxAmount.HasValue) State.TaxAmount = command.TaxAmount;
+        if (command.IsTaxDeductible.HasValue) State.IsTaxDeductible = command.IsTaxDeductible.Value;
+        if (command.Notes != null) State.Notes = command.Notes;
+        if (command.Tags != null) State.Tags = command.Tags.ToList();
 
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         await UpdateIndexAsync();
 
         var evt = new ExpenseUpdated
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             UpdatedBy = command.UpdatedBy,
             Description = command.Description,
             Amount = command.Amount,
             Category = command.Category,
             ExpenseDate = command.ExpenseDate,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Expense updated: {ExpenseId} by {UserId}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.UpdatedBy);
 
         return ToSnapshot();
@@ -173,32 +236,32 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != ExpenseStatus.Pending)
-            throw new InvalidOperationException($"Cannot approve expense in status {_state.State.Status}");
+        if (State.Status != ExpenseStatus.Pending)
+            throw new InvalidOperationException($"Cannot approve expense in status {State.Status}");
 
-        _state.State.Status = ExpenseStatus.Approved;
-        _state.State.ApprovedBy = command.ApprovedBy;
-        _state.State.ApprovedAt = DateTime.UtcNow;
-        if (command.Notes != null)
-            _state.State.Notes = (_state.State.Notes ?? "") + $"\nApproval note: {command.Notes}";
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new ExpenseApprovedJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            ApprovedBy = command.ApprovedBy,
+            Notes = command.Notes,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
         await UpdateIndexAsync();
 
         var evt = new ExpenseApproved
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             ApprovedBy = command.ApprovedBy,
             Notes = command.Notes,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Expense approved: {ExpenseId} by {UserId}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.ApprovedBy);
 
         return ToSnapshot();
@@ -208,29 +271,32 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != ExpenseStatus.Pending)
-            throw new InvalidOperationException($"Cannot reject expense in status {_state.State.Status}");
+        if (State.Status != ExpenseStatus.Pending)
+            throw new InvalidOperationException($"Cannot reject expense in status {State.Status}");
 
-        _state.State.Status = ExpenseStatus.Rejected;
-        _state.State.Notes = (_state.State.Notes ?? "") + $"\nRejection reason: {command.Reason}";
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new ExpenseRejectedJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            RejectedBy = command.RejectedBy,
+            Reason = command.Reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
         await UpdateIndexAsync();
 
         var evt = new ExpenseRejected
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             RejectedBy = command.RejectedBy,
             Reason = command.Reason,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Expense rejected: {ExpenseId} by {UserId}, reason: {Reason}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.RejectedBy,
             command.Reason);
 
@@ -241,34 +307,36 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != ExpenseStatus.Approved && _state.State.Status != ExpenseStatus.Pending)
-            throw new InvalidOperationException($"Cannot mark expense as paid in status {_state.State.Status}");
+        if (State.Status != ExpenseStatus.Approved && State.Status != ExpenseStatus.Pending)
+            throw new InvalidOperationException($"Cannot mark expense as paid in status {State.Status}");
 
-        _state.State.Status = ExpenseStatus.Paid;
-        if (command.ReferenceNumber != null)
-            _state.State.ReferenceNumber = command.ReferenceNumber;
-        if (command.PaymentMethod.HasValue)
-            _state.State.PaymentMethod = command.PaymentMethod;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new ExpensePaidJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            PaidBy = command.PaidBy,
+            PaymentDate = command.PaymentDate,
+            ReferenceNumber = command.ReferenceNumber,
+            PaymentMethod = command.PaymentMethod?.ToString(),
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
         await UpdateIndexAsync();
 
         var evt = new ExpensePaid
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             PaidBy = command.PaidBy,
             PaymentDate = command.PaymentDate,
             ReferenceNumber = command.ReferenceNumber,
             PaymentMethod = command.PaymentMethod,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Expense marked paid: {ExpenseId} by {UserId}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.PaidBy);
 
         return ToSnapshot();
@@ -278,33 +346,36 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        if (_state.State.Status == ExpenseStatus.Voided)
+        if (State.Status == ExpenseStatus.Voided)
             throw new InvalidOperationException("Expense already voided");
 
-        _state.State.Status = ExpenseStatus.Voided;
-        _state.State.Notes = (_state.State.Notes ?? "") + $"\nVoided: {command.Reason}";
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new ExpenseVoidedJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            VoidedBy = command.VoidedBy,
+            Reason = command.Reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         // Remove from index
         var indexGrain = _grainFactory.GetGrain<IExpenseIndexGrain>(
-            GrainKeys.Site(_state.State.OrganizationId, _state.State.SiteId));
-        await indexGrain.RemoveExpenseAsync(_state.State.ExpenseId);
+            GrainKeys.Site(State.OrganizationId, State.SiteId));
+        await indexGrain.RemoveExpenseAsync(State.ExpenseId);
 
         var evt = new ExpenseVoided
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             VoidedBy = command.VoidedBy,
             Reason = command.Reason,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Expense voided: {ExpenseId} by {UserId}, reason: {Reason}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.VoidedBy,
             command.Reason);
     }
@@ -313,29 +384,34 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        _state.State.DocumentUrl = command.DocumentUrl;
-        _state.State.DocumentFilename = command.Filename;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.UpdatedBy = command.AttachedBy;
-        _state.State.Version++;
+        RaiseEvent(new ExpenseReceiptAttachedJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            ReceiptUrl = command.DocumentUrl,
+            FileName = command.Filename,
+            OccurredAt = DateTime.UtcNow
+        });
 
-        await _state.WriteStateAsync();
+        State.UpdatedAt = DateTime.UtcNow;
+        State.UpdatedBy = command.AttachedBy;
+
+        await ConfirmEvents();
         await UpdateIndexAsync();
 
         var evt = new ExpenseDocumentAttached
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             DocumentUrl = command.DocumentUrl,
             Filename = command.Filename,
             AttachedBy = command.AttachedBy,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Document attached to expense: {ExpenseId}, file: {Filename}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.Filename);
 
         return ToSnapshot();
@@ -345,25 +421,33 @@ public class ExpenseGrain : Grain, IExpenseGrain
     {
         EnsureExists();
 
-        _state.State.IsRecurring = true;
-        _state.State.RecurrencePattern = command.Pattern;
-        _state.State.Version++;
+        RaiseEvent(new ExpenseRecurrenceSetJournaledEvent
+        {
+            ExpenseId = State.ExpenseId,
+            Frequency = command.Pattern.Frequency.ToString(),
+            Interval = command.Pattern.Interval,
+            SetBy = command.SetBy,
+            OccurredAt = DateTime.UtcNow
+        });
 
-        await _state.WriteStateAsync();
+        // Apply the full pattern
+        State.RecurrencePattern = command.Pattern;
+
+        await ConfirmEvents();
 
         var evt = new RecurringExpenseCreated
         {
-            ExpenseId = _state.State.ExpenseId,
+            ExpenseId = State.ExpenseId,
             Pattern = command.Pattern,
             CreatedBy = command.SetBy,
-            OrganizationId = _state.State.OrganizationId,
+            OrganizationId = State.OrganizationId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
 
         _logger.LogInformation(
             "Recurrence set for expense: {ExpenseId}, frequency: {Frequency}",
-            _state.State.ExpenseId,
+            State.ExpenseId,
             command.Pattern.Frequency);
 
         return ToSnapshot();
@@ -376,87 +460,87 @@ public class ExpenseGrain : Grain, IExpenseGrain
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.ExpenseId != Guid.Empty);
+        return Task.FromResult(State.ExpenseId != Guid.Empty);
     }
 
     private void EnsureExists()
     {
-        if (_state.State.ExpenseId == Guid.Empty)
+        if (State.ExpenseId == Guid.Empty)
             throw new InvalidOperationException("Expense not initialized");
     }
 
     private void EnsureModifiable()
     {
-        if (_state.State.Status == ExpenseStatus.Voided)
+        if (State.Status == ExpenseStatus.Voided)
             throw new InvalidOperationException("Cannot modify voided expense");
-        if (_state.State.Status == ExpenseStatus.Paid)
+        if (State.Status == ExpenseStatus.Paid)
             throw new InvalidOperationException("Cannot modify paid expense");
     }
 
     private ExpenseSnapshot ToSnapshot()
     {
         return new ExpenseSnapshot(
-            _state.State.ExpenseId,
-            _state.State.OrganizationId,
-            _state.State.SiteId,
-            _state.State.Category,
-            _state.State.CustomCategory,
-            _state.State.Description,
-            _state.State.Amount,
-            _state.State.Currency,
-            _state.State.ExpenseDate,
-            _state.State.VendorId,
-            _state.State.VendorName,
-            _state.State.PaymentMethod,
-            _state.State.ReferenceNumber,
-            _state.State.DocumentUrl,
-            _state.State.DocumentFilename,
-            _state.State.IsRecurring,
-            _state.State.TaxAmount,
-            _state.State.IsTaxDeductible,
-            _state.State.Notes,
-            _state.State.Tags,
-            _state.State.Status,
-            _state.State.ApprovedBy,
-            _state.State.ApprovedAt,
-            _state.State.CreatedAt,
-            _state.State.CreatedBy,
-            _state.State.Version);
+            State.ExpenseId,
+            State.OrganizationId,
+            State.SiteId,
+            State.Category,
+            State.CustomCategory,
+            State.Description,
+            State.Amount,
+            State.Currency,
+            State.ExpenseDate,
+            State.VendorId,
+            State.VendorName,
+            State.PaymentMethod,
+            State.ReferenceNumber,
+            State.DocumentUrl,
+            State.DocumentFilename,
+            State.IsRecurring,
+            State.TaxAmount,
+            State.IsTaxDeductible,
+            State.Notes,
+            State.Tags,
+            State.Status,
+            State.ApprovedBy,
+            State.ApprovedAt,
+            State.CreatedAt,
+            State.CreatedBy,
+            Version);
     }
 
     private ExpenseSummary ToSummary()
     {
         return new ExpenseSummary(
-            _state.State.ExpenseId,
-            _state.State.Category,
-            _state.State.Description,
-            _state.State.Amount,
-            _state.State.Currency,
-            _state.State.ExpenseDate,
-            _state.State.VendorName,
-            _state.State.Status,
-            !string.IsNullOrEmpty(_state.State.DocumentUrl));
+            State.ExpenseId,
+            State.Category,
+            State.Description,
+            State.Amount,
+            State.Currency,
+            State.ExpenseDate,
+            State.VendorName,
+            State.Status,
+            !string.IsNullOrEmpty(State.DocumentUrl));
     }
 
     private async Task RegisterWithIndexAsync()
     {
         var indexGrain = _grainFactory.GetGrain<IExpenseIndexGrain>(
-            GrainKeys.Site(_state.State.OrganizationId, _state.State.SiteId));
+            GrainKeys.Site(State.OrganizationId, State.SiteId));
         await indexGrain.RegisterExpenseAsync(ToSummary());
     }
 
     private async Task UpdateIndexAsync()
     {
         var indexGrain = _grainFactory.GetGrain<IExpenseIndexGrain>(
-            GrainKeys.Site(_state.State.OrganizationId, _state.State.SiteId));
+            GrainKeys.Site(State.OrganizationId, State.SiteId));
         await indexGrain.UpdateExpenseAsync(ToSummary());
     }
 
     private async Task PublishEventAsync(DomainEvent evt)
     {
-        if (_eventStream != null)
+        if (_eventStream != null && State.OrganizationId != Guid.Empty)
         {
-            await _eventStream.OnNextAsync(evt);
+            await _eventStream.Value.OnNextAsync(evt);
         }
     }
 }

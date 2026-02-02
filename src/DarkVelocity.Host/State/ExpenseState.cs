@@ -81,7 +81,6 @@ public sealed class ExpenseState
     [Id(26)] public Guid CreatedBy { get; set; }
     [Id(27)] public DateTime? UpdatedAt { get; set; }
     [Id(28)] public Guid? UpdatedBy { get; set; }
-    [Id(29)] public int Version { get; set; }
 }
 
 /// <summary>

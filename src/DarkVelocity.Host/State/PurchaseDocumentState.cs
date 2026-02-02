@@ -70,8 +70,6 @@ public sealed class PurchaseDocumentState
     [Id(39)] public DateTime? RejectedAt { get; set; }
     [Id(40)] public Guid? RejectedBy { get; set; }
     [Id(41)] public string? RejectionReason { get; set; }
-
-    [Id(42)] public int Version { get; set; }
 }
 
 /// <summary>
