@@ -21,6 +21,9 @@
     <!-- Entity Framework Core for Search Projections -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0-preview.1.25081.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0-preview.1" />
+
+    <!-- OpenAPI/Swagger -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
 
 </Project>
