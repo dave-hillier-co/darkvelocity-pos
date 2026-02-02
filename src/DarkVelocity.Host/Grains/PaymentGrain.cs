@@ -4,6 +4,7 @@ using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
 using Orleans.EventSourcing;
+using Orleans.Providers;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -326,8 +327,11 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>
     {
         EnsureExists();
 
-        if (State.Status != PaymentStatus.Completed)
+        if (State.Status is not (PaymentStatus.Completed or PaymentStatus.PartiallyRefunded))
             throw new InvalidOperationException("Can only refund completed payments");
+
+        if (command.Amount <= 0)
+            throw new InvalidOperationException("Refund amount must be positive");
 
         if (command.Amount > State.TotalAmount - State.RefundedAmount)
             throw new InvalidOperationException("Refund amount exceeds available balance");
@@ -585,7 +589,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
             null,
             new Dictionary<string, string>
             {
-                ["paymentId"] = command.PaymentId?.ToString() ?? ""
+                ["paymentId"] = command.PaymentId.ToString()
             });
 
         if (!result.Success)

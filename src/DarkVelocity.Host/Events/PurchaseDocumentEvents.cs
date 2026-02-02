@@ -1,3 +1,5 @@
+using Orleans;
+
 namespace DarkVelocity.Host.Events;
 
 // ============================================================================
@@ -74,125 +76,133 @@ public enum MappingSource
 /// A purchase document (invoice or receipt) was received from an external source.
 /// This is an observed fact - the document already exists.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentReceived : DomainEvent
 {
     public override string EventType => "purchase-document.received";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required PurchaseDocumentType DocumentType { get; init; }
-    public required DocumentSource Source { get; init; }
-    public required string OriginalFilename { get; init; }
-    public required string StorageUrl { get; init; }
-    public required string ContentType { get; init; }
-    public required long FileSizeBytes { get; init; }
-    public string? EmailFrom { get; init; }
-    public string? EmailSubject { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required PurchaseDocumentType DocumentType { get; init; }
+    [Id(102)] public new required DocumentSource Source { get; init; }
+    [Id(103)] public required string OriginalFilename { get; init; }
+    [Id(104)] public required string StorageUrl { get; init; }
+    [Id(105)] public required string ContentType { get; init; }
+    [Id(106)] public required long FileSizeBytes { get; init; }
+    [Id(107)] public string? EmailFrom { get; init; }
+    [Id(108)] public string? EmailSubject { get; init; }
     /// <summary>True for receipts (already paid), false for invoices by default</summary>
-    public bool IsPaid { get; init; }
+    [Id(109)] public bool IsPaid { get; init; }
 }
 
 /// <summary>
 /// OCR/extraction processing started on a document.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentProcessingStarted : DomainEvent
 {
     public override string EventType => "purchase-document.processing.started";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required string ProcessorType { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required string ProcessorType { get; init; }
 }
 
 /// <summary>
 /// OCR/extraction completed successfully.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentExtracted : DomainEvent
 {
     public override string EventType => "purchase-document.extracted";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required ExtractedDocumentData Data { get; init; }
-    public required decimal ExtractionConfidence { get; init; }
-    public required string ProcessorVersion { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required ExtractedDocumentData Data { get; init; }
+    [Id(102)] public required decimal ExtractionConfidence { get; init; }
+    [Id(103)] public required string ProcessorVersion { get; init; }
 }
 
 /// <summary>
 /// Extraction failed - needs manual intervention.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentExtractionFailed : DomainEvent
 {
     public override string EventType => "purchase-document.extraction.failed";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required string FailureReason { get; init; }
-    public string? ProcessorError { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required string FailureReason { get; init; }
+    [Id(102)] public string? ProcessorError { get; init; }
 }
 
 /// <summary>
 /// A line item was mapped to an internal SKU.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentLineMapped : DomainEvent
 {
     public override string EventType => "purchase-document.line.mapped";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required int LineIndex { get; init; }
-    public required Guid IngredientId { get; init; }
-    public required string VendorDescription { get; init; }
-    public required MappingSource Source { get; init; }
-    public required decimal Confidence { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required int LineIndex { get; init; }
+    [Id(102)] public required Guid IngredientId { get; init; }
+    [Id(103)] public required string VendorDescription { get; init; }
+    [Id(104)] public new required MappingSource Source { get; init; }
+    [Id(105)] public required decimal Confidence { get; init; }
 }
 
 /// <summary>
 /// A line item could not be mapped - flagged for manual review.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentLineUnmapped : DomainEvent
 {
     public override string EventType => "purchase-document.line.unmapped";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required int LineIndex { get; init; }
-    public required string VendorDescription { get; init; }
-    public IReadOnlyList<SuggestedMapping>? Suggestions { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required int LineIndex { get; init; }
+    [Id(102)] public required string VendorDescription { get; init; }
+    [Id(103)] public IReadOnlyList<SuggestedMapping>? Suggestions { get; init; }
 }
 
 /// <summary>
 /// User confirmed the document data is correct.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentConfirmed : DomainEvent
 {
     public override string EventType => "purchase-document.confirmed";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required Guid ConfirmedBy { get; init; }
-    public required ConfirmedDocumentData Data { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required Guid ConfirmedBy { get; init; }
+    [Id(102)] public required ConfirmedDocumentData Data { get; init; }
 }
 
 /// <summary>
 /// Document was rejected/discarded.
 /// </summary>
+[GenerateSerializer]
 public sealed record PurchaseDocumentRejected : DomainEvent
 {
     public override string EventType => "purchase-document.rejected";
     public override string AggregateType => "PurchaseDocument";
     public override Guid AggregateId => DocumentId;
 
-    public required Guid DocumentId { get; init; }
-    public required Guid RejectedBy { get; init; }
-    public required string Reason { get; init; }
+    [Id(100)] public required Guid DocumentId { get; init; }
+    [Id(101)] public required Guid RejectedBy { get; init; }
+    [Id(102)] public required string Reason { get; init; }
 }
 
 // ============================================================================

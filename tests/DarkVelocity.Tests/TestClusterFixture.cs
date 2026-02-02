@@ -1,4 +1,5 @@
 using DarkVelocity.Host.Payments;
+using DarkVelocity.Host.Services;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,12 +34,22 @@ public class TestSiloConfigurator : ISiloConfigurator
         siloBuilder.AddMemoryGrainStorageAsDefault();
         siloBuilder.AddMemoryGrainStorage("OrleansStorage");
         siloBuilder.AddMemoryGrainStorage("PubSubStore");
+        siloBuilder.AddMemoryGrainStorage("purchases");
+
+        // Log consistency provider for JournaledGrain event sourcing
+        siloBuilder.AddLogStorageBasedLogConsistencyProvider("LogStorage");
+        siloBuilder.AddMemoryGrainStorage("LogStorage");
 
         // Add memory stream provider for pub/sub testing with implicit subscription support
         siloBuilder.AddMemoryStreams(StreamConstants.DefaultStreamProvider);
 
         // Add payment gateway services
         siloBuilder.Services.AddSingleton<ICardValidationService, CardValidationService>();
+
+        // Add other required services
+        siloBuilder.Services.AddSingleton<IFuzzyMatchingService, FuzzyMatchingService>();
+        siloBuilder.Services.AddSingleton<IDocumentIntelligenceService, StubDocumentIntelligenceService>();
+        siloBuilder.Services.AddSingleton<IEmailIngestionService, StubEmailIngestionService>();
 
         siloBuilder.Services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning));
     }

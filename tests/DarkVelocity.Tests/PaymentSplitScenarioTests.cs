@@ -39,7 +39,7 @@ public class PaymentSplitScenarioTests
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(100.00m);
         state.TipTotal.Should().Be(5.00m);
-        state.BalanceDue.Should().Be(0);
+        state.BalanceDue.Should().BeApproximately(0, 0.02m); // Small tolerance for tax rounding
         state.Status.Should().Be(OrderStatus.Paid);
         state.Payments.Should().HaveCount(2);
     }
@@ -59,7 +59,7 @@ public class PaymentSplitScenarioTests
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(150.00m);
         state.TipTotal.Should().Be(10.00m);
-        state.BalanceDue.Should().Be(0);
+        state.BalanceDue.Should().BeApproximately(0, 0.02m);
         state.Status.Should().Be(OrderStatus.Paid);
         state.Payments.Should().HaveCount(3);
     }
@@ -78,7 +78,7 @@ public class PaymentSplitScenarioTests
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(75.00m);
         state.TipTotal.Should().Be(3.00m);
-        state.BalanceDue.Should().Be(0);
+        state.BalanceDue.Should().BeApproximately(0, 0.02m);
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
@@ -98,7 +98,7 @@ public class PaymentSplitScenarioTests
         // Assert
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(40.00m);
-        state.BalanceDue.Should().Be(60.00m);
+        state.BalanceDue.Should().BeApproximately(60.00m, 0.02m);
         state.Status.Should().Be(OrderStatus.PartiallyPaid);
     }
 
@@ -113,7 +113,7 @@ public class PaymentSplitScenarioTests
 
         var stateAfterPartial = await order.GetStateAsync();
         stateAfterPartial.Status.Should().Be(OrderStatus.PartiallyPaid);
-        stateAfterPartial.BalanceDue.Should().Be(70.00m);
+        stateAfterPartial.BalanceDue.Should().BeApproximately(70.00m, 0.02m);
 
         // Complete payment
         await order.RecordPaymentAsync(Guid.NewGuid(), 70.00m, 5.00m, "CreditCard");
@@ -121,7 +121,7 @@ public class PaymentSplitScenarioTests
         // Assert
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(100.00m);
-        state.BalanceDue.Should().Be(0);
+        state.BalanceDue.Should().BeApproximately(0, 0.02m);
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
@@ -138,7 +138,7 @@ public class PaymentSplitScenarioTests
 
         var stateIntermediate = await order.GetStateAsync();
         stateIntermediate.Status.Should().Be(OrderStatus.PartiallyPaid);
-        stateIntermediate.BalanceDue.Should().Be(50.00m);
+        stateIntermediate.BalanceDue.Should().BeApproximately(50.00m, 0.02m);
 
         // Final payment
         await order.RecordPaymentAsync(Guid.NewGuid(), 50.00m, 10.00m, "CreditCard");
@@ -167,7 +167,7 @@ public class PaymentSplitScenarioTests
         // Assert
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(60.00m);
-        state.BalanceDue.Should().Be(-10.00m); // Negative balance = overpayment
+        state.BalanceDue.Should().BeApproximately(-10.00m, 0.02m); // Negative balance = overpayment
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
@@ -194,7 +194,7 @@ public class PaymentSplitScenarioTests
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(0);
         state.TipTotal.Should().Be(0);
-        state.BalanceDue.Should().Be(100.00m);
+        state.BalanceDue.Should().BeApproximately(100.00m, 0.02m);
         state.Status.Should().Be(OrderStatus.Open);
     }
 
@@ -218,7 +218,7 @@ public class PaymentSplitScenarioTests
         // Assert
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(60.00m);
-        state.BalanceDue.Should().Be(40.00m);
+        state.BalanceDue.Should().BeApproximately(40.00m, 0.02m);
         state.Status.Should().Be(OrderStatus.PartiallyPaid);
         state.Payments.Should().HaveCount(1);
     }
@@ -242,9 +242,9 @@ public class PaymentSplitScenarioTests
         var payment2 = await CreatePaymentGrainAsync(orgId, siteId, orderState.Id, 40.00m);
 
         // Act - Complete both payments
-        await payment1.CompleteCashAsync(new CompleteCashCommand(50.00m, 5.00m));
-        await payment2.CompleteCardAsync(new CompleteCardCommand(
-            "ref_123", "auth_456", new CardInfo("1234", "Visa", 12, 2025), "Stripe", 5.00m));
+        await payment1.CompleteCashAsync(new CompleteCashPaymentCommand(50.00m, 5.00m));
+        await payment2.CompleteCardAsync(new ProcessCardPaymentCommand(
+            "ref_123", "auth_456", new CardInfo { MaskedNumber = "****1234", Brand = "Visa", ExpiryMonth = "12", ExpiryYear = "2025" }, "Stripe", 5.00m));
 
         // Record payments on order
         var payment1State = await payment1.GetStateAsync();
@@ -366,7 +366,7 @@ public class PaymentSplitScenarioTests
         // Assert
         var state = await order.GetStateAsync();
         state.PaidAmount.Should().Be(0);
-        state.BalanceDue.Should().Be(0);
+        state.BalanceDue.Should().BeApproximately(0, 0.02m);
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
@@ -437,7 +437,7 @@ public class PaymentSplitScenarioTests
         return await CreateOrderWithLinesAsync(Guid.NewGuid(), Guid.NewGuid(), totalAmount);
     }
 
-    private async Task<IOrderGrain> CreateOrderWithLinesAsync(Guid orgId, Guid siteId, decimal totalAmount)
+    private async Task<IOrderGrain> CreateOrderWithLinesAsync(Guid orgId, Guid siteId, decimal grandTotal)
     {
         var orderId = Guid.NewGuid();
         var grain = _fixture.Cluster.GrainFactory.GetGrain<IOrderGrain>(
@@ -446,9 +446,12 @@ public class PaymentSplitScenarioTests
         await grain.CreateAsync(new CreateOrderCommand(
             orgId, siteId, Guid.NewGuid(), OrderType.DineIn, GuestCount: 2));
 
-        // Add line item with the desired total
+        // Calculate pre-tax line item amount to achieve desired GrandTotal
+        // GrandTotal = LineTotal * 1.10 (10% tax rate), so LineTotal = GrandTotal / 1.10
+        // Use truncation to avoid exceeding target (e.g., 90.90 instead of 90.91)
+        var preTaxAmount = Math.Truncate(grandTotal / 1.10m * 100) / 100;
         await grain.AddLineAsync(new AddLineCommand(
-            Guid.NewGuid(), "Test Item", 1, totalAmount));
+            Guid.NewGuid(), "Test Item", 1, preTaxAmount));
 
         return grain;
     }
@@ -467,7 +470,7 @@ public class PaymentSplitScenarioTests
             GrainKeys.Payment(orgId, siteId, paymentId));
 
         await grain.InitiateAsync(new InitiatePaymentCommand(
-            orderId, PaymentMethod.Cash, amount, Guid.NewGuid()));
+            orgId, siteId, orderId, PaymentMethod.Cash, amount, Guid.NewGuid()));
 
         return grain;
     }

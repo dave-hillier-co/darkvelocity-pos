@@ -30,7 +30,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act
-        var act = () => payment.RefundAsync(new RefundCommand(150.00m, "Test refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(150.00m, "Test refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -44,10 +44,10 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // First refund $60
-        await payment.RefundAsync(new RefundCommand(60.00m, "Partial refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(60.00m, "Partial refund", Guid.NewGuid()));
 
         // Act - try to refund another $50 (only $40 remaining)
-        var act = () => payment.RefundAsync(new RefundCommand(50.00m, "Another refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(50.00m, "Another refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -61,7 +61,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act
-        var act = () => payment.RefundAsync(new RefundCommand(0m, "Zero refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(0m, "Zero refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
@@ -74,7 +74,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act
-        var act = () => payment.RefundAsync(new RefundCommand(-10.00m, "Negative refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(-10.00m, "Negative refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
@@ -91,7 +91,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateInitiatedPaymentAsync(100.00m);
 
         // Act
-        var act = () => payment.RefundAsync(new RefundCommand(50.00m, "Test refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(50.00m, "Test refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -103,10 +103,10 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateInitiatedPaymentAsync(100.00m);
-        await payment.VoidAsync(Guid.NewGuid(), "Test void");
+        await payment.VoidAsync(new VoidPaymentCommand(Guid.NewGuid(), "Test void"));
 
         // Act
-        var act = () => payment.RefundAsync(new RefundCommand(50.00m, "Test refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(50.00m, "Test refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -118,14 +118,14 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateCompletedPaymentAsync(100.00m);
-        await payment.RefundAsync(new RefundCommand(100.00m, "Full refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(100.00m, "Full refund", Guid.NewGuid()));
 
         // Verify status changed to Refunded
         var state = await payment.GetStateAsync();
         state.Status.Should().Be(PaymentStatus.Refunded);
 
         // Act - try to refund again
-        var act = () => payment.RefundAsync(new RefundCommand(10.00m, "Another refund", Guid.NewGuid()));
+        var act = () => payment.RefundAsync(new RefundPaymentCommand(10.00m, "Another refund", Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -143,7 +143,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act
-        await payment.RefundAsync(new RefundCommand(30.00m, "Partial refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Partial refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -158,9 +158,9 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act - Multiple small refunds
-        await payment.RefundAsync(new RefundCommand(20.00m, "First refund", Guid.NewGuid()));
-        await payment.RefundAsync(new RefundCommand(30.00m, "Second refund", Guid.NewGuid()));
-        await payment.RefundAsync(new RefundCommand(25.00m, "Third refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(20.00m, "First refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Second refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(25.00m, "Third refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -175,8 +175,8 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act - Partial then remaining
-        await payment.RefundAsync(new RefundCommand(60.00m, "Partial refund", Guid.NewGuid()));
-        await payment.RefundAsync(new RefundCommand(40.00m, "Remaining refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(60.00m, "Partial refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(40.00m, "Remaining refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -189,10 +189,10 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateCompletedPaymentAsync(100.00m);
-        await payment.RefundAsync(new RefundCommand(70.00m, "First refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(70.00m, "First refund", Guid.NewGuid()));
 
         // Act - Refund exact remaining amount
-        await payment.RefundAsync(new RefundCommand(30.00m, "Exact remaining", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Exact remaining", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -209,10 +209,10 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateCompletedPaymentAsync(100.00m);
-        await payment.RefundAsync(new RefundCommand(30.00m, "Partial refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Partial refund", Guid.NewGuid()));
 
         // Act
-        await payment.VoidAsync(Guid.NewGuid(), "Void after partial refund");
+        await payment.VoidAsync(new VoidPaymentCommand(Guid.NewGuid(), "Void after partial refund"));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -224,10 +224,10 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateCompletedPaymentAsync(100.00m);
-        await payment.RefundAsync(new RefundCommand(100.00m, "Full refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(100.00m, "Full refund", Guid.NewGuid()));
 
         // Act
-        var act = () => payment.VoidAsync(Guid.NewGuid(), "Test void");
+        var act = () => payment.VoidAsync(new VoidPaymentCommand(Guid.NewGuid(), "Test void"));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -243,10 +243,10 @@ public class RefundErrorScenarioTests
     {
         // Arrange
         var payment = await CreateCompletedPaymentAsync(100.00m);
-        await payment.RefundAsync(new RefundCommand(30.00m, "Partial refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Partial refund", Guid.NewGuid()));
 
         // Act
-        var act = () => payment.AdjustTipAsync(10.00m);
+        var act = () => payment.AdjustTipAsync(new AdjustTipCommand(10.00m, Guid.NewGuid()));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -266,7 +266,7 @@ public class RefundErrorScenarioTests
         var reason = "Customer returned item";
 
         // Act
-        await payment.RefundAsync(new RefundCommand(40.00m, reason, issuedBy));
+        await payment.RefundAsync(new RefundPaymentCommand(40.00m, reason, issuedBy));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -275,7 +275,7 @@ public class RefundErrorScenarioTests
         state.Refunds[0].Amount.Should().Be(40.00m);
         state.Refunds[0].Reason.Should().Be(reason);
         state.Refunds[0].IssuedBy.Should().Be(issuedBy);
-        state.Refunds[0].RefundedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        state.Refunds[0].IssuedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -285,9 +285,9 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act
-        await payment.RefundAsync(new RefundCommand(25.00m, "First item returned", Guid.NewGuid()));
-        await payment.RefundAsync(new RefundCommand(15.00m, "Second item returned", Guid.NewGuid()));
-        await payment.RefundAsync(new RefundCommand(10.00m, "Third item returned", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(25.00m, "First item returned", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(15.00m, "Second item returned", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(10.00m, "Third item returned", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -307,7 +307,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedPaymentAsync(100.00m);
 
         // Act - refund 1 cent
-        await payment.RefundAsync(new RefundCommand(0.01m, "Rounding correction", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(0.01m, "Rounding correction", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -324,7 +324,7 @@ public class RefundErrorScenarioTests
         // Act - 10 small refunds
         for (int i = 0; i < 10; i++)
         {
-            await payment.RefundAsync(new RefundCommand(5.00m, $"Refund {i + 1}", Guid.NewGuid()));
+            await payment.RefundAsync(new RefundPaymentCommand(5.00m, $"Refund {i + 1}", Guid.NewGuid()));
         }
 
         // Assert
@@ -345,7 +345,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedCashPaymentAsync(50.00m);
 
         // Act
-        await payment.RefundAsync(new RefundCommand(25.00m, "Cash refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(25.00m, "Cash refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -360,7 +360,7 @@ public class RefundErrorScenarioTests
         var payment = await CreateCompletedCardPaymentAsync(75.00m);
 
         // Act
-        await payment.RefundAsync(new RefundCommand(30.00m, "Card refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Card refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -379,19 +379,20 @@ public class RefundErrorScenarioTests
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
 
         var payment = _fixture.Cluster.GrainFactory.GetGrain<IPaymentGrain>(
             GrainKeys.Payment(orgId, siteId, paymentId));
 
         await payment.InitiateAsync(new InitiatePaymentCommand(
-            Guid.NewGuid(), PaymentMethod.GiftCard, 100.00m, Guid.NewGuid()));
+            orgId, siteId, orderId, PaymentMethod.GiftCard, 100.00m, Guid.NewGuid()));
 
         var giftCardId = Guid.NewGuid();
-        await payment.CompleteGiftCardAsync(new CompleteGiftCardCommand(
-            giftCardId, "GC-12345", 100.00m, 50.00m)); // $100 redeemed, $50 remaining
+        await payment.CompleteGiftCardAsync(new ProcessGiftCardPaymentCommand(
+            giftCardId, "GC-12345"));
 
         // Act
-        await payment.RefundAsync(new RefundCommand(40.00m, "Gift card refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(40.00m, "Gift card refund", Guid.NewGuid()));
 
         // Assert
         var state = await payment.GetStateAsync();
@@ -410,20 +411,21 @@ public class RefundErrorScenarioTests
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
 
         var payment = _fixture.Cluster.GrainFactory.GetGrain<IPaymentGrain>(
             GrainKeys.Payment(orgId, siteId, paymentId));
 
         await payment.InitiateAsync(new InitiatePaymentCommand(
-            Guid.NewGuid(), PaymentMethod.Cash, 100.00m, Guid.NewGuid()));
+            orgId, siteId, orderId, PaymentMethod.Cash, 100.00m, Guid.NewGuid()));
 
-        await payment.CompleteCashAsync(new CompleteCashCommand(120.00m, 15.00m)); // $15 tip
+        await payment.CompleteCashAsync(new CompleteCashPaymentCommand(120.00m, 15.00m)); // $15 tip
 
         var stateBeforeRefund = await payment.GetStateAsync();
         stateBeforeRefund.TipAmount.Should().Be(15.00m);
 
         // Act - refund base amount only
-        await payment.RefundAsync(new RefundCommand(30.00m, "Item refund", Guid.NewGuid()));
+        await payment.RefundAsync(new RefundPaymentCommand(30.00m, "Item refund", Guid.NewGuid()));
 
         // Assert - tip should remain unchanged
         var state = await payment.GetStateAsync();
@@ -440,12 +442,13 @@ public class RefundErrorScenarioTests
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
 
         var grain = _fixture.Cluster.GrainFactory.GetGrain<IPaymentGrain>(
             GrainKeys.Payment(orgId, siteId, paymentId));
 
         await grain.InitiateAsync(new InitiatePaymentCommand(
-            Guid.NewGuid(), PaymentMethod.Cash, amount, Guid.NewGuid()));
+            orgId, siteId, orderId, PaymentMethod.Cash, amount, Guid.NewGuid()));
 
         return grain;
     }
@@ -458,7 +461,7 @@ public class RefundErrorScenarioTests
     private async Task<IPaymentGrain> CreateCompletedCashPaymentAsync(decimal amount)
     {
         var grain = await CreateInitiatedPaymentAsync(amount);
-        await grain.CompleteCashAsync(new CompleteCashCommand(amount + 10m, 0)); // Tendered more
+        await grain.CompleteCashAsync(new CompleteCashPaymentCommand(amount + 10m, 0)); // Tendered more
         return grain;
     }
 
@@ -467,17 +470,18 @@ public class RefundErrorScenarioTests
         var orgId = Guid.NewGuid();
         var siteId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
 
         var grain = _fixture.Cluster.GrainFactory.GetGrain<IPaymentGrain>(
             GrainKeys.Payment(orgId, siteId, paymentId));
 
         await grain.InitiateAsync(new InitiatePaymentCommand(
-            Guid.NewGuid(), PaymentMethod.CreditCard, amount, Guid.NewGuid()));
+            orgId, siteId, orderId, PaymentMethod.CreditCard, amount, Guid.NewGuid()));
 
-        await grain.CompleteCardAsync(new CompleteCardCommand(
+        await grain.CompleteCardAsync(new ProcessCardPaymentCommand(
             "ref_12345",
             "auth_67890",
-            new CardInfo("1234", "Visa", 12, 2026),
+            new CardInfo { MaskedNumber = "****1234", Brand = "Visa", EntryMethod = "chip" },
             "Stripe",
             0));
 

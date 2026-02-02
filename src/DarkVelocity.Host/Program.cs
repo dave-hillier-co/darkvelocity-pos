@@ -1,6 +1,7 @@
 using DarkVelocity.Host.Endpoints;
 using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.Services;
+using DarkVelocity.Host.Streams;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +17,10 @@ builder.Host.UseOrleans(siloBuilder =>
     siloBuilder.AddLogStorageBasedLogConsistencyProvider("LogStorage");
     siloBuilder.AddMemoryGrainStorage("LogStorage");
 
-    siloBuilder.AddMemoryStreams("StreamProvider");
+    // PubSubStore required for stream pub/sub
+    siloBuilder.AddMemoryGrainStorage("PubSubStore");
+
+    siloBuilder.AddMemoryStreams(StreamConstants.DefaultStreamProvider);
     siloBuilder.UseDashboard(options =>
     {
         options.Port = 8888;

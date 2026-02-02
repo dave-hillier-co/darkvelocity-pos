@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using DarkVelocity.Host.Events;
 using DarkVelocity.Host.State;
+using DarkVelocity.Host.Streams;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -35,7 +36,7 @@ public class PaymentIntentGrain : Grain, IPaymentIntentGrain
         var accountId = _state.State.AccountId;
         _eventStream = new Lazy<IAsyncStream<IIntegrationEvent>>(() =>
         {
-            var streamProvider = this.GetStreamProvider("StreamProvider");
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
             var streamId = StreamId.Create("PaymentIntents", accountId.ToString());
             return streamProvider.GetStream<IIntegrationEvent>(streamId);
         });

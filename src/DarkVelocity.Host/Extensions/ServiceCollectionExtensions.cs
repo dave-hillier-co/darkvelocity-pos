@@ -20,7 +20,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddJwtAuthentication(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool skipOAuthProviders = false)
     {
         var jwtSettings = configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
         services.AddSingleton(jwtSettings);
@@ -29,7 +30,7 @@ public static class ServiceCollectionExtensions
         var oauthSettings = configuration.GetSection("OAuth").Get<OAuthSettings>() ?? new OAuthSettings();
         services.AddSingleton(oauthSettings);
 
-        services.AddAuthentication(options =>
+        var authBuilder = services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -44,22 +45,31 @@ public static class ServiceCollectionExtensions
         {
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        })
-        .AddGoogle(options =>
+        });
+
+        // Only add OAuth providers if not in testing mode and credentials are configured
+        if (!skipOAuthProviders &&
+            !string.IsNullOrEmpty(oauthSettings.Google.ClientId) &&
+            !string.IsNullOrEmpty(oauthSettings.Microsoft.ClientId))
         {
-            options.ClientId = oauthSettings.Google.ClientId;
-            options.ClientSecret = oauthSettings.Google.ClientSecret;
-            options.CallbackPath = "/signin-google";
-            options.SaveTokens = true;
-        })
-        .AddMicrosoftAccount(options =>
-        {
-            options.ClientId = oauthSettings.Microsoft.ClientId;
-            options.ClientSecret = oauthSettings.Microsoft.ClientSecret;
-            options.CallbackPath = "/signin-microsoft";
-            options.SaveTokens = true;
-        })
-        .AddApiKeyAuth();
+            authBuilder
+                .AddGoogle(options =>
+                {
+                    options.ClientId = oauthSettings.Google.ClientId;
+                    options.ClientSecret = oauthSettings.Google.ClientSecret;
+                    options.CallbackPath = "/signin-google";
+                    options.SaveTokens = true;
+                })
+                .AddMicrosoftAccount(options =>
+                {
+                    options.ClientId = oauthSettings.Microsoft.ClientId;
+                    options.ClientSecret = oauthSettings.Microsoft.ClientSecret;
+                    options.CallbackPath = "/signin-microsoft";
+                    options.SaveTokens = true;
+                });
+        }
+
+        authBuilder.AddApiKeyAuth();
 
         services.AddAuthorization();
 

@@ -1,3 +1,5 @@
+using Orleans;
+
 namespace DarkVelocity.Host.Services;
 
 /// <summary>
@@ -30,61 +32,63 @@ public interface IEmailIngestionService
 /// <summary>
 /// A parsed email with extracted metadata and attachments.
 /// </summary>
+[GenerateSerializer]
 public record ParsedEmail
 {
     /// <summary>Unique message ID from email headers</summary>
-    public required string MessageId { get; init; }
+    [Id(0)] public required string MessageId { get; init; }
 
     /// <summary>Sender email address</summary>
-    public required string From { get; init; }
+    [Id(1)] public required string From { get; init; }
 
     /// <summary>Sender display name if available</summary>
-    public string? FromName { get; init; }
+    [Id(2)] public string? FromName { get; init; }
 
     /// <summary>Recipient email address (the inbox)</summary>
-    public required string To { get; init; }
+    [Id(3)] public required string To { get; init; }
 
     /// <summary>Email subject line</summary>
-    public required string Subject { get; init; }
+    [Id(4)] public required string Subject { get; init; }
 
     /// <summary>Plain text body</summary>
-    public string? TextBody { get; init; }
+    [Id(5)] public string? TextBody { get; init; }
 
     /// <summary>HTML body</summary>
-    public string? HtmlBody { get; init; }
+    [Id(6)] public string? HtmlBody { get; init; }
 
     /// <summary>When the email was sent</summary>
-    public DateTime SentAt { get; init; }
+    [Id(7)] public DateTime SentAt { get; init; }
 
     /// <summary>When the email was received by our system</summary>
-    public DateTime ReceivedAt { get; init; }
+    [Id(8)] public DateTime ReceivedAt { get; init; }
 
     /// <summary>Extracted attachments</summary>
-    public required IReadOnlyList<EmailAttachment> Attachments { get; init; }
+    [Id(9)] public required IReadOnlyList<EmailAttachment> Attachments { get; init; }
 
     /// <summary>Raw headers for debugging</summary>
-    public Dictionary<string, string>? Headers { get; init; }
+    [Id(10)] public Dictionary<string, string>? Headers { get; init; }
 }
 
 /// <summary>
 /// An attachment extracted from an email.
 /// </summary>
+[GenerateSerializer]
 public record EmailAttachment
 {
     /// <summary>Original filename</summary>
-    public required string Filename { get; init; }
+    [Id(0)] public required string Filename { get; init; }
 
     /// <summary>MIME content type</summary>
-    public required string ContentType { get; init; }
+    [Id(1)] public required string ContentType { get; init; }
 
     /// <summary>Size in bytes</summary>
-    public required long SizeBytes { get; init; }
+    [Id(2)] public required long SizeBytes { get; init; }
 
     /// <summary>The attachment content</summary>
-    public required byte[] Content { get; init; }
+    [Id(3)] public required byte[] Content { get; init; }
 
     /// <summary>Content ID for inline attachments</summary>
-    public string? ContentId { get; init; }
+    [Id(4)] public string? ContentId { get; init; }
 
     /// <summary>Whether this appears to be a document (PDF, image)</summary>
     public bool IsDocument => IsDocumentContentType(ContentType);
@@ -102,20 +106,22 @@ public record EmailAttachment
 /// <summary>
 /// Information extracted from a site-specific inbox address.
 /// </summary>
+[GenerateSerializer]
 public record SiteEmailInfo(
-    Guid OrganizationId,
-    Guid SiteId,
-    string InboxType); // "invoices", "receipts", "expenses"
+    [property: Id(0)] Guid OrganizationId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string InboxType); // "invoices", "receipts", "expenses"
 
 /// <summary>
 /// Result of processing an incoming email.
 /// </summary>
+[GenerateSerializer]
 public record EmailProcessingResult
 {
-    public required bool Success { get; init; }
-    public required string MessageId { get; init; }
-    public IReadOnlyList<Guid>? CreatedDocumentIds { get; init; }
-    public string? Error { get; init; }
-    public int AttachmentsProcessed { get; init; }
-    public int AttachmentsSkipped { get; init; }
+    [Id(0)] public required bool Success { get; init; }
+    [Id(1)] public required string MessageId { get; init; }
+    [Id(2)] public IReadOnlyList<Guid>? CreatedDocumentIds { get; init; }
+    [Id(3)] public string? Error { get; init; }
+    [Id(4)] public int AttachmentsProcessed { get; init; }
+    [Id(5)] public int AttachmentsSkipped { get; init; }
 }

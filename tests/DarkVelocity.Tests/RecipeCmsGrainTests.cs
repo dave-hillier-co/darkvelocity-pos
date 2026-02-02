@@ -35,15 +35,15 @@ public class RecipeDocumentGrainTests
             Description: "Traditional lime margarita",
             PortionYield: 1,
             YieldUnit: "cocktail",
-            Ingredients:
-            [
+            Ingredients: new List<CreateRecipeIngredientCommand>
+            {
                 new CreateRecipeIngredientCommand(
                     Guid.NewGuid(), "Tequila", 60, "ml", 0, 0.05m),
                 new CreateRecipeIngredientCommand(
                     Guid.NewGuid(), "Triple Sec", 30, "ml", 0, 0.03m),
                 new CreateRecipeIngredientCommand(
                     Guid.NewGuid(), "Fresh Lime Juice", 30, "ml", 10, 0.02m)
-            ],
+            },
             PublishImmediately: true));
 
         // Assert
@@ -89,19 +89,19 @@ public class RecipeDocumentGrainTests
         var ingredientId = Guid.NewGuid();
         await grain.CreateAsync(new CreateRecipeDocumentCommand(
             Name: "Original Recipe",
-            Ingredients:
-            [
+            Ingredients: new List<CreateRecipeIngredientCommand>
+            {
                 new CreateRecipeIngredientCommand(ingredientId, "Flour", 200, "g", 0, 0.005m)
-            ],
+            },
             PublishImmediately: true));
 
         // Act
         var draft = await grain.CreateDraftAsync(new CreateRecipeDraftCommand(
             Name: "Updated Recipe",
-            Ingredients:
-            [
+            Ingredients: new List<CreateRecipeIngredientCommand>
+            {
                 new CreateRecipeIngredientCommand(ingredientId, "Flour", 250, "g", 0, 0.005m)
-            ],
+            },
             ChangeNote: "Increased flour quantity"));
 
         // Assert
@@ -346,10 +346,10 @@ public class RecipeDocumentGrainTests
         await grain.CreateAsync(new CreateRecipeDocumentCommand(
             Name: "Costed Recipe",
             PortionYield: 4,
-            Ingredients:
-            [
+            Ingredients: new List<CreateRecipeIngredientCommand>
+            {
                 new CreateRecipeIngredientCommand(ingredientId, "Ingredient A", 100, "g", 0, 0.01m)
-            ],
+            },
             PublishImmediately: true));
 
         // Act - Update ingredient price
@@ -420,11 +420,11 @@ public class RecipeDocumentGrainTests
         var result = await grain.CreateAsync(new CreateRecipeDocumentCommand(
             Name: "Costed Recipe",
             PortionYield: 4,
-            Ingredients:
-            [
+            Ingredients: new List<CreateRecipeIngredientCommand>
+            {
                 new CreateRecipeIngredientCommand(Guid.NewGuid(), "A", 100, "g", 0, 0.01m),
                 new CreateRecipeIngredientCommand(Guid.NewGuid(), "B", 50, "g", 10, 0.02m)
-            ],
+            },
             PublishImmediately: true));
 
         // Assert
@@ -564,7 +564,7 @@ public class RecipeCategoryDocumentGrainTests
         await grain.AddRecipeAsync(recipeId3);
 
         // Act
-        await grain.ReorderRecipesAsync([recipeId3, recipeId1, recipeId2]);
+        await grain.ReorderRecipesAsync(new List<string> { recipeId3, recipeId1, recipeId2 });
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();

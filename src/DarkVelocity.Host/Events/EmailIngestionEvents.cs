@@ -1,3 +1,5 @@
+using Orleans;
+
 namespace DarkVelocity.Host.Events;
 
 // ============================================================================
@@ -7,66 +9,70 @@ namespace DarkVelocity.Host.Events;
 /// <summary>
 /// An email was received at a site inbox.
 /// </summary>
+[GenerateSerializer]
 public sealed record EmailReceived : DomainEvent
 {
     public override string EventType => "email.received";
     public override string AggregateType => "EmailInbox";
     public override Guid AggregateId => SiteId;
 
-    public required string MessageId { get; init; }
-    public required string From { get; init; }
-    public string? FromName { get; init; }
-    public required string To { get; init; }
-    public required string Subject { get; init; }
-    public required DateTime SentAt { get; init; }
-    public required int AttachmentCount { get; init; }
-    public required long TotalAttachmentSize { get; init; }
+    [Id(100)] public required string MessageId { get; init; }
+    [Id(101)] public required string From { get; init; }
+    [Id(102)] public string? FromName { get; init; }
+    [Id(103)] public required string To { get; init; }
+    [Id(104)] public required string Subject { get; init; }
+    [Id(105)] public required DateTime SentAt { get; init; }
+    [Id(106)] public required int AttachmentCount { get; init; }
+    [Id(107)] public required long TotalAttachmentSize { get; init; }
 }
 
 /// <summary>
 /// An email was processed and documents were created.
 /// </summary>
+[GenerateSerializer]
 public sealed record EmailProcessed : DomainEvent
 {
     public override string EventType => "email.processed";
     public override string AggregateType => "EmailInbox";
     public override Guid AggregateId => SiteId;
 
-    public required string MessageId { get; init; }
-    public required int DocumentsCreated { get; init; }
-    public required IReadOnlyList<Guid> DocumentIds { get; init; }
-    public required int AttachmentsSkipped { get; init; }
-    public string? SkipReason { get; init; }
+    [Id(100)] public required string MessageId { get; init; }
+    [Id(101)] public required int DocumentsCreated { get; init; }
+    [Id(102)] public required IReadOnlyList<Guid> DocumentIds { get; init; }
+    [Id(103)] public required int AttachmentsSkipped { get; init; }
+    [Id(104)] public string? SkipReason { get; init; }
 }
 
 /// <summary>
 /// Email processing failed.
 /// </summary>
+[GenerateSerializer]
 public sealed record EmailProcessingFailed : DomainEvent
 {
     public override string EventType => "email.processing.failed";
     public override string AggregateType => "EmailInbox";
     public override Guid AggregateId => SiteId;
 
-    public required string MessageId { get; init; }
-    public required string FailureReason { get; init; }
-    public string? ErrorDetails { get; init; }
+    [Id(100)] public required string MessageId { get; init; }
+    [Id(101)] public required string FailureReason { get; init; }
+    [Id(102)] public string? ErrorDetails { get; init; }
 }
 
 /// <summary>
 /// Email was rejected (spam, invalid sender, etc.).
 /// </summary>
+[GenerateSerializer]
 public sealed record EmailRejected : DomainEvent
 {
     public override string EventType => "email.rejected";
     public override string AggregateType => "EmailInbox";
     public override Guid AggregateId => SiteId;
 
-    public required string MessageId { get; init; }
-    public required string From { get; init; }
-    public required string Subject { get; init; }
-    public required EmailRejectionReason Reason { get; init; }
-    public string? ReasonDetails { get; init; }
+    [Id(100)] public required string MessageId { get; init; }
+    [Id(101)] public required string From { get; init; }
+    [Id(102)] public required string Subject { get; init; }
+    [Id(103)] public required EmailRejectionReason Reason { get; init; }
+    [Id(104)] public string? ReasonDetails { get; init; }
 }
 
 /// <summary>
