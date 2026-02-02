@@ -1,5 +1,3 @@
-using DarkVelocity.Host;
-using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Logging;
@@ -8,9 +6,19 @@ using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class InventoryGrain : Grain, IInventoryGrain
+/// <summary>
+/// Context for creating stock movement transactions.
+/// </summary>
+public record StockMovementContext(
+    MovementType Type,
+    decimal UnitCost,
+    string Reason,
+    Guid? BatchId = null,
+    Guid? ReferenceId = null,
+    Guid PerformedBy = default);
+
+public class InventoryGrain : LedgerGrain<InventoryState, StockMovement>, IInventoryGrain
 {
-    private readonly IPersistentState<InventoryState> _state;
     private readonly ILogger<InventoryGrain> _logger;
     private IAsyncStream<IStreamEvent>? _inventoryStream;
     private IAsyncStream<IStreamEvent>? _alertStream;
@@ -18,24 +26,49 @@ public class InventoryGrain : Grain, IInventoryGrain
     public InventoryGrain(
         [PersistentState("inventory", "OrleansStorage")]
         IPersistentState<InventoryState> state,
-        ILogger<InventoryGrain> logger)
+        ILogger<InventoryGrain> logger) : base(state)
     {
-        _state = state;
         _logger = logger;
     }
 
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    protected override bool IsInitialized => State.State.IngredientId != Guid.Empty;
+
+    protected override StockMovement CreateTransaction(
+        decimal amount,
+        decimal balanceAfter,
+        string? notes,
+        object? context)
     {
-        // Streams will be lazily initialized when first operation occurs
-        return base.OnActivateAsync(cancellationToken);
+        var ctx = context as StockMovementContext
+            ?? new StockMovementContext(MovementType.Adjustment, 0, notes ?? "Unknown");
+
+        return new StockMovement
+        {
+            Id = Guid.NewGuid(),
+            Timestamp = DateTime.UtcNow,
+            Type = ctx.Type,
+            Quantity = amount,
+            BatchId = ctx.BatchId,
+            UnitCost = ctx.UnitCost,
+            TotalCost = Math.Abs(amount) * ctx.UnitCost,
+            Reason = ctx.Reason,
+            ReferenceId = ctx.ReferenceId,
+            PerformedBy = ctx.PerformedBy,
+            Notes = notes
+        };
+    }
+
+    protected override void OnBalanceChanged(decimal previousBalance, decimal newBalance)
+    {
+        UpdateStockLevel();
     }
 
     private IAsyncStream<IStreamEvent> GetInventoryStream()
     {
-        if (_inventoryStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_inventoryStream == null && State.State.OrganizationId != Guid.Empty)
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, _state.State.OrganizationId.ToString());
+            var streamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, State.State.OrganizationId.ToString());
             _inventoryStream = streamProvider.GetStream<IStreamEvent>(streamId);
         }
         return _inventoryStream!;
@@ -43,10 +76,10 @@ public class InventoryGrain : Grain, IInventoryGrain
 
     private IAsyncStream<IStreamEvent> GetAlertStream()
     {
-        if (_alertStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_alertStream == null && State.State.OrganizationId != Guid.Empty)
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, _state.State.OrganizationId.ToString());
+            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, State.State.OrganizationId.ToString());
             _alertStream = streamProvider.GetStream<IStreamEvent>(streamId);
         }
         return _alertStream!;
@@ -54,10 +87,10 @@ public class InventoryGrain : Grain, IInventoryGrain
 
     public async Task InitializeAsync(InitializeInventoryCommand command)
     {
-        if (_state.State.IngredientId != Guid.Empty)
+        if (State.State.IngredientId != Guid.Empty)
             throw new InvalidOperationException("Inventory already initialized");
 
-        _state.State = new InventoryState
+        State.State = new InventoryState
         {
             IngredientId = command.IngredientId,
             OrganizationId = command.OrganizationId,
@@ -71,12 +104,12 @@ public class InventoryGrain : Grain, IInventoryGrain
             Version = 1
         };
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public Task<InventoryState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State.State);
     }
 
     public async Task<BatchReceivedResult> ReceiveBatchAsync(ReceiveBatchCommand command)
@@ -101,40 +134,40 @@ public class InventoryGrain : Grain, IInventoryGrain
             Notes = command.Notes
         };
 
-        _state.State.Batches.Add(batch);
+        State.State.Batches.Add(batch);
         RecalculateQuantitiesAndCost();
-        _state.State.LastReceivedAt = DateTime.UtcNow;
+        State.State.LastReceivedAt = DateTime.UtcNow;
 
         RecordMovement(MovementType.Receipt, command.Quantity, command.UnitCost, "Batch received", batchId, command.ReceivedBy ?? Guid.Empty);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
 
         // Publish stock received event
         await GetInventoryStream().OnNextAsync(new StockReceivedEvent(
-            _state.State.IngredientId,
-            _state.State.SiteId,
-            _state.State.IngredientName,
+            State.State.IngredientId,
+            State.State.SiteId,
+            State.State.IngredientName,
             command.Quantity,
-            _state.State.Unit,
+            State.State.Unit,
             command.UnitCost,
-            _state.State.QuantityOnHand,
+            State.State.QuantityOnHand,
             command.BatchNumber,
             command.ExpiryDate.HasValue ? DateOnly.FromDateTime(command.ExpiryDate.Value) : null,
             command.SupplierId,
             command.DeliveryId)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.State.OrganizationId
         });
 
         _logger.LogInformation(
             "Stock received for {IngredientName}: {Quantity} {Unit} at {UnitCost:C}",
-            _state.State.IngredientName,
+            State.State.IngredientName,
             command.Quantity,
-            _state.State.Unit,
+            State.State.Unit,
             command.UnitCost);
 
-        return new BatchReceivedResult(batchId, _state.State.QuantityOnHand, _state.State.WeightedAverageCost);
+        return new BatchReceivedResult(batchId, State.State.QuantityOnHand, State.State.WeightedAverageCost);
     }
 
     public async Task<BatchReceivedResult> ReceiveTransferAsync(ReceiveTransferCommand command)
@@ -154,49 +187,49 @@ public class InventoryGrain : Grain, IInventoryGrain
             Status = BatchStatus.Active
         };
 
-        _state.State.Batches.Add(batch);
+        State.State.Batches.Add(batch);
         RecalculateQuantitiesAndCost();
-        _state.State.LastReceivedAt = DateTime.UtcNow;
+        State.State.LastReceivedAt = DateTime.UtcNow;
 
         RecordMovement(MovementType.Transfer, command.Quantity, command.UnitCost, $"Transfer from site {command.SourceSiteId}", batchId, Guid.Empty, command.TransferId);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
 
-        return new BatchReceivedResult(batchId, _state.State.QuantityOnHand, _state.State.WeightedAverageCost);
+        return new BatchReceivedResult(batchId, State.State.QuantityOnHand, State.State.WeightedAverageCost);
     }
 
     public async Task<ConsumptionResult> ConsumeAsync(ConsumeStockCommand command)
     {
         EnsureExists();
 
-        if (command.Quantity > _state.State.QuantityAvailable)
+        if (command.Quantity > State.State.QuantityAvailable)
             throw new InvalidOperationException("Insufficient stock");
 
-        var previousLevel = _state.State.StockLevel;
+        var previousLevel = State.State.StockLevel;
         var breakdown = ConsumeFifo(command.Quantity);
 
-        _state.State.LastConsumedAt = DateTime.UtcNow;
-        RecordMovement(MovementType.Consumption, -command.Quantity, _state.State.WeightedAverageCost, command.Reason, null, command.PerformedBy ?? Guid.Empty, command.OrderId);
+        State.State.LastConsumedAt = DateTime.UtcNow;
+        RecordMovement(MovementType.Consumption, -command.Quantity, State.State.WeightedAverageCost, command.Reason, null, command.PerformedBy ?? Guid.Empty, command.OrderId);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
 
         var totalCost = breakdown.Sum(b => b.TotalCost);
 
         // Publish stock consumed event
         await GetInventoryStream().OnNextAsync(new StockConsumedEvent(
-            _state.State.IngredientId,
-            _state.State.SiteId,
-            _state.State.IngredientName,
+            State.State.IngredientId,
+            State.State.SiteId,
+            State.State.IngredientName,
             command.Quantity,
-            _state.State.Unit,
+            State.State.Unit,
             totalCost,
-            _state.State.QuantityAvailable,
+            State.State.QuantityAvailable,
             command.OrderId,
             command.Reason)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.State.OrganizationId
         });
 
         // Check for stock level events
@@ -204,59 +237,59 @@ public class InventoryGrain : Grain, IInventoryGrain
 
         _logger.LogInformation(
             "Stock consumed for {IngredientName}: {Quantity} {Unit}. Remaining: {Remaining}",
-            _state.State.IngredientName,
+            State.State.IngredientName,
             command.Quantity,
-            _state.State.Unit,
-            _state.State.QuantityAvailable);
+            State.State.Unit,
+            State.State.QuantityAvailable);
 
         return new ConsumptionResult(command.Quantity, totalCost, breakdown);
     }
 
     private async Task CheckAndPublishStockAlertsAsync(StockLevel previousLevel, Guid? lastOrderId = null)
     {
-        var currentLevel = _state.State.StockLevel;
+        var currentLevel = State.State.StockLevel;
 
         // Publish reorder point breached event when crossing threshold
         if (currentLevel == StockLevel.Low && previousLevel != StockLevel.Low)
         {
-            var quantityToOrder = _state.State.ParLevel - _state.State.QuantityAvailable;
+            var quantityToOrder = State.State.ParLevel - State.State.QuantityAvailable;
             await GetAlertStream().OnNextAsync(new ReorderPointBreachedEvent(
-                _state.State.IngredientId,
-                _state.State.SiteId,
-                _state.State.IngredientName,
-                _state.State.QuantityAvailable,
-                _state.State.ReorderPoint,
-                _state.State.ParLevel,
+                State.State.IngredientId,
+                State.State.SiteId,
+                State.State.IngredientName,
+                State.State.QuantityAvailable,
+                State.State.ReorderPoint,
+                State.State.ParLevel,
                 quantityToOrder > 0 ? quantityToOrder : 0)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
 
             _logger.LogWarning(
                 "Reorder point breached for {IngredientName}: {Quantity} {Unit} (Reorder point: {ReorderPoint})",
-                _state.State.IngredientName,
-                _state.State.QuantityAvailable,
-                _state.State.Unit,
-                _state.State.ReorderPoint);
+                State.State.IngredientName,
+                State.State.QuantityAvailable,
+                State.State.Unit,
+                State.State.ReorderPoint);
         }
 
         // Publish stock depleted event
         if (currentLevel == StockLevel.OutOfStock && previousLevel != StockLevel.OutOfStock)
         {
             await GetAlertStream().OnNextAsync(new StockDepletedEvent(
-                _state.State.IngredientId,
-                _state.State.SiteId,
-                _state.State.IngredientName,
+                State.State.IngredientId,
+                State.State.SiteId,
+                State.State.IngredientName,
                 DateTime.UtcNow,
                 lastOrderId)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
 
             _logger.LogError(
                 "Stock depleted: {IngredientName} at site {SiteId}",
-                _state.State.IngredientName,
-                _state.State.SiteId);
+                State.State.IngredientName,
+                State.State.SiteId);
         }
     }
 
@@ -269,7 +302,7 @@ public class InventoryGrain : Grain, IInventoryGrain
     {
         EnsureExists();
 
-        var movement = _state.State.RecentMovements.FirstOrDefault(m => m.Id == movementId)
+        var movement = State.State.RecentMovements.FirstOrDefault(m => m.Id == movementId)
             ?? throw new InvalidOperationException("Movement not found");
 
         // Create a new batch for the reversed quantity
@@ -287,36 +320,36 @@ public class InventoryGrain : Grain, IInventoryGrain
             Notes = $"Reversed: {reason}"
         };
 
-        _state.State.Batches.Add(batch);
+        State.State.Batches.Add(batch);
         RecalculateQuantitiesAndCost();
 
         RecordMovement(MovementType.Adjustment, Math.Abs(movement.Quantity), movement.UnitCost, $"Reversal: {reason}", batchId, reversedBy);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task RecordWasteAsync(RecordWasteCommand command)
     {
         EnsureExists();
 
-        if (command.Quantity > _state.State.QuantityAvailable)
+        if (command.Quantity > State.State.QuantityAvailable)
             throw new InvalidOperationException("Insufficient stock");
 
         var breakdown = ConsumeFifo(command.Quantity);
         var totalCost = breakdown.Sum(b => b.TotalCost);
 
-        RecordMovement(MovementType.Waste, -command.Quantity, _state.State.WeightedAverageCost, $"{command.WasteCategory}: {command.Reason}", null, command.RecordedBy);
+        RecordMovement(MovementType.Waste, -command.Quantity, State.State.WeightedAverageCost, $"{command.WasteCategory}: {command.Reason}", null, command.RecordedBy);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task AdjustQuantityAsync(AdjustQuantityCommand command)
     {
         EnsureExists();
 
-        var variance = command.NewQuantity - _state.State.QuantityOnHand;
+        var variance = command.NewQuantity - State.State.QuantityOnHand;
 
         if (variance > 0)
         {
@@ -329,12 +362,12 @@ public class InventoryGrain : Grain, IInventoryGrain
                 ReceivedDate = DateTime.UtcNow,
                 Quantity = variance,
                 OriginalQuantity = variance,
-                UnitCost = _state.State.WeightedAverageCost,
-                TotalCost = variance * _state.State.WeightedAverageCost,
+                UnitCost = State.State.WeightedAverageCost,
+                TotalCost = variance * State.State.WeightedAverageCost,
                 Status = BatchStatus.Active,
                 Notes = command.Reason
             };
-            _state.State.Batches.Add(batch);
+            State.State.Batches.Add(batch);
         }
         else if (variance < 0)
         {
@@ -343,11 +376,11 @@ public class InventoryGrain : Grain, IInventoryGrain
         }
 
         RecalculateQuantitiesAndCost();
-        RecordMovement(MovementType.Adjustment, variance, _state.State.WeightedAverageCost, command.Reason, null, command.AdjustedBy);
+        RecordMovement(MovementType.Adjustment, variance, State.State.WeightedAverageCost, command.Reason, null, command.AdjustedBy);
 
-        _state.State.LastCountedAt = DateTime.UtcNow;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.LastCountedAt = DateTime.UtcNow;
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task RecordPhysicalCountAsync(decimal countedQuantity, Guid countedBy, Guid? approvedBy = null)
@@ -359,14 +392,14 @@ public class InventoryGrain : Grain, IInventoryGrain
     {
         EnsureExists();
 
-        if (command.Quantity > _state.State.QuantityAvailable)
+        if (command.Quantity > State.State.QuantityAvailable)
             throw new InvalidOperationException("Insufficient stock for transfer");
 
         var breakdown = ConsumeFifo(command.Quantity);
-        RecordMovement(MovementType.Transfer, -command.Quantity, _state.State.WeightedAverageCost, $"Transfer to site {command.DestinationSiteId}", null, command.TransferredBy, command.TransferId);
+        RecordMovement(MovementType.Transfer, -command.Quantity, State.State.WeightedAverageCost, $"Transfer to site {command.DestinationSiteId}", null, command.TransferredBy, command.TransferId);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task WriteOffExpiredBatchesAsync(Guid performedBy)
@@ -374,79 +407,75 @@ public class InventoryGrain : Grain, IInventoryGrain
         EnsureExists();
 
         var now = DateTime.UtcNow;
-        var expiredBatches = _state.State.Batches
+        var expiredBatches = State.State.Batches
             .Where(b => b.Status == BatchStatus.Active && b.ExpiryDate.HasValue && b.ExpiryDate.Value < now)
             .ToList();
 
         foreach (var batch in expiredBatches)
         {
-            var index = _state.State.Batches.FindIndex(b => b.Id == batch.Id);
-            _state.State.Batches[index] = batch with { Status = BatchStatus.WrittenOff, Quantity = 0 };
+            var index = State.State.Batches.FindIndex(b => b.Id == batch.Id);
+            State.State.Batches[index] = batch with { Status = BatchStatus.WrittenOff, Quantity = 0 };
 
             RecordMovement(MovementType.Waste, -batch.Quantity, batch.UnitCost, "Expired batch write-off", batch.Id, performedBy);
         }
 
         RecalculateQuantitiesAndCost();
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task SetReorderPointAsync(decimal reorderPoint)
     {
         EnsureExists();
-        _state.State.ReorderPoint = reorderPoint;
+        State.State.ReorderPoint = reorderPoint;
         UpdateStockLevel();
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public async Task SetParLevelAsync(decimal parLevel)
     {
         EnsureExists();
-        _state.State.ParLevel = parLevel;
+        State.State.ParLevel = parLevel;
         UpdateStockLevel();
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        State.State.Version++;
+        await State.WriteStateAsync();
     }
 
     public Task<InventoryLevelInfo> GetLevelInfoAsync()
     {
-        DateTime? earliestExpiry = _state.State.Batches
+        DateTime? earliestExpiry = State.State.Batches
             .Where(b => b.Status == BatchStatus.Active && b.ExpiryDate.HasValue)
             .Select(b => b.ExpiryDate)
             .Min();
 
         return Task.FromResult(new InventoryLevelInfo(
-            _state.State.QuantityOnHand,
-            _state.State.QuantityAvailable,
-            _state.State.WeightedAverageCost,
-            _state.State.StockLevel,
+            State.State.QuantityOnHand,
+            State.State.QuantityAvailable,
+            State.State.WeightedAverageCost,
+            State.State.StockLevel,
             earliestExpiry));
     }
 
     public Task<bool> HasSufficientStockAsync(decimal quantity)
     {
-        return Task.FromResult(_state.State.QuantityAvailable >= quantity);
+        return Task.FromResult(State.State.QuantityAvailable >= quantity);
     }
 
     public Task<StockLevel> GetStockLevelAsync()
     {
-        return Task.FromResult(_state.State.StockLevel);
+        return Task.FromResult(State.State.StockLevel);
     }
 
     public Task<IReadOnlyList<StockBatch>> GetActiveBatchesAsync()
     {
-        var active = _state.State.Batches.Where(b => b.Status == BatchStatus.Active).ToList();
+        var active = State.State.Batches.Where(b => b.Status == BatchStatus.Active).ToList();
         return Task.FromResult<IReadOnlyList<StockBatch>>(active);
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.IngredientId != Guid.Empty);
+    public Task<bool> ExistsAsync() => Task.FromResult(State.State.IngredientId != Guid.Empty);
 
-    private void EnsureExists()
-    {
-        if (_state.State.IngredientId == Guid.Empty)
-            throw new InvalidOperationException("Inventory not initialized");
-    }
+    private void EnsureExists() => EnsureInitialized();
 
     private List<BatchConsumptionDetail> ConsumeFifo(decimal quantity)
     {
@@ -454,7 +483,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         var breakdown = new List<BatchConsumptionDetail>();
 
         // Order by received date (oldest first) for FIFO
-        var activeBatches = _state.State.Batches
+        var activeBatches = State.State.Batches
             .Where(b => b.Status == BatchStatus.Active && b.Quantity > 0)
             .OrderBy(b => b.ReceivedDate)
             .ToList();
@@ -464,12 +493,12 @@ public class InventoryGrain : Grain, IInventoryGrain
             if (remaining <= 0) break;
 
             var consumeQty = Math.Min(remaining, batch.Quantity);
-            var index = _state.State.Batches.FindIndex(b => b.Id == batch.Id);
+            var index = State.State.Batches.FindIndex(b => b.Id == batch.Id);
 
             var newQty = batch.Quantity - consumeQty;
             var newStatus = newQty <= 0 ? BatchStatus.Exhausted : batch.Status;
 
-            _state.State.Batches[index] = batch with { Quantity = newQty, Status = newStatus };
+            State.State.Batches[index] = batch with { Quantity = newQty, Status = newStatus };
 
             breakdown.Add(new BatchConsumptionDetail(batch.Id, batch.BatchNumber, consumeQty, batch.UnitCost, consumeQty * batch.UnitCost));
             remaining -= consumeQty;
@@ -481,14 +510,14 @@ public class InventoryGrain : Grain, IInventoryGrain
 
     private void RecalculateQuantitiesAndCost()
     {
-        var activeBatches = _state.State.Batches.Where(b => b.Status == BatchStatus.Active);
+        var activeBatches = State.State.Batches.Where(b => b.Status == BatchStatus.Active);
 
-        _state.State.QuantityOnHand = activeBatches.Sum(b => b.Quantity);
-        _state.State.QuantityAvailable = _state.State.QuantityOnHand - _state.State.QuantityReserved;
+        State.State.QuantityOnHand = activeBatches.Sum(b => b.Quantity);
+        State.State.QuantityAvailable = State.State.QuantityOnHand - State.State.QuantityReserved;
 
         var totalValue = activeBatches.Sum(b => b.Quantity * b.UnitCost);
-        _state.State.WeightedAverageCost = _state.State.QuantityOnHand > 0
-            ? totalValue / _state.State.QuantityOnHand
+        State.State.WeightedAverageCost = State.State.QuantityOnHand > 0
+            ? totalValue / State.State.QuantityOnHand
             : 0;
 
         UpdateStockLevel();
@@ -496,14 +525,14 @@ public class InventoryGrain : Grain, IInventoryGrain
 
     private void UpdateStockLevel()
     {
-        if (_state.State.QuantityAvailable <= 0)
-            _state.State.StockLevel = StockLevel.OutOfStock;
-        else if (_state.State.QuantityAvailable <= _state.State.ReorderPoint)
-            _state.State.StockLevel = StockLevel.Low;
-        else if (_state.State.QuantityAvailable > _state.State.ParLevel && _state.State.ParLevel > 0)
-            _state.State.StockLevel = StockLevel.AbovePar;
+        if (State.State.QuantityAvailable <= 0)
+            State.State.StockLevel = StockLevel.OutOfStock;
+        else if (State.State.QuantityAvailable <= State.State.ReorderPoint)
+            State.State.StockLevel = StockLevel.Low;
+        else if (State.State.QuantityAvailable > State.State.ParLevel && State.State.ParLevel > 0)
+            State.State.StockLevel = StockLevel.AbovePar;
         else
-            _state.State.StockLevel = StockLevel.Normal;
+            State.State.StockLevel = StockLevel.Normal;
     }
 
     private void RecordMovement(MovementType type, decimal quantity, decimal unitCost, string reason, Guid? batchId, Guid performedBy, Guid? referenceId = null)
@@ -522,10 +551,10 @@ public class InventoryGrain : Grain, IInventoryGrain
             PerformedBy = performedBy
         };
 
-        _state.State.RecentMovements.Add(movement);
+        State.State.RecentMovements.Add(movement);
 
         // Keep only last 100 movements
-        if (_state.State.RecentMovements.Count > 100)
-            _state.State.RecentMovements.RemoveAt(0);
+        if (State.State.RecentMovements.Count > 100)
+            State.State.RecentMovements.RemoveAt(0);
     }
 }

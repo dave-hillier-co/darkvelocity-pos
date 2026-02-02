@@ -1,3 +1,5 @@
+using DarkVelocity.Host.Grains;
+
 namespace DarkVelocity.Host.State;
 
 public enum StockLevel
@@ -46,7 +48,7 @@ public enum MovementType
 }
 
 [GenerateSerializer]
-public record StockMovement
+public record StockMovement : ILedgerTransaction
 {
     [Id(0)] public Guid Id { get; init; }
     [Id(1)] public DateTime Timestamp { get; init; }
@@ -60,10 +62,13 @@ public record StockMovement
     [Id(9)] public Guid? ReferenceId { get; init; }
     [Id(10)] public Guid PerformedBy { get; init; }
     [Id(11)] public string? Notes { get; init; }
+
+    // ILedgerTransaction implementation - maps Quantity to Amount
+    decimal ILedgerTransaction.Amount => Quantity;
 }
 
 [GenerateSerializer]
-public sealed class InventoryState
+public sealed class InventoryState : ILedgerState<StockMovement>
 {
     [Id(0)] public Guid IngredientId { get; set; }
     [Id(1)] public Guid OrganizationId { get; set; }
@@ -93,4 +98,14 @@ public sealed class InventoryState
     [Id(20)] public List<StockMovement> RecentMovements { get; set; } = [];
 
     [Id(21)] public int Version { get; set; }
+
+    // ILedgerState implementation - maps QuantityOnHand to Balance
+    decimal ILedgerState<StockMovement>.Balance
+    {
+        get => QuantityOnHand;
+        set => QuantityOnHand = value;
+    }
+
+    // ILedgerState implementation - maps RecentMovements to Transactions
+    List<StockMovement> ILedgerState<StockMovement>.Transactions => RecentMovements;
 }
