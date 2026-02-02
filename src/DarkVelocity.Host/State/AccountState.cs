@@ -263,9 +263,4 @@ public sealed class AccountState
     /// Current accounting period month.
     /// </summary>
     [Id(25)] public int CurrentPeriodMonth { get; set; }
-
-    /// <summary>
-    /// State version for optimistic concurrency.
-    /// </summary>
-    [Id(26)] public int Version { get; set; }
 }

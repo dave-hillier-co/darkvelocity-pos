@@ -100,8 +100,6 @@ public sealed class PaymentState
     [Id(31)] public DateTime? VoidedAt { get; set; }
     [Id(32)] public Guid? VoidedBy { get; set; }
     [Id(33)] public string? VoidReason { get; set; }
-
-    [Id(34)] public int Version { get; set; }
 }
 
 public enum DrawerStatus

@@ -91,6 +91,4 @@ public sealed class InventoryState
     [Id(19)] public DateTime? LastCountedAt { get; set; }
 
     [Id(20)] public List<StockMovement> RecentMovements { get; set; } = [];
-
-    [Id(21)] public int Version { get; set; }
 }

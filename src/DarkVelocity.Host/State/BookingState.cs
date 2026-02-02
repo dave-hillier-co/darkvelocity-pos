@@ -117,8 +117,6 @@ public sealed class BookingState
     [Id(27)] public Guid? LinkedOrderId { get; set; }
     [Id(28)] public Guid? SeatedBy { get; set; }
     [Id(29)] public Guid? CheckedInBy { get; set; }
-
-    [Id(30)] public int Version { get; set; }
 }
 
 // Waitlist

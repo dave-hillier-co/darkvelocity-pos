@@ -65,7 +65,6 @@ public sealed class EmployeeState
     [Id(19)] public List<TimeEntry> RecentTimeEntries { get; set; } = [];
     [Id(20)] public DateTime CreatedAt { get; set; }
     [Id(21)] public DateTime? UpdatedAt { get; set; }
-    [Id(22)] public int Version { get; set; }
 
     public string FullName => $"{FirstName} {LastName}".Trim();
 

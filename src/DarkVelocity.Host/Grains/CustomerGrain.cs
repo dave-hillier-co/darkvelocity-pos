@@ -1,65 +1,308 @@
 using DarkVelocity.Host;
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
-using Orleans.Runtime;
+using Orleans.EventSourcing;
 using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class CustomerGrain : Grain, ICustomerGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class CustomerGrain : JournaledGrain<CustomerState, ICustomerJournaledEvent>, ICustomerGrain
 {
-    private readonly IPersistentState<CustomerState> _state;
-    private IAsyncStream<IStreamEvent>? _customerStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _customerStream;
 
-    public CustomerGrain(
-        [PersistentState("customer", "OrleansStorage")]
-        IPersistentState<CustomerState> state)
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        _state = state;
-    }
-
-    private IAsyncStream<IStreamEvent> GetCustomerStream()
-    {
-        if (_customerStream == null && _state.State.OrganizationId != Guid.Empty)
+        _customerStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.CustomerStreamNamespace, _state.State.OrganizationId.ToString());
-            _customerStream = streamProvider.GetStream<IStreamEvent>(streamId);
+            var streamId = StreamId.Create(StreamConstants.CustomerStreamNamespace, State.OrganizationId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    protected override void TransitionState(CustomerState state, ICustomerJournaledEvent @event)
+    {
+        switch (@event)
+        {
+            case CustomerCreatedJournaledEvent e:
+                state.Id = e.CustomerId;
+                state.OrganizationId = e.OrganizationId;
+                state.FirstName = e.FirstName ?? "";
+                state.LastName = e.LastName ?? "";
+                state.DisplayName = e.DisplayName;
+                state.Contact = new ContactInfo { Email = e.Email, Phone = e.Phone };
+                state.Source = Enum.TryParse<CustomerSource>(e.Source, out var src) ? src : CustomerSource.Direct;
+                state.Status = CustomerStatus.Active;
+                state.Stats = new CustomerStats { Segment = CustomerSegment.New };
+                state.CreatedAt = e.OccurredAt;
+                break;
+
+            case CustomerProfileUpdatedJournaledEvent e:
+                if (e.FirstName != null) state.FirstName = e.FirstName;
+                if (e.LastName != null) state.LastName = e.LastName;
+                if (e.DisplayName != null) state.DisplayName = e.DisplayName;
+                if (e.Email != null || e.Phone != null)
+                {
+                    state.Contact = state.Contact with
+                    {
+                        Email = e.Email ?? state.Contact.Email,
+                        Phone = e.Phone ?? state.Contact.Phone
+                    };
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerTagAddedJournaledEvent e:
+                state.Tags.TryAddTag(e.Tag);
+                break;
+
+            case CustomerTagRemovedJournaledEvent e:
+                state.Tags.Remove(e.Tag);
+                break;
+
+            case CustomerNoteAddedJournaledEvent e:
+                state.Notes.Add(new CustomerNote
+                {
+                    Id = e.NoteId,
+                    Content = e.Content,
+                    CreatedBy = e.CreatedBy,
+                    CreatedAt = e.OccurredAt
+                });
+                break;
+
+            case CustomerLoyaltyEnrolledJournaledEvent e:
+                state.Loyalty = new LoyaltyStatus
+                {
+                    EnrolledAt = e.OccurredAt,
+                    ProgramId = e.ProgramId,
+                    MemberNumber = e.MemberNumber,
+                    TierId = e.InitialTierId,
+                    TierName = e.TierName,
+                    PointsBalance = e.InitialPointsBalance,
+                    LifetimePoints = 0,
+                    YtdPoints = 0,
+                    PointsToNextTier = 0
+                };
+                break;
+
+            case CustomerPointsEarnedJournaledEvent e:
+                if (state.Loyalty != null)
+                {
+                    state.Loyalty = state.Loyalty with
+                    {
+                        PointsBalance = e.NewBalance,
+                        LifetimePoints = state.Loyalty.LifetimePoints + e.Points,
+                        YtdPoints = state.Loyalty.YtdPoints + e.Points
+                    };
+                    if (e.SpendAmount.HasValue)
+                    {
+                        state.Stats = state.Stats with { TotalSpend = state.Stats.TotalSpend + e.SpendAmount.Value };
+                    }
+                }
+                break;
+
+            case CustomerPointsRedeemedJournaledEvent e:
+                if (state.Loyalty != null)
+                {
+                    state.Loyalty = state.Loyalty with { PointsBalance = e.NewBalance };
+                }
+                break;
+
+            case CustomerPointsAdjustedJournaledEvent e:
+                if (state.Loyalty != null)
+                {
+                    state.Loyalty = state.Loyalty with { PointsBalance = e.NewBalance };
+                    if (e.Adjustment > 0)
+                    {
+                        state.Loyalty = state.Loyalty with { LifetimePoints = state.Loyalty.LifetimePoints + e.Adjustment };
+                    }
+                }
+                break;
+
+            case CustomerPointsExpiredJournaledEvent e:
+                if (state.Loyalty != null)
+                {
+                    state.Loyalty = state.Loyalty with { PointsBalance = e.NewBalance };
+                }
+                break;
+
+            case CustomerTierChangedJournaledEvent e:
+                if (state.Loyalty != null)
+                {
+                    state.Loyalty = state.Loyalty with
+                    {
+                        TierId = e.NewTierId,
+                        TierName = e.NewTierName
+                    };
+                }
+                break;
+
+            case CustomerRewardIssuedJournaledEvent e:
+                var reward = new CustomerReward
+                {
+                    Id = e.RewardId,
+                    RewardDefinitionId = Guid.Empty, // Not in event, preserved from command context
+                    Name = e.RewardName,
+                    Status = RewardStatus.Available,
+                    PointsSpent = 0, // Not in event
+                    IssuedAt = e.OccurredAt,
+                    ExpiresAt = e.ExpiryDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MaxValue
+                };
+                state.Rewards.Add(reward);
+                break;
+
+            case CustomerRewardRedeemedJournaledEvent e:
+                var rewardIdx = state.Rewards.FindIndex(r => r.Id == e.RewardId);
+                if (rewardIdx >= 0)
+                {
+                    state.Rewards[rewardIdx] = state.Rewards[rewardIdx] with
+                    {
+                        Status = RewardStatus.Redeemed,
+                        RedeemedAt = e.OccurredAt,
+                        RedemptionOrderId = e.OrderId
+                    };
+                }
+                break;
+
+            case CustomerRewardsExpiredJournaledEvent e:
+                foreach (var rewardId in e.ExpiredRewardIds)
+                {
+                    var idx = state.Rewards.FindIndex(r => r.Id == rewardId);
+                    if (idx >= 0)
+                    {
+                        state.Rewards[idx] = state.Rewards[idx] with { Status = RewardStatus.Expired };
+                    }
+                }
+                break;
+
+            case CustomerVisitRecordedJournaledEvent e:
+                state.Stats = state.Stats with
+                {
+                    TotalVisits = e.VisitNumber,
+                    TotalSpend = state.Stats.TotalSpend + e.SpendAmount,
+                    AverageCheck = (state.Stats.TotalSpend + e.SpendAmount) / e.VisitNumber,
+                    LastVisitSiteId = e.SiteId,
+                    DaysSinceLastVisit = 0
+                };
+                state.LastVisitAt = e.OccurredAt;
+                break;
+
+            case CustomerPreferencesUpdatedJournaledEvent e:
+                state.Preferences = state.Preferences with
+                {
+                    DietaryRestrictions = e.DietaryRestrictions ?? state.Preferences.DietaryRestrictions,
+                    Allergens = e.Allergens ?? state.Preferences.Allergens,
+                    SeatingPreference = e.SeatingPreference ?? state.Preferences.SeatingPreference,
+                    Notes = e.Notes ?? state.Preferences.Notes
+                };
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerDietaryRestrictionAddedJournaledEvent e:
+                var restrictions = state.Preferences.DietaryRestrictions.ToList();
+                if (!restrictions.Contains(e.Restriction))
+                {
+                    restrictions.Add(e.Restriction);
+                    state.Preferences = state.Preferences with { DietaryRestrictions = restrictions };
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerDietaryRestrictionRemovedJournaledEvent e:
+                var restrictionsList = state.Preferences.DietaryRestrictions.ToList();
+                restrictionsList.Remove(e.Restriction);
+                state.Preferences = state.Preferences with { DietaryRestrictions = restrictionsList };
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerAllergenAddedJournaledEvent e:
+                var allergens = state.Preferences.Allergens.ToList();
+                if (!allergens.Contains(e.Allergen))
+                {
+                    allergens.Add(e.Allergen);
+                    state.Preferences = state.Preferences with { Allergens = allergens };
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerAllergenRemovedJournaledEvent e:
+                var allergensList = state.Preferences.Allergens.ToList();
+                allergensList.Remove(e.Allergen);
+                state.Preferences = state.Preferences with { Allergens = allergensList };
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerSeatingPreferenceSetJournaledEvent e:
+                state.Preferences = state.Preferences with { SeatingPreference = e.Preference };
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerReferralCodeGeneratedJournaledEvent e:
+                state.ReferralCode = e.ReferralCode;
+                break;
+
+            case CustomerReferredBySetJournaledEvent e:
+                state.ReferredBy = e.ReferrerId;
+                break;
+
+            case CustomerReferralCompletedJournaledEvent e:
+                state.SuccessfulReferrals++;
+                break;
+
+            case CustomerMergedJournaledEvent e:
+                state.MergedFrom.Add(e.SourceCustomerId);
+                break;
+
+            case CustomerDeactivatedJournaledEvent e:
+                state.Status = CustomerStatus.Inactive;
+                break;
+
+            case CustomerReactivatedJournaledEvent e:
+                state.Status = CustomerStatus.Active;
+                break;
+
+            case CustomerAnonymizedJournaledEvent e:
+                state.FirstName = "REDACTED";
+                state.LastName = "REDACTED";
+                state.DisplayName = "REDACTED";
+                state.Contact = new ContactInfo();
+                state.DateOfBirth = null;
+                state.Status = CustomerStatus.Inactive;
+                break;
         }
-        return _customerStream!;
     }
 
     public async Task<CustomerCreatedResult> CreateAsync(CreateCustomerCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.Id != Guid.Empty)
             throw new InvalidOperationException("Customer already exists");
 
         var key = this.GetPrimaryKeyString();
         var (_, _, customerId) = GrainKeys.ParseOrgEntity(key);
 
-        _state.State = new CustomerState
+        RaiseEvent(new CustomerCreatedJournaledEvent
         {
-            Id = customerId,
+            CustomerId = customerId,
             OrganizationId = command.OrganizationId,
             FirstName = command.FirstName,
             LastName = command.LastName,
             DisplayName = $"{command.FirstName} {command.LastName}".Trim(),
-            Contact = new ContactInfo { Email = command.Email, Phone = command.Phone },
-            Source = command.Source,
-            Status = CustomerStatus.Active,
-            Stats = new CustomerStats { Segment = CustomerSegment.New },
-            CreatedAt = DateTime.UtcNow,
-            Version = 1
-        };
-
-        await _state.WriteStateAsync();
+            Email = command.Email,
+            Phone = command.Phone,
+            Source = command.Source.ToString(),
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         // Publish customer created event
-        await GetCustomerStream().OnNextAsync(new CustomerCreatedEvent(
+        await _customerStream!.Value.OnNextAsync(new CustomerCreatedEvent(
             customerId,
-            _state.State.DisplayName,
+            State.DisplayName,
             command.Email,
             command.Phone,
             command.Source.ToString(),
@@ -68,85 +311,97 @@ public class CustomerGrain : Grain, ICustomerGrain
             OrganizationId = command.OrganizationId
         });
 
-        return new CustomerCreatedResult(customerId, _state.State.DisplayName, _state.State.CreatedAt);
+        return new CustomerCreatedResult(customerId, State.DisplayName, State.CreatedAt);
     }
 
-    public Task<CustomerState> GetStateAsync() => Task.FromResult(_state.State);
+    public Task<CustomerState> GetStateAsync() => Task.FromResult(State);
 
     public async Task UpdateAsync(UpdateCustomerCommand command)
     {
         EnsureExists();
 
         var changedFields = new List<string>();
+        string? newFirstName = null;
+        string? newLastName = null;
+        string? newEmail = null;
+        string? newPhone = null;
 
         if (command.FirstName != null)
         {
-            _state.State.FirstName = command.FirstName;
+            newFirstName = command.FirstName;
             changedFields.Add("FirstName");
         }
         if (command.LastName != null)
         {
-            _state.State.LastName = command.LastName;
+            newLastName = command.LastName;
             changedFields.Add("LastName");
         }
-        if (command.FirstName != null || command.LastName != null)
-            _state.State.DisplayName = $"{_state.State.FirstName} {_state.State.LastName}".Trim();
-
-        if (command.Email != null || command.Phone != null)
+        if (command.Email != null)
         {
-            _state.State.Contact = _state.State.Contact with
-            {
-                Email = command.Email ?? _state.State.Contact.Email,
-                Phone = command.Phone ?? _state.State.Contact.Phone
-            };
-            if (command.Email != null) changedFields.Add("Email");
-            if (command.Phone != null) changedFields.Add("Phone");
+            newEmail = command.Email;
+            changedFields.Add("Email");
         }
-
+        if (command.Phone != null)
+        {
+            newPhone = command.Phone;
+            changedFields.Add("Phone");
+        }
         if (command.DateOfBirth != null)
         {
-            _state.State.DateOfBirth = command.DateOfBirth;
             changedFields.Add("DateOfBirth");
         }
         if (command.Preferences != null)
         {
-            _state.State.Preferences = command.Preferences;
             changedFields.Add("Preferences");
         }
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        if (changedFields.Count == 0) return;
+
+        var displayName = $"{newFirstName ?? State.FirstName} {newLastName ?? State.LastName}".Trim();
+
+        RaiseEvent(new CustomerProfileUpdatedJournaledEvent
+        {
+            CustomerId = State.Id,
+            FirstName = newFirstName,
+            LastName = newLastName,
+            DisplayName = displayName,
+            Email = newEmail,
+            Phone = newPhone,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         // Publish customer profile updated event
-        if (changedFields.Count > 0)
+        await _customerStream!.Value.OnNextAsync(new CustomerProfileUpdatedEvent(
+            State.Id,
+            State.DisplayName,
+            changedFields,
+            UpdatedBy: null)
         {
-            await GetCustomerStream().OnNextAsync(new CustomerProfileUpdatedEvent(
-                _state.State.Id,
-                _state.State.DisplayName,
-                changedFields,
-                UpdatedBy: null)
-            {
-                OrganizationId = _state.State.OrganizationId
-            });
-        }
+            OrganizationId = State.OrganizationId
+        });
     }
 
     public async Task AddTagAsync(string tag)
     {
         EnsureExists();
-        if (_state.State.Tags.TryAddTag(tag))
+        if (!State.Tags.Contains(tag))
         {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerTagAddedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Tag = tag,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
 
             // Publish customer tag added event
-            await GetCustomerStream().OnNextAsync(new CustomerTagAddedEvent(
-                _state.State.Id,
+            await _customerStream!.Value.OnNextAsync(new CustomerTagAddedEvent(
+                State.Id,
                 tag,
                 AddedBy: null)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -154,18 +409,23 @@ public class CustomerGrain : Grain, ICustomerGrain
     public async Task RemoveTagAsync(string tag)
     {
         EnsureExists();
-        if (_state.State.Tags.Remove(tag))
+        if (State.Tags.Contains(tag))
         {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerTagRemovedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Tag = tag,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
 
             // Publish customer tag removed event
-            await GetCustomerStream().OnNextAsync(new CustomerTagRemovedEvent(
-                _state.State.Id,
+            await _customerStream!.Value.OnNextAsync(new CustomerTagRemovedEvent(
+                State.Id,
                 tag,
                 RemovedBy: null)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.OrganizationId
             });
         }
     }
@@ -173,48 +433,45 @@ public class CustomerGrain : Grain, ICustomerGrain
     public async Task AddNoteAsync(string content, Guid createdBy)
     {
         EnsureExists();
-        _state.State.Notes.Add(new CustomerNote
+        RaiseEvent(new CustomerNoteAddedJournaledEvent
         {
-            Id = Guid.NewGuid(),
+            CustomerId = State.Id,
+            NoteId = Guid.NewGuid(),
             Content = content,
             CreatedBy = createdBy,
-            CreatedAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow
         });
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task EnrollInLoyaltyAsync(EnrollLoyaltyCommand command)
     {
         EnsureExists();
-        if (_state.State.Loyalty != null)
+        if (State.Loyalty != null)
             throw new InvalidOperationException("Customer already enrolled in loyalty");
 
-        _state.State.Loyalty = new LoyaltyStatus
+        RaiseEvent(new CustomerLoyaltyEnrolledJournaledEvent
         {
-            EnrolledAt = DateTime.UtcNow,
+            CustomerId = State.Id,
             ProgramId = command.ProgramId,
             MemberNumber = command.MemberNumber,
-            TierId = command.InitialTierId,
+            InitialTierId = command.InitialTierId,
             TierName = command.TierName,
-            PointsBalance = 0,
-            LifetimePoints = 0,
-            YtdPoints = 0,
-            PointsToNextTier = 0
-        };
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            InitialPointsBalance = 0,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         // Publish customer enrolled in loyalty event
-        await GetCustomerStream().OnNextAsync(new CustomerEnrolledInLoyaltyEvent(
-            _state.State.Id,
+        await _customerStream!.Value.OnNextAsync(new CustomerEnrolledInLoyaltyEvent(
+            State.Id,
             command.ProgramId,
             command.MemberNumber,
             command.InitialTierId,
             command.TierName,
             InitialPointsBalance: 0)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
     }
 
@@ -223,18 +480,21 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        _state.State.Loyalty = _state.State.Loyalty! with
+        var newBalance = State.Loyalty!.PointsBalance + command.Points;
+
+        RaiseEvent(new CustomerPointsEarnedJournaledEvent
         {
-            PointsBalance = _state.State.Loyalty.PointsBalance + command.Points,
-            LifetimePoints = _state.State.Loyalty.LifetimePoints + command.Points,
-            YtdPoints = _state.State.Loyalty.YtdPoints + command.Points
-        };
+            CustomerId = State.Id,
+            Points = command.Points,
+            NewBalance = newBalance,
+            OrderId = command.OrderId,
+            SpendAmount = command.SpendAmount,
+            Reason = command.Reason ?? "",
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.Stats = _state.State.Stats with { TotalSpend = _state.State.Stats.TotalSpend + (command.SpendAmount ?? 0) };
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-
-        return new PointsResult(_state.State.Loyalty.PointsBalance, _state.State.Loyalty.LifetimePoints);
+        return new PointsResult(State.Loyalty.PointsBalance, State.Loyalty.LifetimePoints);
     }
 
     public async Task<PointsResult> RedeemPointsAsync(RedeemPointsCommand command)
@@ -242,18 +502,24 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        if (_state.State.Loyalty!.PointsBalance < command.Points)
+        if (State.Loyalty!.PointsBalance < command.Points)
             throw new InvalidOperationException("Insufficient points");
 
-        _state.State.Loyalty = _state.State.Loyalty with
+        var newBalance = State.Loyalty.PointsBalance - command.Points;
+
+        RaiseEvent(new CustomerPointsRedeemedJournaledEvent
         {
-            PointsBalance = _state.State.Loyalty.PointsBalance - command.Points
-        };
+            CustomerId = State.Id,
+            Points = command.Points,
+            NewBalance = newBalance,
+            OrderId = command.OrderId,
+            DiscountValue = command.DiscountValue ?? 0,
+            RewardType = command.RewardType ?? "",
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-
-        return new PointsResult(_state.State.Loyalty.PointsBalance, _state.State.Loyalty.LifetimePoints);
+        return new PointsResult(State.Loyalty.PointsBalance, State.Loyalty.LifetimePoints);
     }
 
     public async Task<PointsResult> AdjustPointsAsync(AdjustPointsCommand command)
@@ -261,18 +527,22 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        var newBalance = _state.State.Loyalty!.PointsBalance + command.Points;
+        var newBalance = State.Loyalty!.PointsBalance + command.Points;
         if (newBalance < 0)
             throw new InvalidOperationException("Adjustment would result in negative balance");
 
-        _state.State.Loyalty = _state.State.Loyalty with { PointsBalance = newBalance };
-        if (command.Points > 0)
-            _state.State.Loyalty = _state.State.Loyalty with { LifetimePoints = _state.State.Loyalty.LifetimePoints + command.Points };
+        RaiseEvent(new CustomerPointsAdjustedJournaledEvent
+        {
+            CustomerId = State.Id,
+            Adjustment = command.Points,
+            NewBalance = newBalance,
+            Reason = command.Reason ?? "",
+            AdjustedBy = command.AdjustedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
-
-        return new PointsResult(_state.State.Loyalty.PointsBalance, _state.State.Loyalty.LifetimePoints);
+        return new PointsResult(State.Loyalty.PointsBalance, State.Loyalty.LifetimePoints);
     }
 
     public async Task ExpirePointsAsync(int points, DateTime expiryDate)
@@ -280,13 +550,16 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        _state.State.Loyalty = _state.State.Loyalty! with
-        {
-            PointsBalance = Math.Max(0, _state.State.Loyalty.PointsBalance - points)
-        };
+        var newBalance = Math.Max(0, State.Loyalty!.PointsBalance - points);
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerPointsExpiredJournaledEvent
+        {
+            CustomerId = State.Id,
+            ExpiredPoints = points,
+            NewBalance = newBalance,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task PromoteTierAsync(Guid newTierId, string tierName, int pointsToNextTier)
@@ -294,15 +567,17 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        _state.State.Loyalty = _state.State.Loyalty! with
+        RaiseEvent(new CustomerTierChangedJournaledEvent
         {
-            TierId = newTierId,
-            TierName = tierName,
-            PointsToNextTier = pointsToNextTier
-        };
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            CustomerId = State.Id,
+            OldTierId = State.Loyalty!.TierId,
+            OldTierName = State.Loyalty.TierName,
+            NewTierId = newTierId,
+            NewTierName = tierName,
+            CumulativeSpend = State.Stats.TotalSpend,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task DemoteTierAsync(Guid newTierId, string tierName, int pointsToNextTier)
@@ -315,38 +590,45 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
         EnsureLoyaltyEnrolled();
 
-        var reward = new CustomerReward
-        {
-            Id = Guid.NewGuid(),
-            RewardDefinitionId = command.RewardDefinitionId,
-            Name = command.RewardName,
-            Status = RewardStatus.Available,
-            PointsSpent = command.PointsCost,
-            IssuedAt = DateTime.UtcNow,
-            ExpiresAt = command.ExpiresAt
-        };
+        var rewardId = Guid.NewGuid();
 
-        _state.State.Rewards.Add(reward);
+        RaiseEvent(new CustomerRewardIssuedJournaledEvent
+        {
+            CustomerId = State.Id,
+            RewardId = rewardId,
+            RewardType = "",
+            RewardName = command.RewardName,
+            Value = null,
+            ExpiryDate = command.ExpiresAt.HasValue ? DateOnly.FromDateTime(command.ExpiresAt.Value) : null,
+            Reason = null,
+            OccurredAt = DateTime.UtcNow
+        });
 
         if (command.PointsCost > 0)
         {
-            _state.State.Loyalty = _state.State.Loyalty! with
+            RaiseEvent(new CustomerPointsRedeemedJournaledEvent
             {
-                PointsBalance = _state.State.Loyalty.PointsBalance - command.PointsCost
-            };
+                CustomerId = State.Id,
+                Points = command.PointsCost,
+                NewBalance = State.Loyalty!.PointsBalance - command.PointsCost,
+                OrderId = Guid.Empty,
+                DiscountValue = 0,
+                RewardType = "reward_issue",
+                OccurredAt = DateTime.UtcNow
+            });
         }
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
 
-        return new RewardResult(reward.Id, reward.ExpiresAt);
+        var issuedReward = State.Rewards.FirstOrDefault(r => r.Id == rewardId);
+        return new RewardResult(rewardId, issuedReward?.ExpiresAt);
     }
 
     public async Task RedeemRewardAsync(RedeemRewardCommand command)
     {
         EnsureExists();
 
-        var reward = _state.State.Rewards.FirstOrDefault(r => r.Id == command.RewardId)
+        var reward = State.Rewards.FirstOrDefault(r => r.Id == command.RewardId)
             ?? throw new InvalidOperationException("Reward not found");
 
         if (reward.Status != RewardStatus.Available)
@@ -355,17 +637,15 @@ public class CustomerGrain : Grain, ICustomerGrain
         if (reward.ExpiresAt < DateTime.UtcNow)
             throw new InvalidOperationException("Reward has expired");
 
-        var index = _state.State.Rewards.FindIndex(r => r.Id == command.RewardId);
-        _state.State.Rewards[index] = reward with
+        RaiseEvent(new CustomerRewardRedeemedJournaledEvent
         {
-            Status = RewardStatus.Redeemed,
-            RedeemedAt = DateTime.UtcNow,
-            RedemptionOrderId = command.OrderId,
-            RedemptionSiteId = command.SiteId
-        };
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            CustomerId = State.Id,
+            RewardId = command.RewardId,
+            OrderId = command.OrderId,
+            RedeemedValue = null,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task ExpireRewardsAsync()
@@ -373,20 +653,20 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
 
         var now = DateTime.UtcNow;
-        var expired = _state.State.Rewards
+        var expiredIds = State.Rewards
             .Where(r => r.Status == RewardStatus.Available && r.ExpiresAt < now)
+            .Select(r => r.Id)
             .ToList();
 
-        foreach (var reward in expired)
+        if (expiredIds.Count > 0)
         {
-            var index = _state.State.Rewards.FindIndex(r => r.Id == reward.Id);
-            _state.State.Rewards[index] = reward with { Status = RewardStatus.Expired };
-        }
-
-        if (expired.Any())
-        {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerRewardsExpiredJournaledEvent
+            {
+                CustomerId = State.Id,
+                ExpiredRewardIds = expiredIds,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
         }
     }
 
@@ -395,9 +675,11 @@ public class CustomerGrain : Grain, ICustomerGrain
         EnsureExists();
 
         // Calculate days since previous visit before updating
-        var daysSincePreviousVisit = _state.State.LastVisitAt.HasValue
-            ? (int)(DateTime.UtcNow - _state.State.LastVisitAt.Value).TotalDays
+        var daysSincePreviousVisit = State.LastVisitAt.HasValue
+            ? (int)(DateTime.UtcNow - State.LastVisitAt.Value).TotalDays
             : 0;
+
+        var visitNumber = State.Stats.TotalVisits + 1;
 
         // Add to visit history
         var visitRecord = new CustomerVisitRecord
@@ -414,51 +696,49 @@ public class CustomerGrain : Grain, ICustomerGrain
             Notes = command.Notes
         };
 
-        _state.State.VisitHistory.Insert(0, visitRecord);
+        State.VisitHistory.Insert(0, visitRecord);
         // Keep only last 50 visits
-        if (_state.State.VisitHistory.Count > 50)
+        if (State.VisitHistory.Count > 50)
         {
-            _state.State.VisitHistory.RemoveAt(_state.State.VisitHistory.Count - 1);
+            State.VisitHistory.RemoveAt(State.VisitHistory.Count - 1);
         }
 
-        _state.State.Stats = _state.State.Stats with
+        RaiseEvent(new CustomerVisitRecordedJournaledEvent
         {
-            TotalVisits = _state.State.Stats.TotalVisits + 1,
-            TotalSpend = _state.State.Stats.TotalSpend + command.SpendAmount,
-            AverageCheck = (_state.State.Stats.TotalSpend + command.SpendAmount) / (_state.State.Stats.TotalVisits + 1),
-            LastVisitSiteId = command.SiteId,
-            DaysSinceLastVisit = 0
-        };
-
-        _state.State.LastVisitAt = DateTime.UtcNow;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            CustomerId = State.Id,
+            SiteId = command.SiteId,
+            OrderId = command.OrderId,
+            SpendAmount = command.SpendAmount,
+            VisitNumber = visitNumber,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         // Publish customer visited event
-        await GetCustomerStream().OnNextAsync(new CustomerVisitedEvent(
-            _state.State.Id,
+        await _customerStream!.Value.OnNextAsync(new CustomerVisitedEvent(
+            State.Id,
             command.SiteId,
             command.OrderId,
             command.SpendAmount,
-            _state.State.Stats.TotalVisits,
-            _state.State.Stats.TotalSpend,
+            State.Stats.TotalVisits,
+            State.Stats.TotalSpend,
             daysSincePreviousVisit)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
     }
 
     public Task<IReadOnlyList<CustomerVisitRecord>> GetVisitHistoryAsync(int limit = 50)
     {
         EnsureExists();
-        var visits = _state.State.VisitHistory.Take(limit).ToList();
+        var visits = State.VisitHistory.Take(limit).ToList();
         return Task.FromResult<IReadOnlyList<CustomerVisitRecord>>(visits);
     }
 
     public Task<IReadOnlyList<CustomerVisitRecord>> GetVisitsBySiteAsync(Guid siteId, int limit = 20)
     {
         EnsureExists();
-        var visits = _state.State.VisitHistory
+        var visits = State.VisitHistory
             .Where(v => v.SiteId == siteId)
             .Take(limit)
             .ToList();
@@ -468,157 +748,189 @@ public class CustomerGrain : Grain, ICustomerGrain
     public Task<CustomerVisitRecord?> GetLastVisitAsync()
     {
         EnsureExists();
-        return Task.FromResult(_state.State.VisitHistory.FirstOrDefault());
+        return Task.FromResult(State.VisitHistory.FirstOrDefault());
     }
 
     public async Task UpdatePreferencesAsync(UpdatePreferencesCommand command)
     {
         EnsureExists();
 
-        _state.State.Preferences = _state.State.Preferences with
+        RaiseEvent(new CustomerPreferencesUpdatedJournaledEvent
         {
-            DietaryRestrictions = command.DietaryRestrictions ?? _state.State.Preferences.DietaryRestrictions,
-            Allergens = command.Allergens ?? _state.State.Preferences.Allergens,
-            SeatingPreference = command.SeatingPreference ?? _state.State.Preferences.SeatingPreference,
-            Notes = command.Notes ?? _state.State.Preferences.Notes
-        };
-
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            CustomerId = State.Id,
+            DietaryRestrictions = command.DietaryRestrictions,
+            Allergens = command.Allergens,
+            SeatingPreference = command.SeatingPreference,
+            Notes = command.Notes,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AddDietaryRestrictionAsync(string restriction)
     {
         EnsureExists();
-        var restrictions = _state.State.Preferences.DietaryRestrictions.ToList();
-        if (!restrictions.Contains(restriction))
+        if (!State.Preferences.DietaryRestrictions.Contains(restriction))
         {
-            restrictions.Add(restriction);
-            _state.State.Preferences = _state.State.Preferences with { DietaryRestrictions = restrictions };
-            _state.State.UpdatedAt = DateTime.UtcNow;
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerDietaryRestrictionAddedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Restriction = restriction,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
         }
     }
 
     public async Task RemoveDietaryRestrictionAsync(string restriction)
     {
         EnsureExists();
-        var restrictions = _state.State.Preferences.DietaryRestrictions.ToList();
-        if (restrictions.Remove(restriction))
+        if (State.Preferences.DietaryRestrictions.Contains(restriction))
         {
-            _state.State.Preferences = _state.State.Preferences with { DietaryRestrictions = restrictions };
-            _state.State.UpdatedAt = DateTime.UtcNow;
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerDietaryRestrictionRemovedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Restriction = restriction,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
         }
     }
 
     public async Task AddAllergenAsync(string allergen)
     {
         EnsureExists();
-        var allergens = _state.State.Preferences.Allergens.ToList();
-        if (!allergens.Contains(allergen))
+        if (!State.Preferences.Allergens.Contains(allergen))
         {
-            allergens.Add(allergen);
-            _state.State.Preferences = _state.State.Preferences with { Allergens = allergens };
-            _state.State.UpdatedAt = DateTime.UtcNow;
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerAllergenAddedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Allergen = allergen,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
         }
     }
 
     public async Task RemoveAllergenAsync(string allergen)
     {
         EnsureExists();
-        var allergens = _state.State.Preferences.Allergens.ToList();
-        if (allergens.Remove(allergen))
+        if (State.Preferences.Allergens.Contains(allergen))
         {
-            _state.State.Preferences = _state.State.Preferences with { Allergens = allergens };
-            _state.State.UpdatedAt = DateTime.UtcNow;
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new CustomerAllergenRemovedJournaledEvent
+            {
+                CustomerId = State.Id,
+                Allergen = allergen,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
         }
     }
 
     public async Task SetSeatingPreferenceAsync(string preference)
     {
         EnsureExists();
-        _state.State.Preferences = _state.State.Preferences with { SeatingPreference = preference };
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerSeatingPreferenceSetJournaledEvent
+        {
+            CustomerId = State.Id,
+            Preference = preference,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task SetReferralCodeAsync(string code)
     {
         EnsureExists();
-        _state.State.ReferralCode = code;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerReferralCodeGeneratedJournaledEvent
+        {
+            CustomerId = State.Id,
+            ReferralCode = code,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task SetReferredByAsync(Guid referrerId)
     {
         EnsureExists();
-        _state.State.ReferredBy = referrerId;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerReferredBySetJournaledEvent
+        {
+            CustomerId = State.Id,
+            ReferrerId = referrerId,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task IncrementReferralCountAsync()
     {
         EnsureExists();
-        _state.State.SuccessfulReferrals++;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerReferralCompletedJournaledEvent
+        {
+            CustomerId = State.Id,
+            ReferredCustomerId = Guid.Empty, // Would need to be passed in
+            BonusPointsAwarded = null,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task MergeFromAsync(Guid sourceCustomerId)
     {
         EnsureExists();
-        _state.State.MergedFrom.Add(sourceCustomerId);
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerMergedJournaledEvent
+        {
+            CustomerId = State.Id,
+            SourceCustomerId = sourceCustomerId,
+            CombinedLifetimeSpend = State.Stats.TotalSpend,
+            CombinedTotalPoints = State.Loyalty?.LifetimePoints ?? 0,
+            CombinedVisits = State.Stats.TotalVisits,
+            MergedBy = Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task DeleteAsync()
     {
         EnsureExists();
-        _state.State.Status = CustomerStatus.Inactive;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerDeactivatedJournaledEvent
+        {
+            CustomerId = State.Id,
+            Reason = "Deleted",
+            DeactivatedBy = null,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AnonymizeAsync()
     {
         EnsureExists();
-        _state.State.FirstName = "REDACTED";
-        _state.State.LastName = "REDACTED";
-        _state.State.DisplayName = "REDACTED";
-        _state.State.Contact = new ContactInfo();
-        _state.State.DateOfBirth = null;
-        _state.State.Status = CustomerStatus.Inactive;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new CustomerAnonymizedJournaledEvent
+        {
+            CustomerId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
-    public Task<bool> IsLoyaltyMemberAsync() => Task.FromResult(_state.State.Loyalty != null);
-    public Task<int> GetPointsBalanceAsync() => Task.FromResult(_state.State.Loyalty?.PointsBalance ?? 0);
+    public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);
+    public Task<bool> IsLoyaltyMemberAsync() => Task.FromResult(State.Loyalty != null);
+    public Task<int> GetPointsBalanceAsync() => Task.FromResult(State.Loyalty?.PointsBalance ?? 0);
     public Task<IReadOnlyList<CustomerReward>> GetAvailableRewardsAsync()
-        => Task.FromResult<IReadOnlyList<CustomerReward>>(_state.State.Rewards.Where(r => r.Status == RewardStatus.Available && r.ExpiresAt > DateTime.UtcNow).ToList());
+        => Task.FromResult<IReadOnlyList<CustomerReward>>(State.Rewards.Where(r => r.Status == RewardStatus.Available && r.ExpiresAt > DateTime.UtcNow).ToList());
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.Id == Guid.Empty)
             throw new InvalidOperationException("Customer does not exist");
     }
 
     private void EnsureLoyaltyEnrolled()
     {
-        if (_state.State.Loyalty == null)
+        if (State.Loyalty == null)
             throw new InvalidOperationException("Customer not enrolled in loyalty program");
     }
 }

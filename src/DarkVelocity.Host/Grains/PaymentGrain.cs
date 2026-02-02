@@ -1,39 +1,142 @@
 using DarkVelocity.Host;
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
+using Orleans.EventSourcing;
 using Orleans.Runtime;
 using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class PaymentGrain : Grain, IPaymentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class PaymentGrain : JournaledGrain<PaymentState, IPaymentJournaledEvent>, IPaymentGrain
 {
-    private readonly IPersistentState<PaymentState> _state;
     private readonly IGrainFactory _grainFactory;
     private Lazy<IAsyncStream<IStreamEvent>>? _paymentStream;
 
-    public PaymentGrain(
-        [PersistentState("payment", "OrleansStorage")]
-        IPersistentState<PaymentState> state,
-        IGrainFactory grainFactory)
+    public PaymentGrain(IGrainFactory grainFactory)
     {
-        _state = state;
         _grainFactory = grainFactory;
     }
 
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        if (_state.State.OrganizationId != Guid.Empty)
+        if (State.OrganizationId != Guid.Empty)
         {
             InitializeStream();
         }
         return base.OnActivateAsync(cancellationToken);
     }
 
+    protected override void TransitionState(PaymentState state, IPaymentJournaledEvent @event)
+    {
+        switch (@event)
+        {
+            case PaymentInitiatedJournaledEvent e:
+                state.Id = e.PaymentId;
+                state.OrganizationId = e.OrganizationId;
+                state.SiteId = e.SiteId;
+                state.OrderId = e.OrderId;
+                state.Method = e.Method;
+                state.Status = PaymentStatus.Initiated;
+                state.Amount = e.Amount;
+                state.TotalAmount = e.Amount;
+                state.CashierId = e.CashierId;
+                state.CustomerId = e.CustomerId;
+                state.DrawerId = e.DrawerId;
+                state.CreatedAt = e.OccurredAt;
+                break;
+
+            case PaymentAuthorizationRequestedJournaledEvent:
+                state.Status = PaymentStatus.Authorizing;
+                break;
+
+            case PaymentAuthorizedJournaledEvent e:
+                state.AuthorizationCode = e.AuthorizationCode;
+                state.GatewayReference = e.GatewayReference;
+                state.CardInfo = e.CardInfo;
+                state.Status = PaymentStatus.Authorized;
+                state.AuthorizedAt = e.OccurredAt;
+                break;
+
+            case PaymentDeclinedJournaledEvent:
+                state.Status = PaymentStatus.Declined;
+                break;
+
+            case PaymentCapturedJournaledEvent e:
+                state.Status = PaymentStatus.Captured;
+                state.CapturedAt = e.OccurredAt;
+                break;
+
+            case CashPaymentCompletedJournaledEvent e:
+                state.AmountTendered = e.AmountTendered;
+                state.TipAmount = e.TipAmount;
+                state.TotalAmount = e.TotalAmount;
+                state.ChangeGiven = e.ChangeGiven;
+                state.Status = PaymentStatus.Completed;
+                state.CompletedAt = e.OccurredAt;
+                break;
+
+            case CardPaymentCompletedJournaledEvent e:
+                state.GatewayReference = e.GatewayReference;
+                state.AuthorizationCode = e.AuthorizationCode;
+                state.CardInfo = e.CardInfo;
+                state.GatewayName = e.GatewayName;
+                state.TipAmount = e.TipAmount;
+                state.TotalAmount = e.TotalAmount;
+                state.Status = PaymentStatus.Completed;
+                state.CapturedAt = e.OccurredAt;
+                state.CompletedAt = e.OccurredAt;
+                break;
+
+            case GiftCardPaymentCompletedJournaledEvent e:
+                state.GiftCardId = e.GiftCardId;
+                state.GiftCardNumber = e.CardNumber;
+                state.TotalAmount = e.TotalAmount;
+                state.Status = PaymentStatus.Completed;
+                state.CompletedAt = e.OccurredAt;
+                break;
+
+            case PaymentVoidedJournaledEvent e:
+                state.Status = PaymentStatus.Voided;
+                state.VoidedBy = e.VoidedBy;
+                state.VoidedAt = e.OccurredAt;
+                state.VoidReason = e.Reason;
+                break;
+
+            case PaymentRefundedJournaledEvent e:
+                var refund = new RefundInfo
+                {
+                    RefundId = e.RefundId,
+                    Amount = e.Amount,
+                    Reason = e.Reason,
+                    IssuedBy = e.IssuedBy,
+                    IssuedAt = e.OccurredAt,
+                    GatewayReference = e.GatewayReference
+                };
+                state.Refunds.Add(refund);
+                state.RefundedAmount += e.Amount;
+                if (state.RefundedAmount >= state.TotalAmount)
+                    state.Status = PaymentStatus.Refunded;
+                else
+                    state.Status = PaymentStatus.PartiallyRefunded;
+                break;
+
+            case PaymentTipAddedJournaledEvent e:
+                state.TipAmount = e.TipAmount;
+                state.TotalAmount = e.NewTotalAmount;
+                break;
+
+            case PaymentBatchAssignedJournaledEvent e:
+                state.BatchId = e.BatchId;
+                break;
+        }
+    }
+
     private void InitializeStream()
     {
-        var orgId = _state.State.OrganizationId;
+        var orgId = State.OrganizationId;
         _paymentStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
@@ -46,51 +149,49 @@ public class PaymentGrain : Grain, IPaymentGrain
 
     public async Task<PaymentInitiatedResult> InitiateAsync(InitiatePaymentCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.Id != Guid.Empty)
             throw new InvalidOperationException("Payment already exists");
 
         var key = this.GetPrimaryKeyString();
         var (_, _, _, paymentId) = GrainKeys.ParseSiteEntity(key);
+        var now = DateTime.UtcNow;
 
-        _state.State = new PaymentState
+        RaiseEvent(new PaymentInitiatedJournaledEvent
         {
-            Id = paymentId,
+            PaymentId = paymentId,
             OrganizationId = command.OrganizationId,
             SiteId = command.SiteId,
             OrderId = command.OrderId,
             Method = command.Method,
-            Status = PaymentStatus.Initiated,
             Amount = command.Amount,
-            TotalAmount = command.Amount,
             CashierId = command.CashierId,
             CustomerId = command.CustomerId,
             DrawerId = command.DrawerId,
-            CreatedAt = DateTime.UtcNow,
-            Version = 1
-        };
+            OccurredAt = now
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
         InitializeStream();
 
-        // Publish payment initiated event
+        // Publish stream event for integration
         await PaymentStream!.OnNextAsync(new PaymentInitiatedEvent(
             paymentId,
-            _state.State.SiteId,
-            _state.State.OrderId,
-            _state.State.Amount,
-            _state.State.Method.ToString(),
-            _state.State.CustomerId,
-            _state.State.CashierId)
+            State.SiteId,
+            State.OrderId,
+            State.Amount,
+            State.Method.ToString(),
+            State.CustomerId,
+            State.CashierId)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
 
-        return new PaymentInitiatedResult(paymentId, _state.State.CreatedAt);
+        return new PaymentInitiatedResult(paymentId, State.CreatedAt);
     }
 
     public Task<PaymentState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State);
     }
 
     public async Task<PaymentCompletedResult> CompleteCashAsync(CompleteCashPaymentCommand command)
@@ -98,42 +199,50 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Initiated);
 
-        _state.State.AmountTendered = command.AmountTendered;
-        _state.State.TipAmount = command.TipAmount;
-        _state.State.TotalAmount = _state.State.Amount + command.TipAmount;
-        _state.State.ChangeGiven = command.AmountTendered - _state.State.TotalAmount;
-        _state.State.Status = PaymentStatus.Completed;
-        _state.State.CompletedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        var totalAmount = State.Amount + command.TipAmount;
+        var changeGiven = command.AmountTendered - totalAmount;
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new CashPaymentCompletedJournaledEvent
+        {
+            PaymentId = State.Id,
+            AmountTendered = command.AmountTendered,
+            TipAmount = command.TipAmount,
+            TotalAmount = totalAmount,
+            ChangeGiven = changeGiven,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
         await PublishPaymentCompletedEventAsync();
 
-        return new PaymentCompletedResult(_state.State.TotalAmount, _state.State.ChangeGiven);
+        return new PaymentCompletedResult(State.TotalAmount, State.ChangeGiven);
     }
 
     public async Task<PaymentCompletedResult> CompleteCardAsync(ProcessCardPaymentCommand command)
     {
         EnsureExists();
 
-        if (_state.State.Status is not (PaymentStatus.Initiated or PaymentStatus.Authorized))
-            throw new InvalidOperationException($"Invalid status for card completion: {_state.State.Status}");
+        if (State.Status is not (PaymentStatus.Initiated or PaymentStatus.Authorized))
+            throw new InvalidOperationException($"Invalid status for card completion: {State.Status}");
 
-        _state.State.GatewayReference = command.GatewayReference;
-        _state.State.AuthorizationCode = command.AuthorizationCode;
-        _state.State.CardInfo = command.CardInfo;
-        _state.State.GatewayName = command.GatewayName;
-        _state.State.TipAmount = command.TipAmount;
-        _state.State.TotalAmount = _state.State.Amount + command.TipAmount;
-        _state.State.Status = PaymentStatus.Completed;
-        _state.State.CapturedAt = DateTime.UtcNow;
-        _state.State.CompletedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        var totalAmount = State.Amount + command.TipAmount;
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new CardPaymentCompletedJournaledEvent
+        {
+            PaymentId = State.Id,
+            GatewayReference = command.GatewayReference,
+            AuthorizationCode = command.AuthorizationCode,
+            CardInfo = command.CardInfo,
+            GatewayName = command.GatewayName,
+            TipAmount = command.TipAmount,
+            TotalAmount = totalAmount,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
         await PublishPaymentCompletedEventAsync();
 
-        return new PaymentCompletedResult(_state.State.TotalAmount, null);
+        return new PaymentCompletedResult(State.TotalAmount, null);
     }
 
     public async Task<PaymentCompletedResult> CompleteGiftCardAsync(ProcessGiftCardPaymentCommand command)
@@ -141,17 +250,19 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Initiated);
 
-        _state.State.GiftCardId = command.GiftCardId;
-        _state.State.GiftCardNumber = command.CardNumber;
-        _state.State.TotalAmount = _state.State.Amount;
-        _state.State.Status = PaymentStatus.Completed;
-        _state.State.CompletedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        RaiseEvent(new GiftCardPaymentCompletedJournaledEvent
+        {
+            PaymentId = State.Id,
+            GiftCardId = command.GiftCardId,
+            CardNumber = command.CardNumber,
+            TotalAmount = State.Amount,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
         await PublishPaymentCompletedEventAsync();
 
-        return new PaymentCompletedResult(_state.State.TotalAmount, null);
+        return new PaymentCompletedResult(State.TotalAmount, null);
     }
 
     public async Task RequestAuthorizationAsync()
@@ -159,10 +270,12 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Initiated);
 
-        _state.State.Status = PaymentStatus.Authorizing;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentAuthorizationRequestedJournaledEvent
+        {
+            PaymentId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task RecordAuthorizationAsync(string authCode, string gatewayRef, CardInfo cardInfo)
@@ -170,14 +283,15 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Authorizing);
 
-        _state.State.AuthorizationCode = authCode;
-        _state.State.GatewayReference = gatewayRef;
-        _state.State.CardInfo = cardInfo;
-        _state.State.Status = PaymentStatus.Authorized;
-        _state.State.AuthorizedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentAuthorizedJournaledEvent
+        {
+            PaymentId = State.Id,
+            AuthorizationCode = authCode,
+            GatewayReference = gatewayRef,
+            CardInfo = cardInfo,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task RecordDeclineAsync(string declineCode, string reason)
@@ -185,10 +299,14 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Authorizing);
 
-        _state.State.Status = PaymentStatus.Declined;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentDeclinedJournaledEvent
+        {
+            PaymentId = State.Id,
+            DeclineCode = declineCode,
+            Reason = reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task CaptureAsync()
@@ -196,63 +314,55 @@ public class PaymentGrain : Grain, IPaymentGrain
         EnsureExists();
         EnsureStatus(PaymentStatus.Authorized);
 
-        _state.State.Status = PaymentStatus.Captured;
-        _state.State.CapturedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentCapturedJournaledEvent
+        {
+            PaymentId = State.Id,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task<RefundResult> RefundAsync(RefundPaymentCommand command)
     {
         EnsureExists();
 
-        if (_state.State.Status != PaymentStatus.Completed)
+        if (State.Status != PaymentStatus.Completed)
             throw new InvalidOperationException("Can only refund completed payments");
 
-        if (command.Amount > _state.State.TotalAmount - _state.State.RefundedAmount)
+        if (command.Amount > State.TotalAmount - State.RefundedAmount)
             throw new InvalidOperationException("Refund amount exceeds available balance");
 
         var refundId = Guid.NewGuid();
-        var refund = new RefundInfo
+
+        RaiseEvent(new PaymentRefundedJournaledEvent
         {
+            PaymentId = State.Id,
             RefundId = refundId,
             Amount = command.Amount,
             Reason = command.Reason,
             IssuedBy = command.IssuedBy,
-            IssuedAt = DateTime.UtcNow
-        };
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.Refunds.Add(refund);
-        _state.State.RefundedAmount += command.Amount;
-
-        if (_state.State.RefundedAmount >= _state.State.TotalAmount)
-            _state.State.Status = PaymentStatus.Refunded;
-        else
-            _state.State.Status = PaymentStatus.PartiallyRefunded;
-
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        // Publish payment refunded event
+        // Publish stream event for integration
         // For gift card payments, the subscriber will credit the refund back to the gift card
         await PaymentStream!.OnNextAsync(new PaymentRefundedEvent(
-            _state.State.Id,
-            _state.State.SiteId,
-            _state.State.OrderId,
+            State.Id,
+            State.SiteId,
+            State.OrderId,
             refundId,
             command.Amount,
-            _state.State.RefundedAmount,
-            _state.State.Method.ToString(),
+            State.RefundedAmount,
+            State.Method.ToString(),
             command.Reason,
             command.IssuedBy,
-            _state.State.GiftCardId)
+            State.GiftCardId)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
 
-        return new RefundResult(refundId, _state.State.RefundedAmount, _state.State.TotalAmount - _state.State.RefundedAmount);
+        return new RefundResult(refundId, State.RefundedAmount, State.TotalAmount - State.RefundedAmount);
     }
 
     public Task<RefundResult> PartialRefundAsync(RefundPaymentCommand command)
@@ -264,29 +374,31 @@ public class PaymentGrain : Grain, IPaymentGrain
     {
         EnsureExists();
 
-        if (_state.State.Status is PaymentStatus.Voided or PaymentStatus.Refunded)
-            throw new InvalidOperationException($"Cannot void payment with status: {_state.State.Status}");
+        if (State.Status is PaymentStatus.Voided or PaymentStatus.Refunded)
+            throw new InvalidOperationException($"Cannot void payment with status: {State.Status}");
 
-        var voidedAmount = _state.State.TotalAmount;
-        _state.State.Status = PaymentStatus.Voided;
-        _state.State.VoidedBy = command.VoidedBy;
-        _state.State.VoidedAt = DateTime.UtcNow;
-        _state.State.VoidReason = command.Reason;
-        _state.State.Version++;
+        var voidedAmount = State.TotalAmount;
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentVoidedJournaledEvent
+        {
+            PaymentId = State.Id,
+            VoidedBy = command.VoidedBy,
+            Reason = command.Reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        // Publish payment voided event
+        // Publish stream event for integration
         await PaymentStream!.OnNextAsync(new PaymentVoidedEvent(
-            _state.State.Id,
-            _state.State.SiteId,
-            _state.State.OrderId,
+            State.Id,
+            State.SiteId,
+            State.OrderId,
             voidedAmount,
-            _state.State.Method.ToString(),
+            State.Method.ToString(),
             command.Reason,
             command.VoidedBy)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
     }
 
@@ -294,64 +406,71 @@ public class PaymentGrain : Grain, IPaymentGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != PaymentStatus.Completed)
+        if (State.Status != PaymentStatus.Completed)
             throw new InvalidOperationException("Can only adjust tip on completed payments");
 
-        var oldTip = _state.State.TipAmount;
-        _state.State.TipAmount = command.NewTipAmount;
-        _state.State.TotalAmount = _state.State.Amount + command.NewTipAmount;
-        _state.State.Version++;
+        var newTotalAmount = State.Amount + command.NewTipAmount;
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentTipAddedJournaledEvent
+        {
+            PaymentId = State.Id,
+            TipAmount = command.NewTipAmount,
+            NewTotalAmount = newTotalAmount,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task AssignToBatchAsync(Guid batchId)
     {
         EnsureExists();
 
-        _state.State.BatchId = batchId;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PaymentBatchAssignedJournaledEvent
+        {
+            PaymentId = State.Id,
+            BatchId = batchId,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
-    public Task<PaymentStatus> GetStatusAsync() => Task.FromResult(_state.State.Status);
+    public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);
+    public Task<PaymentStatus> GetStatusAsync() => Task.FromResult(State.Status);
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.Id == Guid.Empty)
             throw new InvalidOperationException("Payment does not exist");
     }
 
     private void EnsureStatus(PaymentStatus expected)
     {
-        if (_state.State.Status != expected)
-            throw new InvalidOperationException($"Invalid status. Expected {expected}, got {_state.State.Status}");
+        if (State.Status != expected)
+            throw new InvalidOperationException($"Invalid status. Expected {expected}, got {State.Status}");
     }
 
     private async Task PublishPaymentCompletedEventAsync()
     {
-        // Publish payment completed event via stream
+        // Publish payment completed event via stream for integration
         // This replaces the direct grain call to OrderGrain.RecordPaymentAsync
         // allowing multiple subscribers to react to payment completions
         // For gift card payments, the subscriber will redeem from the gift card
         await PaymentStream!.OnNextAsync(new PaymentCompletedEvent(
-            _state.State.Id,
-            _state.State.SiteId,
-            _state.State.OrderId,
-            _state.State.Amount,
-            _state.State.TipAmount,
-            _state.State.TotalAmount,
-            _state.State.Method.ToString(),
-            _state.State.CustomerId,
-            _state.State.CashierId,
-            _state.State.DrawerId,
-            _state.State.GatewayReference,
-            _state.State.CardInfo?.MaskedNumber,
-            _state.State.GiftCardId)
+            State.Id,
+            State.SiteId,
+            State.OrderId,
+            State.Amount,
+            State.TipAmount,
+            State.TotalAmount,
+            State.Method.ToString(),
+            State.CustomerId,
+            State.CashierId,
+            State.DrawerId,
+            State.GatewayReference,
+            State.CardInfo?.MaskedNumber,
+            State.GiftCardId)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
     }
 }

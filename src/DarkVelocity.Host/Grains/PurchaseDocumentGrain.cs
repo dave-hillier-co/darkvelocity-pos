@@ -1,8 +1,9 @@
 using DarkVelocity.Host.Events;
+using DarkVelocity.Host.Events.JournaledEvents;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Logging;
-using Orleans.Runtime;
+using Orleans.EventSourcing;
 using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
@@ -10,62 +11,167 @@ namespace DarkVelocity.Host.Grains;
 /// <summary>
 /// Grain representing a purchase document (invoice or receipt).
 /// </summary>
-public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class PurchaseDocumentGrain : JournaledGrain<PurchaseDocumentState, IPurchaseDocumentJournaledEvent>, IPurchaseDocumentGrain
 {
-    private readonly IPersistentState<PurchaseDocumentState> _state;
     private readonly ILogger<PurchaseDocumentGrain> _logger;
     private readonly IGrainFactory _grainFactory;
-    private IAsyncStream<IStreamEvent>? _purchaseStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _purchaseStream;
 
     public PurchaseDocumentGrain(
-        [PersistentState("purchase-document", "OrleansStorage")]
-        IPersistentState<PurchaseDocumentState> state,
         IGrainFactory grainFactory,
         ILogger<PurchaseDocumentGrain> logger)
     {
-        _state = state;
         _grainFactory = grainFactory;
         _logger = logger;
     }
 
-    private IAsyncStream<IStreamEvent> GetPurchaseStream()
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        if (_purchaseStream == null && _state.State.OrganizationId != Guid.Empty)
+        _purchaseStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create("purchase-document-events", _state.State.OrganizationId.ToString());
-            _purchaseStream = streamProvider.GetStream<IStreamEvent>(streamId);
+            var streamId = StreamId.Create("purchase-document-events", State.OrganizationId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
+
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    protected override void TransitionState(PurchaseDocumentState state, IPurchaseDocumentJournaledEvent @event)
+    {
+        switch (@event)
+        {
+            case PurchaseDocumentCreatedJournaledEvent e:
+                state.DocumentId = e.DocumentId;
+                state.OrganizationId = e.OrganizationId;
+                state.SiteId = e.SiteId;
+                state.DocumentType = Enum.TryParse<PurchaseDocumentType>(e.DocumentType, out var dt) ? dt : PurchaseDocumentType.Invoice;
+                state.Status = PurchaseDocumentStatus.Received;
+                state.VendorId = e.VendorId;
+                state.VendorName = e.VendorName;
+                state.DocumentDate = e.DocumentDate;
+                state.Source = Enum.TryParse<DocumentSource>(e.Source ?? "", out var ds) ? ds : DocumentSource.Manual;
+                state.CreatedAt = e.OccurredAt;
+                break;
+
+            case PurchaseDocumentProcessingRequestedJournaledEvent:
+                state.Status = PurchaseDocumentStatus.Processing;
+                state.ProcessingError = null;
+                break;
+
+            case PurchaseDocumentExtractionAppliedJournaledEvent e:
+                state.VendorName = e.VendorName ?? state.VendorName;
+                state.DocumentDate = e.DocumentDate ?? state.DocumentDate;
+                state.Total = e.Total ?? state.Total;
+                state.ExtractionConfidence = e.Confidence;
+                state.ProcessorVersion = e.ProcessorVersion;
+                state.Status = PurchaseDocumentStatus.Extracted;
+                state.ProcessedAt = e.OccurredAt;
+                break;
+
+            case PurchaseDocumentExtractionFailedJournaledEvent e:
+                state.Status = PurchaseDocumentStatus.Failed;
+                state.ProcessingError = e.Reason;
+                break;
+
+            case PurchaseDocumentLineMappedJournaledEvent e:
+                if (e.LineIndex >= 0 && e.LineIndex < state.Lines.Count)
+                {
+                    var line = state.Lines[e.LineIndex];
+                    state.Lines[e.LineIndex] = line with
+                    {
+                        MappedIngredientId = e.IngredientId,
+                        MappedIngredientSku = e.IngredientSku,
+                        MappedIngredientName = e.IngredientName,
+                        MappingSource = Enum.TryParse<MappingSource>(e.MappingSource, out var ms) ? ms : State.MappingSource.Manual,
+                        MappingConfidence = e.Confidence,
+                        Suggestions = null
+                    };
+                }
+                break;
+
+            case PurchaseDocumentLineUnmappedJournaledEvent e:
+                if (e.LineIndex >= 0 && e.LineIndex < state.Lines.Count)
+                {
+                    var line = state.Lines[e.LineIndex];
+                    state.Lines[e.LineIndex] = line with
+                    {
+                        MappedIngredientId = null,
+                        MappedIngredientSku = null,
+                        MappedIngredientName = null,
+                        MappingSource = null,
+                        MappingConfidence = 0
+                    };
+                }
+                break;
+
+            case PurchaseDocumentLineModifiedJournaledEvent e:
+                if (e.LineIndex >= 0 && e.LineIndex < state.Lines.Count)
+                {
+                    var line = state.Lines[e.LineIndex];
+                    state.Lines[e.LineIndex] = line with
+                    {
+                        Description = e.Description ?? line.Description,
+                        Quantity = e.Quantity ?? line.Quantity,
+                        Unit = e.Unit ?? line.Unit,
+                        UnitPrice = e.UnitPrice ?? line.UnitPrice,
+                        TotalPrice = (e.Quantity ?? line.Quantity) * (e.UnitPrice ?? line.UnitPrice)
+                    };
+                }
+                break;
+
+            case PurchaseDocumentConfirmedJournaledEvent e:
+                if (e.VendorId.HasValue) state.VendorId = e.VendorId;
+                if (e.VendorName != null) state.VendorName = e.VendorName;
+                if (e.DocumentDate.HasValue) state.DocumentDate = e.DocumentDate;
+                state.Status = PurchaseDocumentStatus.Confirmed;
+                state.ConfirmedAt = e.OccurredAt;
+                state.ConfirmedBy = e.ConfirmedBy;
+                break;
+
+            case PurchaseDocumentRejectedJournaledEvent e:
+                state.Status = PurchaseDocumentStatus.Rejected;
+                state.RejectedAt = e.OccurredAt;
+                state.RejectedBy = e.RejectedBy;
+                state.RejectionReason = e.Reason;
+                break;
         }
-        return _purchaseStream!;
     }
 
     public async Task<PurchaseDocumentSnapshot> ReceiveAsync(ReceivePurchaseDocumentCommand command)
     {
-        if (_state.State.DocumentId != Guid.Empty)
+        if (State.DocumentId != Guid.Empty)
             throw new InvalidOperationException("Document already exists");
 
         var isPaid = command.IsPaid ?? (command.DocumentType == PurchaseDocumentType.Receipt);
 
-        _state.State = new PurchaseDocumentState
+        RaiseEvent(new PurchaseDocumentCreatedJournaledEvent
         {
             DocumentId = command.DocumentId,
             OrganizationId = command.OrganizationId,
             SiteId = command.SiteId,
-            DocumentType = command.DocumentType,
-            Status = PurchaseDocumentStatus.Received,
-            Source = command.Source,
-            StorageUrl = command.StorageUrl,
-            OriginalFilename = command.OriginalFilename,
-            ContentType = command.ContentType,
-            FileSizeBytes = command.FileSizeBytes,
-            EmailFrom = command.EmailFrom,
-            EmailSubject = command.EmailSubject,
-            IsPaid = isPaid,
-            CreatedAt = DateTime.UtcNow,
-            Version = 1
-        };
+            DocumentType = command.DocumentType.ToString(),
+            DocumentNumber = "",
+            VendorId = Guid.Empty,
+            VendorName = "",
+            DocumentDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Source = command.Source.ToString(),
+            CreatedBy = Guid.Empty,
+            OccurredAt = DateTime.UtcNow
+        });
 
-        await _state.WriteStateAsync();
+        // Apply additional fields not in journaled event
+        State.Source = command.Source;
+        State.StorageUrl = command.StorageUrl;
+        State.OriginalFilename = command.OriginalFilename;
+        State.ContentType = command.ContentType;
+        State.FileSizeBytes = command.FileSizeBytes;
+        State.EmailFrom = command.EmailFrom;
+        State.EmailSubject = command.EmailSubject;
+        State.IsPaid = isPaid;
+
+        await ConfirmEvents();
 
         _logger.LogInformation(
             "Purchase document received: {DocumentId} ({Type}) from {Source}",
@@ -80,18 +186,20 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != PurchaseDocumentStatus.Received &&
-            _state.State.Status != PurchaseDocumentStatus.Failed)
+        if (State.Status != PurchaseDocumentStatus.Received &&
+            State.Status != PurchaseDocumentStatus.Failed)
         {
-            throw new InvalidOperationException($"Cannot process document in status {_state.State.Status}");
+            throw new InvalidOperationException($"Cannot process document in status {State.Status}");
         }
 
-        _state.State.Status = PurchaseDocumentStatus.Processing;
-        _state.State.ProcessingError = null;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new PurchaseDocumentProcessingRequestedJournaledEvent
+        {
+            DocumentId = State.DocumentId,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
-        _logger.LogInformation("Processing requested for document: {DocumentId}", _state.State.DocumentId);
+        _logger.LogInformation("Processing requested for document: {DocumentId}", State.DocumentId);
     }
 
     public async Task ApplyExtractionResultAsync(ApplyExtractionResultCommand command)
@@ -100,34 +208,43 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
 
         var data = command.Data;
 
+        RaiseEvent(new PurchaseDocumentExtractionAppliedJournaledEvent
+        {
+            DocumentId = State.DocumentId,
+            VendorName = data.VendorName,
+            DocumentDate = data.DocumentDate,
+            Total = data.Total,
+            LineCount = data.Lines.Count,
+            Confidence = command.Confidence,
+            ProcessorVersion = command.ProcessorVersion,
+            OccurredAt = DateTime.UtcNow
+        });
+
         // Apply extracted vendor info
-        _state.State.VendorName = data.VendorName;
-        _state.State.VendorAddress = data.VendorAddress;
-        _state.State.VendorPhone = data.VendorPhone;
+        State.VendorAddress = data.VendorAddress;
+        State.VendorPhone = data.VendorPhone;
 
         // Invoice-specific
-        _state.State.InvoiceNumber = data.InvoiceNumber;
-        _state.State.PurchaseOrderNumber = data.PurchaseOrderNumber;
-        _state.State.DueDate = data.DueDate;
-        _state.State.PaymentTerms = data.PaymentTerms;
+        State.InvoiceNumber = data.InvoiceNumber;
+        State.PurchaseOrderNumber = data.PurchaseOrderNumber;
+        State.DueDate = data.DueDate;
+        State.PaymentTerms = data.PaymentTerms;
 
         // Receipt-specific
-        _state.State.TransactionTime = data.TransactionTime;
-        _state.State.PaymentMethod = data.PaymentMethod;
-        _state.State.CardLastFour = data.CardLastFour;
+        State.TransactionTime = data.TransactionTime;
+        State.PaymentMethod = data.PaymentMethod;
+        State.CardLastFour = data.CardLastFour;
 
         // Common fields
-        _state.State.DocumentDate = data.DocumentDate;
-        _state.State.Subtotal = data.Subtotal;
-        _state.State.Tax = data.Tax;
-        _state.State.Tip = data.Tip;
-        _state.State.DeliveryFee = data.DeliveryFee;
-        _state.State.Total = data.Total;
+        State.Subtotal = data.Subtotal;
+        State.Tax = data.Tax;
+        State.Tip = data.Tip;
+        State.DeliveryFee = data.DeliveryFee;
         if (!string.IsNullOrEmpty(data.Currency))
-            _state.State.Currency = data.Currency;
+            State.Currency = data.Currency;
 
         // Convert line items
-        _state.State.Lines = data.Lines.Select((line, index) => new PurchaseDocumentLine
+        State.Lines = data.Lines.Select((line, index) => new PurchaseDocumentLine
         {
             LineIndex = index,
             Description = line.Description,
@@ -139,18 +256,12 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
             ExtractionConfidence = line.Confidence
         }).ToList();
 
-        _state.State.ExtractionConfidence = command.Confidence;
-        _state.State.ProcessorVersion = command.ProcessorVersion;
-        _state.State.Status = PurchaseDocumentStatus.Extracted;
-        _state.State.ProcessedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
 
         _logger.LogInformation(
             "Extraction completed for document: {DocumentId}, {LineCount} lines, confidence: {Confidence:P0}",
-            _state.State.DocumentId,
-            _state.State.Lines.Count,
+            State.DocumentId,
+            State.Lines.Count,
             command.Confidence);
 
         // Attempt auto-mapping for all lines
@@ -162,34 +273,34 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
     /// </summary>
     private async Task AttemptAutoMappingAsync()
     {
-        if (string.IsNullOrEmpty(_state.State.VendorName))
+        if (string.IsNullOrEmpty(State.VendorName))
             return;
 
         // Get or create the vendor mapping grain
-        var vendorId = NormalizeVendorId(_state.State.VendorName);
+        var vendorId = NormalizeVendorId(State.VendorName);
         var mappingGrain = _grainFactory.GetGrain<IVendorItemMappingGrain>(
-            GrainKeys.VendorItemMapping(_state.State.OrganizationId, vendorId));
+            GrainKeys.VendorItemMapping(State.OrganizationId, vendorId));
 
         // Initialize if needed
         if (!await mappingGrain.ExistsAsync())
         {
-            var vendorType = _state.State.DocumentType == PurchaseDocumentType.Receipt
+            var vendorType = State.DocumentType == PurchaseDocumentType.Receipt
                 ? VendorType.RetailStore
                 : VendorType.Supplier;
 
             await mappingGrain.InitializeAsync(new InitializeVendorMappingCommand(
-                _state.State.OrganizationId,
+                State.OrganizationId,
                 vendorId,
-                _state.State.VendorName,
+                State.VendorName,
                 vendorType));
         }
 
         var mappedCount = 0;
         var suggestedCount = 0;
 
-        for (var i = 0; i < _state.State.Lines.Count; i++)
+        for (var i = 0; i < State.Lines.Count; i++)
         {
-            var line = _state.State.Lines[i];
+            var line = State.Lines[i];
 
             // Skip if already mapped
             if (line.MappedIngredientId.HasValue)
@@ -200,20 +311,23 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
 
             if (result.Found && result.Mapping != null)
             {
-                _state.State.Lines[i] = line with
+                RaiseEvent(new PurchaseDocumentLineMappedJournaledEvent
                 {
-                    MappedIngredientId = result.Mapping.IngredientId,
-                    MappedIngredientSku = result.Mapping.IngredientSku,
-                    MappedIngredientName = result.Mapping.IngredientName,
-                    MappingSource = MappingSource.Auto,
-                    MappingConfidence = result.Mapping.Confidence
-                };
+                    DocumentId = State.DocumentId,
+                    LineIndex = i,
+                    IngredientId = result.Mapping.IngredientId,
+                    IngredientSku = result.Mapping.IngredientSku,
+                    IngredientName = result.Mapping.IngredientName,
+                    MappingSource = MappingSource.Auto.ToString(),
+                    Confidence = result.Mapping.Confidence,
+                    OccurredAt = DateTime.UtcNow
+                });
                 mappedCount++;
 
                 // Record the usage
                 await mappingGrain.RecordUsageAsync(new RecordMappingUsageCommand(
                     line.Description,
-                    _state.State.DocumentId));
+                    State.DocumentId));
             }
             else
             {
@@ -221,7 +335,7 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
                 var suggestions = await mappingGrain.GetSuggestionsAsync(line.Description, null, 3);
                 if (suggestions.Count > 0)
                 {
-                    _state.State.Lines[i] = line with
+                    State.Lines[i] = line with
                     {
                         Suggestions = suggestions.Select(s => new SuggestedMapping
                         {
@@ -237,14 +351,16 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
             }
         }
 
+        if (mappedCount > 0)
+        {
+            await ConfirmEvents();
+        }
+
         if (mappedCount > 0 || suggestedCount > 0)
         {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
-
             _logger.LogInformation(
                 "Auto-mapping for document {DocumentId}: {MappedCount} auto-mapped, {SuggestedCount} with suggestions",
-                _state.State.DocumentId,
+                State.DocumentId,
                 mappedCount,
                 suggestedCount);
         }
@@ -281,17 +397,21 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
     {
         EnsureExists();
 
-        _state.State.Status = PurchaseDocumentStatus.Failed;
-        _state.State.ProcessingError = command.FailureReason;
+        var reason = command.FailureReason;
         if (!string.IsNullOrEmpty(command.ProcessorError))
-            _state.State.ProcessingError += $" ({command.ProcessorError})";
-        _state.State.Version++;
+            reason += $" ({command.ProcessorError})";
 
-        await _state.WriteStateAsync();
+        RaiseEvent(new PurchaseDocumentExtractionFailedJournaledEvent
+        {
+            DocumentId = State.DocumentId,
+            Reason = reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         _logger.LogWarning(
             "Extraction failed for document: {DocumentId}, reason: {Reason}",
-            _state.State.DocumentId,
+            State.DocumentId,
             command.FailureReason);
     }
 
@@ -301,22 +421,21 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
         EnsureExtracted();
 
         var lineIndex = command.LineIndex;
-        if (lineIndex < 0 || lineIndex >= _state.State.Lines.Count)
+        if (lineIndex < 0 || lineIndex >= State.Lines.Count)
             throw new ArgumentOutOfRangeException(nameof(command.LineIndex));
 
-        var existingLine = _state.State.Lines[lineIndex];
-        _state.State.Lines[lineIndex] = existingLine with
+        RaiseEvent(new PurchaseDocumentLineMappedJournaledEvent
         {
-            MappedIngredientId = command.IngredientId,
-            MappedIngredientSku = command.IngredientSku,
-            MappedIngredientName = command.IngredientName,
-            MappingSource = command.Source,
-            MappingConfidence = command.Confidence,
-            Suggestions = null // Clear suggestions when mapped
-        };
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            DocumentId = State.DocumentId,
+            LineIndex = lineIndex,
+            IngredientId = command.IngredientId,
+            IngredientSku = command.IngredientSku,
+            IngredientName = command.IngredientName,
+            MappingSource = command.Source.ToString(),
+            Confidence = command.Confidence,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         _logger.LogDebug(
             "Line {LineIndex} mapped to {IngredientSku} via {Source}",
@@ -331,21 +450,16 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
         EnsureExtracted();
 
         var lineIndex = command.LineIndex;
-        if (lineIndex < 0 || lineIndex >= _state.State.Lines.Count)
+        if (lineIndex < 0 || lineIndex >= State.Lines.Count)
             throw new ArgumentOutOfRangeException(nameof(command.LineIndex));
 
-        var existingLine = _state.State.Lines[lineIndex];
-        _state.State.Lines[lineIndex] = existingLine with
+        RaiseEvent(new PurchaseDocumentLineUnmappedJournaledEvent
         {
-            MappedIngredientId = null,
-            MappedIngredientSku = null,
-            MappedIngredientName = null,
-            MappingSource = null,
-            MappingConfidence = 0
-        };
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            DocumentId = State.DocumentId,
+            LineIndex = lineIndex,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task UpdateLineAsync(UpdateLineCommand command)
@@ -354,21 +468,20 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
         EnsureExtracted();
 
         var lineIndex = command.LineIndex;
-        if (lineIndex < 0 || lineIndex >= _state.State.Lines.Count)
+        if (lineIndex < 0 || lineIndex >= State.Lines.Count)
             throw new ArgumentOutOfRangeException(nameof(command.LineIndex));
 
-        var existingLine = _state.State.Lines[lineIndex];
-        _state.State.Lines[lineIndex] = existingLine with
+        RaiseEvent(new PurchaseDocumentLineModifiedJournaledEvent
         {
-            Description = command.Description ?? existingLine.Description,
-            Quantity = command.Quantity ?? existingLine.Quantity,
-            Unit = command.Unit ?? existingLine.Unit,
-            UnitPrice = command.UnitPrice ?? existingLine.UnitPrice,
-            TotalPrice = (command.Quantity ?? existingLine.Quantity) * (command.UnitPrice ?? existingLine.UnitPrice)
-        };
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            DocumentId = State.DocumentId,
+            LineIndex = lineIndex,
+            Description = command.Description,
+            Quantity = command.Quantity,
+            Unit = command.Unit,
+            UnitPrice = command.UnitPrice,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task SetLineSuggestionsAsync(int lineIndex, IReadOnlyList<SuggestedMapping> suggestions)
@@ -376,17 +489,16 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
         EnsureExists();
         EnsureExtracted();
 
-        if (lineIndex < 0 || lineIndex >= _state.State.Lines.Count)
+        if (lineIndex < 0 || lineIndex >= State.Lines.Count)
             throw new ArgumentOutOfRangeException(nameof(lineIndex));
 
-        var existingLine = _state.State.Lines[lineIndex];
-        _state.State.Lines[lineIndex] = existingLine with
+        var existingLine = State.Lines[lineIndex];
+        State.Lines[lineIndex] = existingLine with
         {
             Suggestions = suggestions.ToList()
         };
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        // No journaled event for suggestions - they are transient
     }
 
     public async Task<PurchaseDocumentSnapshot> ConfirmAsync(ConfirmPurchaseDocumentCommand command)
@@ -394,31 +506,30 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
         EnsureExists();
         EnsureExtracted();
 
-        // Apply any overrides from the command
-        if (command.VendorId.HasValue)
-            _state.State.VendorId = command.VendorId;
-        if (!string.IsNullOrEmpty(command.VendorName))
-            _state.State.VendorName = command.VendorName;
-        if (command.DocumentDate.HasValue)
-            _state.State.DocumentDate = command.DocumentDate;
+        RaiseEvent(new PurchaseDocumentConfirmedJournaledEvent
+        {
+            DocumentId = State.DocumentId,
+            ConfirmedBy = command.ConfirmedBy,
+            VendorId = command.VendorId,
+            VendorName = command.VendorName,
+            DocumentDate = command.DocumentDate,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        // Apply currency if provided
         if (!string.IsNullOrEmpty(command.Currency))
-            _state.State.Currency = command.Currency;
+            State.Currency = command.Currency;
 
-        _state.State.Status = PurchaseDocumentStatus.Confirmed;
-        _state.State.ConfirmedAt = DateTime.UtcNow;
-        _state.State.ConfirmedBy = command.ConfirmedBy;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
 
         // Publish confirmed event for downstream processing
         var confirmedData = new ConfirmedDocumentData
         {
-            VendorId = _state.State.VendorId,
-            VendorName = _state.State.VendorName ?? "Unknown",
-            DocumentDate = _state.State.DocumentDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
-            InvoiceNumber = _state.State.InvoiceNumber,
-            Lines = _state.State.Lines.Select(l => new ConfirmedLineItem
+            VendorId = State.VendorId,
+            VendorName = State.VendorName ?? "Unknown",
+            DocumentDate = State.DocumentDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+            InvoiceNumber = State.InvoiceNumber,
+            Lines = State.Lines.Select(l => new ConfirmedLineItem
             {
                 Description = l.Description,
                 Quantity = l.Quantity ?? 1,
@@ -429,20 +540,20 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
                 IngredientSku = l.MappedIngredientSku,
                 MappingSource = l.MappingSource
             }).ToList(),
-            Total = _state.State.Total ?? 0,
-            Tax = _state.State.Tax ?? 0,
-            Currency = _state.State.Currency,
-            IsPaid = _state.State.IsPaid,
-            DueDate = _state.State.DueDate
+            Total = State.Total ?? 0,
+            Tax = State.Tax ?? 0,
+            Currency = State.Currency,
+            IsPaid = State.IsPaid,
+            DueDate = State.DueDate
         };
 
-        await GetPurchaseStream().OnNextAsync(new PurchaseDocumentConfirmedEvent(
-            _state.State.DocumentId,
-            _state.State.SiteId,
-            _state.State.DocumentType,
+        await _purchaseStream!.Value.OnNextAsync(new PurchaseDocumentConfirmedEvent(
+            State.DocumentId,
+            State.SiteId,
+            State.DocumentType,
             confirmedData)
         {
-            OrganizationId = _state.State.OrganizationId
+            OrganizationId = State.OrganizationId
         });
 
         // Learn mappings from confirmed lines
@@ -450,7 +561,7 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
 
         _logger.LogInformation(
             "Purchase document confirmed: {DocumentId} by {UserId}",
-            _state.State.DocumentId,
+            State.DocumentId,
             command.ConfirmedBy);
 
         return ToSnapshot();
@@ -461,16 +572,16 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
     /// </summary>
     private async Task LearnMappingsFromConfirmationAsync(Guid confirmedBy)
     {
-        if (string.IsNullOrEmpty(_state.State.VendorName))
+        if (string.IsNullOrEmpty(State.VendorName))
             return;
 
-        var vendorId = NormalizeVendorId(_state.State.VendorName);
+        var vendorId = NormalizeVendorId(State.VendorName);
         var mappingGrain = _grainFactory.GetGrain<IVendorItemMappingGrain>(
-            GrainKeys.VendorItemMapping(_state.State.OrganizationId, vendorId));
+            GrainKeys.VendorItemMapping(State.OrganizationId, vendorId));
 
         var learnedCount = 0;
 
-        foreach (var line in _state.State.Lines)
+        foreach (var line in State.Lines)
         {
             // Only learn from manually mapped or suggested mappings (not auto-mapped)
             if (!line.MappedIngredientId.HasValue)
@@ -487,7 +598,7 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
                 line.MappingSource ?? MappingSource.Manual,
                 line.MappingConfidence,
                 line.ProductCode,
-                _state.State.DocumentId,
+                State.DocumentId,
                 confirmedBy,
                 line.UnitPrice,
                 line.Unit));
@@ -500,7 +611,7 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
             _logger.LogInformation(
                 "Learned {Count} mappings from confirmed document {DocumentId}",
                 learnedCount,
-                _state.State.DocumentId);
+                State.DocumentId);
         }
     }
 
@@ -508,17 +619,18 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
     {
         EnsureExists();
 
-        _state.State.Status = PurchaseDocumentStatus.Rejected;
-        _state.State.RejectedAt = DateTime.UtcNow;
-        _state.State.RejectedBy = command.RejectedBy;
-        _state.State.RejectionReason = command.Reason;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new PurchaseDocumentRejectedJournaledEvent
+        {
+            DocumentId = State.DocumentId,
+            RejectedBy = command.RejectedBy,
+            Reason = command.Reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
 
         _logger.LogInformation(
             "Purchase document rejected: {DocumentId}, reason: {Reason}",
-            _state.State.DocumentId,
+            State.DocumentId,
             command.Reason);
     }
 
@@ -529,44 +641,44 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
 
     public Task<PurchaseDocumentState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State);
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.DocumentId != Guid.Empty);
+        return Task.FromResult(State.DocumentId != Guid.Empty);
     }
 
     private void EnsureExists()
     {
-        if (_state.State.DocumentId == Guid.Empty)
+        if (State.DocumentId == Guid.Empty)
             throw new InvalidOperationException("Document not initialized");
     }
 
     private void EnsureExtracted()
     {
-        if (_state.State.Status != PurchaseDocumentStatus.Extracted &&
-            _state.State.Status != PurchaseDocumentStatus.Confirmed)
+        if (State.Status != PurchaseDocumentStatus.Extracted &&
+            State.Status != PurchaseDocumentStatus.Confirmed)
         {
-            throw new InvalidOperationException($"Document not in extracted state (current: {_state.State.Status})");
+            throw new InvalidOperationException($"Document not in extracted state (current: {State.Status})");
         }
     }
 
     private PurchaseDocumentSnapshot ToSnapshot()
     {
         return new PurchaseDocumentSnapshot(
-            _state.State.DocumentId,
-            _state.State.OrganizationId,
-            _state.State.SiteId,
-            _state.State.DocumentType,
-            _state.State.Status,
-            _state.State.Source,
-            _state.State.StorageUrl,
-            _state.State.OriginalFilename,
-            _state.State.VendorName,
-            _state.State.DocumentDate,
-            _state.State.InvoiceNumber,
-            _state.State.Lines.Select(l => new PurchaseDocumentLineSnapshot(
+            State.DocumentId,
+            State.OrganizationId,
+            State.SiteId,
+            State.DocumentType,
+            State.Status,
+            State.Source,
+            State.StorageUrl,
+            State.OriginalFilename,
+            State.VendorName,
+            State.DocumentDate,
+            State.InvoiceNumber,
+            State.Lines.Select(l => new PurchaseDocumentLineSnapshot(
                 l.LineIndex,
                 l.Description,
                 l.Quantity,
@@ -579,14 +691,14 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
                 l.MappingSource,
                 l.MappingConfidence,
                 l.Suggestions)).ToList(),
-            _state.State.Total,
-            _state.State.Currency,
-            _state.State.IsPaid,
-            _state.State.ExtractionConfidence,
-            _state.State.ProcessingError,
-            _state.State.CreatedAt,
-            _state.State.ConfirmedAt,
-            _state.State.Version);
+            State.Total,
+            State.Currency,
+            State.IsPaid,
+            State.ExtractionConfidence,
+            State.ProcessingError,
+            State.CreatedAt,
+            State.ConfirmedAt,
+            Version);
     }
 }
 
