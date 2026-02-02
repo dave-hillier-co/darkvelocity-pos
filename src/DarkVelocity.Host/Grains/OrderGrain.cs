@@ -10,8 +10,8 @@ namespace DarkVelocity.Host.Grains;
 public class OrderGrain : Grain, IOrderGrain
 {
     private readonly IPersistentState<OrderState> _state;
-    private IAsyncStream<IStreamEvent>? _orderStream;
-    private IAsyncStream<IStreamEvent>? _salesStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _orderStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _salesStream;
     private static int _orderCounter = 1000;
 
     public OrderGrain(
@@ -21,27 +21,34 @@ public class OrderGrain : Grain, IOrderGrain
         _state = state;
     }
 
-    private IAsyncStream<IStreamEvent> GetOrderStream()
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        if (_orderStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_state.State.OrganizationId != Guid.Empty)
         {
-            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, _state.State.OrganizationId.ToString());
-            _orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+            InitializeStreams();
         }
-        return _orderStream!;
+        return base.OnActivateAsync(cancellationToken);
     }
 
-    private IAsyncStream<IStreamEvent> GetSalesStream()
+    private void InitializeStreams()
     {
-        if (_salesStream == null && _state.State.OrganizationId != Guid.Empty)
+        var orgId = _state.State.OrganizationId;
+        _orderStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var salesStreamId = StreamId.Create(StreamConstants.SalesStreamNamespace, _state.State.OrganizationId.ToString());
-            _salesStream = streamProvider.GetStream<IStreamEvent>(salesStreamId);
-        }
-        return _salesStream!;
+            var streamId = StreamId.Create(StreamConstants.OrderStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
+        _salesStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.SalesStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
     }
+
+    private IAsyncStream<IStreamEvent>? OrderStream => _orderStream?.Value;
+    private IAsyncStream<IStreamEvent>? SalesStream => _salesStream?.Value;
 
     public async Task<OrderCreatedResult> CreateAsync(CreateOrderCommand command)
     {
@@ -71,11 +78,12 @@ public class OrderGrain : Grain, IOrderGrain
         };
 
         await _state.WriteStateAsync();
+        InitializeStreams();
 
         // Publish order created event
-        if (GetOrderStream() != null)
+        if (OrderStream != null)
         {
-            await GetOrderStream().OnNextAsync(new OrderCreatedEvent(
+            await OrderStream.OnNextAsync(new OrderCreatedEvent(
                 orderId,
                 siteId,
                 orderNumber,
@@ -128,9 +136,9 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish line added event
-        if (GetOrderStream() != null)
+        if (OrderStream != null)
         {
-            await GetOrderStream().OnNextAsync(new OrderLineAddedEvent(
+            await OrderStream.OnNextAsync(new OrderLineAddedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 lineId,
@@ -243,7 +251,7 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish OrderSentToKitchenEvent for kitchen domain to create tickets
-        if (GetOrderStream() != null)
+        if (OrderStream != null)
         {
             var kitchenLines = pendingLines.Select(l => new KitchenLineItem(
                 LineId: l.Id,
@@ -253,7 +261,7 @@ public class OrderGrain : Grain, IOrderGrain
                 Modifiers: l.Modifiers?.Select(m => m.Name).ToList(),
                 SpecialInstructions: l.Notes)).ToList();
 
-            await GetOrderStream().OnNextAsync(new OrderSentToKitchenEvent(
+            await OrderStream.OnNextAsync(new OrderSentToKitchenEvent(
                 OrderId: _state.State.Id,
                 SiteId: _state.State.SiteId,
                 OrderNumber: _state.State.OrderNumber,
@@ -468,9 +476,9 @@ public class OrderGrain : Grain, IOrderGrain
             .ToList();
 
         // Publish order completed event (triggers loyalty, inventory, reporting)
-        if (GetOrderStream() != null)
+        if (OrderStream != null)
         {
-            await GetOrderStream().OnNextAsync(new OrderCompletedEvent(
+            await OrderStream.OnNextAsync(new OrderCompletedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.OrderNumber,
@@ -491,9 +499,9 @@ public class OrderGrain : Grain, IOrderGrain
         }
 
         // Publish sale recorded event (triggers sales aggregation)
-        if (GetSalesStream() != null)
+        if (SalesStream != null)
         {
-            await GetSalesStream().OnNextAsync(new SaleRecordedEvent(
+            await SalesStream.OnNextAsync(new SaleRecordedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 DateOnly.FromDateTime(_state.State.ClosedAt.Value),
@@ -528,9 +536,9 @@ public class OrderGrain : Grain, IOrderGrain
         await _state.WriteStateAsync();
 
         // Publish order voided event
-        if (GetOrderStream() != null)
+        if (OrderStream != null)
         {
-            await GetOrderStream().OnNextAsync(new OrderVoidedEvent(
+            await OrderStream.OnNextAsync(new OrderVoidedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 _state.State.OrderNumber,
@@ -543,9 +551,9 @@ public class OrderGrain : Grain, IOrderGrain
         }
 
         // Publish void recorded event for sales aggregation
-        if (GetSalesStream() != null)
+        if (SalesStream != null)
         {
-            await GetSalesStream().OnNextAsync(new VoidRecordedEvent(
+            await SalesStream.OnNextAsync(new VoidRecordedEvent(
                 _state.State.Id,
                 _state.State.SiteId,
                 DateOnly.FromDateTime(DateTime.UtcNow),

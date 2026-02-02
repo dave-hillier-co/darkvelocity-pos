@@ -13,9 +13,9 @@ public class InventoryGrain : Grain, IInventoryGrain
     private readonly IPersistentState<InventoryState> _state;
     private readonly IGrainFactory _grainFactory;
     private readonly ILogger<InventoryGrain> _logger;
-    private IAsyncStream<IStreamEvent>? _inventoryStream;
-    private IAsyncStream<IStreamEvent>? _alertStream;
-    private ILedgerGrain? _ledger;
+    private Lazy<IAsyncStream<IStreamEvent>>? _inventoryStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _alertStream;
+    private Lazy<ILedgerGrain>? _ledger;
 
     public InventoryGrain(
         [PersistentState("inventory", "OrleansStorage")]
@@ -28,44 +28,45 @@ public class InventoryGrain : Grain, IInventoryGrain
         _logger = logger;
     }
 
-    private ILedgerGrain GetLedger()
-    {
-        if (_ledger == null && _state.State.OrganizationId != Guid.Empty)
-        {
-            // Key format: org:{orgId}:ledger:inventory:{siteId}:{ingredientId}
-            var ledgerKey = GrainKeys.InventoryLedger(_state.State.OrganizationId, _state.State.SiteId, _state.State.IngredientId);
-            _ledger = _grainFactory.GetGrain<ILedgerGrain>(ledgerKey);
-        }
-        return _ledger!;
-    }
-
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        // Streams will be lazily initialized when first operation occurs
+        if (_state.State.OrganizationId != Guid.Empty)
+        {
+            InitializeLazyFields();
+        }
         return base.OnActivateAsync(cancellationToken);
     }
 
-    private IAsyncStream<IStreamEvent> GetInventoryStream()
+    private void InitializeLazyFields()
     {
-        if (_inventoryStream == null && _state.State.OrganizationId != Guid.Empty)
+        var orgId = _state.State.OrganizationId;
+        var siteId = _state.State.SiteId;
+        var ingredientId = _state.State.IngredientId;
+
+        _ledger = new Lazy<ILedgerGrain>(() =>
+        {
+            var ledgerKey = GrainKeys.InventoryLedger(orgId, siteId, ingredientId);
+            return _grainFactory.GetGrain<ILedgerGrain>(ledgerKey);
+        });
+
+        _inventoryStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, _state.State.OrganizationId.ToString());
-            _inventoryStream = streamProvider.GetStream<IStreamEvent>(streamId);
-        }
-        return _inventoryStream!;
+            var streamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
+
+        _alertStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
     }
 
-    private IAsyncStream<IStreamEvent> GetAlertStream()
-    {
-        if (_alertStream == null && _state.State.OrganizationId != Guid.Empty)
-        {
-            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.AlertStreamNamespace, _state.State.OrganizationId.ToString());
-            _alertStream = streamProvider.GetStream<IStreamEvent>(streamId);
-        }
-        return _alertStream!;
-    }
+    private ILedgerGrain Ledger => _ledger!.Value;
+    private IAsyncStream<IStreamEvent> InventoryStream => _inventoryStream!.Value;
+    private IAsyncStream<IStreamEvent> AlertStream => _alertStream!.Value;
 
     public async Task InitializeAsync(InitializeInventoryCommand command)
     {
@@ -87,9 +88,10 @@ public class InventoryGrain : Grain, IInventoryGrain
         };
 
         await _state.WriteStateAsync();
+        InitializeLazyFields();
 
         // Initialize the ledger for quantity tracking
-        await GetLedger().InitializeAsync(command.OrganizationId);
+        await Ledger.InitializeAsync(command.OrganizationId);
     }
 
     public Task<InventoryState> GetStateAsync()
@@ -124,7 +126,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         _state.State.LastReceivedAt = DateTime.UtcNow;
 
         // Credit ledger with received quantity
-        var ledgerResult = await GetLedger().CreditAsync(
+        var ledgerResult = await Ledger.CreditAsync(
             command.Quantity,
             "receipt",
             "Batch received",
@@ -142,7 +144,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         await _state.WriteStateAsync();
 
         // Publish stock received event
-        await GetInventoryStream().OnNextAsync(new StockReceivedEvent(
+        await InventoryStream.OnNextAsync(new StockReceivedEvent(
             _state.State.IngredientId,
             _state.State.SiteId,
             _state.State.IngredientName,
@@ -190,7 +192,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         _state.State.LastReceivedAt = DateTime.UtcNow;
 
         // Credit ledger with transferred quantity
-        await GetLedger().CreditAsync(
+        await Ledger.CreditAsync(
             command.Quantity,
             "transfer_in",
             $"Transfer from site {command.SourceSiteId}",
@@ -214,7 +216,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         EnsureExists();
 
         // Check ledger balance for sufficient stock
-        var hasSufficient = await GetLedger().HasSufficientBalanceAsync(command.Quantity);
+        var hasSufficient = await Ledger.HasSufficientBalanceAsync(command.Quantity);
         if (!hasSufficient)
             throw new InvalidOperationException("Insufficient stock");
 
@@ -223,7 +225,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         var totalCost = breakdown.Sum(b => b.TotalCost);
 
         // Debit ledger for consumed quantity
-        var ledgerResult = await GetLedger().DebitAsync(
+        var ledgerResult = await Ledger.DebitAsync(
             command.Quantity,
             "consumption",
             command.Reason,
@@ -244,7 +246,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         await _state.WriteStateAsync();
 
         // Publish stock consumed event
-        await GetInventoryStream().OnNextAsync(new StockConsumedEvent(
+        await InventoryStream.OnNextAsync(new StockConsumedEvent(
             _state.State.IngredientId,
             _state.State.SiteId,
             _state.State.IngredientName,
@@ -279,7 +281,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         if (currentLevel == StockLevel.Low && previousLevel != StockLevel.Low)
         {
             var quantityToOrder = _state.State.ParLevel - _state.State.QuantityAvailable;
-            await GetAlertStream().OnNextAsync(new ReorderPointBreachedEvent(
+            await AlertStream.OnNextAsync(new ReorderPointBreachedEvent(
                 _state.State.IngredientId,
                 _state.State.SiteId,
                 _state.State.IngredientName,
@@ -302,7 +304,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         // Publish stock depleted event
         if (currentLevel == StockLevel.OutOfStock && previousLevel != StockLevel.OutOfStock)
         {
-            await GetAlertStream().OnNextAsync(new StockDepletedEvent(
+            await AlertStream.OnNextAsync(new StockDepletedEvent(
                 _state.State.IngredientId,
                 _state.State.SiteId,
                 _state.State.IngredientName,
@@ -334,7 +336,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         var reversedQuantity = Math.Abs(movement.Quantity);
 
         // Credit ledger for reversed quantity
-        await GetLedger().CreditAsync(
+        await Ledger.CreditAsync(
             reversedQuantity,
             "reversal",
             $"Reversal: {reason}",
@@ -373,7 +375,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         EnsureExists();
 
         // Debit ledger for wasted quantity
-        var ledgerResult = await GetLedger().DebitAsync(
+        var ledgerResult = await Ledger.DebitAsync(
             command.Quantity,
             "waste",
             $"{command.WasteCategory}: {command.Reason}",
@@ -402,7 +404,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         var variance = command.NewQuantity - _state.State.QuantityOnHand;
 
         // Adjust ledger to new quantity
-        var ledgerResult = await GetLedger().AdjustToAsync(
+        var ledgerResult = await Ledger.AdjustToAsync(
             command.NewQuantity,
             command.Reason,
             new Dictionary<string, string>
@@ -457,7 +459,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         EnsureExists();
 
         // Debit ledger for transferred quantity
-        var ledgerResult = await GetLedger().DebitAsync(
+        var ledgerResult = await Ledger.DebitAsync(
             command.Quantity,
             "transfer_out",
             $"Transfer to site {command.DestinationSiteId}",
@@ -491,7 +493,7 @@ public class InventoryGrain : Grain, IInventoryGrain
         if (totalExpiredQuantity > 0)
         {
             // Debit ledger for total expired quantity
-            await GetLedger().DebitAsync(
+            await Ledger.DebitAsync(
                 totalExpiredQuantity,
                 "expiry_writeoff",
                 "Expired batch write-off",
@@ -552,7 +554,7 @@ public class InventoryGrain : Grain, IInventoryGrain
     {
         if (_state.State.OrganizationId == Guid.Empty)
             return false;
-        return await GetLedger().HasSufficientBalanceAsync(quantity);
+        return await Ledger.HasSufficientBalanceAsync(quantity);
     }
 
     public Task<StockLevel> GetStockLevelAsync()
