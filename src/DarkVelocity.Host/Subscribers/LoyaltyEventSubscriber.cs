@@ -1,3 +1,4 @@
+using DarkVelocity.Host;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Logging;
@@ -6,12 +7,11 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to order completion events and awards loyalty points.
-/// This decouples the Sales domain from the Loyalty domain via pub/sub.
+/// Subscribes to order completion events and routes customer spend to CustomerSpendProjectionGrain.
+/// This decouples the Order domain from the Loyalty domain via pub/sub.
 ///
-/// Reacts to:
-/// - OrderCompletedEvent: Awards points to customer based on spend
-/// - OrderVoidedEvent: Reverses points if customer was assigned
+/// Listens to: order-events stream (OrderCompletedEvent, OrderVoidedEvent)
+/// Routes to: CustomerSpendProjectionGrain (keyed by org:customerId)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
@@ -27,10 +27,11 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
     public override async Task OnActivateAsync(CancellationToken cancellationToken)
     {
         var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.OrderStreamNamespace, this.GetPrimaryKeyString());
-        var stream = streamProvider.GetStream<IStreamEvent>(streamId);
 
-        _subscription = await stream.SubscribeAsync(this);
+        // Subscribe to order-events stream
+        var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, this.GetPrimaryKeyString());
+        var orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+        _subscription = await orderStream.SubscribeAsync(this);
 
         _logger.LogInformation(
             "LoyaltyEventSubscriber activated for organization {OrgId}",
@@ -98,12 +99,14 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
         }
 
         _logger.LogInformation(
-            "Awarding loyalty points for order {OrderNumber} to customer {CustomerId}. Spend: {Total:C}",
-            evt.OrderNumber,
+            "Routing customer spend to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderNumber}. Spend: {Total:C}",
             evt.CustomerId,
+            evt.OrderNumber,
             evt.Total);
 
-        // Get the customer spend projection grain to record the spend and calculate points
+        var transactionDate = evt.BusinessDate ?? DateOnly.FromDateTime(evt.OccurredAt);
+
+        // Route directly to the CustomerSpendProjectionGrain
         var spendProjectionKey = GrainKeys.CustomerSpendProjection(evt.OrganizationId, evt.CustomerId.Value);
         var spendProjectionGrain = GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(spendProjectionKey);
 
@@ -113,12 +116,12 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
             var result = await spendProjectionGrain.RecordSpendAsync(new RecordSpendCommand(
                 OrderId: evt.OrderId,
                 SiteId: evt.SiteId,
-                NetSpend: evt.Total - evt.Tax, // Net spend before tax
+                NetSpend: evt.Total - evt.Tax,
                 GrossSpend: evt.Subtotal,
                 DiscountAmount: evt.DiscountAmount,
                 TaxAmount: evt.Tax,
                 ItemCount: evt.Lines.Sum(l => l.Quantity),
-                TransactionDate: DateOnly.FromDateTime(evt.OccurredAt)));
+                TransactionDate: transactionDate));
 
             _logger.LogInformation(
                 "Customer {CustomerId} earned {PointsEarned} points for order {OrderNumber}. " +
@@ -138,29 +141,56 @@ public class LoyaltyEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObs
                     result.NewTier);
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist"))
+        catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") || ex.Message.Contains("not initialized"))
         {
             // Customer spend projection not initialized - customer may not be enrolled in loyalty
             _logger.LogDebug(
-                "Customer {CustomerId} not enrolled in loyalty program - skipping points",
-                evt.CustomerId);
+                "Customer {CustomerId} not enrolled in loyalty program - skipping points for order {OrderNumber}",
+                evt.CustomerId,
+                evt.OrderNumber);
         }
     }
 
     private async Task HandleOrderVoidedAsync(OrderVoidedEvent evt)
     {
-        // We would need to track which customer was on the voided order
-        // For now, log that we received the event
+        // Only process if there was a customer on the voided order
+        if (evt.CustomerId == null)
+        {
+            _logger.LogDebug(
+                "Order {OrderNumber} voided without customer - no loyalty reversal needed",
+                evt.OrderNumber);
+            return;
+        }
+
         _logger.LogInformation(
-            "Order {OrderNumber} voided for {VoidedAmount:C}. Loyalty points reversal would require customer lookup.",
-            evt.OrderNumber,
-            evt.VoidedAmount);
+            "Routing customer spend reversal to CustomerSpendProjectionGrain: Customer {CustomerId}, Order {OrderId}",
+            evt.CustomerId,
+            evt.OrderId);
 
-        // In a full implementation, you would:
-        // 1. Look up the original order to get the customer ID
-        // 2. Call ReverseSpendAsync on the CustomerSpendProjectionGrain
-        // This would require storing customer ID in the voided event or maintaining an order index
+        // Route directly to the CustomerSpendProjectionGrain
+        var spendProjectionKey = GrainKeys.CustomerSpendProjection(evt.OrganizationId, evt.CustomerId.Value);
+        var spendProjectionGrain = GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(spendProjectionKey);
 
-        await Task.CompletedTask;
+        try
+        {
+            await spendProjectionGrain.ReverseSpendAsync(new ReverseSpendCommand(
+                OrderId: evt.OrderId,
+                Amount: evt.VoidedAmount,
+                Reason: evt.Reason));
+
+            _logger.LogInformation(
+                "Reversed customer spend for customer {CustomerId}, order {OrderId}. Amount: {Amount:C}",
+                evt.CustomerId,
+                evt.OrderId,
+                evt.VoidedAmount);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") || ex.Message.Contains("not initialized"))
+        {
+            // Customer spend projection not initialized - nothing to reverse
+            _logger.LogDebug(
+                "Customer {CustomerId} not enrolled in loyalty program - nothing to reverse for order {OrderId}",
+                evt.CustomerId,
+                evt.OrderId);
+        }
     }
 }

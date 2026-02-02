@@ -187,6 +187,7 @@ public sealed record OrderLineAddedEvent(
 
 /// <summary>
 /// Published when an order is finalized/completed.
+/// This is the single source of truth for order completion.
 /// Subscribers: Loyalty (points), Inventory (consumption), Reporting (aggregation).
 /// </summary>
 [GenerateSerializer]
@@ -204,7 +205,8 @@ public sealed record OrderCompletedEvent(
     [property: Id(10)] Guid? CustomerId = null,
     [property: Id(11)] string? CustomerName = null,
     [property: Id(12)] int GuestCount = 1,
-    [property: Id(13)] string Channel = "DineIn"
+    [property: Id(13)] string Channel = "DineIn",
+    [property: Id(14)] DateOnly? BusinessDate = null
 ) : StreamEvent;
 
 /// <summary>
@@ -241,6 +243,7 @@ public sealed record KitchenLineItem(
 
 /// <summary>
 /// Published when an order is voided.
+/// Subscribers: Sales (aggregation), Kitchen (ticket cancellation).
 /// </summary>
 [GenerateSerializer]
 public sealed record OrderVoidedEvent(
@@ -249,7 +252,9 @@ public sealed record OrderVoidedEvent(
     [property: Id(2)] string OrderNumber,
     [property: Id(3)] decimal VoidedAmount,
     [property: Id(4)] string Reason,
-    [property: Id(5)] Guid VoidedByUserId
+    [property: Id(5)] Guid VoidedByUserId,
+    [property: Id(6)] DateOnly? BusinessDate = null,
+    [property: Id(7)] Guid? CustomerId = null
 ) : StreamEvent;
 
 /// <summary>

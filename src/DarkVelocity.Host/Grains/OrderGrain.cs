@@ -14,7 +14,6 @@ namespace DarkVelocity.Host.Grains;
 public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrderGrain
 {
     private Lazy<IAsyncStream<IStreamEvent>>? _orderStream;
-    private Lazy<IAsyncStream<IStreamEvent>>? _salesStream;
     private static int _orderCounter = 1000;
 
     public override Task OnActivateAsync(CancellationToken cancellationToken)
@@ -35,16 +34,9 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
             var streamId = StreamId.Create(StreamConstants.OrderStreamNamespace, orgId.ToString());
             return streamProvider.GetStream<IStreamEvent>(streamId);
         });
-        _salesStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
-        {
-            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.SalesStreamNamespace, orgId.ToString());
-            return streamProvider.GetStream<IStreamEvent>(streamId);
-        });
     }
 
     private IAsyncStream<IStreamEvent>? OrderStream => _orderStream?.Value;
-    private IAsyncStream<IStreamEvent>? SalesStream => _salesStream?.Value;
 
     /// <summary>
     /// Applies an event to the grain state. This is the core of event sourcing.
@@ -647,7 +639,10 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
                 null))
             .ToList();
 
-        // Publish order completed event (triggers loyalty, inventory, reporting)
+        var businessDate = DateOnly.FromDateTime(State.ClosedAt!.Value);
+
+        // Publish order completed event - single source of truth
+        // Downstream subscribers (Sales, Loyalty, Inventory) react to this event
         if (OrderStream != null)
         {
             await OrderStream.OnNextAsync(new OrderCompletedEvent(
@@ -664,27 +659,8 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
                 State.CustomerId,
                 State.CustomerName,
                 State.GuestCount,
-                State.Type.ToString())
-            {
-                OrganizationId = State.OrganizationId
-            });
-        }
-
-        // Publish sale recorded event (triggers sales aggregation)
-        if (SalesStream != null)
-        {
-            await SalesStream.OnNextAsync(new SaleRecordedEvent(
-                State.Id,
-                State.SiteId,
-                DateOnly.FromDateTime(State.ClosedAt!.Value),
-                State.Subtotal,
-                State.DiscountTotal,
-                State.Subtotal - State.DiscountTotal,
-                State.TaxTotal,
-                0m, // TheoreticalCOGS - would be calculated from recipes
-                lineSnapshots.Sum(l => l.Quantity),
-                State.GuestCount,
-                State.Type.ToString())
+                State.Type.ToString(),
+                businessDate)
             {
                 OrganizationId = State.OrganizationId
             });
@@ -697,6 +673,7 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
         EnsureNotClosed();
 
         var voidedAmount = State.GrandTotal;
+        var businessDate = DateOnly.FromDateTime(DateTime.UtcNow);
 
         RaiseEvent(new OrderVoidedJournaledEvent
         {
@@ -708,7 +685,8 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
 
         await ConfirmEvents();
 
-        // Publish order voided event
+        // Publish order voided event - single source of truth
+        // Downstream subscribers (Sales, Loyalty) react to this event
         if (OrderStream != null)
         {
             await OrderStream.OnNextAsync(new OrderVoidedEvent(
@@ -717,21 +695,9 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderJournaledEvent>, IOrd
                 State.OrderNumber,
                 voidedAmount,
                 command.Reason,
-                command.VoidedBy)
-            {
-                OrganizationId = State.OrganizationId
-            });
-        }
-
-        // Publish void recorded event for sales aggregation
-        if (SalesStream != null)
-        {
-            await SalesStream.OnNextAsync(new VoidRecordedEvent(
-                State.Id,
-                State.SiteId,
-                DateOnly.FromDateTime(DateTime.UtcNow),
-                voidedAmount,
-                command.Reason)
+                command.VoidedBy,
+                businessDate,
+                State.CustomerId)
             {
                 OrganizationId = State.OrganizationId
             });

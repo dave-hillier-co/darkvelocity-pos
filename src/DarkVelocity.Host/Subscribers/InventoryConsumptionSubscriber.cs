@@ -1,3 +1,4 @@
+using DarkVelocity.Host;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Logging;
@@ -6,18 +7,18 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Subscribes to order completion events and triggers inventory consumption.
-/// This decouples the Sales domain from the Inventory domain via pub/sub.
+/// Subscribes to order completion events and routes inventory consumption to InventoryGrain.
+/// This decouples the Order domain from the Inventory domain via pub/sub.
 ///
-/// Reacts to:
-/// - OrderCompletedEvent: Consumes stock for each line item based on recipes
-/// - OrderVoidedEvent: Reverses inventory consumption if applicable
+/// Listens to: order-events stream (OrderCompletedEvent, OrderVoidedEvent)
+/// Routes to: InventoryGrain (keyed by org:site:ingredientId)
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
 {
     private readonly ILogger<InventoryConsumptionSubscriberGrain> _logger;
     private StreamSubscriptionHandle<IStreamEvent>? _subscription;
+    private IAsyncStream<IStreamEvent>? _alertStream;
 
     public InventoryConsumptionSubscriberGrain(ILogger<InventoryConsumptionSubscriberGrain> logger)
     {
@@ -27,10 +28,15 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
     public override async Task OnActivateAsync(CancellationToken cancellationToken)
     {
         var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var streamId = StreamId.Create(StreamConstants.OrderStreamNamespace, this.GetPrimaryKeyString());
-        var stream = streamProvider.GetStream<IStreamEvent>(streamId);
 
-        _subscription = await stream.SubscribeAsync(this);
+        // Subscribe to order-events stream
+        var orderStreamId = StreamId.Create(StreamConstants.OrderStreamNamespace, this.GetPrimaryKeyString());
+        var orderStream = streamProvider.GetStream<IStreamEvent>(orderStreamId);
+        _subscription = await orderStream.SubscribeAsync(this);
+
+        // Get alert stream for publishing stock shortage alerts
+        var alertStreamId = StreamId.Create(StreamConstants.AlertStreamNamespace, this.GetPrimaryKeyString());
+        _alertStream = streamProvider.GetStream<IStreamEvent>(alertStreamId);
 
         _logger.LogInformation(
             "InventoryConsumptionSubscriber activated for organization {OrgId}",
@@ -93,7 +99,7 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
             evt.OrderNumber,
             evt.Lines.Count);
 
-        var consumedCount = 0;
+        var processedCount = 0;
 
         foreach (var line in evt.Lines)
         {
@@ -106,12 +112,10 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
                 continue;
             }
 
-            // In a full implementation, we would:
-            // 1. Look up the recipe to get ingredient breakdown
-            // 2. For each ingredient, consume the appropriate quantity
-            // For now, we'll consume directly using the product ID as ingredient ID
-            // (this is a simplification for demonstration)
-
+            // Route directly to the appropriate InventoryGrain based on site and ingredient ID
+            // For now, use ProductId as ingredient ID (simplified)
+            // In a full implementation, we would look up the recipe and route
+            // consumption to each ingredient
             var ingredientKey = GrainKeys.Inventory(evt.OrganizationId, evt.SiteId, line.ProductId);
             var inventoryGrain = GrainFactory.GetGrain<IInventoryGrain>(ingredientKey);
 
@@ -122,9 +126,7 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
                     line.Quantity,
                     evt.ServerId);
 
-                consumedCount++;
-
-                _logger.LogDebug(
+                _logger.LogInformation(
                     "Consumed {Quantity} of {ProductName} for order {OrderNumber}. " +
                     "COGS: {COGS:C}, Remaining: {Remaining}",
                     line.Quantity,
@@ -132,6 +134,8 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
                     evt.OrderNumber,
                     result.CostOfGoodsConsumed,
                     result.QuantityRemaining);
+
+                processedCount++;
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("Insufficient"))
             {
@@ -144,7 +148,7 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
                 // Publish an alert for stock shortage
                 await PublishStockAlertAsync(evt, line);
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist"))
+            catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") || ex.Message.Contains("not initialized"))
             {
                 // Inventory not set up for this item - skip
                 _logger.LogDebug(
@@ -155,49 +159,52 @@ public class InventoryConsumptionSubscriberGrain : Grain, IGrainWithStringKey, I
         }
 
         _logger.LogInformation(
-            "Completed inventory consumption for order {OrderNumber}. Consumed {ConsumedCount}/{TotalCount} items",
-            evt.OrderNumber,
-            consumedCount,
-            evt.Lines.Count);
+            "Processed {ProcessedCount} inventory consumptions for order {OrderNumber}",
+            processedCount,
+            evt.OrderNumber);
     }
 
     private async Task HandleOrderVoidedAsync(OrderVoidedEvent evt)
     {
         _logger.LogInformation(
-            "Order {OrderNumber} voided - inventory consumption reversal would be handled here",
-            evt.OrderNumber);
+            "Inventory consumption reversal for order {OrderId} - this requires movement lookup",
+            evt.OrderId);
 
         // In a full implementation:
         // 1. Look up the original consumption movements for this order
+        //    (would require an order-to-movements index or querying all inventory grains)
         // 2. Call ReverseConsumptionAsync for each movement
-        // This would require storing movement IDs or maintaining an order-to-movements index
+        // For now, log and acknowledge
+
+        _logger.LogWarning(
+            "Inventory reversal for order {OrderId} not fully implemented - requires movement tracking",
+            evt.OrderId);
 
         await Task.CompletedTask;
     }
 
-    private async Task PublishStockAlertAsync(OrderCompletedEvent orderEvent, OrderLineSnapshot line)
+    private async Task PublishStockAlertAsync(OrderCompletedEvent evt, OrderLineSnapshot line)
     {
-        var alertStreamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var alertStreamId = StreamId.Create(StreamConstants.AlertStreamNamespace, orderEvent.OrganizationId.ToString());
-        var alertStream = alertStreamProvider.GetStream<IStreamEvent>(alertStreamId);
-
-        await alertStream.OnNextAsync(new AlertTriggeredEvent(
-            AlertId: Guid.NewGuid(),
-            SiteId: orderEvent.SiteId,
-            AlertType: "inventory.stock_shortage",
-            Severity: "Warning",
-            Title: $"Stock shortage: {line.ProductName}",
-            Message: $"Insufficient stock for {line.ProductName} (ordered: {line.Quantity}) on order {orderEvent.OrderNumber}",
-            Metadata: new Dictionary<string, string>
-            {
-                ["productId"] = line.ProductId.ToString(),
-                ["productName"] = line.ProductName,
-                ["orderId"] = orderEvent.OrderId.ToString(),
-                ["orderNumber"] = orderEvent.OrderNumber,
-                ["quantityOrdered"] = line.Quantity.ToString()
-            })
+        if (_alertStream != null)
         {
-            OrganizationId = orderEvent.OrganizationId
-        });
+            await _alertStream.OnNextAsync(new AlertTriggeredEvent(
+                AlertId: Guid.NewGuid(),
+                SiteId: evt.SiteId,
+                AlertType: "inventory.stock_shortage",
+                Severity: "Warning",
+                Title: $"Stock shortage: {line.ProductName}",
+                Message: $"Insufficient stock for {line.ProductName} (ordered: {line.Quantity}) on order {evt.OrderNumber}",
+                Metadata: new Dictionary<string, string>
+                {
+                    ["ingredientId"] = line.ProductId.ToString(),
+                    ["productName"] = line.ProductName,
+                    ["orderId"] = evt.OrderId.ToString(),
+                    ["orderNumber"] = evt.OrderNumber,
+                    ["quantityOrdered"] = line.Quantity.ToString()
+                })
+            {
+                OrganizationId = evt.OrganizationId
+            });
+        }
     }
 }
