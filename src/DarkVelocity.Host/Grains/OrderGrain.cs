@@ -220,10 +220,11 @@ public class OrderGrain : Grain, IOrderGrain
         EnsureExists();
         EnsureNotClosed();
 
-        if (!_state.State.Lines.Any(l => l.Status == OrderLineStatus.Pending))
+        var pendingLines = _state.State.Lines.Where(l => l.Status == OrderLineStatus.Pending).ToList();
+        if (!pendingLines.Any())
             throw new InvalidOperationException("No pending items to send");
 
-        foreach (var line in _state.State.Lines.Where(l => l.Status == OrderLineStatus.Pending).ToList())
+        foreach (var line in pendingLines)
         {
             var index = _state.State.Lines.FindIndex(l => l.Id == line.Id);
             _state.State.Lines[index] = line with
@@ -240,6 +241,32 @@ public class OrderGrain : Grain, IOrderGrain
         _state.State.Version++;
 
         await _state.WriteStateAsync();
+
+        // Publish OrderSentToKitchenEvent for kitchen domain to create tickets
+        if (GetOrderStream() != null)
+        {
+            var kitchenLines = pendingLines.Select(l => new KitchenLineItem(
+                LineId: l.Id,
+                MenuItemId: l.MenuItemId,
+                Name: l.Name,
+                Quantity: l.Quantity,
+                Modifiers: l.Modifiers?.Select(m => m.Name).ToList(),
+                SpecialInstructions: l.Notes)).ToList();
+
+            await GetOrderStream().OnNextAsync(new OrderSentToKitchenEvent(
+                OrderId: _state.State.Id,
+                SiteId: _state.State.SiteId,
+                OrderNumber: _state.State.OrderNumber,
+                OrderType: _state.State.Type.ToString(),
+                TableNumber: _state.State.TableNumber,
+                GuestCount: _state.State.GuestCount,
+                ServerId: _state.State.ServerId,
+                ServerName: _state.State.ServerName,
+                Lines: kitchenLines)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+        }
     }
 
     public Task<OrderTotals> RecalculateTotalsAsync()
@@ -440,7 +467,7 @@ public class OrderGrain : Grain, IOrderGrain
                 null)) // RecipeId would come from menu item lookup
             .ToList();
 
-        // Publish order completed event (triggers inventory consumption)
+        // Publish order completed event (triggers loyalty, inventory, reporting)
         if (GetOrderStream() != null)
         {
             await GetOrderStream().OnNextAsync(new OrderCompletedEvent(
@@ -453,7 +480,11 @@ public class OrderGrain : Grain, IOrderGrain
                 _state.State.DiscountTotal,
                 lineSnapshots,
                 _state.State.ServerId,
-                _state.State.ServerName)
+                _state.State.ServerName,
+                _state.State.CustomerId,
+                _state.State.CustomerName,
+                _state.State.GuestCount,
+                _state.State.Type.ToString())
             {
                 OrganizationId = _state.State.OrganizationId
             });

@@ -187,7 +187,7 @@ public sealed record OrderLineAddedEvent(
 
 /// <summary>
 /// Published when an order is finalized/completed.
-/// Triggers inventory consumption and sales aggregation.
+/// Subscribers: Loyalty (points), Inventory (consumption), Reporting (aggregation).
 /// </summary>
 [GenerateSerializer]
 public sealed record OrderCompletedEvent(
@@ -200,8 +200,44 @@ public sealed record OrderCompletedEvent(
     [property: Id(6)] decimal DiscountAmount,
     [property: Id(7)] List<OrderLineSnapshot> Lines,
     [property: Id(8)] Guid? ServerId,
-    [property: Id(9)] string? ServerName
+    [property: Id(9)] string? ServerName,
+    [property: Id(10)] Guid? CustomerId = null,
+    [property: Id(11)] string? CustomerName = null,
+    [property: Id(12)] int GuestCount = 1,
+    [property: Id(13)] string Channel = "DineIn"
 ) : StreamEvent;
+
+/// <summary>
+/// Published when order items are sent to the kitchen.
+/// Subscriber: Kitchen (ticket creation).
+/// </summary>
+[GenerateSerializer]
+public sealed record OrderSentToKitchenEvent(
+    [property: Id(0)] Guid OrderId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string OrderNumber,
+    [property: Id(3)] string OrderType,
+    [property: Id(4)] string? TableNumber,
+    [property: Id(5)] int? GuestCount,
+    [property: Id(6)] Guid? ServerId,
+    [property: Id(7)] string? ServerName,
+    [property: Id(8)] List<KitchenLineItem> Lines,
+    [property: Id(9)] string? Notes = null
+) : StreamEvent;
+
+/// <summary>
+/// Line item sent to kitchen with preparation details.
+/// </summary>
+[GenerateSerializer]
+public sealed record KitchenLineItem(
+    [property: Id(0)] Guid LineId,
+    [property: Id(1)] Guid MenuItemId,
+    [property: Id(2)] string Name,
+    [property: Id(3)] int Quantity,
+    [property: Id(4)] List<string>? Modifiers = null,
+    [property: Id(5)] string? SpecialInstructions = null,
+    [property: Id(6)] Guid? StationId = null
+);
 
 /// <summary>
 /// Published when an order is voided.

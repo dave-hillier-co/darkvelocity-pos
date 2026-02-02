@@ -7,8 +7,16 @@ using Orleans.Streams;
 namespace DarkVelocity.Host.Grains.Subscribers;
 
 /// <summary>
-/// Implicit stream subscriber that handles order events.
-/// Syncs order completions to inventory consumption.
+/// Legacy order event subscriber - now primarily for logging and monitoring.
+///
+/// Domain-specific event handling has been moved to dedicated subscribers:
+/// - KitchenEventSubscriberGrain: Creates kitchen tickets from OrderSentToKitchenEvent
+/// - LoyaltyEventSubscriberGrain: Awards loyalty points from OrderCompletedEvent
+/// - InventoryConsumptionSubscriberGrain: Consumes inventory from OrderCompletedEvent
+/// - SalesEventSubscriberGrain: Aggregates sales data from SaleRecordedEvent
+///
+/// This follows the pub/sub pattern where a single domain event triggers
+/// multiple independent subscribers, each handling their own bounded context.
 /// </summary>
 [ImplicitStreamSubscription(StreamConstants.OrderStreamNamespace)]
 public class OrderEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObserver<IStreamEvent>
@@ -46,33 +54,57 @@ public class OrderEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
         await base.OnDeactivateAsync(reason, cancellationToken);
     }
 
-    public async Task OnNextAsync(IStreamEvent item, StreamSequenceToken? token = null)
+    public Task OnNextAsync(IStreamEvent item, StreamSequenceToken? token = null)
     {
-        try
+        // Log all order events for monitoring/debugging purposes
+        // Actual domain handling is done by dedicated subscribers
+        switch (item)
         {
-            switch (item)
-            {
-                case OrderCompletedEvent completedEvent:
-                    await HandleOrderCompletedAsync(completedEvent);
-                    break;
+            case OrderCreatedEvent evt:
+                _logger.LogInformation(
+                    "Order {OrderNumber} created at site {SiteId}",
+                    evt.OrderNumber,
+                    evt.SiteId);
+                break;
 
-                case OrderVoidedEvent voidedEvent:
-                    await HandleOrderVoidedAsync(voidedEvent);
-                    break;
+            case OrderLineAddedEvent evt:
+                _logger.LogDebug(
+                    "Line added to order {OrderId}: {ProductName} x{Quantity}",
+                    evt.OrderId,
+                    evt.ProductName,
+                    evt.Quantity);
+                break;
 
-                case OrderLineAddedEvent lineAddedEvent:
-                    await HandleOrderLineAddedAsync(lineAddedEvent);
-                    break;
+            case OrderSentToKitchenEvent evt:
+                _logger.LogInformation(
+                    "Order {OrderNumber} sent to kitchen with {LineCount} items",
+                    evt.OrderNumber,
+                    evt.Lines.Count);
+                break;
 
-                default:
-                    _logger.LogDebug("Ignoring unhandled event type: {EventType}", item.GetType().Name);
-                    break;
-            }
+            case OrderCompletedEvent evt:
+                _logger.LogInformation(
+                    "Order {OrderNumber} completed. Total: {Total:C}, Lines: {LineCount}, Customer: {CustomerId}",
+                    evt.OrderNumber,
+                    evt.Total,
+                    evt.Lines.Count,
+                    evt.CustomerId?.ToString() ?? "none");
+                break;
+
+            case OrderVoidedEvent evt:
+                _logger.LogWarning(
+                    "Order {OrderNumber} voided for {VoidedAmount:C}. Reason: {Reason}",
+                    evt.OrderNumber,
+                    evt.VoidedAmount,
+                    evt.Reason);
+                break;
+
+            default:
+                _logger.LogDebug("Order event received: {EventType}", item.GetType().Name);
+                break;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error handling event {EventType}: {EventId}", item.GetType().Name, item.EventId);
-        }
+
+        return Task.CompletedTask;
     }
 
     public Task OnCompletedAsync()
@@ -84,78 +116,6 @@ public class OrderEventSubscriberGrain : Grain, IGrainWithStringKey, IAsyncObser
     public Task OnErrorAsync(Exception ex)
     {
         _logger.LogError(ex, "Error in order event stream");
-        return Task.CompletedTask;
-    }
-
-    private async Task HandleOrderCompletedAsync(OrderCompletedEvent evt)
-    {
-        _logger.LogInformation(
-            "Order {OrderNumber} completed. Processing inventory consumption for {LineCount} items",
-            evt.OrderNumber,
-            evt.Lines.Count);
-
-        // In a real implementation, you would:
-        // 1. Look up recipe for each line item
-        // 2. Calculate ingredient consumption
-        // 3. Call InventoryGrain.ConsumeAsync for each ingredient
-
-        // For now, we'll publish to an inventory stream that the InventoryGrain can subscribe to
-        var inventoryStreamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-        var inventoryStreamId = StreamId.Create(StreamConstants.InventoryStreamNamespace, evt.OrganizationId.ToString());
-        var inventoryStream = inventoryStreamProvider.GetStream<IStreamEvent>(inventoryStreamId);
-
-        foreach (var line in evt.Lines)
-        {
-            // Publish stock consumed event for each line
-            // In production, this would include actual ingredient breakdown from recipes
-            await inventoryStream.OnNextAsync(new StockConsumedEvent(
-                line.ProductId, // This would be ingredient ID in production
-                evt.SiteId,
-                line.ProductName,
-                line.Quantity,
-                "unit",
-                line.LineTotal * 0.3m, // Estimated COGS at 30%
-                0, // QuantityRemaining - would be calculated from inventory
-                evt.OrderId,
-                "Order completion")
-            {
-                OrganizationId = evt.OrganizationId
-            });
-        }
-
-        _logger.LogInformation(
-            "Published inventory consumption events for order {OrderNumber}",
-            evt.OrderNumber);
-    }
-
-    private Task HandleOrderVoidedAsync(OrderVoidedEvent evt)
-    {
-        _logger.LogInformation(
-            "Order {OrderNumber} voided for {VoidedAmount:C}. Reason: {Reason}",
-            evt.OrderNumber,
-            evt.VoidedAmount,
-            evt.Reason);
-
-        // In a real implementation, you might:
-        // 1. Reverse inventory consumption
-        // 2. Update kitchen display
-        // 3. Trigger alerts for manager review
-
-        return Task.CompletedTask;
-    }
-
-    private Task HandleOrderLineAddedAsync(OrderLineAddedEvent evt)
-    {
-        _logger.LogDebug(
-            "Line added to order {OrderId}: {ProductName} x{Quantity}",
-            evt.OrderId,
-            evt.ProductName,
-            evt.Quantity);
-
-        // In a real implementation, you might:
-        // 1. Send to kitchen display system
-        // 2. Update real-time sales dashboard
-
         return Task.CompletedTask;
     }
 }
