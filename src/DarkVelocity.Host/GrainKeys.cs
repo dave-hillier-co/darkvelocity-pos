@@ -426,6 +426,13 @@ public static class GrainKeys
         => SiteEntity(orgId, siteId, "purchase-doc", documentId);
 
     /// <summary>
+    /// Creates a key for a line items grain.
+    /// Used for composition with OrderGrain, PurchaseDocumentGrain, etc.
+    /// </summary>
+    public static string LineItems(Guid orgId, string ownerType, Guid ownerId)
+        => $"{orgId}:lines:{ownerType}:{ownerId}";
+
+    /// <summary>
     /// Creates a key for a vendor item mapping grain using vendor GUID.
     /// </summary>
     public static string VendorItemMapping(Guid orgId, Guid vendorId)
