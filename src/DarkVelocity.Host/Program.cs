@@ -60,6 +60,11 @@ app.MapOAuthEndpoints()
    .MapBookingEndpoints()
    .MapEmployeeEndpoints()
    .MapSearchEndpoints()
+   .MapTableEndpoints()
+   .MapFloorPlanEndpoints()
+   .MapWaitlistEndpoints()
+   .MapAvailabilityEndpoints()
+   .MapWebhookEndpoints()
    .MapPaymentGatewayEndpoints()
    .MapChannelEndpoints();
 

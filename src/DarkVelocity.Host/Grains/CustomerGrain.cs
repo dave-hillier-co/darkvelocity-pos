@@ -399,6 +399,28 @@ public class CustomerGrain : Grain, ICustomerGrain
             ? (int)(DateTime.UtcNow - _state.State.LastVisitAt.Value).TotalDays
             : 0;
 
+        // Add to visit history
+        var visitRecord = new CustomerVisitRecord
+        {
+            Id = Guid.NewGuid(),
+            SiteId = command.SiteId,
+            SiteName = command.SiteName,
+            VisitedAt = DateTime.UtcNow,
+            OrderId = command.OrderId,
+            BookingId = command.BookingId,
+            SpendAmount = command.SpendAmount,
+            PartySize = command.PartySize,
+            PointsEarned = command.PointsEarned,
+            Notes = command.Notes
+        };
+
+        _state.State.VisitHistory.Insert(0, visitRecord);
+        // Keep only last 50 visits
+        if (_state.State.VisitHistory.Count > 50)
+        {
+            _state.State.VisitHistory.RemoveAt(_state.State.VisitHistory.Count - 1);
+        }
+
         _state.State.Stats = _state.State.Stats with
         {
             TotalVisits = _state.State.Stats.TotalVisits + 1,
@@ -424,6 +446,109 @@ public class CustomerGrain : Grain, ICustomerGrain
         {
             OrganizationId = _state.State.OrganizationId
         });
+    }
+
+    public Task<IReadOnlyList<CustomerVisitRecord>> GetVisitHistoryAsync(int limit = 50)
+    {
+        EnsureExists();
+        var visits = _state.State.VisitHistory.Take(limit).ToList();
+        return Task.FromResult<IReadOnlyList<CustomerVisitRecord>>(visits);
+    }
+
+    public Task<IReadOnlyList<CustomerVisitRecord>> GetVisitsBySiteAsync(Guid siteId, int limit = 20)
+    {
+        EnsureExists();
+        var visits = _state.State.VisitHistory
+            .Where(v => v.SiteId == siteId)
+            .Take(limit)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<CustomerVisitRecord>>(visits);
+    }
+
+    public Task<CustomerVisitRecord?> GetLastVisitAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(_state.State.VisitHistory.FirstOrDefault());
+    }
+
+    public async Task UpdatePreferencesAsync(UpdatePreferencesCommand command)
+    {
+        EnsureExists();
+
+        _state.State.Preferences = _state.State.Preferences with
+        {
+            DietaryRestrictions = command.DietaryRestrictions ?? _state.State.Preferences.DietaryRestrictions,
+            Allergens = command.Allergens ?? _state.State.Preferences.Allergens,
+            SeatingPreference = command.SeatingPreference ?? _state.State.Preferences.SeatingPreference,
+            Notes = command.Notes ?? _state.State.Preferences.Notes
+        };
+
+        _state.State.UpdatedAt = DateTime.UtcNow;
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public async Task AddDietaryRestrictionAsync(string restriction)
+    {
+        EnsureExists();
+        var restrictions = _state.State.Preferences.DietaryRestrictions.ToList();
+        if (!restrictions.Contains(restriction))
+        {
+            restrictions.Add(restriction);
+            _state.State.Preferences = _state.State.Preferences with { DietaryRestrictions = restrictions };
+            _state.State.UpdatedAt = DateTime.UtcNow;
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+        }
+    }
+
+    public async Task RemoveDietaryRestrictionAsync(string restriction)
+    {
+        EnsureExists();
+        var restrictions = _state.State.Preferences.DietaryRestrictions.ToList();
+        if (restrictions.Remove(restriction))
+        {
+            _state.State.Preferences = _state.State.Preferences with { DietaryRestrictions = restrictions };
+            _state.State.UpdatedAt = DateTime.UtcNow;
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+        }
+    }
+
+    public async Task AddAllergenAsync(string allergen)
+    {
+        EnsureExists();
+        var allergens = _state.State.Preferences.Allergens.ToList();
+        if (!allergens.Contains(allergen))
+        {
+            allergens.Add(allergen);
+            _state.State.Preferences = _state.State.Preferences with { Allergens = allergens };
+            _state.State.UpdatedAt = DateTime.UtcNow;
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+        }
+    }
+
+    public async Task RemoveAllergenAsync(string allergen)
+    {
+        EnsureExists();
+        var allergens = _state.State.Preferences.Allergens.ToList();
+        if (allergens.Remove(allergen))
+        {
+            _state.State.Preferences = _state.State.Preferences with { Allergens = allergens };
+            _state.State.UpdatedAt = DateTime.UtcNow;
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+        }
+    }
+
+    public async Task SetSeatingPreferenceAsync(string preference)
+    {
+        EnsureExists();
+        _state.State.Preferences = _state.State.Preferences with { SeatingPreference = preference };
+        _state.State.UpdatedAt = DateTime.UtcNow;
+        _state.State.Version++;
+        await _state.WriteStateAsync();
     }
 
     public async Task SetReferralCodeAsync(string code)

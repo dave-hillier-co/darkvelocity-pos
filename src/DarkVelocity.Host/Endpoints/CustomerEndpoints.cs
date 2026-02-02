@@ -130,6 +130,97 @@ public static class CustomerEndpoints
             return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/customers/{customerId}/rewards", items, items.Count));
         });
 
+        // Visit History endpoints
+        group.MapGet("/{customerId}/visits", async (
+            Guid orgId, Guid customerId,
+            [FromQuery] int? limit,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            var visits = await grain.GetVisitHistoryAsync(limit ?? 50);
+            var items = visits.Select(v => Hal.Resource(v, new Dictionary<string, object>
+            {
+                ["customer"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}" }
+            })).ToList();
+
+            return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/customers/{customerId}/visits", items, items.Count));
+        });
+
+        // Preferences endpoints
+        group.MapGet("/{customerId}/preferences", async (Guid orgId, Guid customerId, IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            var state = await grain.GetStateAsync();
+            return Results.Ok(Hal.Resource(state.Preferences, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}/preferences" },
+                ["customer"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}" }
+            }));
+        });
+
+        group.MapPatch("/{customerId}/preferences", async (
+            Guid orgId, Guid customerId,
+            [FromBody] UpdateCustomerPreferencesRequest request,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            await grain.UpdatePreferencesAsync(new UpdatePreferencesCommand(
+                request.DietaryRestrictions, request.Allergens, request.SeatingPreference, request.Notes));
+            var state = await grain.GetStateAsync();
+
+            return Results.Ok(Hal.Resource(state.Preferences, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}/preferences" }
+            }));
+        });
+
+        // Tags endpoints
+        group.MapGet("/{customerId}/tags", async (Guid orgId, Guid customerId, IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            var state = await grain.GetStateAsync();
+            return Results.Ok(new
+            {
+                _links = new { self = new { href = $"/api/orgs/{orgId}/customers/{customerId}/tags" } },
+                tags = state.Tags
+            });
+        });
+
+        group.MapPost("/{customerId}/tags", async (
+            Guid orgId, Guid customerId,
+            [FromBody] AddTagRequest request,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            await grain.AddTagAsync(request.Tag);
+            return Results.Ok(new { message = "Tag added" });
+        });
+
+        group.MapDelete("/{customerId}/tags/{tag}", async (Guid orgId, Guid customerId, string tag, IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<ICustomerGrain>(GrainKeys.Customer(orgId, customerId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Customer not found"));
+
+            await grain.RemoveTagAsync(tag);
+            return Results.NoContent();
+        });
+
         return app;
     }
 }
