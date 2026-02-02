@@ -347,191 +347,188 @@ public class PaymentGrain : Grain, IPaymentGrain
     }
 }
 
-public class CashDrawerGrain : Grain, ICashDrawerGrain
-{
-    private readonly IPersistentState<CashDrawerState> _state;
+/// <summary>
+/// Context for creating cash drawer transactions.
+/// </summary>
+public record CashDrawerTransactionContext(
+    DrawerTransactionType Type,
+    Guid? PaymentId = null);
 
+public class CashDrawerGrain : LedgerGrain<CashDrawerState, DrawerTransaction>, ICashDrawerGrain
+{
     public CashDrawerGrain(
         [PersistentState("cashdrawer", "OrleansStorage")]
-        IPersistentState<CashDrawerState> state)
+        IPersistentState<CashDrawerState> state) : base(state)
     {
-        _state = state;
+    }
+
+    protected override bool IsInitialized => State.State.Id != Guid.Empty;
+
+    protected override DrawerTransaction CreateTransaction(
+        decimal amount,
+        decimal balanceAfter,
+        string? notes,
+        object? context)
+    {
+        var ctx = context as CashDrawerTransactionContext
+            ?? new CashDrawerTransactionContext(DrawerTransactionType.Adjustment);
+
+        return new DrawerTransaction
+        {
+            Id = Guid.NewGuid(),
+            Type = ctx.Type,
+            Amount = amount,
+            BalanceAfter = balanceAfter,
+            PaymentId = ctx.PaymentId,
+            Description = notes,
+            Timestamp = DateTime.UtcNow
+        };
     }
 
     public async Task<DrawerOpenedResult> OpenAsync(OpenDrawerCommand command)
     {
-        if (_state.State.Status == DrawerStatus.Open)
+        if (State.State.Status == DrawerStatus.Open)
             throw new InvalidOperationException("Drawer is already open");
 
         var key = this.GetPrimaryKeyString();
         var (_, _, _, drawerId) = GrainKeys.ParseSiteEntity(key);
 
-        if (_state.State.Id == Guid.Empty)
+        if (State.State.Id == Guid.Empty)
         {
-            _state.State.Id = drawerId;
-            _state.State.OrganizationId = command.OrganizationId;
-            _state.State.SiteId = command.SiteId;
-            _state.State.Name = $"Drawer-{drawerId.ToString()[..8]}";
+            State.State.Id = drawerId;
+            State.State.OrganizationId = command.OrganizationId;
+            State.State.SiteId = command.SiteId;
+            State.State.Name = $"Drawer-{drawerId.ToString()[..8]}";
         }
 
-        _state.State.Status = DrawerStatus.Open;
-        _state.State.CurrentUserId = command.UserId;
-        _state.State.OpenedAt = DateTime.UtcNow;
-        _state.State.OpeningFloat = command.OpeningFloat;
-        _state.State.CashIn = 0;
-        _state.State.CashOut = 0;
-        _state.State.ExpectedBalance = command.OpeningFloat;
-        _state.State.ActualBalance = null;
-        _state.State.CashDrops.Clear();
-        _state.State.Transactions.Clear();
-        _state.State.Version++;
+        State.State.Status = DrawerStatus.Open;
+        State.State.CurrentUserId = command.UserId;
+        State.State.OpenedAt = DateTime.UtcNow;
+        State.State.OpeningFloat = command.OpeningFloat;
+        State.State.CashIn = 0;
+        State.State.CashOut = 0;
+        State.State.ExpectedBalance = command.OpeningFloat;
+        State.State.ActualBalance = null;
+        State.State.CashDrops.Clear();
+        State.State.Transactions.Clear();
+        State.State.Version++;
 
-        _state.State.Transactions.Add(new DrawerTransaction
+        // Record opening float transaction
+        State.State.Transactions.Add(new DrawerTransaction
         {
             Id = Guid.NewGuid(),
             Type = DrawerTransactionType.OpeningFloat,
             Amount = command.OpeningFloat,
+            BalanceAfter = command.OpeningFloat,
             Timestamp = DateTime.UtcNow
         });
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
-        return new DrawerOpenedResult(_state.State.Id, _state.State.OpenedAt.Value);
+        return new DrawerOpenedResult(State.State.Id, State.State.OpenedAt.Value);
     }
 
     public Task<CashDrawerState> GetStateAsync()
     {
-        return Task.FromResult(_state.State);
+        return Task.FromResult(State.State);
     }
 
     public async Task RecordCashInAsync(RecordCashInCommand command)
     {
         EnsureOpen();
 
-        _state.State.CashIn += command.Amount;
-        _state.State.ExpectedBalance += command.Amount;
+        // Update CashIn counter before the ledger operation
+        State.State.CashIn += command.Amount;
 
-        _state.State.Transactions.Add(new DrawerTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = DrawerTransactionType.CashSale,
-            Amount = command.Amount,
-            PaymentId = command.PaymentId,
-            Timestamp = DateTime.UtcNow
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        await CreditAsync(
+            command.Amount,
+            null,
+            new CashDrawerTransactionContext(
+                DrawerTransactionType.CashSale,
+                PaymentId: command.PaymentId));
     }
 
     public async Task RecordCashOutAsync(RecordCashOutCommand command)
     {
         EnsureOpen();
 
-        if (command.Amount > _state.State.ExpectedBalance)
-            throw new InvalidOperationException("Insufficient cash in drawer");
+        // Update CashOut counter before the ledger operation
+        State.State.CashOut += command.Amount;
 
-        _state.State.CashOut += command.Amount;
-        _state.State.ExpectedBalance -= command.Amount;
-
-        _state.State.Transactions.Add(new DrawerTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = DrawerTransactionType.CashPayout,
-            Amount = command.Amount,
-            Description = command.Reason,
-            Timestamp = DateTime.UtcNow
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        await DebitAsync(
+            command.Amount,
+            command.Reason,
+            new CashDrawerTransactionContext(DrawerTransactionType.CashPayout));
     }
 
     public async Task RecordDropAsync(CashDropCommand command)
     {
         EnsureOpen();
 
-        if (command.Amount > _state.State.ExpectedBalance)
-            throw new InvalidOperationException("Insufficient cash for drop");
-
+        // Record the cash drop
         var drop = new CashDrop
         {
             Id = Guid.NewGuid(),
             Amount = command.Amount,
-            DroppedBy = _state.State.CurrentUserId!.Value,
+            DroppedBy = State.State.CurrentUserId!.Value,
             DroppedAt = DateTime.UtcNow,
             Notes = command.Notes
         };
+        State.State.CashDrops.Add(drop);
 
-        _state.State.CashDrops.Add(drop);
-        _state.State.ExpectedBalance -= command.Amount;
-
-        _state.State.Transactions.Add(new DrawerTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = DrawerTransactionType.Drop,
-            Amount = command.Amount,
-            Description = command.Notes,
-            Timestamp = DateTime.UtcNow
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        await DebitAsync(
+            command.Amount,
+            command.Notes,
+            new CashDrawerTransactionContext(DrawerTransactionType.Drop));
     }
 
     public async Task OpenNoSaleAsync(Guid userId, string? reason = null)
     {
         EnsureOpen();
 
-        _state.State.Transactions.Add(new DrawerTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = DrawerTransactionType.NoSale,
-            Amount = 0,
-            Description = reason ?? "No sale",
-            Timestamp = DateTime.UtcNow
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        // NoSale doesn't change balance, just records the event
+        await RecordTransactionAsync(
+            0,
+            reason ?? "No sale",
+            new CashDrawerTransactionContext(DrawerTransactionType.NoSale));
     }
 
     public async Task CountAsync(CountDrawerCommand command)
     {
         EnsureOpen();
 
-        _state.State.Status = DrawerStatus.Counting;
-        _state.State.ActualBalance = command.CountedAmount;
-        _state.State.LastCountedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.Status = DrawerStatus.Counting;
+        State.State.ActualBalance = command.CountedAmount;
+        State.State.LastCountedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task<DrawerClosedResult> CloseAsync(CloseDrawerCommand command)
     {
-        if (_state.State.Status == DrawerStatus.Closed)
+        if (State.State.Status == DrawerStatus.Closed)
             throw new InvalidOperationException("Drawer is already closed");
 
-        var variance = command.ActualBalance - _state.State.ExpectedBalance;
+        var variance = command.ActualBalance - State.State.ExpectedBalance;
 
-        _state.State.ActualBalance = command.ActualBalance;
-        _state.State.Status = DrawerStatus.Closed;
-        _state.State.Version++;
+        State.State.ActualBalance = command.ActualBalance;
+        State.State.Status = DrawerStatus.Closed;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
-        return new DrawerClosedResult(_state.State.ExpectedBalance, command.ActualBalance, variance);
+        return new DrawerClosedResult(State.State.ExpectedBalance, command.ActualBalance, variance);
     }
 
-    public Task<bool> IsOpenAsync() => Task.FromResult(_state.State.Status == DrawerStatus.Open);
-    public Task<decimal> GetExpectedBalanceAsync() => Task.FromResult(_state.State.ExpectedBalance);
-    public Task<DrawerStatus> GetStatusAsync() => Task.FromResult(_state.State.Status);
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
+    public Task<bool> IsOpenAsync() => Task.FromResult(State.State.Status == DrawerStatus.Open);
+    public Task<decimal> GetExpectedBalanceAsync() => Task.FromResult(State.State.ExpectedBalance);
+    public Task<DrawerStatus> GetStatusAsync() => Task.FromResult(State.State.Status);
+    public Task<bool> ExistsAsync() => Task.FromResult(IsInitialized);
 
     private void EnsureOpen()
     {
-        if (_state.State.Status != DrawerStatus.Open)
+        if (State.State.Status != DrawerStatus.Open)
             throw new InvalidOperationException("Drawer is not open");
     }
 }

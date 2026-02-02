@@ -1,3 +1,5 @@
+using DarkVelocity.Host.Grains;
+
 namespace DarkVelocity.Host.State;
 
 public enum PaymentMethod
@@ -123,7 +125,7 @@ public record CashDrop
 }
 
 [GenerateSerializer]
-public record DrawerTransaction
+public record DrawerTransaction : ILedgerTransaction
 {
     [Id(0)] public Guid Id { get; init; }
     [Id(1)] public DrawerTransactionType Type { get; init; }
@@ -131,6 +133,10 @@ public record DrawerTransaction
     [Id(3)] public Guid? PaymentId { get; init; }
     [Id(4)] public string? Description { get; init; }
     [Id(5)] public DateTime Timestamp { get; init; }
+    [Id(6)] public decimal BalanceAfter { get; init; }
+
+    // ILedgerTransaction.Notes maps to Description
+    string? ILedgerTransaction.Notes => Description;
 }
 
 public enum DrawerTransactionType
@@ -145,7 +151,7 @@ public enum DrawerTransactionType
 }
 
 [GenerateSerializer]
-public sealed class CashDrawerState
+public sealed class CashDrawerState : ILedgerState<DrawerTransaction>
 {
     [Id(0)] public Guid Id { get; set; }
     [Id(1)] public Guid OrganizationId { get; set; }
@@ -164,4 +170,11 @@ public sealed class CashDrawerState
     [Id(14)] public List<DrawerTransaction> Transactions { get; set; } = [];
     [Id(15)] public DateTime? LastCountedAt { get; set; }
     [Id(16)] public int Version { get; set; }
+
+    // ILedgerState.Balance maps to ExpectedBalance
+    decimal ILedgerState<DrawerTransaction>.Balance
+    {
+        get => ExpectedBalance;
+        set => ExpectedBalance = value;
+    }
 }
