@@ -95,6 +95,11 @@ cd apps/backoffice && npm install && npm run dev
 - Event sourcing for state persistence
 - Single-writer principle per aggregate
 - Grain keys use tenant prefixes: `org:{orgId}:{type}:{entityId}`
+- **Prefer composition over inheritance**: Extend grain functionality by calling other grains, not by subclassing
+  - Grains collaborate through grain-to-grain calls (`GrainFactory.GetGrain<T>()`)
+  - Extract reusable logic into separate grains or plain C# services
+  - Avoid base grain classes that add domain behavior—use them only for cross-cutting infrastructure concerns
+  - Example: An `OrderGrain` needing loyalty points calls `ILoyaltyGrain`, it doesn't inherit from a `LoyaltyAwareGrain`
 
 ### Event Naming
 - Past tense for domain events: `OrderOpened`, `PaymentApplied`, `StockConsumed`
