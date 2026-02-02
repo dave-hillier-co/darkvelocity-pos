@@ -3,17 +3,13 @@ using DarkVelocity.Host.Endpoints;
 using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.Services;
 using DarkVelocity.Host.Streams;
-using Orleans.Streams.Kafka.Config;
+using Orleans.Dashboard;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Azure Storage connection - uses Azurite for local dev, Azure Table Storage in production
 var azureStorageConnectionString = builder.Configuration.GetConnectionString("AzureStorage")
     ?? "UseDevelopmentStorage=true";
-
-// Kafka connection - uses local Docker for dev, Azure Event Hubs (Kafka protocol) in production
-var kafkaBrokers = builder.Configuration.GetConnectionString("Kafka")
-    ?? "localhost:9092";
 
 // Configure Orleans Silo
 builder.Host.UseOrleans(siloBuilder =>
@@ -33,38 +29,12 @@ builder.Host.UseOrleans(siloBuilder =>
     // PubSubStore required for stream pub/sub
     siloBuilder.AddMemoryGrainStorage("PubSubStore");
 
-    // Kafka streaming provider - stream namespaces map to Kafka topics
-    siloBuilder.AddKafka(StreamConstants.DefaultStreamProvider)
-        .WithOptions(options =>
-        {
-            options.BrokerList = [kafkaBrokers];
-            options.ConsumerGroupId = "darkvelocity-orleans";
-            options.ConsumeMode = ConsumeMode.LastCommittedMessage;
+    // Memory streaming provider for development
+    // TODO: Replace with Azure Event Hubs or similar for production pub/sub
+    siloBuilder.AddMemoryStreams(StreamConstants.DefaultStreamProvider);
 
-            // Register topics for each stream namespace
-            options.AddTopic(StreamConstants.OrderStreamNamespace);
-            options.AddTopic(StreamConstants.PaymentStreamNamespace);
-            options.AddTopic(StreamConstants.InventoryStreamNamespace);
-            options.AddTopic(StreamConstants.CustomerStreamNamespace);
-            options.AddTopic(StreamConstants.BookingStreamNamespace);
-            options.AddTopic(StreamConstants.EmployeeStreamNamespace);
-            options.AddTopic(StreamConstants.UserStreamNamespace);
-            options.AddTopic(StreamConstants.GiftCardStreamNamespace);
-            options.AddTopic(StreamConstants.CustomerSpendStreamNamespace);
-            options.AddTopic(StreamConstants.AccountingStreamNamespace);
-            options.AddTopic(StreamConstants.SalesStreamNamespace);
-            options.AddTopic(StreamConstants.AlertStreamNamespace);
-            options.AddTopic(StreamConstants.DeviceStreamNamespace);
-            options.AddTopic(StreamConstants.PurchaseDocumentStreamNamespace);
-            options.AddTopic(StreamConstants.WorkflowStreamNamespace);
-        })
-        .Build();
-
-    siloBuilder.UseDashboard(options =>
-    {
-        options.Port = 8888;
-        options.HostSelf = true;
-    });
+    // Orleans Dashboard for real-time cluster monitoring
+    siloBuilder.AddDashboard();
 });
 
 // Configure services
@@ -98,6 +68,9 @@ app.UseAuthorization();
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health");
+
+// Orleans Dashboard at /dashboard
+app.MapOrleansDashboard();
 
 // Map all API endpoints
 app.MapOAuthEndpoints()
