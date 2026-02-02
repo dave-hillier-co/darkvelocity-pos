@@ -1,5 +1,6 @@
 using DarkVelocity.Host.Endpoints;
 using DarkVelocity.Host.Extensions;
+using DarkVelocity.Host.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +24,8 @@ builder.Services
     .AddJwtAuthentication(builder.Configuration)
     .AddCorsPolicy()
     .AddSearchServices(builder.Configuration)
-    .AddPaymentGatewayServices();
+    .AddPaymentGatewayServices()
+    .AddSingleton<IDocumentIntelligenceService, StubDocumentIntelligenceService>();
 
 var app = builder.Build();
 
@@ -67,7 +69,8 @@ app.MapOAuthEndpoints()
    .MapWebhookEndpoints()
    .MapPaymentGatewayEndpoints()
    .MapChannelEndpoints()
-   .MapBatchEndpoints();
+   .MapBatchEndpoints()
+   .MapPurchaseDocumentEndpoints();
 
 app.Run();
 

@@ -362,6 +362,24 @@ public static class GrainKeys
     public static string ChannelRegistry(Guid orgId) => $"{orgId}:channelregistry";
 
     /// <summary>
+    /// Creates a key for a purchase document grain (invoice or receipt).
+    /// </summary>
+    public static string PurchaseDocument(Guid orgId, Guid siteId, Guid documentId)
+        => SiteEntity(orgId, siteId, "purchase-doc", documentId);
+
+    /// <summary>
+    /// Creates a key for a vendor item mapping grain.
+    /// </summary>
+    public static string VendorItemMapping(Guid orgId, Guid vendorId)
+        => OrgEntity(orgId, "vendor-mapping", vendorId);
+
+    /// <summary>
+    /// Creates a key for an expense grain.
+    /// </summary>
+    public static string Expense(Guid orgId, Guid siteId, Guid expenseId)
+        => SiteEntity(orgId, siteId, "expense", expenseId);
+
+    /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
     public static string GenerateUserCode()
