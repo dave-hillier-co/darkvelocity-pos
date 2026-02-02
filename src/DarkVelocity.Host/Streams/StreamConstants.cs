@@ -79,4 +79,9 @@ public static class StreamConstants
     /// Stream namespace for purchase document events (invoice/receipt confirmation).
     /// </summary>
     public const string PurchaseDocumentStreamNamespace = "purchase-document-events";
+
+    /// <summary>
+    /// Stream namespace for workflow status transition events.
+    /// </summary>
+    public const string WorkflowStreamNamespace = "workflow-events";
 }

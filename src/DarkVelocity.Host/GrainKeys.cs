@@ -445,6 +445,24 @@ public static class GrainKeys
         => SiteEntity(orgId, siteId, "expense", expenseId);
 
     /// <summary>
+    /// Creates a key for a workflow grain.
+    /// Key format: org:{orgId}:workflow:{ownerType}:{ownerId}
+    /// </summary>
+    public static string Workflow(Guid orgId, string ownerType, Guid ownerId)
+        => $"org:{orgId}:workflow:{ownerType}:{ownerId}";
+
+    /// <summary>
+    /// Parses a workflow grain key.
+    /// </summary>
+    public static (Guid OrgId, string OwnerType, Guid OwnerId) ParseWorkflow(string key)
+    {
+        var parts = key.Split(':');
+        if (parts.Length != 5 || parts[0] != "org" || parts[2] != "workflow")
+            throw new ArgumentException($"Invalid workflow key format: {key}");
+        return (Guid.Parse(parts[1]), parts[3], Guid.Parse(parts[4]));
+    }
+
+    /// <summary>
     /// Creates a key for an email inbox grain (one per site).
     /// </summary>
     public static string EmailInbox(Guid orgId, Guid siteId)
