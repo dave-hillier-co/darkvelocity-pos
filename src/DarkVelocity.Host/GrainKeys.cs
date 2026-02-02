@@ -361,6 +361,45 @@ public static class GrainKeys
     /// </summary>
     public static string ChannelRegistry(Guid orgId) => $"{orgId}:channelregistry";
 
+    // ============================================================================
+    // CMS Menu Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a menu item document grain (CMS versioned).
+    /// </summary>
+    public static string MenuItemDocument(Guid orgId, string documentId) => $"{orgId}:menuitemdoc:{documentId}";
+
+    /// <summary>
+    /// Creates a key for a menu category document grain (CMS versioned).
+    /// </summary>
+    public static string MenuCategoryDocument(Guid orgId, string documentId) => $"{orgId}:menucategorydoc:{documentId}";
+
+    /// <summary>
+    /// Creates a key for a modifier block grain.
+    /// </summary>
+    public static string ModifierBlock(Guid orgId, string blockId) => $"{orgId}:modifierblock:{blockId}";
+
+    /// <summary>
+    /// Creates a key for a content tag grain.
+    /// </summary>
+    public static string ContentTag(Guid orgId, string tagId) => $"{orgId}:contenttag:{tagId}";
+
+    /// <summary>
+    /// Creates a key for site menu overrides grain.
+    /// </summary>
+    public static string SiteMenuOverrides(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:menuoverrides";
+
+    /// <summary>
+    /// Creates a key for the menu content resolver grain.
+    /// </summary>
+    public static string MenuContentResolver(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:menuresolver";
+
+    /// <summary>
+    /// Creates a key for the menu registry grain (one per org).
+    /// </summary>
+    public static string MenuRegistry(Guid orgId) => $"{orgId}:menuregistry";
+
     /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
