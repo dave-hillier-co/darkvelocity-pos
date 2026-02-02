@@ -1,10 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance for Claude Code when working with the DarkVelocity POS codebase.
+This file provides guidance for Claude Code when working with the DarkVelocity codebase.
 
 ## Project Overview
 
-DarkVelocity POS is a full-featured Point of Sale system built with .NET 10 and React. The backend uses Microsoft Orleans virtual actor framework for distributed state management with event sourcing patterns.
+DarkVelocity is a complete restaurant and bar management solution built with .NET 10 and React. It provides everything hospitality businesses need: point of sale, kitchen display systems, table and floor management, reservations and bookings, inventory and procurement, customer loyalty, gift cards, staff scheduling, and back-office reporting.
+
+The backend uses Microsoft Orleans virtual actor framework for distributed state management with event sourcing patterns.
 
 ## Tech Stack
 
