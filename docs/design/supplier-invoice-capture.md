@@ -979,13 +979,59 @@ For reference, other approaches considered but not currently implemented:
 4. On confirmation, learn new mappings from manual/suggested items
 ```
 
-### Phase 4: Expense Tracking
+### Phase 4: Expense Tracking ✅ COMPLETE
 - General expense recording (rent, utilities, etc.)
-- Category management
+- Full expense lifecycle (Pending → Approved → Paid)
+- Category management (16 built-in categories)
 - Receipt/document upload for supporting docs
-- Basic expense reporting
+- Basic expense reporting by category
+- Recurring expense support
+- Index grain for querying and aggregation
 
-### Phase 5: Advanced Features
+**Implemented files:**
+- `State/ExpenseState.cs` - Grain state with full expense data model
+- `Events/ExpenseEvents.cs` - Domain events for expense lifecycle
+- `Grains/IExpenseGrain.cs` - Grain interface with commands/results
+- `Grains/ExpenseGrain.cs` - Grain implementation + ExpenseIndexGrain
+- `Endpoints/ExpenseEndpoints.cs` - REST API endpoints
+- `Contracts/ExpenseContracts.cs` - Request DTOs
+
+**Key Features:**
+- **16 expense categories**: Rent, Utilities, Insurance, Equipment, Maintenance, Marketing, Supplies, Professional, BankFees, CreditCardFees, Licenses, Travel, Subscriptions, Taxes, Payroll, Other
+- **Payment methods**: Cash, Check, CreditCard, DebitCard, BankTransfer, Other
+- **Status workflow**: Pending → Approved/Rejected → Paid/Voided
+- **Approval tracking**: Who approved, when, with optional notes
+- **Document attachment**: Link receipt/invoice files to expenses
+- **Recurring expenses**: Pattern support for monthly/weekly/annual expenses
+- **Tax tracking**: Tax amounts and tax-deductible flags
+- **Tag support**: Free-form tags for filtering/grouping
+- **Index grain**: Efficient querying without loading individual expense grains
+
+**Expense Workflow:**
+```
+1. Record expense (status: Pending)
+2. Review and approve/reject
+   - Approved → can be marked as paid
+   - Rejected → terminal state with reason
+3. Mark as paid (status: Paid) with payment details
+4. Can void at any state with reason
+```
+
+**API Endpoints:**
+```
+POST   /api/orgs/{orgId}/sites/{siteId}/expenses          - Create expense
+GET    /api/orgs/{orgId}/sites/{siteId}/expenses          - List with filtering
+GET    /api/orgs/{orgId}/sites/{siteId}/expenses/{id}     - Get expense
+PATCH  /api/orgs/{orgId}/sites/{siteId}/expenses/{id}     - Update expense
+DELETE /api/orgs/{orgId}/sites/{siteId}/expenses/{id}     - Void expense
+POST   /api/orgs/{orgId}/sites/{siteId}/expenses/{id}/approve   - Approve
+POST   /api/orgs/{orgId}/sites/{siteId}/expenses/{id}/reject    - Reject
+POST   /api/orgs/{orgId}/sites/{siteId}/expenses/{id}/pay       - Mark paid
+POST   /api/orgs/{orgId}/sites/{siteId}/expenses/{id}/document  - Attach doc
+GET    /api/orgs/{orgId}/sites/{siteId}/expenses/summary/by-category - Category totals
+```
+
+### Phase 5: Advanced Features (DEFERRED)
 - Price variance alerts (supplier raised prices)
 - Vendor comparison (same item, different prices)
 - Purchase order matching for invoices
@@ -1057,6 +1103,309 @@ For reference, other approaches considered but not currently implemented:
 4. **Approval workflow**: Do invoices need manager approval before confirmation?
 
 5. **Integration depth**: Should confirmed invoices automatically create inventory receipts, or just emit events for separate processing?
+
+---
+
+## LLM-Enhanced Processing (Future Enhancement)
+
+Large Language Models can significantly improve both OCR accuracy and item mapping by understanding context rather than relying purely on pattern matching. This section describes an architecture for incorporating LLMs with appropriate fallbacks.
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    LLM-ENHANCED PROCESSING PIPELINE                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   Document Image/PDF                                                     │
+│          │                                                               │
+│          ▼                                                               │
+│   ┌──────────────────┐                                                  │
+│   │  Primary: Azure   │◄─── Try first (fast, cost-effective)            │
+│   │  Document Intel   │                                                  │
+│   └────────┬─────────┘                                                  │
+│            │                                                             │
+│            ▼  Low confidence (<70%) or extraction failure?               │
+│   ┌──────────────────┐                                                  │
+│   │  Fallback: LLM    │◄─── Vision-capable model (GPT-4V, Claude)       │
+│   │  with Vision      │     Better at: handwriting, unusual layouts,    │
+│   └────────┬─────────┘     multi-language, damaged documents            │
+│            │                                                             │
+│            ▼                                                             │
+│   ┌──────────────────┐                                                  │
+│   │  Extracted Data   │                                                  │
+│   │  (structured)     │                                                  │
+│   └────────┬─────────┘                                                  │
+│            │                                                             │
+│            ▼                                                             │
+│   ┌──────────────────┐                                                  │
+│   │  Primary: Local   │◄─── Fast, no API cost                           │
+│   │  Fuzzy Matching   │     Levenshtein + token overlap                 │
+│   └────────┬─────────┘                                                  │
+│            │                                                             │
+│            ▼  Low confidence (<60%) or no matches?                       │
+│   ┌──────────────────┐                                                  │
+│   │  Fallback: LLM    │◄─── Understands: synonyms, abbreviations,       │
+│   │  Semantic Match   │     measurement conversions, brand names        │
+│   └────────┬─────────┘                                                  │
+│            │                                                             │
+│            ▼                                                             │
+│   ┌──────────────────┐                                                  │
+│   │  Mapped Items     │                                                  │
+│   │  (with confidence)│                                                  │
+│   └──────────────────┘                                                  │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### LLM for Document Extraction
+
+**When to use LLM over traditional OCR:**
+- Confidence score from Azure/Textract is below threshold (e.g., <70%)
+- Document has unusual formatting (handwritten notes, non-standard layouts)
+- Multi-language documents or mixed scripts
+- Damaged, faded, or low-quality images
+- Complex tables with merged cells or inconsistent structure
+
+**Implementation approach:**
+
+```csharp
+public interface IDocumentExtractionService
+{
+    Task<ExtractionResult> ExtractAsync(
+        Stream document,
+        string contentType,
+        ExtractionOptions options,
+        CancellationToken cancellationToken = default);
+}
+
+public record ExtractionOptions(
+    bool AllowLlmFallback = true,
+    decimal MinConfidenceThreshold = 0.70m,
+    string? PreferredProvider = null,  // "azure", "llm", "auto"
+    int MaxLlmRetries = 2);
+
+public class HybridExtractionService : IDocumentExtractionService
+{
+    private readonly IDocumentIntelligenceService _primaryOcr;
+    private readonly ILlmExtractionService _llmFallback;
+
+    public async Task<ExtractionResult> ExtractAsync(...)
+    {
+        // Try primary OCR first
+        var result = await _primaryOcr.ExtractAsync(document, contentType);
+
+        if (result.OverallConfidence >= options.MinConfidenceThreshold)
+            return result;
+
+        // Low confidence - try LLM if enabled
+        if (options.AllowLlmFallback)
+        {
+            var llmResult = await _llmFallback.ExtractWithVisionAsync(
+                document, contentType, result); // Pass OCR result as hint
+
+            // LLM can validate/correct OCR output
+            return MergeResults(result, llmResult);
+        }
+
+        return result; // Return low-confidence result
+    }
+}
+```
+
+**LLM extraction prompt template:**
+
+```
+You are extracting data from a {document_type} image.
+
+Extract the following information in JSON format:
+- vendor_name: The supplier or store name
+- document_number: Invoice/receipt number
+- document_date: Date of the document (YYYY-MM-DD)
+- line_items: Array of {description, quantity, unit, unit_price, total}
+- subtotal, tax, total: Monetary amounts
+
+Previous OCR attempt extracted:
+{ocr_result_json}
+
+Review the image and correct any errors in the OCR output.
+Pay special attention to:
+- Abbreviated item names (expand if possible)
+- Numeric values (quantities, prices)
+- Date formats
+
+Return corrected JSON.
+```
+
+### LLM for Semantic Item Mapping
+
+**When to use LLM over fuzzy matching:**
+- Fuzzy match confidence is below threshold (e.g., <60%)
+- Description uses brand names, synonyms, or industry jargon
+- Measurement/unit conversions needed (e.g., "5LB BAG" → ingredient measured in kg)
+- Ingredient substitutions (e.g., "ROMAINE HEARTS" might map to "lettuce")
+- Multi-word abbreviations that token matching misses
+
+**Implementation approach:**
+
+```csharp
+public interface IItemMappingService
+{
+    Task<MappingResult> MapItemAsync(
+        string vendorDescription,
+        string vendorId,
+        IReadOnlyList<IngredientInfo> candidateIngredients,
+        MappingOptions options,
+        CancellationToken cancellationToken = default);
+}
+
+public record MappingOptions(
+    bool AllowLlmFallback = true,
+    decimal MinFuzzyConfidence = 0.60m,
+    int MaxLlmCandidates = 10);
+
+public class HybridMappingService : IItemMappingService
+{
+    private readonly IFuzzyMatchingService _fuzzyMatcher;
+    private readonly ILlmMappingService _llmMapper;
+    private readonly IVendorItemMappingGrain _mappingGrain;
+
+    public async Task<MappingResult> MapItemAsync(...)
+    {
+        // 1. Check exact mappings first (free, instant)
+        var exactMatch = await _mappingGrain.GetExactMatchAsync(vendorDescription);
+        if (exactMatch != null)
+            return exactMatch;
+
+        // 2. Try fuzzy matching (fast, local)
+        var fuzzyMatches = _fuzzyMatcher.FindIngredientMatches(
+            vendorDescription, candidateIngredients);
+
+        if (fuzzyMatches.Any(m => m.Confidence >= options.MinFuzzyConfidence))
+            return fuzzyMatches.First();
+
+        // 3. LLM semantic matching (slower, costs money)
+        if (options.AllowLlmFallback && fuzzyMatches.Count > 0)
+        {
+            // Give LLM the top fuzzy candidates to choose from
+            var topCandidates = fuzzyMatches.Take(options.MaxLlmCandidates).ToList();
+            var llmResult = await _llmMapper.SelectBestMatchAsync(
+                vendorDescription, topCandidates);
+            return llmResult;
+        }
+
+        // 4. Return best fuzzy match or null
+        return fuzzyMatches.FirstOrDefault();
+    }
+}
+```
+
+**LLM mapping prompt template:**
+
+```
+You are matching a vendor item description to internal inventory ingredients.
+
+Vendor item: "{vendor_description}"
+Vendor: {vendor_name}
+
+Candidate ingredients (from inventory):
+{candidates_json}
+
+Select the BEST matching ingredient, considering:
+- The item might use abbreviations (CHKN=chicken, ORG=organic, LG=large)
+- Brand names should be ignored (focus on the actual product)
+- Unit conversions are acceptable (5LB → 2.27kg ingredient is fine)
+- "None of the above" if no good match exists
+
+Return JSON: {"ingredient_id": "...", "confidence": 0.0-1.0, "reasoning": "..."}
+```
+
+### Cost and Latency Considerations
+
+| Approach | Cost | Latency | Best For |
+|----------|------|---------|----------|
+| Azure Document Intelligence | ~$0.01/page | ~2-5s | Clean PDFs, standard formats |
+| LLM Vision (GPT-4V/Claude) | ~$0.03-0.10/image | ~5-15s | Complex layouts, corrections |
+| Local Fuzzy Matching | Free | <10ms | Exact/near-exact matches |
+| LLM Semantic Matching | ~$0.01-0.03/call | ~1-3s | Ambiguous items, synonyms |
+
+**Recommended thresholds:**
+- OCR confidence threshold: 70% (below this → LLM fallback)
+- Fuzzy match confidence threshold: 60% (below this → LLM fallback)
+- LLM confidence threshold: 80% (below this → flag for manual review)
+
+### Implementation Phases
+
+**Phase A: Instrumentation**
+- Add confidence tracking to current OCR and fuzzy matching
+- Log all low-confidence extractions and mappings
+- Analyze patterns to tune thresholds
+
+**Phase B: LLM Vision for OCR**
+- Implement `ILlmExtractionService` with Claude or GPT-4V
+- Add fallback logic to extraction pipeline
+- A/B test against pure OCR for accuracy improvement
+
+**Phase C: LLM Semantic Mapping**
+- Implement `ILlmMappingService`
+- Add fallback logic to mapping pipeline
+- Track cost per successful mapping vs manual intervention saved
+
+### Service Interface
+
+```csharp
+public interface ILlmExtractionService
+{
+    /// <summary>
+    /// Extract document data using vision-capable LLM.
+    /// </summary>
+    Task<ExtractionResult> ExtractWithVisionAsync(
+        Stream document,
+        string contentType,
+        ExtractionResult? ocrHint = null,
+        CancellationToken cancellationToken = default);
+}
+
+public interface ILlmMappingService
+{
+    /// <summary>
+    /// Select best ingredient match using semantic understanding.
+    /// </summary>
+    Task<MappingResult?> SelectBestMatchAsync(
+        string vendorDescription,
+        IReadOnlyList<MappingCandidate> candidates,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generate mapping suggestions for unknown items.
+    /// </summary>
+    Task<IReadOnlyList<MappingSuggestion>> SuggestMappingsAsync(
+        string vendorDescription,
+        IReadOnlyList<IngredientInfo> allIngredients,
+        CancellationToken cancellationToken = default);
+}
+```
+
+### Fallback Strategy Summary
+
+```
+Document Extraction:
+1. Azure Document Intelligence (fast, cheap)
+   └─► If confidence < 70% ──► 2. LLM Vision (accurate, slower)
+                                   └─► If still low ──► Manual review flag
+
+Item Mapping:
+1. Exact match from learned mappings (instant, free)
+   └─► If no match ──► 2. Fuzzy token matching (fast, free)
+                           └─► If confidence < 60% ──► 3. LLM semantic (smart, costs $)
+                                                           └─► If confidence < 80% ──► Manual review
+```
+
+This layered approach balances cost, latency, and accuracy:
+- Fast path (most items): Exact match + high-confidence fuzzy = 0ms-10ms, $0
+- Medium path: OCR fallback or LLM mapping = 1-15s, $0.01-0.10
+- Slow path (rare): Full LLM pipeline = 10-20s, $0.05-0.15
+- Manual path: Flagged for human review when confidence insufficient
 
 ---
 

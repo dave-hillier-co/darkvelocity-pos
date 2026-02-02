@@ -74,7 +74,8 @@ app.MapOAuthEndpoints()
    .MapBatchEndpoints()
    .MapPurchaseDocumentEndpoints()
    .MapEmailIngestionEndpoints()
-   .MapVendorMappingEndpoints();
+   .MapVendorMappingEndpoints()
+   .MapExpenseEndpoints();
 
 app.Run();
 

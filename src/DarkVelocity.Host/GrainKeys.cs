@@ -393,6 +393,12 @@ public static class GrainKeys
         => $"{orgId}:{siteId}:email-inbox";
 
     /// <summary>
+    /// Creates a key for an expense index grain (one per site).
+    /// </summary>
+    public static string ExpenseIndex(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:expense-index";
+
+    /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
     public static string GenerateUserCode()
