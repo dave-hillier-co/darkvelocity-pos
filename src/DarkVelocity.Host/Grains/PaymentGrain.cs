@@ -11,7 +11,7 @@ public class PaymentGrain : Grain, IPaymentGrain
 {
     private readonly IPersistentState<PaymentState> _state;
     private readonly IGrainFactory _grainFactory;
-    private IAsyncStream<IStreamEvent>? _paymentStream;
+    private Lazy<IAsyncStream<IStreamEvent>>? _paymentStream;
 
     public PaymentGrain(
         [PersistentState("payment", "OrleansStorage")]
@@ -24,21 +24,25 @@ public class PaymentGrain : Grain, IPaymentGrain
 
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        // Stream will be lazily initialized when first payment operation occurs
-        // to avoid initializing for non-existent payments
+        if (_state.State.OrganizationId != Guid.Empty)
+        {
+            InitializeStream();
+        }
         return base.OnActivateAsync(cancellationToken);
     }
 
-    private IAsyncStream<IStreamEvent> GetPaymentStream()
+    private void InitializeStream()
     {
-        if (_paymentStream == null && _state.State.OrganizationId != Guid.Empty)
+        var orgId = _state.State.OrganizationId;
+        _paymentStream = new Lazy<IAsyncStream<IStreamEvent>>(() =>
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.PaymentStreamNamespace, _state.State.OrganizationId.ToString());
-            _paymentStream = streamProvider.GetStream<IStreamEvent>(streamId);
-        }
-        return _paymentStream!;
+            var streamId = StreamId.Create(StreamConstants.PaymentStreamNamespace, orgId.ToString());
+            return streamProvider.GetStream<IStreamEvent>(streamId);
+        });
     }
+
+    private IAsyncStream<IStreamEvent>? PaymentStream => _paymentStream?.Value;
 
     public async Task<PaymentInitiatedResult> InitiateAsync(InitiatePaymentCommand command)
     {
@@ -66,9 +70,10 @@ public class PaymentGrain : Grain, IPaymentGrain
         };
 
         await _state.WriteStateAsync();
+        InitializeStream();
 
         // Publish payment initiated event
-        await GetPaymentStream().OnNextAsync(new PaymentInitiatedEvent(
+        await PaymentStream!.OnNextAsync(new PaymentInitiatedEvent(
             paymentId,
             _state.State.SiteId,
             _state.State.OrderId,
@@ -231,7 +236,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         await _state.WriteStateAsync();
 
         // Publish payment refunded event
-        await GetPaymentStream().OnNextAsync(new PaymentRefundedEvent(
+        await PaymentStream!.OnNextAsync(new PaymentRefundedEvent(
             _state.State.Id,
             _state.State.SiteId,
             _state.State.OrderId,
@@ -270,7 +275,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         await _state.WriteStateAsync();
 
         // Publish payment voided event
-        await GetPaymentStream().OnNextAsync(new PaymentVoidedEvent(
+        await PaymentStream!.OnNextAsync(new PaymentVoidedEvent(
             _state.State.Id,
             _state.State.SiteId,
             _state.State.OrderId,
@@ -328,7 +333,7 @@ public class PaymentGrain : Grain, IPaymentGrain
         // Publish payment completed event via stream
         // This replaces the direct grain call to OrderGrain.RecordPaymentAsync
         // allowing multiple subscribers to react to payment completions
-        await GetPaymentStream().OnNextAsync(new PaymentCompletedEvent(
+        await PaymentStream!.OnNextAsync(new PaymentCompletedEvent(
             _state.State.Id,
             _state.State.SiteId,
             _state.State.OrderId,
@@ -351,7 +356,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
 {
     private readonly IPersistentState<CashDrawerState> _state;
     private readonly IGrainFactory _grainFactory;
-    private ILedgerGrain? _ledger;
+    private Lazy<ILedgerGrain>? _ledger;
 
     public CashDrawerGrain(
         [PersistentState("cashdrawer", "OrleansStorage")]
@@ -362,15 +367,27 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         _grainFactory = grainFactory;
     }
 
-    private ILedgerGrain GetLedger()
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        if (_ledger == null && _state.State.OrganizationId != Guid.Empty)
+        if (_state.State.OrganizationId != Guid.Empty)
         {
-            var ledgerKey = GrainKeys.Ledger(_state.State.OrganizationId, "cashdrawer", _state.State.Id);
-            _ledger = _grainFactory.GetGrain<ILedgerGrain>(ledgerKey);
+            InitializeLedger();
         }
-        return _ledger!;
+        return base.OnActivateAsync(cancellationToken);
     }
+
+    private void InitializeLedger()
+    {
+        var orgId = _state.State.OrganizationId;
+        var drawerId = _state.State.Id;
+        _ledger = new Lazy<ILedgerGrain>(() =>
+        {
+            var ledgerKey = GrainKeys.Ledger(orgId, "cashdrawer", drawerId);
+            return _grainFactory.GetGrain<ILedgerGrain>(ledgerKey);
+        });
+    }
+
+    private ILedgerGrain? Ledger => _ledger?.Value;
 
     public async Task<DrawerOpenedResult> OpenAsync(OpenDrawerCommand command)
     {
@@ -408,11 +425,11 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         });
 
         await _state.WriteStateAsync();
+        InitializeLedger();
 
         // Initialize ledger and credit opening float
-        var ledger = GetLedger();
-        await ledger.InitializeAsync(command.OrganizationId);
-        await ledger.CreditAsync(
+        await Ledger!.InitializeAsync(command.OrganizationId);
+        await Ledger!.CreditAsync(
             command.OpeningFloat,
             "opening_float",
             null,
@@ -430,7 +447,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         // Sync ExpectedBalance from ledger if initialized
         if (_state.State.OrganizationId != Guid.Empty)
         {
-            _state.State.ExpectedBalance = await GetLedger().GetBalanceAsync();
+            _state.State.ExpectedBalance = await Ledger!.GetBalanceAsync();
         }
         return _state.State;
     }
@@ -439,7 +456,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
     {
         EnsureOpen();
 
-        var result = await GetLedger().CreditAsync(
+        var result = await Ledger!.CreditAsync(
             command.Amount,
             "cash_sale",
             null,
@@ -470,7 +487,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
     {
         EnsureOpen();
 
-        var result = await GetLedger().DebitAsync(
+        var result = await Ledger!.DebitAsync(
             command.Amount,
             "cash_payout",
             command.Reason,
@@ -498,7 +515,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
     {
         EnsureOpen();
 
-        var result = await GetLedger().DebitAsync(
+        var result = await Ledger!.DebitAsync(
             command.Amount,
             "drop",
             command.Notes,
@@ -569,7 +586,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         if (_state.State.Status == DrawerStatus.Closed)
             throw new InvalidOperationException("Drawer is already closed");
 
-        var expectedBalance = await GetLedger().GetBalanceAsync();
+        var expectedBalance = await Ledger!.GetBalanceAsync();
         var variance = command.ActualBalance - expectedBalance;
 
         _state.State.ExpectedBalance = expectedBalance;
@@ -588,7 +605,7 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
     {
         if (_state.State.OrganizationId == Guid.Empty)
             return 0;
-        return await GetLedger().GetBalanceAsync();
+        return await Ledger!.GetBalanceAsync();
     }
 
     public Task<DrawerStatus> GetStatusAsync() => Task.FromResult(_state.State.Status);
