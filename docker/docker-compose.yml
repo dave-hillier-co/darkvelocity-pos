@@ -85,6 +85,38 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
 
+  spicedb:
+    image: authzed/spicedb:latest
+    container_name: darkvelocity-spicedb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: serve
+    ports:
+      - "50051:50051"  # gRPC
+      - "8443:8443"    # HTTP/REST gateway
+      - "9090:9090"    # Metrics
+    environment:
+      SPICEDB_GRPC_PRESHARED_KEY: "darkvelocity_dev_key"
+      SPICEDB_DATASTORE_ENGINE: postgres
+      SPICEDB_DATASTORE_CONN_URI: "postgres://darkvelocity:darkvelocity_dev@postgres:5432/spicedb?sslmode=disable"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spicedb-migrate:
+    image: authzed/spicedb:latest
+    container_name: darkvelocity-spicedb-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: migrate head
+    environment:
+      SPICEDB_DATASTORE_ENGINE: postgres
+      SPICEDB_DATASTORE_CONN_URI: "postgres://darkvelocity:darkvelocity_dev@postgres:5432/spicedb?sslmode=disable"
+
 volumes:
   azurite_data:
   postgres_data:

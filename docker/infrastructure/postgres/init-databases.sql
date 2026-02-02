@@ -41,6 +41,10 @@ GRANT ALL PRIVILEGES ON DATABASE costing_db TO darkvelocity;
 CREATE DATABASE reporting_db;
 GRANT ALL PRIVILEGES ON DATABASE reporting_db TO darkvelocity;
 
+-- SpiceDB Database (Relationship-based authorization)
+CREATE DATABASE spicedb;
+GRANT ALL PRIVILEGES ON DATABASE spicedb TO darkvelocity;
+
 -- Connect to each database and enable UUID extension
 \c auth_db
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
