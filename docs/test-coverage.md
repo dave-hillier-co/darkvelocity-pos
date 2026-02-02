@@ -792,3 +792,256 @@ result.Should().NotBeNull();
 result.Status.Should().Be(ExpectedStatus.Active);
 items.Should().HaveCount(3);
 ```
+
+---
+
+## Coverage Gap Analysis
+
+This section identifies logical coverage gaps and areas for improvement.
+
+### Risk Assessment Summary
+
+| Area | Coverage | Risk Level |
+|------|----------|------------|
+| Happy Path Workflows | Excellent | Low |
+| Validation & Error Cases | Poor | **High** |
+| State Transition Validation | Partial | **High** |
+| Concurrent Operations | None | **High** |
+| Cross-Grain Integration | Minimal | **High** |
+| Boundary Cases | Sparse | Medium |
+| Refunds/Reversals | Partial | **High** |
+
+---
+
+### Booking Domain Gaps
+
+**Missing State Transition Tests:**
+- Modifying booking after confirmation
+- Cancelling a completed booking
+- Confirming an already-confirmed booking
+- Seating without first recording arrival
+
+**Missing Availability & Conflict Tests:**
+- Table availability checks with overlapping bookings
+- Double-booking prevention
+- Party size vs table capacity validation
+- Table combination for large parties
+
+**Missing Boundary Tests:**
+- Zero or negative guest counts (error handling)
+- Booking with party size exceeding max capacity
+- Past date booking attempts
+- Maximum advance booking enforcement
+
+**Missing Integration Tests:**
+- Booking confirmation → Table availability impact
+- Booking → Automatic reminder triggering
+
+---
+
+### Order Domain Gaps
+
+**Missing State Transition Tests:**
+- Modifying order after sent to kitchen
+- Closing order without full payment
+- Sending an empty order
+- Void after order completion/closure
+
+**Missing Line Item Tests:**
+- Voiding line after kitchen completion
+- Modifying quantity/price after line is sent
+- Line state validation (voiding already-voided line)
+
+**Missing Discount Tests:**
+- Applying discount greater than order total
+- Multiple discount stacking rules
+- Discount removal/adjustment
+- Discount application after payment
+
+**Missing Split Order Tests:**
+- Split bill scenarios (multiple payment methods)
+- Split order to different tables
+- Unequal splits
+
+**Missing Integration Tests:**
+- Order send → Kitchen ticket creation
+- Order send → Inventory deduction
+- Void order → Cancel kitchen tickets
+- Insufficient inventory rejection
+
+---
+
+### Payment Domain Gaps
+
+**Missing Error Handling Tests:**
+- Card declined during capture
+- Timeout/network failure during payment
+- CVV validation failure
+- Address mismatch (AVS failure)
+
+**Missing Refund Scenario Tests:**
+- Refund exceeding payment amount
+- Refund with prior partial refund
+- Refund processor failure (retry logic)
+- Refund reversal/chargeback
+
+**Missing Split Payment Tests:**
+- Multiple payment methods on one order
+- Partial card + cash split
+- Unequal split scenarios
+
+**Missing Edge Case Tests:**
+- Zero amount payments
+- Negative amounts (error case)
+- Overpayment handling
+- Rounding errors (cash vs digital)
+
+**Missing Integration Tests:**
+- Payment → Order status update verification
+- Payment → Accounting ledger entry
+- Payment → Loyalty points application
+
+---
+
+### Inventory Domain Gaps
+
+**Missing Consumption Error Tests:**
+- Consume with zero quantity
+- Consume negative amount
+- Boundary cases on batch exhaustion
+
+**Missing Expiration Tests:**
+- Batch expiry date enforcement
+- Partial batch expiration
+- Expiration date updates
+- Grace periods for use
+
+**Missing Transfer Tests:**
+- Chain transfers (A → B → C)
+- Transfer approval workflows
+- Transfer failures and rollback
+- Transfer reconciliation
+
+**Missing Integration Tests:**
+- Order placed → Inventory deduction on kitchen send
+- Menu item unavailable when inventory depleted
+- Forecast-based ordering
+
+---
+
+### Kitchen Domain Gaps
+
+**Missing State Transition Tests:**
+- Item recall (reopen completed item)
+- Item modification after start
+- Item void after completion
+- Invalid state transitions
+
+**Missing Routing Tests:**
+- Items for different stations on same ticket
+- Ticket splitting across stations
+- Item routing to wrong station (error handling)
+
+**Missing Queue Tests:**
+- Queue depth tracking
+- Backing up alerts
+- Peak time management
+- Queue timeout/escalation
+
+**Missing Allergen Tests:**
+- Allergen tagging and validation
+- Cross-contamination prevention
+- Allergen warning on ticket
+
+---
+
+### Menu Domain Gaps
+
+**Missing Time-Based Tests:**
+- Lunch vs dinner menu switching
+- Time-restricted items (breakfast only)
+- Blackout periods
+- Seasonal item dates
+
+**Missing Availability Tests:**
+- Sold out items (soft unavailability)
+- Item deactivation impact on existing orders
+- Inventory-based availability
+
+**Missing Modifier Validation Tests:**
+- Required modifier enforcement
+- Min/max selection validation
+- Incompatible modifier combinations
+
+**Missing Pricing Tests:**
+- Price tiers (happy hour, customer type)
+- Price change impact on active orders
+
+---
+
+### Cross-Cutting Gaps
+
+**Concurrency Testing:**
+- No tests for simultaneous operations on same entity
+- No race condition testing
+- No deadlock scenarios
+
+**Input Validation:**
+- Limited negative/boundary value testing
+- Business rule violation message verification
+
+**Audit/History:**
+- No audit trail testing
+- No event sourcing validation
+- No state change tracking verification
+
+---
+
+## Recommended Priority Improvements
+
+### Priority 1 (High Risk)
+
+1. **Add state transition validation tests**
+   - Prevent invalid workflow paths
+   - Verify error messages for invalid transitions
+
+2. **Add order ↔ inventory integration tests**
+   - Verify inventory deduction on kitchen send
+   - Test insufficient inventory rejection
+
+3. **Add payment split scenarios**
+   - Multiple payment methods per order
+   - Partial payments with balance tracking
+
+4. **Add refund error scenarios**
+   - Processor failures
+   - Reversals and chargebacks
+
+### Priority 2 (Medium Risk)
+
+5. **Add menu item availability tests**
+   - Time-based availability
+   - Inventory-based availability
+
+6. **Add kitchen ticket routing tests**
+   - Multi-station orders
+   - Station failure handling
+
+7. **Add negative/boundary case tests**
+   - Zero amounts
+   - Overflow values
+   - Empty collections
+
+### Priority 3 (Lower Risk)
+
+8. **Add concurrent operation tests**
+   - Race conditions
+   - Simultaneous modifications
+
+9. **Add audit trail verification**
+   - Event sourcing validation
+   - State history tracking
+
+10. **Add performance boundary tests**
+    - Large collection handling
+    - Batch operation limits
