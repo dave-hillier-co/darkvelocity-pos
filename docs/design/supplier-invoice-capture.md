@@ -943,12 +943,41 @@ For reference, other approaches considered but not currently implemented:
 - `Endpoints/EmailIngestionEndpoints.cs` - Webhook and management API
 - `Contracts/EmailIngestionContracts.cs` - Request DTOs
 
-### Phase 3: Smart Mapping
+### Phase 3: Smart Mapping ✅ COMPLETE
 - Vendor-specific mapping persistence (suppliers and stores)
 - Auto-mapping for previously confirmed items
 - Fuzzy matching suggestions with confidence scores
 - Learning algorithm improves from confirmations
 - Common retailer recognition (Costco, Walmart item formats)
+- Receipt abbreviation expansion (CHKN → CHICKEN, ORG → ORGANIC, etc.)
+
+**Implemented files:**
+- `State/VendorItemMappingState.cs` - Grain state with exact/pattern mappings
+- `Events/VendorItemMappingEvents.cs` - Mapping domain events
+- `Grains/IVendorItemMappingGrain.cs` - Grain interface with commands/results
+- `Grains/VendorItemMappingGrain.cs` - Grain implementation
+- `Services/IFuzzyMatchingService.cs` - Fuzzy matching with Levenshtein distance
+- `Endpoints/VendorMappingEndpoints.cs` - Mapping management API
+- `Contracts/VendorMappingContracts.cs` - Request DTOs
+
+**Key Features:**
+- Exact description matching (case-insensitive, normalized)
+- Product code matching for supplier SKUs
+- Fuzzy pattern matching using token overlap
+- Auto-learning from confirmed purchase documents
+- Receipt abbreviation expansion dictionary
+- Vendor normalization (Costco variants → "costco")
+
+**Auto-mapping Flow:**
+```
+1. Document extraction completes
+2. PurchaseDocumentGrain calls AttemptAutoMappingAsync()
+3. For each line item:
+   a. Look up exact match by description or product code
+   b. If found → auto-map with high confidence
+   c. If not found → get fuzzy suggestions from patterns
+4. On confirmation, learn new mappings from manual/suggested items
+```
 
 ### Phase 4: Expense Tracking
 - General expense recording (rent, utilities, etc.)

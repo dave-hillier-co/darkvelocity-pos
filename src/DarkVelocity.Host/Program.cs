@@ -26,7 +26,8 @@ builder.Services
     .AddSearchServices(builder.Configuration)
     .AddPaymentGatewayServices()
     .AddSingleton<IDocumentIntelligenceService, StubDocumentIntelligenceService>()
-    .AddSingleton<IEmailIngestionService, StubEmailIngestionService>();
+    .AddSingleton<IEmailIngestionService, StubEmailIngestionService>()
+    .AddSingleton<IFuzzyMatchingService, FuzzyMatchingService>();
 
 var app = builder.Build();
 
@@ -72,7 +73,8 @@ app.MapOAuthEndpoints()
    .MapChannelEndpoints()
    .MapBatchEndpoints()
    .MapPurchaseDocumentEndpoints()
-   .MapEmailIngestionEndpoints();
+   .MapEmailIngestionEndpoints()
+   .MapVendorMappingEndpoints();
 
 app.Run();
 

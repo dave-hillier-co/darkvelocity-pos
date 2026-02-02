@@ -14,14 +14,17 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
 {
     private readonly IPersistentState<PurchaseDocumentState> _state;
     private readonly ILogger<PurchaseDocumentGrain> _logger;
+    private readonly IGrainFactory _grainFactory;
     private IAsyncStream<IStreamEvent>? _purchaseStream;
 
     public PurchaseDocumentGrain(
         [PersistentState("purchase-document", "OrleansStorage")]
         IPersistentState<PurchaseDocumentState> state,
+        IGrainFactory grainFactory,
         ILogger<PurchaseDocumentGrain> logger)
     {
         _state = state;
+        _grainFactory = grainFactory;
         _logger = logger;
     }
 
@@ -149,6 +152,129 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
             _state.State.DocumentId,
             _state.State.Lines.Count,
             command.Confidence);
+
+        // Attempt auto-mapping for all lines
+        await AttemptAutoMappingAsync();
+    }
+
+    /// <summary>
+    /// Attempts to auto-map all unmapped line items using vendor mappings.
+    /// </summary>
+    private async Task AttemptAutoMappingAsync()
+    {
+        if (string.IsNullOrEmpty(_state.State.VendorName))
+            return;
+
+        // Get or create the vendor mapping grain
+        var vendorId = NormalizeVendorId(_state.State.VendorName);
+        var mappingGrain = _grainFactory.GetGrain<IVendorItemMappingGrain>(
+            GrainKeys.VendorItemMapping(_state.State.OrganizationId, vendorId));
+
+        // Initialize if needed
+        if (!await mappingGrain.ExistsAsync())
+        {
+            var vendorType = _state.State.DocumentType == PurchaseDocumentType.Receipt
+                ? VendorType.RetailStore
+                : VendorType.Supplier;
+
+            await mappingGrain.InitializeAsync(new InitializeVendorMappingCommand(
+                _state.State.OrganizationId,
+                vendorId,
+                _state.State.VendorName,
+                vendorType));
+        }
+
+        var mappedCount = 0;
+        var suggestedCount = 0;
+
+        for (var i = 0; i < _state.State.Lines.Count; i++)
+        {
+            var line = _state.State.Lines[i];
+
+            // Skip if already mapped
+            if (line.MappedIngredientId.HasValue)
+                continue;
+
+            // Try to find a mapping
+            var result = await mappingGrain.GetMappingAsync(line.Description, line.ProductCode);
+
+            if (result.Found && result.Mapping != null)
+            {
+                _state.State.Lines[i] = line with
+                {
+                    MappedIngredientId = result.Mapping.IngredientId,
+                    MappedIngredientSku = result.Mapping.IngredientSku,
+                    MappedIngredientName = result.Mapping.IngredientName,
+                    MappingSource = MappingSource.Auto,
+                    MappingConfidence = result.Mapping.Confidence
+                };
+                mappedCount++;
+
+                // Record the usage
+                await mappingGrain.RecordUsageAsync(new RecordMappingUsageCommand(
+                    line.Description,
+                    _state.State.DocumentId));
+            }
+            else
+            {
+                // Get suggestions for unmapped items
+                var suggestions = await mappingGrain.GetSuggestionsAsync(line.Description, null, 3);
+                if (suggestions.Count > 0)
+                {
+                    _state.State.Lines[i] = line with
+                    {
+                        Suggestions = suggestions.Select(s => new SuggestedMapping
+                        {
+                            IngredientId = s.IngredientId,
+                            IngredientName = s.IngredientName,
+                            Sku = s.IngredientSku,
+                            Confidence = s.Confidence,
+                            MatchReason = s.MatchReason
+                        }).ToList()
+                    };
+                    suggestedCount++;
+                }
+            }
+        }
+
+        if (mappedCount > 0 || suggestedCount > 0)
+        {
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+
+            _logger.LogInformation(
+                "Auto-mapping for document {DocumentId}: {MappedCount} auto-mapped, {SuggestedCount} with suggestions",
+                _state.State.DocumentId,
+                mappedCount,
+                suggestedCount);
+        }
+    }
+
+    /// <summary>
+    /// Normalizes a vendor name to a consistent ID.
+    /// </summary>
+    private static string NormalizeVendorId(string vendorName)
+    {
+        // Remove common suffixes and normalize
+        var normalized = vendorName.ToLowerInvariant()
+            .Replace(" inc.", "")
+            .Replace(" llc", "")
+            .Replace(" corp.", "")
+            .Replace(" co.", "")
+            .Replace(",", "")
+            .Replace(".", "")
+            .Trim();
+
+        // Common retailer normalization
+        if (normalized.Contains("costco")) return "costco";
+        if (normalized.Contains("walmart")) return "walmart";
+        if (normalized.Contains("sam's club")) return "sams-club";
+        if (normalized.Contains("restaurant depot")) return "restaurant-depot";
+        if (normalized.Contains("sysco")) return "sysco";
+        if (normalized.Contains("us foods")) return "us-foods";
+
+        // Use the normalized name with spaces replaced by hyphens
+        return System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", "-");
     }
 
     public async Task MarkExtractionFailedAsync(MarkExtractionFailedCommand command)
@@ -319,12 +445,63 @@ public class PurchaseDocumentGrain : Grain, IPurchaseDocumentGrain
             OrganizationId = _state.State.OrganizationId
         });
 
+        // Learn mappings from confirmed lines
+        await LearnMappingsFromConfirmationAsync(command.ConfirmedBy);
+
         _logger.LogInformation(
             "Purchase document confirmed: {DocumentId} by {UserId}",
             _state.State.DocumentId,
             command.ConfirmedBy);
 
         return ToSnapshot();
+    }
+
+    /// <summary>
+    /// Learns mappings from confirmed line items for future auto-mapping.
+    /// </summary>
+    private async Task LearnMappingsFromConfirmationAsync(Guid confirmedBy)
+    {
+        if (string.IsNullOrEmpty(_state.State.VendorName))
+            return;
+
+        var vendorId = NormalizeVendorId(_state.State.VendorName);
+        var mappingGrain = _grainFactory.GetGrain<IVendorItemMappingGrain>(
+            GrainKeys.VendorItemMapping(_state.State.OrganizationId, vendorId));
+
+        var learnedCount = 0;
+
+        foreach (var line in _state.State.Lines)
+        {
+            // Only learn from manually mapped or suggested mappings (not auto-mapped)
+            if (!line.MappedIngredientId.HasValue)
+                continue;
+
+            if (line.MappingSource == MappingSource.Auto)
+                continue; // Already learned
+
+            await mappingGrain.LearnMappingAsync(new LearnMappingCommand(
+                line.Description,
+                line.MappedIngredientId.Value,
+                line.MappedIngredientName ?? "Unknown",
+                line.MappedIngredientSku ?? "unknown",
+                line.MappingSource ?? MappingSource.Manual,
+                line.MappingConfidence,
+                line.ProductCode,
+                _state.State.DocumentId,
+                confirmedBy,
+                line.UnitPrice,
+                line.Unit));
+
+            learnedCount++;
+        }
+
+        if (learnedCount > 0)
+        {
+            _logger.LogInformation(
+                "Learned {Count} mappings from confirmed document {DocumentId}",
+                learnedCount,
+                _state.State.DocumentId);
+        }
     }
 
     public async Task RejectAsync(RejectPurchaseDocumentCommand command)

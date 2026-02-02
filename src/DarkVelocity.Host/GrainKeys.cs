@@ -368,10 +368,17 @@ public static class GrainKeys
         => SiteEntity(orgId, siteId, "purchase-doc", documentId);
 
     /// <summary>
-    /// Creates a key for a vendor item mapping grain.
+    /// Creates a key for a vendor item mapping grain using vendor GUID.
     /// </summary>
     public static string VendorItemMapping(Guid orgId, Guid vendorId)
         => OrgEntity(orgId, "vendor-mapping", vendorId);
+
+    /// <summary>
+    /// Creates a key for a vendor item mapping grain using vendor name/ID string.
+    /// Used for retail stores (e.g., "costco", "walmart").
+    /// </summary>
+    public static string VendorItemMapping(Guid orgId, string vendorId)
+        => $"{orgId}:vendor-mapping:{vendorId.ToLowerInvariant()}";
 
     /// <summary>
     /// Creates a key for an expense grain.
