@@ -1,4 +1,5 @@
 using DarkVelocity.Host;
+using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
@@ -250,9 +251,8 @@ public class BookingGrain : Grain, IBookingGrain
     {
         EnsureExists();
 
-        if (!_state.State.Tags.Contains(tag))
+        if (_state.State.Tags.TryAddTag(tag))
         {
-            _state.State.Tags.Add(tag);
             _state.State.Version++;
             await _state.WriteStateAsync();
         }

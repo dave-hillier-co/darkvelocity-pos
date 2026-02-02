@@ -1,3 +1,4 @@
+using DarkVelocity.Host.Extensions;
 using DarkVelocity.Host.State;
 
 namespace DarkVelocity.Host.Grains;
@@ -178,9 +179,8 @@ public class TableGrain : Grain, ITableGrain
     public async Task AddTagAsync(string tag)
     {
         EnsureExists();
-        if (!_state.State.Tags.Contains(tag))
+        if (_state.State.Tags.TryAddTag(tag))
         {
-            _state.State.Tags.Add(tag);
             _state.State.UpdatedAt = DateTime.UtcNow;
             _state.State.Version++;
             await _state.WriteStateAsync();
