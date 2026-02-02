@@ -1,3 +1,5 @@
+using DarkVelocity.Host.Grains;
+
 namespace DarkVelocity.Host.State;
 
 public enum GiftCardStatus
@@ -17,7 +19,7 @@ public enum GiftCardType
 }
 
 [GenerateSerializer]
-public record GiftCardTransaction
+public record GiftCardTransaction : ILedgerTransaction
 {
     [Id(0)] public Guid Id { get; init; }
     [Id(1)] public GiftCardTransactionType Type { get; init; }
@@ -44,7 +46,7 @@ public enum GiftCardTransactionType
 }
 
 [GenerateSerializer]
-public sealed class GiftCardState
+public sealed class GiftCardState : ILedgerState<GiftCardTransaction>
 {
     [Id(0)] public Guid Id { get; set; }
     [Id(1)] public Guid OrganizationId { get; set; }
@@ -56,6 +58,13 @@ public sealed class GiftCardState
     [Id(6)] public decimal InitialValue { get; set; }
     [Id(7)] public decimal CurrentBalance { get; set; }
     [Id(8)] public string Currency { get; set; } = "USD";
+
+    // ILedgerState.Balance maps to CurrentBalance
+    decimal ILedgerState<GiftCardTransaction>.Balance
+    {
+        get => CurrentBalance;
+        set => CurrentBalance = value;
+    }
 
     [Id(9)] public DateTime? ActivatedAt { get; set; }
     [Id(10)] public DateTime? ExpiresAt { get; set; }

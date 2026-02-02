@@ -1,7 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using DarkVelocity.Host;
-using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using DarkVelocity.Host.Streams;
 using Orleans.Runtime;
@@ -9,24 +7,69 @@ using Orleans.Streams;
 
 namespace DarkVelocity.Host.Grains;
 
-public class GiftCardGrain : Grain, IGiftCardGrain
+/// <summary>
+/// Context for creating gift card transactions.
+/// </summary>
+public record GiftCardTransactionContext(
+    GiftCardTransactionType Type,
+    Guid? OrderId = null,
+    Guid? PaymentId = null,
+    Guid? SiteId = null,
+    Guid PerformedBy = default);
+
+public class GiftCardGrain : LedgerGrain<GiftCardState, GiftCardTransaction>, IGiftCardGrain
 {
-    private readonly IPersistentState<GiftCardState> _state;
     private IAsyncStream<IStreamEvent>? _giftCardStream;
 
     public GiftCardGrain(
         [PersistentState("giftcard", "OrleansStorage")]
-        IPersistentState<GiftCardState> state)
+        IPersistentState<GiftCardState> state) : base(state)
     {
-        _state = state;
+    }
+
+    protected override bool IsInitialized => State.State.Id != Guid.Empty;
+
+    protected override GiftCardTransaction CreateTransaction(
+        decimal amount,
+        decimal balanceAfter,
+        string? notes,
+        object? context)
+    {
+        var ctx = context as GiftCardTransactionContext
+            ?? new GiftCardTransactionContext(GiftCardTransactionType.Adjustment);
+
+        return new GiftCardTransaction
+        {
+            Id = Guid.NewGuid(),
+            Type = ctx.Type,
+            Amount = amount,
+            BalanceAfter = balanceAfter,
+            OrderId = ctx.OrderId,
+            PaymentId = ctx.PaymentId,
+            SiteId = ctx.SiteId,
+            PerformedBy = ctx.PerformedBy,
+            Timestamp = DateTime.UtcNow,
+            Notes = notes
+        };
+    }
+
+    protected override void OnBalanceChanged(decimal previousBalance, decimal newBalance)
+    {
+        // Update status based on balance
+        if (newBalance == 0 && State.State.Status == GiftCardStatus.Active)
+            State.State.Status = GiftCardStatus.Depleted;
+        else if (newBalance > 0 && State.State.Status == GiftCardStatus.Depleted)
+            State.State.Status = GiftCardStatus.Active;
+
+        State.State.UpdatedAt = DateTime.UtcNow;
     }
 
     private IAsyncStream<IStreamEvent> GetGiftCardStream()
     {
-        if (_giftCardStream == null && _state.State.OrganizationId != Guid.Empty)
+        if (_giftCardStream == null && State.State.OrganizationId != Guid.Empty)
         {
             var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
-            var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, _state.State.OrganizationId.ToString());
+            var streamId = StreamId.Create(StreamConstants.GiftCardStreamNamespace, State.State.OrganizationId.ToString());
             _giftCardStream = streamProvider.GetStream<IStreamEvent>(streamId);
         }
         return _giftCardStream!;
@@ -34,13 +77,13 @@ public class GiftCardGrain : Grain, IGiftCardGrain
 
     public async Task<GiftCardCreatedResult> CreateAsync(CreateGiftCardCommand command)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.State.Id != Guid.Empty)
             throw new InvalidOperationException("Gift card already exists");
 
         var key = this.GetPrimaryKeyString();
         var (_, _, cardId) = GrainKeys.ParseOrgEntity(key);
 
-        _state.State = new GiftCardState
+        State.State = new GiftCardState
         {
             Id = cardId,
             OrganizationId = command.OrganizationId,
@@ -56,435 +99,347 @@ public class GiftCardGrain : Grain, IGiftCardGrain
             Version = 1
         };
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
 
-        return new GiftCardCreatedResult(cardId, command.CardNumber, _state.State.CreatedAt);
+        return new GiftCardCreatedResult(cardId, command.CardNumber, State.State.CreatedAt);
     }
 
-    public Task<GiftCardState> GetStateAsync() => Task.FromResult(_state.State);
+    public Task<GiftCardState> GetStateAsync() => Task.FromResult(State.State);
 
     public async Task<GiftCardActivatedResult> ActivateAsync(ActivateGiftCardCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Status != GiftCardStatus.Inactive)
-            throw new InvalidOperationException($"Cannot activate gift card: {_state.State.Status}");
+        if (State.State.Status != GiftCardStatus.Inactive)
+            throw new InvalidOperationException($"Cannot activate gift card: {State.State.Status}");
 
-        _state.State.Status = GiftCardStatus.Active;
-        _state.State.ActivatedAt = DateTime.UtcNow;
-        _state.State.ActivatedBy = command.ActivatedBy;
-        _state.State.ActivationSiteId = command.SiteId;
-        _state.State.ActivationOrderId = command.OrderId;
-        _state.State.PurchaserCustomerId = command.PurchaserCustomerId;
-        _state.State.PurchaserName = command.PurchaserName;
-        _state.State.PurchaserEmail = command.PurchaserEmail;
+        State.State.Status = GiftCardStatus.Active;
+        State.State.ActivatedAt = DateTime.UtcNow;
+        State.State.ActivatedBy = command.ActivatedBy;
+        State.State.ActivationSiteId = command.SiteId;
+        State.State.ActivationOrderId = command.OrderId;
+        State.State.PurchaserCustomerId = command.PurchaserCustomerId;
+        State.State.PurchaserName = command.PurchaserName;
+        State.State.PurchaserEmail = command.PurchaserEmail;
 
-        var transaction = new GiftCardTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Activation,
-            Amount = _state.State.InitialValue,
-            BalanceAfter = _state.State.CurrentBalance,
-            SiteId = command.SiteId,
-            OrderId = command.OrderId,
-            PerformedBy = command.ActivatedBy,
-            Timestamp = DateTime.UtcNow
-        };
-        _state.State.Transactions.Add(transaction);
-        _state.State.Version++;
+        // Record activation transaction (no balance change)
+        await RecordTransactionAsync(
+            State.State.InitialValue,
+            null,
+            new GiftCardTransactionContext(
+                GiftCardTransactionType.Activation,
+                OrderId: command.OrderId,
+                SiteId: command.SiteId,
+                PerformedBy: command.ActivatedBy));
 
-        await _state.WriteStateAsync();
-
-        // Publish gift card activated event - triggers accounting: Debit Cash, Credit GC Liability
+        // Publish gift card activated event
         if (GetGiftCardStream() != null)
         {
             await GetGiftCardStream().OnNextAsync(new GiftCardActivatedEvent(
-                _state.State.Id,
+                State.State.Id,
                 command.SiteId,
-                _state.State.CardNumber,
-                _state.State.InitialValue,
+                State.State.CardNumber,
+                State.State.InitialValue,
                 command.PurchaserCustomerId,
                 command.OrderId)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
-        return new GiftCardActivatedResult(_state.State.CurrentBalance, _state.State.ActivatedAt.Value);
+        return new GiftCardActivatedResult(State.State.CurrentBalance, State.State.ActivatedAt.Value);
     }
 
     public async Task SetRecipientAsync(SetRecipientCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        _state.State.RecipientCustomerId = command.CustomerId;
-        _state.State.RecipientName = command.Name;
-        _state.State.RecipientEmail = command.Email;
-        _state.State.RecipientPhone = command.Phone;
-        _state.State.PersonalMessage = command.PersonalMessage;
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        State.State.RecipientCustomerId = command.CustomerId;
+        State.State.RecipientName = command.Name;
+        State.State.RecipientEmail = command.Email;
+        State.State.RecipientPhone = command.Phone;
+        State.State.PersonalMessage = command.PersonalMessage;
+        State.State.UpdatedAt = DateTime.UtcNow;
+        State.State.Version++;
 
-        await _state.WriteStateAsync();
+        await State.WriteStateAsync();
     }
 
     public async Task<RedemptionResult> RedeemAsync(RedeemGiftCardCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
         EnsureActive();
         EnsureNotExpired();
 
-        if (command.Amount > _state.State.CurrentBalance)
-            throw new InvalidOperationException("Insufficient balance");
+        var result = await DebitAsync(
+            command.Amount,
+            null,
+            new GiftCardTransactionContext(
+                GiftCardTransactionType.Redemption,
+                OrderId: command.OrderId,
+                PaymentId: command.PaymentId,
+                SiteId: command.SiteId,
+                PerformedBy: command.PerformedBy));
 
-        _state.State.CurrentBalance -= command.Amount;
-        _state.State.TotalRedeemed += command.Amount;
-        _state.State.RedemptionCount++;
-        _state.State.LastUsedAt = DateTime.UtcNow;
-        _state.State.LastUsedSiteId = command.SiteId;
+        State.State.TotalRedeemed += command.Amount;
+        State.State.RedemptionCount++;
+        State.State.LastUsedAt = DateTime.UtcNow;
+        State.State.LastUsedSiteId = command.SiteId;
 
-        if (_state.State.CurrentBalance == 0)
-            _state.State.Status = GiftCardStatus.Depleted;
-
-        var transaction = new GiftCardTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Redemption,
-            Amount = -command.Amount,
-            BalanceAfter = _state.State.CurrentBalance,
-            OrderId = command.OrderId,
-            PaymentId = command.PaymentId,
-            SiteId = command.SiteId,
-            PerformedBy = command.PerformedBy,
-            Timestamp = DateTime.UtcNow
-        };
-        _state.State.Transactions.Add(transaction);
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        // Publish gift card redeemed event - triggers accounting: Debit GC Liability, Credit Sales Revenue
+        // Publish gift card redeemed event
         if (GetGiftCardStream() != null)
         {
             await GetGiftCardStream().OnNextAsync(new GiftCardRedeemedEvent(
-                _state.State.Id,
+                State.State.Id,
                 command.SiteId,
-                _state.State.CardNumber,
+                State.State.CardNumber,
                 command.Amount,
-                _state.State.CurrentBalance,
+                State.State.CurrentBalance,
                 command.OrderId,
-                _state.State.RecipientCustomerId)
+                State.State.RecipientCustomerId)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
-        return new RedemptionResult(command.Amount, _state.State.CurrentBalance);
+        return new RedemptionResult(command.Amount, result.BalanceAfter);
     }
 
     public async Task<decimal> ReloadAsync(ReloadGiftCardCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
-            throw new InvalidOperationException($"Cannot reload gift card: {_state.State.Status}");
+        if (State.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
+            throw new InvalidOperationException($"Cannot reload gift card: {State.State.Status}");
 
-        if (_state.State.Status == GiftCardStatus.Depleted)
-            _state.State.Status = GiftCardStatus.Active;
+        var result = await CreditAsync(
+            command.Amount,
+            command.Notes,
+            new GiftCardTransactionContext(
+                GiftCardTransactionType.Reload,
+                OrderId: command.OrderId,
+                SiteId: command.SiteId,
+                PerformedBy: command.PerformedBy));
 
-        _state.State.CurrentBalance += command.Amount;
-        _state.State.TotalReloaded += command.Amount;
-        _state.State.LastUsedAt = DateTime.UtcNow;
-        _state.State.LastUsedSiteId = command.SiteId;
+        State.State.TotalReloaded += command.Amount;
+        State.State.LastUsedAt = DateTime.UtcNow;
+        State.State.LastUsedSiteId = command.SiteId;
 
-        var transaction = new GiftCardTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Reload,
-            Amount = command.Amount,
-            BalanceAfter = _state.State.CurrentBalance,
-            OrderId = command.OrderId,
-            SiteId = command.SiteId,
-            PerformedBy = command.PerformedBy,
-            Timestamp = DateTime.UtcNow,
-            Notes = command.Notes
-        };
-        _state.State.Transactions.Add(transaction);
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        // Publish gift card reloaded event - triggers accounting: Debit Cash, Credit GC Liability
+        // Publish gift card reloaded event
         if (GetGiftCardStream() != null)
         {
             await GetGiftCardStream().OnNextAsync(new GiftCardReloadedEvent(
-                _state.State.Id,
+                State.State.Id,
                 command.SiteId,
-                _state.State.CardNumber,
+                State.State.CardNumber,
                 command.Amount,
-                _state.State.CurrentBalance,
+                result.BalanceAfter,
                 command.OrderId)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
-        return _state.State.CurrentBalance;
+        return result.BalanceAfter;
     }
 
     public async Task<decimal> RefundToCardAsync(RefundToGiftCardCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
-            throw new InvalidOperationException($"Cannot refund to gift card: {_state.State.Status}");
+        if (State.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
+            throw new InvalidOperationException($"Cannot refund to gift card: {State.State.Status}");
 
-        if (_state.State.Status == GiftCardStatus.Depleted)
-            _state.State.Status = GiftCardStatus.Active;
+        var result = await CreditAsync(
+            command.Amount,
+            command.Notes,
+            new GiftCardTransactionContext(
+                GiftCardTransactionType.Refund,
+                PaymentId: command.OriginalPaymentId,
+                SiteId: command.SiteId,
+                PerformedBy: command.PerformedBy));
 
-        _state.State.CurrentBalance += command.Amount;
-        _state.State.LastUsedAt = DateTime.UtcNow;
-        _state.State.LastUsedSiteId = command.SiteId;
+        State.State.LastUsedAt = DateTime.UtcNow;
+        State.State.LastUsedSiteId = command.SiteId;
 
-        var transaction = new GiftCardTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Refund,
-            Amount = command.Amount,
-            BalanceAfter = _state.State.CurrentBalance,
-            PaymentId = command.OriginalPaymentId,
-            SiteId = command.SiteId,
-            PerformedBy = command.PerformedBy,
-            Timestamp = DateTime.UtcNow,
-            Notes = command.Notes
-        };
-        _state.State.Transactions.Add(transaction);
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        // Publish refund applied event - triggers accounting: Debit Refund Expense, Credit GC Liability
+        // Publish refund applied event
         if (_giftCardStream != null && command.OriginalOrderId != null)
         {
             await GetGiftCardStream().OnNextAsync(new GiftCardRefundAppliedEvent(
-                _state.State.Id,
+                State.State.Id,
                 command.SiteId,
-                _state.State.CardNumber,
+                State.State.CardNumber,
                 command.Amount,
-                _state.State.CurrentBalance,
+                result.BalanceAfter,
                 command.OriginalOrderId.Value,
                 command.Notes)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
 
-        return _state.State.CurrentBalance;
+        return result.BalanceAfter;
     }
 
     public async Task<decimal> AdjustBalanceAsync(AdjustGiftCardCommand command)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        var newBalance = _state.State.CurrentBalance + command.Amount;
-        if (newBalance < 0)
-            throw new InvalidOperationException("Adjustment would result in negative balance");
+        var result = command.Amount >= 0
+            ? await CreditAsync(
+                command.Amount,
+                command.Reason,
+                new GiftCardTransactionContext(
+                    GiftCardTransactionType.Adjustment,
+                    PerformedBy: command.AdjustedBy))
+            : await DebitAsync(
+                -command.Amount,
+                command.Reason,
+                new GiftCardTransactionContext(
+                    GiftCardTransactionType.Adjustment,
+                    PerformedBy: command.AdjustedBy));
 
-        _state.State.CurrentBalance = newBalance;
-
-        if (newBalance == 0)
-            _state.State.Status = GiftCardStatus.Depleted;
-        else if (_state.State.Status == GiftCardStatus.Depleted)
-            _state.State.Status = GiftCardStatus.Active;
-
-        var transaction = new GiftCardTransaction
-        {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Adjustment,
-            Amount = command.Amount,
-            BalanceAfter = _state.State.CurrentBalance,
-            PerformedBy = command.AdjustedBy,
-            Timestamp = DateTime.UtcNow,
-            Notes = command.Reason
-        };
-        _state.State.Transactions.Add(transaction);
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        return _state.State.CurrentBalance;
+        return result.BalanceAfter;
     }
 
     public Task<bool> ValidatePinAsync(string pin)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Pin == null)
+        if (State.State.Pin == null)
             return Task.FromResult(true); // No PIN required
 
-        return Task.FromResult(_state.State.Pin == HashPin(pin));
+        return Task.FromResult(State.State.Pin == HashPin(pin));
     }
 
     public async Task ExpireAsync()
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
-            throw new InvalidOperationException($"Cannot expire gift card: {_state.State.Status}");
+        if (State.State.Status is GiftCardStatus.Cancelled or GiftCardStatus.Expired)
+            throw new InvalidOperationException($"Cannot expire gift card: {State.State.Status}");
 
-        var previousBalance = _state.State.CurrentBalance;
-        _state.State.Status = GiftCardStatus.Expired;
+        var previousBalance = State.State.CurrentBalance;
+        State.State.Status = GiftCardStatus.Expired;
 
         if (previousBalance > 0)
         {
-            var transaction = new GiftCardTransaction
-            {
-                Id = Guid.NewGuid(),
-                Type = GiftCardTransactionType.Expiration,
-                Amount = -previousBalance,
-                BalanceAfter = 0,
-                PerformedBy = Guid.Empty,
-                Timestamp = DateTime.UtcNow,
-                Notes = "Card expired"
-            };
-            _state.State.Transactions.Add(transaction);
-            _state.State.CurrentBalance = 0;
+            await DebitAsync(
+                previousBalance,
+                "Card expired",
+                new GiftCardTransactionContext(GiftCardTransactionType.Expiration),
+                allowNegative: false);
+        }
+        else
+        {
+            State.State.UpdatedAt = DateTime.UtcNow;
+            State.State.Version++;
+            await State.WriteStateAsync();
         }
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
-
-        // Publish gift card expired event - triggers accounting: Debit GC Liability, Credit Breakage Income
+        // Publish gift card expired event
         if (_giftCardStream != null && previousBalance > 0)
         {
             await GetGiftCardStream().OnNextAsync(new GiftCardExpiredEvent(
-                _state.State.Id,
-                _state.State.ActivationSiteId ?? Guid.Empty,
-                _state.State.CardNumber,
+                State.State.Id,
+                State.State.ActivationSiteId ?? Guid.Empty,
+                State.State.CardNumber,
                 previousBalance)
             {
-                OrganizationId = _state.State.OrganizationId
+                OrganizationId = State.State.OrganizationId
             });
         }
     }
 
     public async Task CancelAsync(string reason, Guid cancelledBy)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        if (_state.State.Status == GiftCardStatus.Cancelled)
+        if (State.State.Status == GiftCardStatus.Cancelled)
             throw new InvalidOperationException("Gift card already cancelled");
 
-        var previousBalance = _state.State.CurrentBalance;
-        _state.State.Status = GiftCardStatus.Cancelled;
+        var previousBalance = State.State.CurrentBalance;
+        State.State.Status = GiftCardStatus.Cancelled;
 
         if (previousBalance > 0)
         {
-            var transaction = new GiftCardTransaction
-            {
-                Id = Guid.NewGuid(),
-                Type = GiftCardTransactionType.Void,
-                Amount = -previousBalance,
-                BalanceAfter = 0,
-                PerformedBy = cancelledBy,
-                Timestamp = DateTime.UtcNow,
-                Notes = $"Cancelled: {reason}"
-            };
-            _state.State.Transactions.Add(transaction);
-            _state.State.CurrentBalance = 0;
+            await DebitAsync(
+                previousBalance,
+                $"Cancelled: {reason}",
+                new GiftCardTransactionContext(
+                    GiftCardTransactionType.Void,
+                    PerformedBy: cancelledBy),
+                allowNegative: false);
         }
-
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        else
+        {
+            State.State.UpdatedAt = DateTime.UtcNow;
+            State.State.Version++;
+            await State.WriteStateAsync();
+        }
     }
 
     public async Task VoidTransactionAsync(Guid transactionId, string reason, Guid voidedBy)
     {
-        EnsureExists();
+        EnsureInitialized();
 
-        var index = _state.State.Transactions.FindIndex(t => t.Id == transactionId);
-        if (index < 0)
-            throw new InvalidOperationException("Transaction not found");
-
-        var originalTransaction = _state.State.Transactions[index];
+        var originalTransaction = State.State.Transactions.FirstOrDefault(t => t.Id == transactionId)
+            ?? throw new InvalidOperationException("Transaction not found");
 
         // Reverse the transaction
         var reversalAmount = -originalTransaction.Amount;
-        var newBalance = _state.State.CurrentBalance + reversalAmount;
 
-        if (newBalance < 0)
-            throw new InvalidOperationException("Void would result in negative balance");
-
-        _state.State.CurrentBalance = newBalance;
-
-        var voidTransaction = new GiftCardTransaction
+        if (reversalAmount > 0)
         {
-            Id = Guid.NewGuid(),
-            Type = GiftCardTransactionType.Void,
-            Amount = reversalAmount,
-            BalanceAfter = _state.State.CurrentBalance,
-            PerformedBy = voidedBy,
-            Timestamp = DateTime.UtcNow,
-            Notes = $"Void of transaction {transactionId}: {reason}"
-        };
-        _state.State.Transactions.Add(voidTransaction);
-
-        if (_state.State.CurrentBalance == 0)
-            _state.State.Status = GiftCardStatus.Depleted;
-        else if (_state.State.Status == GiftCardStatus.Depleted)
-            _state.State.Status = GiftCardStatus.Active;
-
-        _state.State.UpdatedAt = DateTime.UtcNow;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+            await CreditAsync(
+                reversalAmount,
+                $"Void of transaction {transactionId}: {reason}",
+                new GiftCardTransactionContext(
+                    GiftCardTransactionType.Void,
+                    PerformedBy: voidedBy));
+        }
+        else
+        {
+            await DebitAsync(
+                -reversalAmount,
+                $"Void of transaction {transactionId}: {reason}",
+                new GiftCardTransactionContext(
+                    GiftCardTransactionType.Void,
+                    PerformedBy: voidedBy));
+        }
     }
 
-    public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
+    public Task<bool> ExistsAsync() => Task.FromResult(IsInitialized);
 
     public Task<GiftCardBalanceInfo> GetBalanceInfoAsync()
         => Task.FromResult(new GiftCardBalanceInfo(
-            _state.State.CurrentBalance,
-            _state.State.Status,
-            _state.State.ExpiresAt));
+            State.State.CurrentBalance,
+            State.State.Status,
+            State.State.ExpiresAt));
 
     public Task<bool> HasSufficientBalanceAsync(decimal amount)
     {
-        if (_state.State.Status != GiftCardStatus.Active)
+        if (State.State.Status != GiftCardStatus.Active)
             return Task.FromResult(false);
 
-        if (_state.State.ExpiresAt != null && _state.State.ExpiresAt < DateTime.UtcNow)
+        if (State.State.ExpiresAt != null && State.State.ExpiresAt < DateTime.UtcNow)
             return Task.FromResult(false);
 
-        return Task.FromResult(_state.State.CurrentBalance >= amount);
+        return Task.FromResult(HasSufficientBalance(amount));
     }
 
     public Task<IReadOnlyList<GiftCardTransaction>> GetTransactionsAsync()
-        => Task.FromResult<IReadOnlyList<GiftCardTransaction>>(_state.State.Transactions);
-
-    private void EnsureExists()
-    {
-        if (_state.State.Id == Guid.Empty)
-            throw new InvalidOperationException("Gift card does not exist");
-    }
+        => Task.FromResult<IReadOnlyList<GiftCardTransaction>>(State.State.Transactions);
 
     private void EnsureActive()
     {
-        if (_state.State.Status != GiftCardStatus.Active)
-            throw new InvalidOperationException($"Gift card is not active: {_state.State.Status}");
+        if (State.State.Status != GiftCardStatus.Active)
+            throw new InvalidOperationException($"Gift card is not active: {State.State.Status}");
     }
 
     private void EnsureNotExpired()
     {
-        if (_state.State.ExpiresAt != null && _state.State.ExpiresAt < DateTime.UtcNow)
+        if (State.State.ExpiresAt != null && State.State.ExpiresAt < DateTime.UtcNow)
             throw new InvalidOperationException("Gift card has expired");
     }
 
