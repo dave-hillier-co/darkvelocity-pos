@@ -1,30 +1,241 @@
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.State;
-using Orleans.Runtime;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 
 namespace DarkVelocity.Host.Grains;
 
 // ============================================================================
-// Recipe Document Grain Implementation
+// Recipe Document Grain Implementation (Event Sourced)
 // ============================================================================
 
 /// <summary>
-/// Grain for recipe document management with versioning and workflow.
-/// Provides CMS-like functionality: draft/publish, versioning, scheduling, localization.
+/// Event-sourced grain for recipe document management with versioning and workflow.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class RecipeDocumentGrain : JournaledGrain<RecipeDocumentState, IRecipeDocumentEvent>, IRecipeDocumentGrain
 {
-    private readonly IPersistentState<RecipeDocumentState> _state;
-
-    public RecipeDocumentGrain(
-        [PersistentState("recipeDocument", "OrleansStorage")]
-        IPersistentState<RecipeDocumentState> state)
+    /// <summary>
+    /// Applies domain events to mutate state. This is the core of event sourcing.
+    /// </summary>
+    protected override void TransitionState(RecipeDocumentState state, IRecipeDocumentEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case RecipeDocumentInitialized e:
+                state.OrgId = e.OrgId;
+                state.DocumentId = e.DocumentId;
+                state.IsCreated = true;
+                state.CurrentVersion = 1;
+                state.PublishedVersion = e.PublishImmediately ? 1 : null;
+                state.DraftVersion = e.PublishImmediately ? null : 1;
+                state.CreatedAt = e.OccurredAt;
+                var ingredients = e.Ingredients?.Select((i, idx) => new RecipeIngredientState
+                {
+                    IngredientId = i.IngredientId,
+                    IngredientName = i.IngredientName,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit,
+                    WastePercentage = i.WastePercentage,
+                    UnitCost = i.UnitCost,
+                    PrepInstructions = i.PrepInstructions,
+                    IsOptional = i.IsOptional,
+                    DisplayOrder = i.DisplayOrder == 0 ? idx : i.DisplayOrder,
+                    SubstitutionIds = i.SubstitutionIds?.ToList() ?? []
+                }).ToList() ?? [];
+                state.Versions.Add(new RecipeVersionState
+                {
+                    VersionNumber = 1,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = "Initial creation",
+                    Content = new LocalizedContent
+                    {
+                        DefaultLocale = e.Locale,
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            [e.Locale] = new LocalizedStrings { Name = e.Name, Description = e.Description }
+                        }
+                    },
+                    Media = !string.IsNullOrEmpty(e.ImageUrl) ? new MediaInfo { PrimaryImageUrl = e.ImageUrl } : null,
+                    PortionYield = e.PortionYield,
+                    YieldUnit = e.YieldUnit,
+                    Ingredients = ingredients,
+                    AllergenTags = e.AllergenTags?.ToList() ?? [],
+                    DietaryTags = e.DietaryTags?.ToList() ?? [],
+                    PrepInstructions = e.PrepInstructions,
+                    PrepTimeMinutes = e.PrepTimeMinutes,
+                    CookTimeMinutes = e.CookTimeMinutes,
+                    CategoryId = e.CategoryId
+                });
+                break;
+
+            case RecipeDraftVersionCreated e:
+                var baseVersion = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                var draftIngredients = e.Ingredients?.Select((i, idx) => new RecipeIngredientState
+                {
+                    IngredientId = i.IngredientId,
+                    IngredientName = i.IngredientName,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit,
+                    WastePercentage = i.WastePercentage,
+                    UnitCost = i.UnitCost,
+                    PrepInstructions = i.PrepInstructions,
+                    IsOptional = i.IsOptional,
+                    DisplayOrder = i.DisplayOrder == 0 ? idx : i.DisplayOrder,
+                    SubstitutionIds = i.SubstitutionIds?.ToList() ?? []
+                }).ToList() ?? baseVersion.Ingredients.Select(i => new RecipeIngredientState
+                {
+                    IngredientId = i.IngredientId,
+                    IngredientName = i.IngredientName,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit,
+                    WastePercentage = i.WastePercentage,
+                    UnitCost = i.UnitCost,
+                    PrepInstructions = i.PrepInstructions,
+                    IsOptional = i.IsOptional,
+                    DisplayOrder = i.DisplayOrder,
+                    SubstitutionIds = [.. i.SubstitutionIds]
+                }).ToList();
+                var newVersion = new RecipeVersionState
+                {
+                    VersionNumber = e.VersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = e.ChangeNote,
+                    Content = CloneContent(baseVersion.Content),
+                    Media = baseVersion.Media != null ? new MediaInfo
+                    {
+                        PrimaryImageUrl = e.ImageUrl ?? baseVersion.Media.PrimaryImageUrl,
+                        ThumbnailUrl = baseVersion.Media.ThumbnailUrl,
+                        AdditionalImageUrls = [.. baseVersion.Media.AdditionalImageUrls]
+                    } : e.ImageUrl != null ? new MediaInfo { PrimaryImageUrl = e.ImageUrl } : null,
+                    PortionYield = e.PortionYield ?? baseVersion.PortionYield,
+                    YieldUnit = e.YieldUnit ?? baseVersion.YieldUnit,
+                    Ingredients = draftIngredients,
+                    AllergenTags = e.AllergenTags?.ToList() ?? [.. baseVersion.AllergenTags],
+                    DietaryTags = e.DietaryTags?.ToList() ?? [.. baseVersion.DietaryTags],
+                    PrepInstructions = e.PrepInstructions ?? baseVersion.PrepInstructions,
+                    PrepTimeMinutes = e.PrepTimeMinutes ?? baseVersion.PrepTimeMinutes,
+                    CookTimeMinutes = e.CookTimeMinutes ?? baseVersion.CookTimeMinutes,
+                    CategoryId = e.CategoryId ?? baseVersion.CategoryId
+                };
+                if (e.Name != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Name = e.Name;
+                if (e.Description != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Description = e.Description;
+                state.Versions.Add(newVersion);
+                state.CurrentVersion = e.VersionNumber;
+                state.DraftVersion = e.VersionNumber;
+                break;
+
+            case RecipeDraftWasPublished e:
+                state.PublishedVersion = e.PublishedVersion;
+                state.DraftVersion = null;
+                break;
+
+            case RecipeDraftWasDiscarded e:
+                state.Versions.RemoveAll(v => v.VersionNumber == e.DiscardedVersion);
+                state.DraftVersion = null;
+                state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
+                break;
+
+            case RecipeRevertedToVersion e:
+                var targetVersion = state.Versions.First(v => v.VersionNumber == e.ToVersion);
+                state.Versions.Add(new RecipeVersionState
+                {
+                    VersionNumber = e.NewVersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.RevertedBy,
+                    ChangeNote = e.Reason ?? $"Reverted to version {e.ToVersion}",
+                    Content = CloneContent(targetVersion.Content),
+                    Media = targetVersion.Media,
+                    PortionYield = targetVersion.PortionYield,
+                    YieldUnit = targetVersion.YieldUnit,
+                    Ingredients = targetVersion.Ingredients.Select(i => new RecipeIngredientState
+                    {
+                        IngredientId = i.IngredientId,
+                        IngredientName = i.IngredientName,
+                        Quantity = i.Quantity,
+                        Unit = i.Unit,
+                        WastePercentage = i.WastePercentage,
+                        UnitCost = i.UnitCost,
+                        PrepInstructions = i.PrepInstructions,
+                        IsOptional = i.IsOptional,
+                        DisplayOrder = i.DisplayOrder,
+                        SubstitutionIds = [.. i.SubstitutionIds]
+                    }).ToList(),
+                    AllergenTags = [.. targetVersion.AllergenTags],
+                    DietaryTags = [.. targetVersion.DietaryTags],
+                    PrepInstructions = targetVersion.PrepInstructions,
+                    PrepTimeMinutes = targetVersion.PrepTimeMinutes,
+                    CookTimeMinutes = targetVersion.CookTimeMinutes,
+                    CategoryId = targetVersion.CategoryId
+                });
+                state.CurrentVersion = e.NewVersionNumber;
+                state.PublishedVersion = e.NewVersionNumber;
+                state.DraftVersion = null;
+                break;
+
+            case RecipeTranslationAdded e:
+                var versionForTranslation = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForTranslation.Content.Translations[e.Locale] = new LocalizedStrings
+                {
+                    Name = e.Name,
+                    Description = e.Description
+                };
+                break;
+
+            case RecipeTranslationRemoved e:
+                var versionForRemoval = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForRemoval.Content.Translations.Remove(e.Locale);
+                break;
+
+            case RecipeChangeWasScheduled e:
+                state.Schedules.Add(new ScheduledChange
+                {
+                    ScheduleId = e.ScheduleId,
+                    VersionToActivate = e.VersionToActivate,
+                    ActivateAt = e.ActivateAt,
+                    DeactivateAt = e.DeactivateAt,
+                    Name = e.Name,
+                    IsActive = true
+                });
+                break;
+
+            case RecipeScheduleWasCancelled e:
+                state.Schedules.RemoveAll(s => s.ScheduleId == e.ScheduleId);
+                break;
+
+            case RecipeDocumentWasArchived e:
+                state.IsArchived = true;
+                break;
+
+            case RecipeDocumentWasRestored e:
+                state.IsArchived = false;
+                break;
+
+            case RecipeLinkedToMenu e:
+                if (!state.LinkedMenuItemIds.Contains(e.MenuItemDocumentId))
+                    state.LinkedMenuItemIds.Add(e.MenuItemDocumentId);
+                break;
+
+            case RecipeUnlinkedFromMenu e:
+                state.LinkedMenuItemIds.Remove(e.MenuItemDocumentId);
+                break;
+        }
     }
 
     public async Task<RecipeDocumentSnapshot> CreateAsync(CreateRecipeDocumentCommand command)
     {
-        if (_state.State.IsCreated)
+        if (State.IsCreated)
             throw new InvalidOperationException("Recipe document already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -32,212 +243,125 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
         var orgId = Guid.Parse(parts[0]);
         var documentId = parts[2];
 
-        var ingredients = command.Ingredients?.Select((i, idx) => new RecipeIngredientState
-        {
-            IngredientId = i.IngredientId,
-            IngredientName = i.IngredientName,
-            Quantity = i.Quantity,
-            Unit = i.Unit,
-            WastePercentage = i.WastePercentage,
-            UnitCost = i.UnitCost,
-            PrepInstructions = i.PrepInstructions,
-            IsOptional = i.IsOptional,
-            DisplayOrder = i.DisplayOrder == 0 ? idx : i.DisplayOrder,
-            SubstitutionIds = i.SubstitutionIds?.ToList() ?? []
-        }).ToList() ?? [];
+        var ingredientData = command.Ingredients?.Select((i, idx) => new RecipeIngredientData(
+            IngredientId: i.IngredientId,
+            IngredientName: i.IngredientName,
+            Quantity: i.Quantity,
+            Unit: i.Unit,
+            WastePercentage: i.WastePercentage,
+            UnitCost: i.UnitCost,
+            PrepInstructions: i.PrepInstructions,
+            IsOptional: i.IsOptional,
+            DisplayOrder: i.DisplayOrder == 0 ? idx : i.DisplayOrder,
+            SubstitutionIds: i.SubstitutionIds?.ToList()
+        )).ToList();
 
-        var version = new RecipeVersionState
-        {
-            VersionNumber = 1,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = "Initial creation",
-            Content = new LocalizedContent
-            {
-                DefaultLocale = command.Locale,
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    [command.Locale] = new LocalizedStrings
-                    {
-                        Name = command.Name,
-                        Description = command.Description
-                    }
-                }
-            },
-            Media = !string.IsNullOrEmpty(command.ImageUrl)
-                ? new MediaInfo { PrimaryImageUrl = command.ImageUrl }
-                : null,
-            PortionYield = command.PortionYield,
-            YieldUnit = command.YieldUnit,
-            Ingredients = ingredients,
-            AllergenTags = command.AllergenTags?.ToList() ?? [],
-            DietaryTags = command.DietaryTags?.ToList() ?? [],
-            PrepInstructions = command.PrepInstructions,
-            PrepTimeMinutes = command.PrepTimeMinutes,
-            CookTimeMinutes = command.CookTimeMinutes,
-            CategoryId = command.CategoryId
-        };
+        RaiseEvent(new RecipeDocumentInitialized(
+            DocumentId: documentId,
+            OrgId: orgId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Name: command.Name,
+            Description: command.Description,
+            PortionYield: command.PortionYield,
+            YieldUnit: command.YieldUnit,
+            Ingredients: ingredientData,
+            AllergenTags: command.AllergenTags?.ToList(),
+            DietaryTags: command.DietaryTags?.ToList(),
+            PrepInstructions: command.PrepInstructions,
+            PrepTimeMinutes: command.PrepTimeMinutes,
+            CookTimeMinutes: command.CookTimeMinutes,
+            ImageUrl: command.ImageUrl,
+            CategoryId: command.CategoryId,
+            Locale: command.Locale,
+            CreatedBy: command.CreatedBy,
+            PublishImmediately: command.PublishImmediately
+        ));
 
-        _state.State = new RecipeDocumentState
-        {
-            OrgId = orgId,
-            DocumentId = documentId,
-            IsCreated = true,
-            CurrentVersion = 1,
-            PublishedVersion = command.PublishImmediately ? 1 : null,
-            DraftVersion = command.PublishImmediately ? null : 1,
-            Versions = [version],
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuditLog =
-            [
-                new AuditEntry
-                {
-                    Action = "Created",
-                    UserId = command.CreatedBy,
-                    VersionNumber = 1
-                }
-            ]
-        };
-
-        if (command.PublishImmediately)
-        {
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "Published",
-                UserId = command.CreatedBy,
-                VersionNumber = 1
-            });
-        }
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return GetSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.IsCreated);
+        return Task.FromResult(State.IsCreated);
     }
 
     public async Task<RecipeVersionSnapshot> CreateDraftAsync(CreateRecipeDraftCommand command)
     {
         EnsureInitialized();
 
-        // Get base version (either current draft or published)
-        var baseVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        var ingredientData = command.Ingredients?.Select((i, idx) => new RecipeIngredientData(
+            IngredientId: i.IngredientId,
+            IngredientName: i.IngredientName,
+            Quantity: i.Quantity,
+            Unit: i.Unit,
+            WastePercentage: i.WastePercentage,
+            UnitCost: i.UnitCost,
+            PrepInstructions: i.PrepInstructions,
+            IsOptional: i.IsOptional,
+            DisplayOrder: i.DisplayOrder == 0 ? idx : i.DisplayOrder,
+            SubstitutionIds: i.SubstitutionIds?.ToList()
+        )).ToList();
 
-        var ingredients = command.Ingredients?.Select((i, idx) => new RecipeIngredientState
-        {
-            IngredientId = i.IngredientId,
-            IngredientName = i.IngredientName,
-            Quantity = i.Quantity,
-            Unit = i.Unit,
-            WastePercentage = i.WastePercentage,
-            UnitCost = i.UnitCost,
-            PrepInstructions = i.PrepInstructions,
-            IsOptional = i.IsOptional,
-            DisplayOrder = i.DisplayOrder == 0 ? idx : i.DisplayOrder,
-            SubstitutionIds = i.SubstitutionIds?.ToList() ?? []
-        }).ToList() ?? baseVersion.Ingredients.Select(i => new RecipeIngredientState
-        {
-            IngredientId = i.IngredientId,
-            IngredientName = i.IngredientName,
-            Quantity = i.Quantity,
-            Unit = i.Unit,
-            WastePercentage = i.WastePercentage,
-            UnitCost = i.UnitCost,
-            PrepInstructions = i.PrepInstructions,
-            IsOptional = i.IsOptional,
-            DisplayOrder = i.DisplayOrder,
-            SubstitutionIds = [.. i.SubstitutionIds]
-        }).ToList();
+        RaiseEvent(new RecipeDraftVersionCreated(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: newVersionNumber,
+            Name: command.Name,
+            Description: command.Description,
+            PortionYield: command.PortionYield,
+            YieldUnit: command.YieldUnit,
+            Ingredients: ingredientData,
+            AllergenTags: command.AllergenTags?.ToList(),
+            DietaryTags: command.DietaryTags?.ToList(),
+            PrepInstructions: command.PrepInstructions,
+            PrepTimeMinutes: command.PrepTimeMinutes,
+            CookTimeMinutes: command.CookTimeMinutes,
+            ImageUrl: command.ImageUrl,
+            CategoryId: command.CategoryId,
+            ChangeNote: command.ChangeNote,
+            CreatedBy: command.CreatedBy
+        ));
 
-        var newVersion = new RecipeVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = command.ChangeNote,
-            Content = CloneContent(baseVersion.Content),
-            Media = baseVersion.Media != null ? new MediaInfo
-            {
-                PrimaryImageUrl = command.ImageUrl ?? baseVersion.Media.PrimaryImageUrl,
-                ThumbnailUrl = baseVersion.Media.ThumbnailUrl,
-                AdditionalImageUrls = [.. baseVersion.Media.AdditionalImageUrls]
-            } : command.ImageUrl != null ? new MediaInfo { PrimaryImageUrl = command.ImageUrl } : null,
-            PortionYield = command.PortionYield ?? baseVersion.PortionYield,
-            YieldUnit = command.YieldUnit ?? baseVersion.YieldUnit,
-            Ingredients = ingredients,
-            AllergenTags = command.AllergenTags?.ToList() ?? [.. baseVersion.AllergenTags],
-            DietaryTags = command.DietaryTags?.ToList() ?? [.. baseVersion.DietaryTags],
-            PrepInstructions = command.PrepInstructions ?? baseVersion.PrepInstructions,
-            PrepTimeMinutes = command.PrepTimeMinutes ?? baseVersion.PrepTimeMinutes,
-            CookTimeMinutes = command.CookTimeMinutes ?? baseVersion.CookTimeMinutes,
-            CategoryId = command.CategoryId ?? baseVersion.CategoryId
-        };
+        await ConfirmEvents();
 
-        // Update name/description if provided
-        if (command.Name != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Name = command.Name;
-        }
-        if (command.Description != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Description = command.Description;
-        }
-
-        _state.State.Versions.Add(newVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.DraftVersion = newVersionNumber;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftCreated",
-            UserId = command.CreatedBy,
-            Note = command.ChangeNote,
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        var newVersion = State.Versions.First(v => v.VersionNumber == newVersionNumber);
         return ToVersionSnapshot(newVersion);
     }
 
     public Task<RecipeVersionSnapshot?> GetVersionAsync(int version)
     {
         EnsureInitialized();
-        var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == version);
+        var v = State.Versions.FirstOrDefault(x => x.VersionNumber == version);
         return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
     }
 
     public Task<RecipeVersionSnapshot?> GetPublishedAsync()
     {
         EnsureInitialized();
-        if (!_state.State.PublishedVersion.HasValue)
+        if (!State.PublishedVersion.HasValue)
             return Task.FromResult<RecipeVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
         return Task.FromResult<RecipeVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<RecipeVersionSnapshot?> GetDraftAsync()
     {
         EnsureInitialized();
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return Task.FromResult<RecipeVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
         return Task.FromResult<RecipeVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<IReadOnlyList<RecipeVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20)
     {
         EnsureInitialized();
-        var versions = _state.State.Versions
+        var versions = State.Versions
             .OrderByDescending(v => v.VersionNumber)
             .Skip(skip)
             .Take(take)
@@ -250,283 +374,189 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             throw new InvalidOperationException("No draft to publish");
 
-        var previousPublished = _state.State.PublishedVersion;
-        _state.State.PublishedVersion = _state.State.DraftVersion;
-        _state.State.DraftVersion = null;
+        RaiseEvent(new RecipeDraftWasPublished(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            PublishedVersion: State.DraftVersion.Value,
+            PublishedBy: publishedBy,
+            Note: note
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Published",
-            UserId = publishedBy,
-            Note = note ?? $"Published version {_state.State.PublishedVersion} (previously {previousPublished})",
-            VersionNumber = _state.State.PublishedVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task DiscardDraftAsync()
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return;
 
-        var draftVersion = _state.State.DraftVersion.Value;
-        _state.State.Versions.RemoveAll(v => v.VersionNumber == draftVersion);
-        _state.State.DraftVersion = null;
+        RaiseEvent(new RecipeDraftWasDiscarded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            DiscardedVersion: State.DraftVersion.Value
+        ));
 
-        // Recalculate current version
-        _state.State.CurrentVersion = _state.State.Versions.Max(v => v.VersionNumber);
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftDiscarded",
-            VersionNumber = draftVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.Versions.FirstOrDefault(v => v.VersionNumber == version)
-            ?? throw new InvalidOperationException($"Version {version} not found");
+        if (!State.Versions.Any(v => v.VersionNumber == version))
+            throw new InvalidOperationException($"Version {version} not found");
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        // Create a new version that's a copy of the target version
-        var revertedVersion = new RecipeVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = revertedBy,
-            ChangeNote = reason ?? $"Reverted from version {_state.State.PublishedVersion} to version {version}",
-            Content = CloneContent(targetVersion.Content),
-            Media = targetVersion.Media,
-            PortionYield = targetVersion.PortionYield,
-            YieldUnit = targetVersion.YieldUnit,
-            Ingredients = targetVersion.Ingredients.Select(i => new RecipeIngredientState
-            {
-                IngredientId = i.IngredientId,
-                IngredientName = i.IngredientName,
-                Quantity = i.Quantity,
-                Unit = i.Unit,
-                WastePercentage = i.WastePercentage,
-                UnitCost = i.UnitCost,
-                PrepInstructions = i.PrepInstructions,
-                IsOptional = i.IsOptional,
-                DisplayOrder = i.DisplayOrder,
-                SubstitutionIds = [.. i.SubstitutionIds]
-            }).ToList(),
-            AllergenTags = [.. targetVersion.AllergenTags],
-            DietaryTags = [.. targetVersion.DietaryTags],
-            PrepInstructions = targetVersion.PrepInstructions,
-            PrepTimeMinutes = targetVersion.PrepTimeMinutes,
-            CookTimeMinutes = targetVersion.CookTimeMinutes,
-            CategoryId = targetVersion.CategoryId
-        };
+        RaiseEvent(new RecipeRevertedToVersion(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ToVersion: version,
+            NewVersionNumber: newVersionNumber,
+            RevertedBy: revertedBy,
+            Reason: reason
+        ));
 
-        _state.State.Versions.Add(revertedVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.PublishedVersion = newVersionNumber;
-        _state.State.DraftVersion = null;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Reverted",
-            UserId = revertedBy,
-            Note = reason ?? $"Reverted to version {version}",
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task AddTranslationAsync(AddRecipeTranslationCommand command)
     {
         EnsureInitialized();
 
-        // Add to draft if exists, otherwise to published
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new RecipeTranslationAdded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Locale: command.Locale,
+            Name: command.Name,
+            Description: command.Description
+        ));
 
-        targetVersion.Content.Translations[command.Locale] = new LocalizedStrings
-        {
-            Name = command.Name,
-            Description = command.Description
-        };
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = $"TranslationAdded:{command.Locale}",
-            VersionNumber = targetVersion.VersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RemoveTranslationAsync(string locale)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var targetVersion = State.DraftVersion.HasValue
+            ? State.Versions.First(v => v.VersionNumber == State.DraftVersion.Value)
+            : State.Versions.First(v => v.VersionNumber == State.PublishedVersion);
 
         if (locale == targetVersion.Content.DefaultLocale)
             throw new InvalidOperationException("Cannot remove default locale translation");
 
-        targetVersion.Content.Translations.Remove(locale);
+        RaiseEvent(new RecipeTranslationRemoved(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Locale: locale
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = $"TranslationRemoved:{locale}",
-            VersionNumber = targetVersion.VersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task<ScheduledChange> ScheduleChangeAsync(int version, DateTimeOffset activateAt, DateTimeOffset? deactivateAt = null, string? name = null)
     {
         EnsureInitialized();
 
-        if (!_state.State.Versions.Any(v => v.VersionNumber == version))
+        if (!State.Versions.Any(v => v.VersionNumber == version))
             throw new InvalidOperationException($"Version {version} not found");
 
-        var schedule = new ScheduledChange
-        {
-            ScheduleId = Guid.NewGuid().ToString(),
-            VersionToActivate = version,
-            ActivateAt = activateAt,
-            DeactivateAt = deactivateAt,
-            Name = name,
-            IsActive = true
-        };
+        var scheduleId = Guid.NewGuid().ToString();
 
-        _state.State.Schedules.Add(schedule);
+        RaiseEvent(new RecipeChangeWasScheduled(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ScheduleId: scheduleId,
+            VersionToActivate: version,
+            ActivateAt: activateAt,
+            DeactivateAt: deactivateAt,
+            Name: name
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "ScheduleCreated",
-            Note = $"Scheduled version {version} for {activateAt}",
-            VersionNumber = version
-        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-        return schedule;
+        return State.Schedules.First(s => s.ScheduleId == scheduleId);
     }
 
     public async Task CancelScheduleAsync(string scheduleId)
     {
         EnsureInitialized();
 
-        var schedule = _state.State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
-        if (schedule != null)
+        if (State.Schedules.Any(s => s.ScheduleId == scheduleId))
         {
-            _state.State.Schedules.Remove(schedule);
+            RaiseEvent(new RecipeScheduleWasCancelled(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                ScheduleId: scheduleId
+            ));
 
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "ScheduleCancelled",
-                Note = $"Cancelled schedule {scheduleId}"
-            });
-
-            await _state.WriteStateAsync();
+            await ConfirmEvents();
         }
     }
 
     public Task<IReadOnlyList<ScheduledChange>> GetSchedulesAsync()
     {
         EnsureInitialized();
-        return Task.FromResult<IReadOnlyList<ScheduledChange>>(_state.State.Schedules.Where(s => s.IsActive).ToList());
+        return Task.FromResult<IReadOnlyList<ScheduledChange>>(State.Schedules.Where(s => s.IsActive).ToList());
     }
 
     public async Task ArchiveAsync(Guid? archivedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = true;
-        _state.State.ArchivedAt = DateTimeOffset.UtcNow;
+        RaiseEvent(new RecipeDocumentWasArchived(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ArchivedBy: archivedBy,
+            Reason: reason
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Archived",
-            UserId = archivedBy,
-            Note = reason
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RestoreAsync(Guid? restoredBy = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = false;
-        _state.State.ArchivedAt = null;
+        RaiseEvent(new RecipeDocumentWasRestored(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RestoredBy: restoredBy
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Restored",
-            UserId = restoredBy
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
-    public async Task RecalculateCostAsync(IReadOnlyDictionary<Guid, decimal>? ingredientPrices = null)
+    public Task RecalculateCostAsync(IReadOnlyDictionary<Guid, decimal>? ingredientPrices = null)
     {
         EnsureInitialized();
 
-        // Update costs in the draft or published version
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        // Cost recalculation is a derived computation that doesn't change the core document state.
+        // The ingredient unit costs are updated when drafts are created.
+        // This method can be used for read-only cost computation if needed.
 
-        if (ingredientPrices != null)
-        {
-            foreach (var ingredient in targetVersion.Ingredients)
-            {
-                if (ingredientPrices.TryGetValue(ingredient.IngredientId, out var newPrice))
-                {
-                    ingredient.UnitCost = newPrice;
-                }
-            }
-        }
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "CostRecalculated",
-            Note = $"Theoretical cost: {targetVersion.TheoreticalCost:C}, Cost per portion: {targetVersion.CostPerPortion:C}",
-            VersionNumber = targetVersion.VersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        return Task.CompletedTask;
     }
 
     public async Task LinkMenuItemAsync(string menuItemDocumentId)
     {
         EnsureInitialized();
 
-        if (!_state.State.LinkedMenuItemIds.Contains(menuItemDocumentId))
+        if (!State.LinkedMenuItemIds.Contains(menuItemDocumentId))
         {
-            _state.State.LinkedMenuItemIds.Add(menuItemDocumentId);
+            RaiseEvent(new RecipeLinkedToMenu(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                MenuItemDocumentId: menuItemDocumentId
+            ));
 
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "MenuItemLinked",
-                Note = $"Linked to menu item {menuItemDocumentId}"
-            });
-
-            await _state.WriteStateAsync();
+            await ConfirmEvents();
         }
     }
 
@@ -534,22 +564,22 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
     {
         EnsureInitialized();
 
-        if (_state.State.LinkedMenuItemIds.Remove(menuItemDocumentId))
+        if (State.LinkedMenuItemIds.Contains(menuItemDocumentId))
         {
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "MenuItemUnlinked",
-                Note = $"Unlinked from menu item {menuItemDocumentId}"
-            });
+            RaiseEvent(new RecipeUnlinkedFromMenu(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                MenuItemDocumentId: menuItemDocumentId
+            ));
 
-            await _state.WriteStateAsync();
+            await ConfirmEvents();
         }
     }
 
     public Task<IReadOnlyList<string>> GetLinkedMenuItemsAsync()
     {
         EnsureInitialized();
-        return Task.FromResult<IReadOnlyList<string>>(_state.State.LinkedMenuItemIds);
+        return Task.FromResult<IReadOnlyList<string>>(State.LinkedMenuItemIds);
     }
 
     public Task<RecipeDocumentSnapshot> GetSnapshotAsync()
@@ -558,12 +588,18 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
         return Task.FromResult(GetSnapshot());
     }
 
+    public async Task<IReadOnlyList<IRecipeDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100)
+    {
+        var events = await RetrieveConfirmedEvents(fromVersion, maxCount);
+        return events.ToList();
+    }
+
     public Task<RecipeVersionSnapshot?> PreviewAtAsync(DateTimeOffset when)
     {
         EnsureInitialized();
 
         // Check schedules for what would be active at that time
-        var activeSchedule = _state.State.Schedules
+        var activeSchedule = State.Schedules
             .Where(s => s.IsActive && s.ActivateAt <= when)
             .Where(s => !s.DeactivateAt.HasValue || s.DeactivateAt.Value > when)
             .OrderByDescending(s => s.ActivateAt)
@@ -571,14 +607,14 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
 
         if (activeSchedule != null)
         {
-            var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == activeSchedule.VersionToActivate);
+            var v = State.Versions.FirstOrDefault(x => x.VersionNumber == activeSchedule.VersionToActivate);
             return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
         }
 
         // Return published version
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             return Task.FromResult<RecipeVersionSnapshot?>(ToVersionSnapshot(v));
         }
 
@@ -590,31 +626,31 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
         RecipeVersionSnapshot? published = null;
         RecipeVersionSnapshot? draft = null;
 
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             published = ToVersionSnapshot(v);
         }
 
-        if (_state.State.DraftVersion.HasValue)
+        if (State.DraftVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
             draft = ToVersionSnapshot(v);
         }
 
         return new RecipeDocumentSnapshot(
-            DocumentId: _state.State.DocumentId,
-            OrgId: _state.State.OrgId,
-            CurrentVersion: _state.State.CurrentVersion,
-            PublishedVersion: _state.State.PublishedVersion,
-            DraftVersion: _state.State.DraftVersion,
-            IsArchived: _state.State.IsArchived,
-            CreatedAt: _state.State.CreatedAt,
+            DocumentId: State.DocumentId,
+            OrgId: State.OrgId,
+            CurrentVersion: State.CurrentVersion,
+            PublishedVersion: State.PublishedVersion,
+            DraftVersion: State.DraftVersion,
+            IsArchived: State.IsArchived,
+            CreatedAt: State.CreatedAt,
             Published: published,
             Draft: draft,
-            Schedules: _state.State.Schedules.Where(s => s.IsActive).ToList(),
-            TotalVersions: _state.State.Versions.Count,
-            LinkedMenuItemIds: _state.State.LinkedMenuItemIds);
+            Schedules: State.Schedules.Where(s => s.IsActive).ToList(),
+            TotalVersions: State.Versions.Count,
+            LinkedMenuItemIds: State.LinkedMenuItemIds);
     }
 
     private static RecipeVersionSnapshot ToVersionSnapshot(RecipeVersionState v)
@@ -675,32 +711,163 @@ public class RecipeDocumentGrain : Grain, IRecipeDocumentGrain
 
     private void EnsureInitialized()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
             throw new InvalidOperationException("Recipe document not initialized");
     }
 }
 
 // ============================================================================
-// Recipe Category Document Grain Implementation
+// Recipe Category Document Grain Implementation (Event Sourced)
 // ============================================================================
 
 /// <summary>
-/// Grain for recipe category document management with versioning and workflow.
+/// Event-sourced grain for recipe category document management with versioning and workflow.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class RecipeCategoryDocumentGrain : JournaledGrain<RecipeCategoryDocumentState, IRecipeCategoryDocumentEvent>, IRecipeCategoryDocumentGrain
 {
-    private readonly IPersistentState<RecipeCategoryDocumentState> _state;
-
-    public RecipeCategoryDocumentGrain(
-        [PersistentState("recipeCategoryDocument", "OrleansStorage")]
-        IPersistentState<RecipeCategoryDocumentState> state)
+    /// <summary>
+    /// Applies domain events to mutate state. This is the core of event sourcing.
+    /// </summary>
+    protected override void TransitionState(RecipeCategoryDocumentState state, IRecipeCategoryDocumentEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case RecipeCategoryDocumentInitialized e:
+                state.OrgId = e.OrgId;
+                state.DocumentId = e.DocumentId;
+                state.IsCreated = true;
+                state.CurrentVersion = 1;
+                state.PublishedVersion = e.PublishImmediately ? 1 : null;
+                state.DraftVersion = e.PublishImmediately ? null : 1;
+                state.CreatedAt = e.OccurredAt;
+                state.Versions.Add(new RecipeCategoryVersionState
+                {
+                    VersionNumber = 1,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = "Initial creation",
+                    Content = new LocalizedContent
+                    {
+                        DefaultLocale = e.Locale,
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            [e.Locale] = new LocalizedStrings { Name = e.Name, Description = e.Description }
+                        }
+                    },
+                    Color = e.Color,
+                    IconUrl = e.IconUrl,
+                    DisplayOrder = e.DisplayOrder
+                });
+                break;
+
+            case RecipeCategoryDraftVersionCreated e:
+                var baseVer = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                var newVer = new RecipeCategoryVersionState
+                {
+                    VersionNumber = e.VersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = e.ChangeNote,
+                    Content = CloneContent(baseVer.Content),
+                    Color = e.Color ?? baseVer.Color,
+                    IconUrl = e.IconUrl ?? baseVer.IconUrl,
+                    DisplayOrder = e.DisplayOrder ?? baseVer.DisplayOrder,
+                    RecipeDocumentIds = e.RecipeDocumentIds?.ToList() ?? [.. baseVer.RecipeDocumentIds]
+                };
+                if (e.Name != null)
+                    newVer.Content.Translations[newVer.Content.DefaultLocale].Name = e.Name;
+                if (e.Description != null)
+                    newVer.Content.Translations[newVer.Content.DefaultLocale].Description = e.Description;
+                state.Versions.Add(newVer);
+                state.CurrentVersion = e.VersionNumber;
+                state.DraftVersion = e.VersionNumber;
+                break;
+
+            case RecipeCategoryDraftWasPublished e:
+                state.PublishedVersion = e.PublishedVersion;
+                state.DraftVersion = null;
+                break;
+
+            case RecipeCategoryDraftWasDiscarded e:
+                state.Versions.RemoveAll(v => v.VersionNumber == e.DiscardedVersion);
+                state.DraftVersion = null;
+                state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
+                break;
+
+            case RecipeCategoryRevertedToVersion e:
+                var targetVer = state.Versions.First(v => v.VersionNumber == e.ToVersion);
+                state.Versions.Add(new RecipeCategoryVersionState
+                {
+                    VersionNumber = e.NewVersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.RevertedBy,
+                    ChangeNote = e.Reason ?? $"Reverted to version {e.ToVersion}",
+                    Content = CloneContent(targetVer.Content),
+                    Color = targetVer.Color,
+                    IconUrl = targetVer.IconUrl,
+                    DisplayOrder = targetVer.DisplayOrder,
+                    RecipeDocumentIds = [.. targetVer.RecipeDocumentIds]
+                });
+                state.CurrentVersion = e.NewVersionNumber;
+                state.PublishedVersion = e.NewVersionNumber;
+                state.DraftVersion = null;
+                break;
+
+            case RecipeCategoryRecipeAdded e:
+                var verForAdd = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                if (!verForAdd.RecipeDocumentIds.Contains(e.RecipeDocumentId))
+                    verForAdd.RecipeDocumentIds.Add(e.RecipeDocumentId);
+                break;
+
+            case RecipeCategoryRecipeRemoved e:
+                var verForRemove = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                verForRemove.RecipeDocumentIds.Remove(e.RecipeDocumentId);
+                break;
+
+            case RecipeCategoryRecipesReordered e:
+                var verForReorder = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                verForReorder.RecipeDocumentIds = e.RecipeDocumentIds.ToList();
+                break;
+
+            case RecipeCategoryChangeWasScheduled e:
+                state.Schedules.Add(new ScheduledChange
+                {
+                    ScheduleId = e.ScheduleId,
+                    VersionToActivate = e.VersionToActivate,
+                    ActivateAt = e.ActivateAt,
+                    DeactivateAt = e.DeactivateAt,
+                    Name = e.Name,
+                    IsActive = true
+                });
+                break;
+
+            case RecipeCategoryScheduleWasCancelled e:
+                state.Schedules.RemoveAll(s => s.ScheduleId == e.ScheduleId);
+                break;
+
+            case RecipeCategoryDocumentWasArchived e:
+                state.IsArchived = true;
+                break;
+
+            case RecipeCategoryDocumentWasRestored e:
+                state.IsArchived = false;
+                break;
+        }
     }
 
     public async Task<RecipeCategoryDocumentSnapshot> CreateAsync(CreateRecipeCategoryDocumentCommand command)
     {
-        if (_state.State.IsCreated)
+        if (State.IsCreated)
             throw new InvalidOperationException("Recipe category document already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -708,150 +875,86 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
         var orgId = Guid.Parse(parts[0]);
         var documentId = parts[2];
 
-        var version = new RecipeCategoryVersionState
-        {
-            VersionNumber = 1,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = "Initial creation",
-            Content = new LocalizedContent
-            {
-                DefaultLocale = command.Locale,
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    [command.Locale] = new LocalizedStrings
-                    {
-                        Name = command.Name,
-                        Description = command.Description
-                    }
-                }
-            },
-            Color = command.Color,
-            IconUrl = command.IconUrl,
-            DisplayOrder = command.DisplayOrder
-        };
+        RaiseEvent(new RecipeCategoryDocumentInitialized(
+            DocumentId: documentId,
+            OrgId: orgId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Name: command.Name,
+            DisplayOrder: command.DisplayOrder,
+            Description: command.Description,
+            Color: command.Color,
+            IconUrl: command.IconUrl,
+            Locale: command.Locale,
+            CreatedBy: command.CreatedBy,
+            PublishImmediately: command.PublishImmediately
+        ));
 
-        _state.State = new RecipeCategoryDocumentState
-        {
-            OrgId = orgId,
-            DocumentId = documentId,
-            IsCreated = true,
-            CurrentVersion = 1,
-            PublishedVersion = command.PublishImmediately ? 1 : null,
-            DraftVersion = command.PublishImmediately ? null : 1,
-            Versions = [version],
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuditLog =
-            [
-                new AuditEntry
-                {
-                    Action = "Created",
-                    UserId = command.CreatedBy,
-                    VersionNumber = 1
-                }
-            ]
-        };
-
-        if (command.PublishImmediately)
-        {
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "Published",
-                UserId = command.CreatedBy,
-                VersionNumber = 1
-            });
-        }
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return GetSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.IsCreated);
+        return Task.FromResult(State.IsCreated);
     }
 
     public async Task<RecipeCategoryVersionSnapshot> CreateDraftAsync(CreateRecipeCategoryDraftCommand command)
     {
         EnsureInitialized();
 
-        var baseVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        RaiseEvent(new RecipeCategoryDraftVersionCreated(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: newVersionNumber,
+            CreatedBy: command.CreatedBy,
+            ChangeNote: command.ChangeNote,
+            Name: command.Name,
+            DisplayOrder: command.DisplayOrder,
+            Description: command.Description,
+            Color: command.Color,
+            IconUrl: command.IconUrl,
+            RecipeDocumentIds: command.RecipeDocumentIds?.ToList()
+        ));
 
-        var newVersion = new RecipeCategoryVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = command.ChangeNote,
-            Content = CloneContent(baseVersion.Content),
-            Color = command.Color ?? baseVersion.Color,
-            IconUrl = command.IconUrl ?? baseVersion.IconUrl,
-            DisplayOrder = command.DisplayOrder ?? baseVersion.DisplayOrder,
-            RecipeDocumentIds = command.RecipeDocumentIds?.ToList() ?? [.. baseVersion.RecipeDocumentIds]
-        };
+        await ConfirmEvents();
 
-        if (command.Name != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Name = command.Name;
-        }
-        if (command.Description != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Description = command.Description;
-        }
-
-        _state.State.Versions.Add(newVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.DraftVersion = newVersionNumber;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftCreated",
-            UserId = command.CreatedBy,
-            Note = command.ChangeNote,
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        var newVersion = State.Versions.First(v => v.VersionNumber == newVersionNumber);
         return ToVersionSnapshot(newVersion);
     }
 
     public Task<RecipeCategoryVersionSnapshot?> GetVersionAsync(int version)
     {
         EnsureInitialized();
-        var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == version);
+        var v = State.Versions.FirstOrDefault(x => x.VersionNumber == version);
         return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
     }
 
     public Task<RecipeCategoryVersionSnapshot?> GetPublishedAsync()
     {
         EnsureInitialized();
-        if (!_state.State.PublishedVersion.HasValue)
+        if (!State.PublishedVersion.HasValue)
             return Task.FromResult<RecipeCategoryVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
         return Task.FromResult<RecipeCategoryVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<RecipeCategoryVersionSnapshot?> GetDraftAsync()
     {
         EnsureInitialized();
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return Task.FromResult<RecipeCategoryVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
         return Task.FromResult<RecipeCategoryVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<IReadOnlyList<RecipeCategoryVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20)
     {
         EnsureInitialized();
-        var versions = _state.State.Versions
+        var versions = State.Versions
             .OrderByDescending(v => v.VersionNumber)
             .Skip(skip)
             .Take(take)
@@ -864,95 +967,76 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             throw new InvalidOperationException("No draft to publish");
 
-        var previousPublished = _state.State.PublishedVersion;
-        _state.State.PublishedVersion = _state.State.DraftVersion;
-        _state.State.DraftVersion = null;
+        RaiseEvent(new RecipeCategoryDraftWasPublished(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            PublishedVersion: State.DraftVersion.Value,
+            PreviousPublishedVersion: State.PublishedVersion,
+            PublishedBy: publishedBy,
+            Note: note
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Published",
-            UserId = publishedBy,
-            Note = note ?? $"Published version {_state.State.PublishedVersion} (previously {previousPublished})",
-            VersionNumber = _state.State.PublishedVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task DiscardDraftAsync()
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return;
 
-        var draftVersion = _state.State.DraftVersion.Value;
-        _state.State.Versions.RemoveAll(v => v.VersionNumber == draftVersion);
-        _state.State.DraftVersion = null;
-        _state.State.CurrentVersion = _state.State.Versions.Max(v => v.VersionNumber);
+        RaiseEvent(new RecipeCategoryDraftWasDiscarded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            DiscardedVersion: State.DraftVersion.Value
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftDiscarded",
-            VersionNumber = draftVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.Versions.FirstOrDefault(v => v.VersionNumber == version)
-            ?? throw new InvalidOperationException($"Version {version} not found");
+        if (!State.Versions.Any(v => v.VersionNumber == version))
+            throw new InvalidOperationException($"Version {version} not found");
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var revertedVersion = new RecipeCategoryVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = revertedBy,
-            ChangeNote = reason ?? $"Reverted from version {_state.State.PublishedVersion} to version {version}",
-            Content = CloneContent(targetVersion.Content),
-            Color = targetVersion.Color,
-            IconUrl = targetVersion.IconUrl,
-            DisplayOrder = targetVersion.DisplayOrder,
-            RecipeDocumentIds = [.. targetVersion.RecipeDocumentIds]
-        };
+        RaiseEvent(new RecipeCategoryRevertedToVersion(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            FromVersion: State.PublishedVersion ?? 0,
+            ToVersion: version,
+            NewVersionNumber: newVersionNumber,
+            RevertedBy: revertedBy,
+            Reason: reason
+        ));
 
-        _state.State.Versions.Add(revertedVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.PublishedVersion = newVersionNumber;
-        _state.State.DraftVersion = null;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Reverted",
-            UserId = revertedBy,
-            Note = reason ?? $"Reverted to version {version}",
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task AddRecipeAsync(string recipeDocumentId)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var targetVersion = State.DraftVersion.HasValue
+            ? State.Versions.First(v => v.VersionNumber == State.DraftVersion.Value)
+            : State.Versions.First(v => v.VersionNumber == State.PublishedVersion);
 
         if (!targetVersion.RecipeDocumentIds.Contains(recipeDocumentId))
         {
-            targetVersion.RecipeDocumentIds.Add(recipeDocumentId);
-            await _state.WriteStateAsync();
+            RaiseEvent(new RecipeCategoryRecipeAdded(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                RecipeDocumentId: recipeDocumentId
+            ));
+
+            await ConfirmEvents();
         }
     }
 
@@ -960,70 +1044,65 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new RecipeCategoryRecipeRemoved(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RecipeDocumentId: recipeDocumentId
+        ));
 
-        targetVersion.RecipeDocumentIds.Remove(recipeDocumentId);
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task ReorderRecipesAsync(IReadOnlyList<string> recipeDocumentIds)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new RecipeCategoryRecipesReordered(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RecipeDocumentIds: recipeDocumentIds.ToList()
+        ));
 
-        targetVersion.RecipeDocumentIds = recipeDocumentIds.ToList();
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task<ScheduledChange> ScheduleChangeAsync(int version, DateTimeOffset activateAt, DateTimeOffset? deactivateAt = null, string? name = null)
     {
         EnsureInitialized();
 
-        if (!_state.State.Versions.Any(v => v.VersionNumber == version))
+        if (!State.Versions.Any(v => v.VersionNumber == version))
             throw new InvalidOperationException($"Version {version} not found");
 
-        var schedule = new ScheduledChange
-        {
-            ScheduleId = Guid.NewGuid().ToString(),
-            VersionToActivate = version,
-            ActivateAt = activateAt,
-            DeactivateAt = deactivateAt,
-            Name = name,
-            IsActive = true
-        };
+        var scheduleId = Guid.NewGuid().ToString();
 
-        _state.State.Schedules.Add(schedule);
+        RaiseEvent(new RecipeCategoryChangeWasScheduled(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ScheduleId: scheduleId,
+            VersionToActivate: version,
+            ActivateAt: activateAt,
+            DeactivateAt: deactivateAt,
+            Name: name
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "ScheduleCreated",
-            Note = $"Scheduled version {version} for {activateAt}",
-            VersionNumber = version
-        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
-        return schedule;
+        return State.Schedules.First(s => s.ScheduleId == scheduleId);
     }
 
     public async Task CancelScheduleAsync(string scheduleId)
     {
         EnsureInitialized();
 
-        var schedule = _state.State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
-        if (schedule != null)
+        if (State.Schedules.Any(s => s.ScheduleId == scheduleId))
         {
-            _state.State.Schedules.Remove(schedule);
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "ScheduleCancelled",
-                Note = $"Cancelled schedule {scheduleId}"
-            });
-            await _state.WriteStateAsync();
+            RaiseEvent(new RecipeCategoryScheduleWasCancelled(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                ScheduleId: scheduleId
+            ));
+
+            await ConfirmEvents();
         }
     }
 
@@ -1031,31 +1110,27 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = true;
+        RaiseEvent(new RecipeCategoryDocumentWasArchived(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ArchivedBy: archivedBy,
+            Reason: reason
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Archived",
-            UserId = archivedBy,
-            Note = reason
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RestoreAsync(Guid? restoredBy = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = false;
+        RaiseEvent(new RecipeCategoryDocumentWasRestored(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RestoredBy: restoredBy
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Restored",
-            UserId = restoredBy
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public Task<RecipeCategoryDocumentSnapshot> GetSnapshotAsync()
@@ -1064,35 +1139,41 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
         return Task.FromResult(GetSnapshot());
     }
 
+    public async Task<IReadOnlyList<IRecipeCategoryDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100)
+    {
+        var events = await RetrieveConfirmedEvents(fromVersion, maxCount);
+        return events.ToList();
+    }
+
     private RecipeCategoryDocumentSnapshot GetSnapshot()
     {
         RecipeCategoryVersionSnapshot? published = null;
         RecipeCategoryVersionSnapshot? draft = null;
 
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             published = ToVersionSnapshot(v);
         }
 
-        if (_state.State.DraftVersion.HasValue)
+        if (State.DraftVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
             draft = ToVersionSnapshot(v);
         }
 
         return new RecipeCategoryDocumentSnapshot(
-            DocumentId: _state.State.DocumentId,
-            OrgId: _state.State.OrgId,
-            CurrentVersion: _state.State.CurrentVersion,
-            PublishedVersion: _state.State.PublishedVersion,
-            DraftVersion: _state.State.DraftVersion,
-            IsArchived: _state.State.IsArchived,
-            CreatedAt: _state.State.CreatedAt,
+            DocumentId: State.DocumentId,
+            OrgId: State.OrgId,
+            CurrentVersion: State.CurrentVersion,
+            PublishedVersion: State.PublishedVersion,
+            DraftVersion: State.DraftVersion,
+            IsArchived: State.IsArchived,
+            CreatedAt: State.CreatedAt,
             Published: published,
             Draft: draft,
-            Schedules: _state.State.Schedules.Where(s => s.IsActive).ToList(),
-            TotalVersions: _state.State.Versions.Count);
+            Schedules: State.Schedules.Where(s => s.IsActive).ToList(),
+            TotalVersions: State.Versions.Count);
     }
 
     private static RecipeCategoryVersionSnapshot ToVersionSnapshot(RecipeCategoryVersionState v)
@@ -1132,7 +1213,7 @@ public class RecipeCategoryDocumentGrain : Grain, IRecipeCategoryDocumentGrain
 
     private void EnsureInitialized()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
             throw new InvalidOperationException("Recipe category document not initialized");
     }
 }
@@ -1159,7 +1240,7 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     {
         await EnsureInitializedAsync();
 
-        _state.State.Recipes[documentId] = new RecipeRegistryEntry
+        State.Recipes[documentId] = new RecipeRegistryEntry
         {
             DocumentId = documentId,
             Name = name,
@@ -1179,7 +1260,7 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     {
         await EnsureInitializedAsync();
 
-        if (_state.State.Recipes.TryGetValue(documentId, out var entry))
+        if (State.Recipes.TryGetValue(documentId, out var entry))
         {
             entry.Name = name;
             entry.CostPerPortion = costPerPortion;
@@ -1195,13 +1276,13 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     public async Task UnregisterRecipeAsync(string documentId)
     {
         await EnsureInitializedAsync();
-        _state.State.Recipes.Remove(documentId);
+        State.Recipes.Remove(documentId);
         await _state.WriteStateAsync();
     }
 
     public Task<IReadOnlyList<RecipeDocumentSummary>> GetRecipesAsync(string? categoryId = null, bool includeArchived = false)
     {
-        var recipes = _state.State.Recipes.Values
+        var recipes = State.Recipes.Values
             .Where(r => includeArchived || !r.IsArchived)
             .Where(r => categoryId == null || r.CategoryId == categoryId)
             .OrderBy(r => r.Name)
@@ -1224,7 +1305,7 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     {
         await EnsureInitializedAsync();
 
-        _state.State.Categories[documentId] = new RecipeCategoryRegistryEntry
+        State.Categories[documentId] = new RecipeCategoryRegistryEntry
         {
             DocumentId = documentId,
             Name = name,
@@ -1243,7 +1324,7 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     {
         await EnsureInitializedAsync();
 
-        if (_state.State.Categories.TryGetValue(documentId, out var entry))
+        if (State.Categories.TryGetValue(documentId, out var entry))
         {
             entry.Name = name;
             entry.DisplayOrder = displayOrder;
@@ -1259,13 +1340,13 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     public async Task UnregisterCategoryAsync(string documentId)
     {
         await EnsureInitializedAsync();
-        _state.State.Categories.Remove(documentId);
+        State.Categories.Remove(documentId);
         await _state.WriteStateAsync();
     }
 
     public Task<IReadOnlyList<RecipeCategoryDocumentSummary>> GetCategoriesAsync(bool includeArchived = false)
     {
-        var categories = _state.State.Categories.Values
+        var categories = State.Categories.Values
             .Where(c => includeArchived || !c.IsArchived)
             .OrderBy(c => c.DisplayOrder)
             .ThenBy(c => c.Name)
@@ -1286,7 +1367,7 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
     public Task<IReadOnlyList<RecipeDocumentSummary>> SearchRecipesAsync(string query, int take = 20)
     {
         var lowerQuery = query.ToLowerInvariant();
-        var recipes = _state.State.Recipes.Values
+        var recipes = State.Recipes.Values
             .Where(r => !r.IsArchived)
             .Where(r => r.Name.ToLowerInvariant().Contains(lowerQuery))
             .Take(take)
@@ -1307,12 +1388,12 @@ public class RecipeRegistryGrain : Grain, IRecipeRegistryGrain
 
     private async Task EnsureInitializedAsync()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
         {
             var key = this.GetPrimaryKeyString();
             var parts = key.Split(':');
-            _state.State.OrgId = Guid.Parse(parts[0]);
-            _state.State.IsCreated = true;
+            State.OrgId = Guid.Parse(parts[0]);
+            State.IsCreated = true;
             await _state.WriteStateAsync();
         }
     }

@@ -1,30 +1,193 @@
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.State;
-using Orleans.Runtime;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 
 namespace DarkVelocity.Host.Grains;
 
 // ============================================================================
-// Menu Item Document Grain Implementation
+// Menu Item Document Grain Implementation (Event Sourced)
 // ============================================================================
 
 /// <summary>
-/// Grain for menu item document management with versioning and workflow.
-/// Provides CMS-like functionality: draft/publish, versioning, scheduling, localization.
+/// Event-sourced grain for menu item document management with versioning and workflow.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class MenuItemDocumentGrain : JournaledGrain<MenuItemDocumentState, IMenuItemDocumentEvent>, IMenuItemDocumentGrain
 {
-    private readonly IPersistentState<MenuItemDocumentState> _state;
-
-    public MenuItemDocumentGrain(
-        [PersistentState("menuItemDocument", "OrleansStorage")]
-        IPersistentState<MenuItemDocumentState> state)
+    /// <summary>
+    /// Applies domain events to mutate state. This is the core of event sourcing.
+    /// </summary>
+    protected override void TransitionState(MenuItemDocumentState state, IMenuItemDocumentEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case MenuItemDocumentInitialized e:
+                state.OrgId = e.OrgId;
+                state.DocumentId = e.DocumentId;
+                state.IsCreated = true;
+                state.CurrentVersion = 1;
+                state.PublishedVersion = e.PublishImmediately ? 1 : null;
+                state.DraftVersion = e.PublishImmediately ? null : 1;
+                state.CreatedAt = e.OccurredAt;
+                state.Versions.Add(new MenuItemVersionState
+                {
+                    VersionNumber = 1,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = "Initial creation",
+                    Content = new LocalizedContent
+                    {
+                        DefaultLocale = e.Locale,
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            [e.Locale] = new LocalizedStrings { Name = e.Name, Description = e.Description }
+                        }
+                    },
+                    Pricing = new PricingInfo { BasePrice = e.Price },
+                    Media = !string.IsNullOrEmpty(e.ImageUrl) ? new MediaInfo { PrimaryImageUrl = e.ImageUrl } : null,
+                    CategoryId = e.CategoryId,
+                    AccountingGroupId = e.AccountingGroupId,
+                    RecipeId = e.RecipeId,
+                    Sku = e.Sku,
+                    TrackInventory = e.TrackInventory
+                });
+                break;
+
+            case MenuItemDraftVersionCreated e:
+                var baseVersion = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                var newVersion = new MenuItemVersionState
+                {
+                    VersionNumber = e.VersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = e.ChangeNote,
+                    Content = CloneContent(baseVersion.Content),
+                    Pricing = new PricingInfo
+                    {
+                        BasePrice = e.Price ?? baseVersion.Pricing.BasePrice,
+                        CostPrice = baseVersion.Pricing.CostPrice,
+                        Currency = baseVersion.Pricing.Currency
+                    },
+                    Media = baseVersion.Media != null ? new MediaInfo
+                    {
+                        PrimaryImageUrl = e.ImageUrl ?? baseVersion.Media.PrimaryImageUrl,
+                        ThumbnailUrl = baseVersion.Media.ThumbnailUrl,
+                        AdditionalImageUrls = [.. baseVersion.Media.AdditionalImageUrls]
+                    } : e.ImageUrl != null ? new MediaInfo { PrimaryImageUrl = e.ImageUrl } : null,
+                    CategoryId = e.CategoryId ?? baseVersion.CategoryId,
+                    AccountingGroupId = e.AccountingGroupId ?? baseVersion.AccountingGroupId,
+                    RecipeId = e.RecipeId ?? baseVersion.RecipeId,
+                    ModifierBlockIds = e.ModifierBlockIds ?? [.. baseVersion.ModifierBlockIds],
+                    TagIds = e.TagIds ?? [.. baseVersion.TagIds],
+                    Sku = e.Sku ?? baseVersion.Sku,
+                    TrackInventory = e.TrackInventory ?? baseVersion.TrackInventory,
+                    DisplayOrder = baseVersion.DisplayOrder
+                };
+                if (e.Name != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Name = e.Name;
+                if (e.Description != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Description = e.Description;
+                state.Versions.Add(newVersion);
+                state.CurrentVersion = e.VersionNumber;
+                state.DraftVersion = e.VersionNumber;
+                break;
+
+            case MenuItemDraftWasPublished e:
+                state.PublishedVersion = e.PublishedVersion;
+                state.DraftVersion = null;
+                break;
+
+            case MenuItemDraftDiscarded e:
+                state.Versions.RemoveAll(v => v.VersionNumber == e.DiscardedVersion);
+                state.DraftVersion = null;
+                state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
+                break;
+
+            case MenuItemRevertedToVersion e:
+                var targetVersion = state.Versions.First(v => v.VersionNumber == e.ToVersion);
+                var revertedVersion = new MenuItemVersionState
+                {
+                    VersionNumber = e.NewVersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.RevertedBy,
+                    ChangeNote = e.Reason ?? $"Reverted to version {e.ToVersion}",
+                    Content = CloneContent(targetVersion.Content),
+                    Pricing = new PricingInfo
+                    {
+                        BasePrice = targetVersion.Pricing.BasePrice,
+                        CostPrice = targetVersion.Pricing.CostPrice,
+                        Currency = targetVersion.Pricing.Currency
+                    },
+                    Media = targetVersion.Media,
+                    CategoryId = targetVersion.CategoryId,
+                    AccountingGroupId = targetVersion.AccountingGroupId,
+                    RecipeId = targetVersion.RecipeId,
+                    ModifierBlockIds = [.. targetVersion.ModifierBlockIds],
+                    TagIds = [.. targetVersion.TagIds],
+                    Sku = targetVersion.Sku,
+                    TrackInventory = targetVersion.TrackInventory,
+                    DisplayOrder = targetVersion.DisplayOrder
+                };
+                state.Versions.Add(revertedVersion);
+                state.CurrentVersion = e.NewVersionNumber;
+                state.PublishedVersion = e.NewVersionNumber;
+                state.DraftVersion = null;
+                break;
+
+            case MenuItemTranslationAdded e:
+                var versionForTranslation = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForTranslation.Content.Translations[e.Locale] = new LocalizedStrings
+                {
+                    Name = e.Name,
+                    Description = e.Description,
+                    KitchenName = e.KitchenName
+                };
+                break;
+
+            case MenuItemTranslationRemoved e:
+                var versionForRemoval = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForRemoval.Content.Translations.Remove(e.Locale);
+                break;
+
+            case MenuItemChangeWasScheduled e:
+                state.Schedules.Add(new ScheduledChange
+                {
+                    ScheduleId = e.ScheduleId,
+                    VersionToActivate = e.VersionToActivate,
+                    ActivateAt = e.ActivateAt,
+                    DeactivateAt = e.DeactivateAt,
+                    Name = e.Name,
+                    IsActive = true
+                });
+                break;
+
+            case MenuItemScheduleWasCancelled e:
+                state.Schedules.RemoveAll(s => s.ScheduleId == e.ScheduleId);
+                break;
+
+            case MenuItemDocumentWasArchived e:
+                state.IsArchived = true;
+                state.ArchivedAt = e.OccurredAt;
+                break;
+
+            case MenuItemDocumentWasRestored e:
+                state.IsArchived = false;
+                state.ArchivedAt = null;
+                break;
+        }
     }
 
     public async Task<MenuItemDocumentSnapshot> CreateAsync(CreateMenuItemDocumentCommand command)
     {
-        if (_state.State.IsCreated)
+        if (State.IsCreated)
             throw new InvalidOperationException("Menu item document already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -32,177 +195,94 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
         var orgId = Guid.Parse(parts[0]);
         var documentId = parts[2];
 
-        var version = new MenuItemVersionState
-        {
-            VersionNumber = 1,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = "Initial creation",
-            Content = new LocalizedContent
-            {
-                DefaultLocale = command.Locale,
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    [command.Locale] = new LocalizedStrings
-                    {
-                        Name = command.Name,
-                        Description = command.Description
-                    }
-                }
-            },
-            Pricing = new PricingInfo
-            {
-                BasePrice = command.Price
-            },
-            Media = !string.IsNullOrEmpty(command.ImageUrl)
-                ? new MediaInfo { PrimaryImageUrl = command.ImageUrl }
-                : null,
-            CategoryId = command.CategoryId,
-            AccountingGroupId = command.AccountingGroupId,
-            RecipeId = command.RecipeId,
-            Sku = command.Sku,
-            TrackInventory = command.TrackInventory
-        };
+        RaiseEvent(new MenuItemDocumentInitialized(
+            DocumentId: documentId,
+            OrgId: orgId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Name: command.Name,
+            Price: command.Price,
+            Description: command.Description,
+            CategoryId: command.CategoryId,
+            AccountingGroupId: command.AccountingGroupId,
+            RecipeId: command.RecipeId,
+            ImageUrl: command.ImageUrl,
+            Sku: command.Sku,
+            TrackInventory: command.TrackInventory,
+            Locale: command.Locale,
+            CreatedBy: command.CreatedBy,
+            PublishImmediately: command.PublishImmediately
+        ));
 
-        _state.State = new MenuItemDocumentState
-        {
-            OrgId = orgId,
-            DocumentId = documentId,
-            IsCreated = true,
-            CurrentVersion = 1,
-            PublishedVersion = command.PublishImmediately ? 1 : null,
-            DraftVersion = command.PublishImmediately ? null : 1,
-            Versions = [version],
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuditLog =
-            [
-                new AuditEntry
-                {
-                    Action = "Created",
-                    UserId = command.CreatedBy,
-                    VersionNumber = 1
-                }
-            ]
-        };
-
-        if (command.PublishImmediately)
-        {
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "Published",
-                UserId = command.CreatedBy,
-                VersionNumber = 1
-            });
-        }
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return GetSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.IsCreated);
+        return Task.FromResult(State.IsCreated);
     }
 
     public async Task<MenuItemVersionSnapshot> CreateDraftAsync(CreateMenuItemDraftCommand command)
     {
         EnsureInitialized();
 
-        // Get base version (either current draft or published)
-        var baseVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        RaiseEvent(new MenuItemDraftVersionCreated(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: newVersionNumber,
+            CreatedBy: command.CreatedBy,
+            ChangeNote: command.ChangeNote,
+            Name: command.Name,
+            Price: command.Price,
+            Description: command.Description,
+            ImageUrl: command.ImageUrl,
+            CategoryId: command.CategoryId,
+            AccountingGroupId: command.AccountingGroupId,
+            RecipeId: command.RecipeId,
+            Sku: command.Sku,
+            TrackInventory: command.TrackInventory,
+            ModifierBlockIds: command.ModifierBlockIds?.ToList(),
+            TagIds: command.TagIds?.ToList()
+        ));
 
-        var newVersion = new MenuItemVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = command.ChangeNote,
-            Content = CloneContent(baseVersion.Content),
-            Pricing = new PricingInfo
-            {
-                BasePrice = command.Price ?? baseVersion.Pricing.BasePrice,
-                CostPrice = baseVersion.Pricing.CostPrice,
-                Currency = baseVersion.Pricing.Currency
-            },
-            Media = baseVersion.Media != null ? new MediaInfo
-            {
-                PrimaryImageUrl = command.ImageUrl ?? baseVersion.Media.PrimaryImageUrl,
-                ThumbnailUrl = baseVersion.Media.ThumbnailUrl,
-                AdditionalImageUrls = [.. baseVersion.Media.AdditionalImageUrls]
-            } : command.ImageUrl != null ? new MediaInfo { PrimaryImageUrl = command.ImageUrl } : null,
-            CategoryId = command.CategoryId ?? baseVersion.CategoryId,
-            AccountingGroupId = command.AccountingGroupId ?? baseVersion.AccountingGroupId,
-            RecipeId = command.RecipeId ?? baseVersion.RecipeId,
-            ModifierBlockIds = command.ModifierBlockIds?.ToList() ?? [.. baseVersion.ModifierBlockIds],
-            TagIds = command.TagIds?.ToList() ?? [.. baseVersion.TagIds],
-            Sku = command.Sku ?? baseVersion.Sku,
-            TrackInventory = command.TrackInventory ?? baseVersion.TrackInventory,
-            DisplayOrder = baseVersion.DisplayOrder
-        };
-
-        // Update name/description if provided
-        if (command.Name != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Name = command.Name;
-        }
-        if (command.Description != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Description = command.Description;
-        }
-
-        _state.State.Versions.Add(newVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.DraftVersion = newVersionNumber;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftCreated",
-            UserId = command.CreatedBy,
-            Note = command.ChangeNote,
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
+        var newVersion = State.Versions.First(v => v.VersionNumber == newVersionNumber);
         return ToVersionSnapshot(newVersion);
     }
 
     public Task<MenuItemVersionSnapshot?> GetVersionAsync(int version)
     {
         EnsureInitialized();
-        var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == version);
+        var v = State.Versions.FirstOrDefault(x => x.VersionNumber == version);
         return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
     }
 
     public Task<MenuItemVersionSnapshot?> GetPublishedAsync()
     {
         EnsureInitialized();
-        if (!_state.State.PublishedVersion.HasValue)
+        if (!State.PublishedVersion.HasValue)
             return Task.FromResult<MenuItemVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
         return Task.FromResult<MenuItemVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<MenuItemVersionSnapshot?> GetDraftAsync()
     {
         EnsureInitialized();
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return Task.FromResult<MenuItemVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
         return Task.FromResult<MenuItemVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<IReadOnlyList<MenuItemVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20)
     {
         EnsureInitialized();
-        var versions = _state.State.Versions
+        var versions = State.Versions
             .OrderByDescending(v => v.VersionNumber)
             .Skip(skip)
             .Take(take)
@@ -215,230 +295,170 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             throw new InvalidOperationException("No draft to publish");
 
-        var previousPublished = _state.State.PublishedVersion;
-        _state.State.PublishedVersion = _state.State.DraftVersion;
-        _state.State.DraftVersion = null;
+        RaiseEvent(new MenuItemDraftWasPublished(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            PublishedVersion: State.DraftVersion.Value,
+            PreviousPublishedVersion: State.PublishedVersion,
+            PublishedBy: publishedBy,
+            Note: note
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Published",
-            UserId = publishedBy,
-            Note = note ?? $"Published version {_state.State.PublishedVersion} (previously {previousPublished})",
-            VersionNumber = _state.State.PublishedVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task DiscardDraftAsync()
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return;
 
-        var draftVersion = _state.State.DraftVersion.Value;
-        _state.State.Versions.RemoveAll(v => v.VersionNumber == draftVersion);
-        _state.State.DraftVersion = null;
+        RaiseEvent(new MenuItemDraftDiscarded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            DiscardedVersion: State.DraftVersion.Value
+        ));
 
-        // Recalculate current version
-        _state.State.CurrentVersion = _state.State.Versions.Max(v => v.VersionNumber);
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftDiscarded",
-            VersionNumber = draftVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.Versions.FirstOrDefault(v => v.VersionNumber == version)
-            ?? throw new InvalidOperationException($"Version {version} not found");
+        if (!State.Versions.Any(v => v.VersionNumber == version))
+            throw new InvalidOperationException($"Version {version} not found");
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        // Create a new version that's a copy of the target version
-        var revertedVersion = new MenuItemVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = revertedBy,
-            ChangeNote = reason ?? $"Reverted from version {_state.State.PublishedVersion} to version {version}",
-            Content = CloneContent(targetVersion.Content),
-            Pricing = new PricingInfo
-            {
-                BasePrice = targetVersion.Pricing.BasePrice,
-                CostPrice = targetVersion.Pricing.CostPrice,
-                Currency = targetVersion.Pricing.Currency
-            },
-            Media = targetVersion.Media,
-            CategoryId = targetVersion.CategoryId,
-            AccountingGroupId = targetVersion.AccountingGroupId,
-            RecipeId = targetVersion.RecipeId,
-            ModifierBlockIds = [.. targetVersion.ModifierBlockIds],
-            TagIds = [.. targetVersion.TagIds],
-            Sku = targetVersion.Sku,
-            TrackInventory = targetVersion.TrackInventory,
-            DisplayOrder = targetVersion.DisplayOrder
-        };
+        RaiseEvent(new MenuItemRevertedToVersion(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            FromVersion: State.PublishedVersion ?? 0,
+            ToVersion: version,
+            NewVersionNumber: newVersionNumber,
+            RevertedBy: revertedBy,
+            Reason: reason
+        ));
 
-        _state.State.Versions.Add(revertedVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.PublishedVersion = newVersionNumber;
-        _state.State.DraftVersion = null;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Reverted",
-            UserId = revertedBy,
-            Note = reason ?? $"Reverted to version {version}",
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task AddTranslationAsync(AddMenuItemTranslationCommand command)
     {
         EnsureInitialized();
 
-        // Add to draft if exists, otherwise to published
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var targetVersion = State.DraftVersion.HasValue
+            ? State.Versions.First(v => v.VersionNumber == State.DraftVersion.Value)
+            : State.Versions.First(v => v.VersionNumber == State.PublishedVersion);
 
-        targetVersion.Content.Translations[command.Locale] = new LocalizedStrings
-        {
-            Name = command.Name,
-            Description = command.Description,
-            KitchenName = command.KitchenName
-        };
+        RaiseEvent(new MenuItemTranslationAdded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Locale: command.Locale,
+            Name: command.Name,
+            Description: command.Description,
+            KitchenName: command.KitchenName
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = $"TranslationAdded:{command.Locale}",
-            VersionNumber = targetVersion.VersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RemoveTranslationAsync(string locale)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var targetVersion = State.DraftVersion.HasValue
+            ? State.Versions.First(v => v.VersionNumber == State.DraftVersion.Value)
+            : State.Versions.First(v => v.VersionNumber == State.PublishedVersion);
 
         if (locale == targetVersion.Content.DefaultLocale)
             throw new InvalidOperationException("Cannot remove default locale translation");
 
-        targetVersion.Content.Translations.Remove(locale);
+        RaiseEvent(new MenuItemTranslationRemoved(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Locale: locale
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = $"TranslationRemoved:{locale}",
-            VersionNumber = targetVersion.VersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task<ScheduledChange> ScheduleChangeAsync(int version, DateTimeOffset activateAt, DateTimeOffset? deactivateAt = null, string? name = null)
     {
         EnsureInitialized();
 
-        if (!_state.State.Versions.Any(v => v.VersionNumber == version))
+        if (!State.Versions.Any(v => v.VersionNumber == version))
             throw new InvalidOperationException($"Version {version} not found");
 
-        var schedule = new ScheduledChange
-        {
-            ScheduleId = Guid.NewGuid().ToString(),
-            VersionToActivate = version,
-            ActivateAt = activateAt,
-            DeactivateAt = deactivateAt,
-            Name = name,
-            IsActive = true
-        };
+        var scheduleId = Guid.NewGuid().ToString();
 
-        _state.State.Schedules.Add(schedule);
+        RaiseEvent(new MenuItemChangeWasScheduled(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ScheduleId: scheduleId,
+            VersionToActivate: version,
+            ActivateAt: activateAt,
+            DeactivateAt: deactivateAt,
+            Name: name
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "ScheduleCreated",
-            Note = $"Scheduled version {version} for {activateAt}",
-            VersionNumber = version
-        });
-
-        await _state.WriteStateAsync();
-        return schedule;
+        await ConfirmEvents();
+        return State.Schedules.First(s => s.ScheduleId == scheduleId);
     }
 
     public async Task CancelScheduleAsync(string scheduleId)
     {
         EnsureInitialized();
 
-        var schedule = _state.State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
+        var schedule = State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
         if (schedule != null)
         {
-            _state.State.Schedules.Remove(schedule);
+            RaiseEvent(new MenuItemScheduleWasCancelled(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                ScheduleId: scheduleId
+            ));
 
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "ScheduleCancelled",
-                Note = $"Cancelled schedule {scheduleId}"
-            });
-
-            await _state.WriteStateAsync();
+            await ConfirmEvents();
         }
     }
 
     public Task<IReadOnlyList<ScheduledChange>> GetSchedulesAsync()
     {
         EnsureInitialized();
-        return Task.FromResult<IReadOnlyList<ScheduledChange>>(_state.State.Schedules.Where(s => s.IsActive).ToList());
+        return Task.FromResult<IReadOnlyList<ScheduledChange>>(State.Schedules.Where(s => s.IsActive).ToList());
     }
 
     public async Task ArchiveAsync(Guid? archivedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = true;
-        _state.State.ArchivedAt = DateTimeOffset.UtcNow;
+        RaiseEvent(new MenuItemDocumentWasArchived(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ArchivedBy: archivedBy,
+            Reason: reason
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Archived",
-            UserId = archivedBy,
-            Note = reason
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RestoreAsync(Guid? restoredBy = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = false;
-        _state.State.ArchivedAt = null;
+        RaiseEvent(new MenuItemDocumentWasRestored(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RestoredBy: restoredBy
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Restored",
-            UserId = restoredBy
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public Task<MenuItemDocumentSnapshot> GetSnapshotAsync()
@@ -452,7 +472,7 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
         EnsureInitialized();
 
         // Check schedules for what would be active at that time
-        var activeSchedule = _state.State.Schedules
+        var activeSchedule = State.Schedules
             .Where(s => s.IsActive && s.ActivateAt <= when)
             .Where(s => !s.DeactivateAt.HasValue || s.DeactivateAt.Value > when)
             .OrderByDescending(s => s.ActivateAt)
@@ -460,18 +480,28 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
 
         if (activeSchedule != null)
         {
-            var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == activeSchedule.VersionToActivate);
+            var v = State.Versions.FirstOrDefault(x => x.VersionNumber == activeSchedule.VersionToActivate);
             return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
         }
 
         // Return published version
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             return Task.FromResult<MenuItemVersionSnapshot?>(ToVersionSnapshot(v));
         }
 
         return Task.FromResult<MenuItemVersionSnapshot?>(null);
+    }
+
+    /// <summary>
+    /// Gets the full event history for this document.
+    /// This is the key benefit of using JournaledGrain - full audit trail.
+    /// </summary>
+    public async Task<IReadOnlyList<IMenuItemDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100)
+    {
+        var events = await RetrieveConfirmedEvents(fromVersion, maxCount);
+        return events.ToList();
     }
 
     private MenuItemDocumentSnapshot GetSnapshot()
@@ -479,30 +509,30 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
         MenuItemVersionSnapshot? published = null;
         MenuItemVersionSnapshot? draft = null;
 
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             published = ToVersionSnapshot(v);
         }
 
-        if (_state.State.DraftVersion.HasValue)
+        if (State.DraftVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
             draft = ToVersionSnapshot(v);
         }
 
         return new MenuItemDocumentSnapshot(
-            DocumentId: _state.State.DocumentId,
-            OrgId: _state.State.OrgId,
-            CurrentVersion: _state.State.CurrentVersion,
-            PublishedVersion: _state.State.PublishedVersion,
-            DraftVersion: _state.State.DraftVersion,
-            IsArchived: _state.State.IsArchived,
-            CreatedAt: _state.State.CreatedAt,
+            DocumentId: State.DocumentId,
+            OrgId: State.OrgId,
+            CurrentVersion: State.CurrentVersion,
+            PublishedVersion: State.PublishedVersion,
+            DraftVersion: State.DraftVersion,
+            IsArchived: State.IsArchived,
+            CreatedAt: State.CreatedAt,
             Published: published,
             Draft: draft,
-            Schedules: _state.State.Schedules.Where(s => s.IsActive).ToList(),
-            TotalVersions: _state.State.Versions.Count);
+            Schedules: State.Schedules.Where(s => s.IsActive).ToList(),
+            TotalVersions: State.Versions.Count);
     }
 
     private static MenuItemVersionSnapshot ToVersionSnapshot(MenuItemVersionState v)
@@ -547,32 +577,164 @@ public class MenuItemDocumentGrain : Grain, IMenuItemDocumentGrain
 
     private void EnsureInitialized()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
             throw new InvalidOperationException("Menu item document not initialized");
     }
 }
 
 // ============================================================================
-// Menu Category Document Grain Implementation
+// Menu Category Document Grain Implementation (Event Sourced)
 // ============================================================================
 
 /// <summary>
-/// Grain for menu category document management with versioning and workflow.
+/// Event-sourced grain for menu category document management with versioning and workflow.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class MenuCategoryDocumentGrain : JournaledGrain<MenuCategoryDocumentState, IMenuCategoryDocumentEvent>, IMenuCategoryDocumentGrain
 {
-    private readonly IPersistentState<MenuCategoryDocumentState> _state;
-
-    public MenuCategoryDocumentGrain(
-        [PersistentState("menuCategoryDocument", "OrleansStorage")]
-        IPersistentState<MenuCategoryDocumentState> state)
+    /// <summary>
+    /// Applies domain events to mutate state.
+    /// </summary>
+    protected override void TransitionState(MenuCategoryDocumentState state, IMenuCategoryDocumentEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case MenuCategoryDocumentInitialized e:
+                state.OrgId = e.OrgId;
+                state.DocumentId = e.DocumentId;
+                state.IsCreated = true;
+                state.CurrentVersion = 1;
+                state.PublishedVersion = e.PublishImmediately ? 1 : null;
+                state.DraftVersion = e.PublishImmediately ? null : 1;
+                state.CreatedAt = e.OccurredAt;
+                state.Versions.Add(new MenuCategoryVersionState
+                {
+                    VersionNumber = 1,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = "Initial creation",
+                    Content = new LocalizedContent
+                    {
+                        DefaultLocale = e.Locale,
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            [e.Locale] = new LocalizedStrings { Name = e.Name, Description = e.Description }
+                        }
+                    },
+                    Color = e.Color,
+                    IconUrl = e.IconUrl,
+                    DisplayOrder = e.DisplayOrder
+                });
+                break;
+
+            case MenuCategoryDraftVersionCreated e:
+                var baseVersion = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                var newVersion = new MenuCategoryVersionState
+                {
+                    VersionNumber = e.VersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = e.ChangeNote,
+                    Content = CloneContent(baseVersion.Content),
+                    Color = e.Color ?? baseVersion.Color,
+                    IconUrl = e.IconUrl ?? baseVersion.IconUrl,
+                    DisplayOrder = e.DisplayOrder ?? baseVersion.DisplayOrder,
+                    ItemDocumentIds = e.ItemDocumentIds ?? [.. baseVersion.ItemDocumentIds]
+                };
+                if (e.Name != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Name = e.Name;
+                if (e.Description != null)
+                    newVersion.Content.Translations[newVersion.Content.DefaultLocale].Description = e.Description;
+                state.Versions.Add(newVersion);
+                state.CurrentVersion = e.VersionNumber;
+                state.DraftVersion = e.VersionNumber;
+                break;
+
+            case MenuCategoryDraftWasPublished e:
+                state.PublishedVersion = e.PublishedVersion;
+                state.DraftVersion = null;
+                break;
+
+            case MenuCategoryDraftDiscarded e:
+                state.Versions.RemoveAll(v => v.VersionNumber == e.DiscardedVersion);
+                state.DraftVersion = null;
+                state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
+                break;
+
+            case MenuCategoryRevertedToVersion e:
+                var targetVersion = state.Versions.First(v => v.VersionNumber == e.ToVersion);
+                var revertedVersion = new MenuCategoryVersionState
+                {
+                    VersionNumber = e.NewVersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.RevertedBy,
+                    ChangeNote = e.Reason ?? $"Reverted to version {e.ToVersion}",
+                    Content = CloneContent(targetVersion.Content),
+                    Color = targetVersion.Color,
+                    IconUrl = targetVersion.IconUrl,
+                    DisplayOrder = targetVersion.DisplayOrder,
+                    ItemDocumentIds = [.. targetVersion.ItemDocumentIds]
+                };
+                state.Versions.Add(revertedVersion);
+                state.CurrentVersion = e.NewVersionNumber;
+                state.PublishedVersion = e.NewVersionNumber;
+                state.DraftVersion = null;
+                break;
+
+            case MenuCategoryItemAdded e:
+                var versionForAdd = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                if (!versionForAdd.ItemDocumentIds.Contains(e.ItemDocumentId))
+                    versionForAdd.ItemDocumentIds.Add(e.ItemDocumentId);
+                break;
+
+            case MenuCategoryItemRemoved e:
+                var versionForRemove = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForRemove.ItemDocumentIds.Remove(e.ItemDocumentId);
+                break;
+
+            case MenuCategoryItemsReordered e:
+                var versionForReorder = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                versionForReorder.ItemDocumentIds = e.ItemDocumentIds;
+                break;
+
+            case MenuCategoryChangeWasScheduled e:
+                state.Schedules.Add(new ScheduledChange
+                {
+                    ScheduleId = e.ScheduleId,
+                    VersionToActivate = e.VersionToActivate,
+                    ActivateAt = e.ActivateAt,
+                    DeactivateAt = e.DeactivateAt,
+                    Name = e.Name,
+                    IsActive = true
+                });
+                break;
+
+            case MenuCategoryScheduleWasCancelled e:
+                state.Schedules.RemoveAll(s => s.ScheduleId == e.ScheduleId);
+                break;
+
+            case MenuCategoryDocumentWasArchived e:
+                state.IsArchived = true;
+                break;
+
+            case MenuCategoryDocumentWasRestored e:
+                state.IsArchived = false;
+                break;
+        }
     }
 
     public async Task<MenuCategoryDocumentSnapshot> CreateAsync(CreateMenuCategoryDocumentCommand command)
     {
-        if (_state.State.IsCreated)
+        if (State.IsCreated)
             throw new InvalidOperationException("Menu category document already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -580,150 +742,84 @@ public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
         var orgId = Guid.Parse(parts[0]);
         var documentId = parts[2];
 
-        var version = new MenuCategoryVersionState
-        {
-            VersionNumber = 1,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = "Initial creation",
-            Content = new LocalizedContent
-            {
-                DefaultLocale = command.Locale,
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    [command.Locale] = new LocalizedStrings
-                    {
-                        Name = command.Name,
-                        Description = command.Description
-                    }
-                }
-            },
-            Color = command.Color,
-            IconUrl = command.IconUrl,
-            DisplayOrder = command.DisplayOrder
-        };
+        RaiseEvent(new MenuCategoryDocumentInitialized(
+            DocumentId: documentId,
+            OrgId: orgId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Name: command.Name,
+            DisplayOrder: command.DisplayOrder,
+            Description: command.Description,
+            Color: command.Color,
+            IconUrl: command.IconUrl,
+            Locale: command.Locale,
+            CreatedBy: command.CreatedBy,
+            PublishImmediately: command.PublishImmediately
+        ));
 
-        _state.State = new MenuCategoryDocumentState
-        {
-            OrgId = orgId,
-            DocumentId = documentId,
-            IsCreated = true,
-            CurrentVersion = 1,
-            PublishedVersion = command.PublishImmediately ? 1 : null,
-            DraftVersion = command.PublishImmediately ? null : 1,
-            Versions = [version],
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuditLog =
-            [
-                new AuditEntry
-                {
-                    Action = "Created",
-                    UserId = command.CreatedBy,
-                    VersionNumber = 1
-                }
-            ]
-        };
-
-        if (command.PublishImmediately)
-        {
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "Published",
-                UserId = command.CreatedBy,
-                VersionNumber = 1
-            });
-        }
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return GetSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.IsCreated);
+        return Task.FromResult(State.IsCreated);
     }
 
     public async Task<MenuCategoryVersionSnapshot> CreateDraftAsync(CreateMenuCategoryDraftCommand command)
     {
         EnsureInitialized();
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var baseVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new MenuCategoryDraftVersionCreated(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: newVersionNumber,
+            CreatedBy: command.CreatedBy,
+            ChangeNote: command.ChangeNote,
+            Name: command.Name,
+            DisplayOrder: command.DisplayOrder,
+            Description: command.Description,
+            Color: command.Color,
+            IconUrl: command.IconUrl,
+            ItemDocumentIds: command.ItemDocumentIds?.ToList()
+        ));
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
-
-        var newVersion = new MenuCategoryVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = command.ChangeNote,
-            Content = CloneContent(baseVersion.Content),
-            Color = command.Color ?? baseVersion.Color,
-            IconUrl = command.IconUrl ?? baseVersion.IconUrl,
-            DisplayOrder = command.DisplayOrder ?? baseVersion.DisplayOrder,
-            ItemDocumentIds = command.ItemDocumentIds?.ToList() ?? [.. baseVersion.ItemDocumentIds]
-        };
-
-        if (command.Name != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Name = command.Name;
-        }
-        if (command.Description != null)
-        {
-            var defaultLocale = newVersion.Content.DefaultLocale;
-            newVersion.Content.Translations[defaultLocale].Description = command.Description;
-        }
-
-        _state.State.Versions.Add(newVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.DraftVersion = newVersionNumber;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftCreated",
-            UserId = command.CreatedBy,
-            Note = command.ChangeNote,
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
+        var newVersion = State.Versions.First(v => v.VersionNumber == newVersionNumber);
         return ToVersionSnapshot(newVersion);
     }
 
     public Task<MenuCategoryVersionSnapshot?> GetVersionAsync(int version)
     {
         EnsureInitialized();
-        var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == version);
+        var v = State.Versions.FirstOrDefault(x => x.VersionNumber == version);
         return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
     }
 
     public Task<MenuCategoryVersionSnapshot?> GetPublishedAsync()
     {
         EnsureInitialized();
-        if (!_state.State.PublishedVersion.HasValue)
+        if (!State.PublishedVersion.HasValue)
             return Task.FromResult<MenuCategoryVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
         return Task.FromResult<MenuCategoryVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<MenuCategoryVersionSnapshot?> GetDraftAsync()
     {
         EnsureInitialized();
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return Task.FromResult<MenuCategoryVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
         return Task.FromResult<MenuCategoryVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<IReadOnlyList<MenuCategoryVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20)
     {
         EnsureInitialized();
-        var versions = _state.State.Versions
+        var versions = State.Versions
             .OrderByDescending(v => v.VersionNumber)
             .Skip(skip)
             .Take(take)
@@ -736,166 +832,134 @@ public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             throw new InvalidOperationException("No draft to publish");
 
-        var previousPublished = _state.State.PublishedVersion;
-        _state.State.PublishedVersion = _state.State.DraftVersion;
-        _state.State.DraftVersion = null;
+        RaiseEvent(new MenuCategoryDraftWasPublished(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            PublishedVersion: State.DraftVersion.Value,
+            PreviousPublishedVersion: State.PublishedVersion,
+            PublishedBy: publishedBy,
+            Note: note
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Published",
-            UserId = publishedBy,
-            Note = note ?? $"Published version {_state.State.PublishedVersion} (previously {previousPublished})",
-            VersionNumber = _state.State.PublishedVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task DiscardDraftAsync()
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return;
 
-        var draftVersion = _state.State.DraftVersion.Value;
-        _state.State.Versions.RemoveAll(v => v.VersionNumber == draftVersion);
-        _state.State.DraftVersion = null;
-        _state.State.CurrentVersion = _state.State.Versions.Max(v => v.VersionNumber);
+        RaiseEvent(new MenuCategoryDraftDiscarded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            DiscardedVersion: State.DraftVersion.Value
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftDiscarded",
-            VersionNumber = draftVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.Versions.FirstOrDefault(v => v.VersionNumber == version)
-            ?? throw new InvalidOperationException($"Version {version} not found");
+        if (!State.Versions.Any(v => v.VersionNumber == version))
+            throw new InvalidOperationException($"Version {version} not found");
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var revertedVersion = new MenuCategoryVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = revertedBy,
-            ChangeNote = reason ?? $"Reverted from version {_state.State.PublishedVersion} to version {version}",
-            Content = CloneContent(targetVersion.Content),
-            Color = targetVersion.Color,
-            IconUrl = targetVersion.IconUrl,
-            DisplayOrder = targetVersion.DisplayOrder,
-            ItemDocumentIds = [.. targetVersion.ItemDocumentIds]
-        };
+        RaiseEvent(new MenuCategoryRevertedToVersion(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            FromVersion: State.PublishedVersion ?? 0,
+            ToVersion: version,
+            NewVersionNumber: newVersionNumber,
+            RevertedBy: revertedBy,
+            Reason: reason
+        ));
 
-        _state.State.Versions.Add(revertedVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.PublishedVersion = newVersionNumber;
-        _state.State.DraftVersion = null;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Reverted",
-            UserId = revertedBy,
-            Note = reason ?? $"Reverted to version {version}",
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task AddItemAsync(string itemDocumentId)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new MenuCategoryItemAdded(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ItemDocumentId: itemDocumentId
+        ));
 
-        if (!targetVersion.ItemDocumentIds.Contains(itemDocumentId))
-        {
-            targetVersion.ItemDocumentIds.Add(itemDocumentId);
-            await _state.WriteStateAsync();
-        }
+        await ConfirmEvents();
     }
 
     public async Task RemoveItemAsync(string itemDocumentId)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new MenuCategoryItemRemoved(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ItemDocumentId: itemDocumentId
+        ));
 
-        targetVersion.ItemDocumentIds.Remove(itemDocumentId);
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task ReorderItemsAsync(IReadOnlyList<string> itemDocumentIds)
     {
         EnsureInitialized();
 
-        var targetVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        RaiseEvent(new MenuCategoryItemsReordered(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ItemDocumentIds: itemDocumentIds.ToList()
+        ));
 
-        targetVersion.ItemDocumentIds = itemDocumentIds.ToList();
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task<ScheduledChange> ScheduleChangeAsync(int version, DateTimeOffset activateAt, DateTimeOffset? deactivateAt = null, string? name = null)
     {
         EnsureInitialized();
 
-        if (!_state.State.Versions.Any(v => v.VersionNumber == version))
+        if (!State.Versions.Any(v => v.VersionNumber == version))
             throw new InvalidOperationException($"Version {version} not found");
 
-        var schedule = new ScheduledChange
-        {
-            ScheduleId = Guid.NewGuid().ToString(),
-            VersionToActivate = version,
-            ActivateAt = activateAt,
-            DeactivateAt = deactivateAt,
-            Name = name,
-            IsActive = true
-        };
+        var scheduleId = Guid.NewGuid().ToString();
 
-        _state.State.Schedules.Add(schedule);
+        RaiseEvent(new MenuCategoryChangeWasScheduled(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ScheduleId: scheduleId,
+            VersionToActivate: version,
+            ActivateAt: activateAt,
+            DeactivateAt: deactivateAt,
+            Name: name
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "ScheduleCreated",
-            Note = $"Scheduled version {version} for {activateAt}",
-            VersionNumber = version
-        });
-
-        await _state.WriteStateAsync();
-        return schedule;
+        await ConfirmEvents();
+        return State.Schedules.First(s => s.ScheduleId == scheduleId);
     }
 
     public async Task CancelScheduleAsync(string scheduleId)
     {
         EnsureInitialized();
 
-        var schedule = _state.State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
+        var schedule = State.Schedules.FirstOrDefault(s => s.ScheduleId == scheduleId);
         if (schedule != null)
         {
-            _state.State.Schedules.Remove(schedule);
-            _state.State.AuditLog.Add(new AuditEntry
-            {
-                Action = "ScheduleCancelled",
-                Note = $"Cancelled schedule {scheduleId}"
-            });
-            await _state.WriteStateAsync();
+            RaiseEvent(new MenuCategoryScheduleWasCancelled(
+                DocumentId: State.DocumentId,
+                OccurredAt: DateTimeOffset.UtcNow,
+                ScheduleId: scheduleId
+            ));
+            await ConfirmEvents();
         }
     }
 
@@ -903,31 +967,27 @@ public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = true;
+        RaiseEvent(new MenuCategoryDocumentWasArchived(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ArchivedBy: archivedBy,
+            Reason: reason
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Archived",
-            UserId = archivedBy,
-            Note = reason
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RestoreAsync(Guid? restoredBy = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = false;
+        RaiseEvent(new MenuCategoryDocumentWasRestored(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RestoredBy: restoredBy
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Restored",
-            UserId = restoredBy
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public Task<MenuCategoryDocumentSnapshot> GetSnapshotAsync()
@@ -936,35 +996,44 @@ public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
         return Task.FromResult(GetSnapshot());
     }
 
+    /// <summary>
+    /// Gets the full event history for this category document.
+    /// </summary>
+    public async Task<IReadOnlyList<IMenuCategoryDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100)
+    {
+        var events = await RetrieveConfirmedEvents(fromVersion, maxCount);
+        return events.ToList();
+    }
+
     private MenuCategoryDocumentSnapshot GetSnapshot()
     {
         MenuCategoryVersionSnapshot? published = null;
         MenuCategoryVersionSnapshot? draft = null;
 
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             published = ToVersionSnapshot(v);
         }
 
-        if (_state.State.DraftVersion.HasValue)
+        if (State.DraftVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
             draft = ToVersionSnapshot(v);
         }
 
         return new MenuCategoryDocumentSnapshot(
-            DocumentId: _state.State.DocumentId,
-            OrgId: _state.State.OrgId,
-            CurrentVersion: _state.State.CurrentVersion,
-            PublishedVersion: _state.State.PublishedVersion,
-            DraftVersion: _state.State.DraftVersion,
-            IsArchived: _state.State.IsArchived,
-            CreatedAt: _state.State.CreatedAt,
+            DocumentId: State.DocumentId,
+            OrgId: State.OrgId,
+            CurrentVersion: State.CurrentVersion,
+            PublishedVersion: State.PublishedVersion,
+            DraftVersion: State.DraftVersion,
+            IsArchived: State.IsArchived,
+            CreatedAt: State.CreatedAt,
             Published: published,
             Draft: draft,
-            Schedules: _state.State.Schedules.Where(s => s.IsActive).ToList(),
-            TotalVersions: _state.State.Versions.Count);
+            Schedules: State.Schedules.Where(s => s.IsActive).ToList(),
+            TotalVersions: State.Versions.Count);
     }
 
     private static MenuCategoryVersionSnapshot ToVersionSnapshot(MenuCategoryVersionState v)
@@ -1004,32 +1073,165 @@ public class MenuCategoryDocumentGrain : Grain, IMenuCategoryDocumentGrain
 
     private void EnsureInitialized()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
             throw new InvalidOperationException("Menu category document not initialized");
     }
 }
 
 // ============================================================================
-// Modifier Block Grain Implementation
+// Modifier Block Grain Implementation (Event Sourced)
 // ============================================================================
 
 /// <summary>
-/// Grain for reusable modifier block management.
+/// Event-sourced grain for reusable modifier block management.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class ModifierBlockGrain : Grain, IModifierBlockGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class ModifierBlockGrain : JournaledGrain<ModifierBlockState, IModifierBlockEvent>, IModifierBlockGrain
 {
-    private readonly IPersistentState<ModifierBlockState> _state;
-
-    public ModifierBlockGrain(
-        [PersistentState("modifierBlock", "OrleansStorage")]
-        IPersistentState<ModifierBlockState> state)
+    /// <summary>
+    /// Applies domain events to mutate state.
+    /// </summary>
+    protected override void TransitionState(ModifierBlockState state, IModifierBlockEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case ModifierBlockInitialized e:
+                state.OrgId = e.OrgId;
+                state.BlockId = e.BlockId;
+                state.IsCreated = true;
+                state.CurrentVersion = 1;
+                state.PublishedVersion = e.PublishImmediately ? 1 : null;
+                state.DraftVersion = e.PublishImmediately ? null : 1;
+                state.CreatedAt = e.OccurredAt;
+                var options = e.Options?.Select((o, i) => new ModifierOptionState
+                {
+                    OptionId = o.OptionId,
+                    Content = new LocalizedContent
+                    {
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            ["en-US"] = new LocalizedStrings { Name = o.Name }
+                        }
+                    },
+                    PriceAdjustment = o.PriceAdjustment,
+                    IsDefault = o.IsDefault,
+                    DisplayOrder = o.DisplayOrder == 0 ? i : o.DisplayOrder,
+                    IsActive = true,
+                    ServingSize = o.ServingSize,
+                    ServingUnit = o.ServingUnit,
+                    InventoryItemId = o.InventoryItemId
+                }).ToList() ?? [];
+                state.Versions.Add(new ModifierBlockVersionState
+                {
+                    VersionNumber = 1,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = "Initial creation",
+                    Content = new LocalizedContent
+                    {
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            ["en-US"] = new LocalizedStrings { Name = e.Name }
+                        }
+                    },
+                    SelectionRule = e.SelectionRule,
+                    MinSelections = e.MinSelections,
+                    MaxSelections = e.MaxSelections,
+                    IsRequired = e.IsRequired,
+                    Options = options
+                });
+                break;
+
+            case ModifierBlockDraftVersionCreated e:
+                var baseVersion = state.DraftVersion.HasValue
+                    ? state.Versions.First(v => v.VersionNumber == state.DraftVersion.Value)
+                    : state.Versions.First(v => v.VersionNumber == state.PublishedVersion);
+                var draftOptions = e.Options?.Select((o, i) => new ModifierOptionState
+                {
+                    OptionId = o.OptionId,
+                    Content = new LocalizedContent
+                    {
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            ["en-US"] = new LocalizedStrings { Name = o.Name }
+                        }
+                    },
+                    PriceAdjustment = o.PriceAdjustment,
+                    IsDefault = o.IsDefault,
+                    DisplayOrder = o.DisplayOrder == 0 ? i : o.DisplayOrder,
+                    IsActive = true,
+                    ServingSize = o.ServingSize,
+                    ServingUnit = o.ServingUnit,
+                    InventoryItemId = o.InventoryItemId
+                }).ToList() ?? baseVersion.Options.Select(o => new ModifierOptionState
+                {
+                    OptionId = o.OptionId,
+                    Content = o.Content,
+                    PriceAdjustment = o.PriceAdjustment,
+                    IsDefault = o.IsDefault,
+                    DisplayOrder = o.DisplayOrder,
+                    IsActive = o.IsActive,
+                    ServingSize = o.ServingSize,
+                    ServingUnit = o.ServingUnit,
+                    InventoryItemId = o.InventoryItemId
+                }).ToList();
+                state.Versions.Add(new ModifierBlockVersionState
+                {
+                    VersionNumber = e.VersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.CreatedBy,
+                    ChangeNote = e.ChangeNote,
+                    Content = new LocalizedContent
+                    {
+                        Translations = new Dictionary<string, LocalizedStrings>
+                        {
+                            ["en-US"] = new LocalizedStrings { Name = e.Name ?? baseVersion.Content.GetStrings().Name }
+                        }
+                    },
+                    SelectionRule = e.SelectionRule ?? baseVersion.SelectionRule,
+                    MinSelections = e.MinSelections ?? baseVersion.MinSelections,
+                    MaxSelections = e.MaxSelections ?? baseVersion.MaxSelections,
+                    IsRequired = e.IsRequired ?? baseVersion.IsRequired,
+                    Options = draftOptions
+                });
+                state.CurrentVersion = e.VersionNumber;
+                state.DraftVersion = e.VersionNumber;
+                break;
+
+            case ModifierBlockDraftWasPublished e:
+                state.PublishedVersion = e.PublishedVersion;
+                state.DraftVersion = null;
+                break;
+
+            case ModifierBlockDraftDiscarded e:
+                state.Versions.RemoveAll(v => v.VersionNumber == e.DiscardedVersion);
+                state.DraftVersion = null;
+                state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
+                break;
+
+            case ModifierBlockUsageRegistered e:
+                if (!state.UsedByItemIds.Contains(e.ItemDocumentId))
+                    state.UsedByItemIds.Add(e.ItemDocumentId);
+                break;
+
+            case ModifierBlockUsageUnregistered e:
+                state.UsedByItemIds.Remove(e.ItemDocumentId);
+                break;
+
+            case ModifierBlockWasArchived e:
+                state.IsArchived = true;
+                break;
+
+            case ModifierBlockWasRestored e:
+                state.IsArchived = false;
+                break;
+        }
     }
 
     public async Task<ModifierBlockSnapshot> CreateAsync(CreateModifierBlockCommand command)
     {
-        if (_state.State.IsCreated)
+        if (State.IsCreated)
             throw new InvalidOperationException("Modifier block already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -1037,178 +1239,99 @@ public class ModifierBlockGrain : Grain, IModifierBlockGrain
         var orgId = Guid.Parse(parts[0]);
         var blockId = parts[2];
 
-        var options = command.Options?.Select((o, i) => new ModifierOptionState
-        {
-            OptionId = Guid.NewGuid().ToString(),
-            Content = new LocalizedContent
-            {
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    ["en-US"] = new LocalizedStrings { Name = o.Name }
-                }
-            },
-            PriceAdjustment = o.PriceAdjustment,
-            IsDefault = o.IsDefault,
-            DisplayOrder = o.DisplayOrder == 0 ? i : o.DisplayOrder,
-            IsActive = true,
-            ServingSize = o.ServingSize,
-            ServingUnit = o.ServingUnit,
-            InventoryItemId = o.InventoryItemId
-        }).ToList() ?? [];
+        var optionData = command.Options?.Select((o, i) => new ModifierOptionData(
+            OptionId: Guid.NewGuid().ToString(),
+            Name: o.Name,
+            PriceAdjustment: o.PriceAdjustment,
+            IsDefault: o.IsDefault,
+            DisplayOrder: o.DisplayOrder == 0 ? i : o.DisplayOrder,
+            ServingSize: o.ServingSize,
+            ServingUnit: o.ServingUnit,
+            InventoryItemId: o.InventoryItemId
+        )).ToList();
 
-        var version = new ModifierBlockVersionState
-        {
-            VersionNumber = 1,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = "Initial creation",
-            Content = new LocalizedContent
-            {
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    ["en-US"] = new LocalizedStrings { Name = command.Name }
-                }
-            },
-            SelectionRule = command.SelectionRule,
-            MinSelections = command.MinSelections,
-            MaxSelections = command.MaxSelections,
-            IsRequired = command.IsRequired,
-            Options = options
-        };
+        RaiseEvent(new ModifierBlockInitialized(
+            BlockId: blockId,
+            OrgId: orgId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Name: command.Name,
+            SelectionRule: command.SelectionRule,
+            MinSelections: command.MinSelections,
+            MaxSelections: command.MaxSelections,
+            IsRequired: command.IsRequired,
+            Options: optionData,
+            CreatedBy: command.CreatedBy,
+            PublishImmediately: command.PublishImmediately
+        ));
 
-        _state.State = new ModifierBlockState
-        {
-            OrgId = orgId,
-            BlockId = blockId,
-            IsCreated = true,
-            CurrentVersion = 1,
-            PublishedVersion = command.PublishImmediately ? 1 : null,
-            DraftVersion = command.PublishImmediately ? null : 1,
-            Versions = [version],
-            CreatedAt = DateTimeOffset.UtcNow,
-            AuditLog =
-            [
-                new AuditEntry
-                {
-                    Action = "Created",
-                    UserId = command.CreatedBy,
-                    VersionNumber = 1
-                }
-            ]
-        };
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return GetSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.IsCreated);
+        return Task.FromResult(State.IsCreated);
     }
 
     public async Task<ModifierBlockVersionSnapshot> CreateDraftAsync(CreateModifierBlockDraftCommand command)
     {
         EnsureInitialized();
+        var newVersionNumber = State.CurrentVersion + 1;
 
-        var baseVersion = _state.State.DraftVersion.HasValue
-            ? _state.State.Versions.First(v => v.VersionNumber == _state.State.DraftVersion.Value)
-            : _state.State.Versions.First(v => v.VersionNumber == _state.State.PublishedVersion);
+        var optionData = command.Options?.Select((o, i) => new ModifierOptionData(
+            OptionId: Guid.NewGuid().ToString(),
+            Name: o.Name,
+            PriceAdjustment: o.PriceAdjustment,
+            IsDefault: o.IsDefault,
+            DisplayOrder: o.DisplayOrder == 0 ? i : o.DisplayOrder,
+            ServingSize: o.ServingSize,
+            ServingUnit: o.ServingUnit,
+            InventoryItemId: o.InventoryItemId
+        )).ToList();
 
-        var newVersionNumber = _state.State.CurrentVersion + 1;
+        RaiseEvent(new ModifierBlockDraftVersionCreated(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: newVersionNumber,
+            CreatedBy: command.CreatedBy,
+            ChangeNote: command.ChangeNote,
+            Name: command.Name,
+            SelectionRule: command.SelectionRule,
+            MinSelections: command.MinSelections,
+            MaxSelections: command.MaxSelections,
+            IsRequired: command.IsRequired,
+            Options: optionData
+        ));
 
-        var options = command.Options?.Select((o, i) => new ModifierOptionState
-        {
-            OptionId = Guid.NewGuid().ToString(),
-            Content = new LocalizedContent
-            {
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    ["en-US"] = new LocalizedStrings { Name = o.Name }
-                }
-            },
-            PriceAdjustment = o.PriceAdjustment,
-            IsDefault = o.IsDefault,
-            DisplayOrder = o.DisplayOrder == 0 ? i : o.DisplayOrder,
-            IsActive = true,
-            ServingSize = o.ServingSize,
-            ServingUnit = o.ServingUnit,
-            InventoryItemId = o.InventoryItemId
-        }).ToList() ?? baseVersion.Options.Select(o => new ModifierOptionState
-        {
-            OptionId = o.OptionId,
-            Content = o.Content,
-            PriceAdjustment = o.PriceAdjustment,
-            IsDefault = o.IsDefault,
-            DisplayOrder = o.DisplayOrder,
-            IsActive = o.IsActive,
-            ServingSize = o.ServingSize,
-            ServingUnit = o.ServingUnit,
-            InventoryItemId = o.InventoryItemId
-        }).ToList();
-
-        var newVersion = new ModifierBlockVersionState
-        {
-            VersionNumber = newVersionNumber,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = command.CreatedBy,
-            ChangeNote = command.ChangeNote,
-            Content = new LocalizedContent
-            {
-                Translations = new Dictionary<string, LocalizedStrings>
-                {
-                    ["en-US"] = new LocalizedStrings
-                    {
-                        Name = command.Name ?? baseVersion.Content.GetStrings().Name
-                    }
-                }
-            },
-            SelectionRule = command.SelectionRule ?? baseVersion.SelectionRule,
-            MinSelections = command.MinSelections ?? baseVersion.MinSelections,
-            MaxSelections = command.MaxSelections ?? baseVersion.MaxSelections,
-            IsRequired = command.IsRequired ?? baseVersion.IsRequired,
-            Options = options
-        };
-
-        _state.State.Versions.Add(newVersion);
-        _state.State.CurrentVersion = newVersionNumber;
-        _state.State.DraftVersion = newVersionNumber;
-
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftCreated",
-            UserId = command.CreatedBy,
-            Note = command.ChangeNote,
-            VersionNumber = newVersionNumber
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
+        var newVersion = State.Versions.First(v => v.VersionNumber == newVersionNumber);
         return ToVersionSnapshot(newVersion);
     }
 
     public Task<ModifierBlockVersionSnapshot?> GetVersionAsync(int version)
     {
         EnsureInitialized();
-        var v = _state.State.Versions.FirstOrDefault(x => x.VersionNumber == version);
+        var v = State.Versions.FirstOrDefault(x => x.VersionNumber == version);
         return Task.FromResult(v != null ? ToVersionSnapshot(v) : null);
     }
 
     public Task<ModifierBlockVersionSnapshot?> GetPublishedAsync()
     {
         EnsureInitialized();
-        if (!_state.State.PublishedVersion.HasValue)
+        if (!State.PublishedVersion.HasValue)
             return Task.FromResult<ModifierBlockVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
         return Task.FromResult<ModifierBlockVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
     public Task<ModifierBlockVersionSnapshot?> GetDraftAsync()
     {
         EnsureInitialized();
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return Task.FromResult<ModifierBlockVersionSnapshot?>(null);
 
-        var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+        var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
         return Task.FromResult<ModifierBlockVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
@@ -1216,100 +1339,97 @@ public class ModifierBlockGrain : Grain, IModifierBlockGrain
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             throw new InvalidOperationException("No draft to publish");
 
-        _state.State.PublishedVersion = _state.State.DraftVersion;
-        _state.State.DraftVersion = null;
+        RaiseEvent(new ModifierBlockDraftWasPublished(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            PublishedVersion: State.DraftVersion.Value,
+            PreviousPublishedVersion: State.PublishedVersion,
+            PublishedBy: publishedBy,
+            Note: note
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Published",
-            UserId = publishedBy,
-            Note = note,
-            VersionNumber = _state.State.PublishedVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task DiscardDraftAsync()
     {
         EnsureInitialized();
 
-        if (!_state.State.DraftVersion.HasValue)
+        if (!State.DraftVersion.HasValue)
             return;
 
-        var draftVersion = _state.State.DraftVersion.Value;
-        _state.State.Versions.RemoveAll(v => v.VersionNumber == draftVersion);
-        _state.State.DraftVersion = null;
-        _state.State.CurrentVersion = _state.State.Versions.Max(v => v.VersionNumber);
+        RaiseEvent(new ModifierBlockDraftDiscarded(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            DiscardedVersion: State.DraftVersion.Value
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "DraftDiscarded",
-            VersionNumber = draftVersion
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RegisterUsageAsync(string itemDocumentId)
     {
         EnsureInitialized();
 
-        if (!_state.State.UsedByItemIds.Contains(itemDocumentId))
-        {
-            _state.State.UsedByItemIds.Add(itemDocumentId);
-            await _state.WriteStateAsync();
-        }
+        RaiseEvent(new ModifierBlockUsageRegistered(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ItemDocumentId: itemDocumentId
+        ));
+
+        await ConfirmEvents();
     }
 
     public async Task UnregisterUsageAsync(string itemDocumentId)
     {
         EnsureInitialized();
-        _state.State.UsedByItemIds.Remove(itemDocumentId);
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ModifierBlockUsageUnregistered(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ItemDocumentId: itemDocumentId
+        ));
+
+        await ConfirmEvents();
     }
 
     public Task<IReadOnlyList<string>> GetUsageAsync()
     {
         EnsureInitialized();
-        return Task.FromResult<IReadOnlyList<string>>(_state.State.UsedByItemIds);
+        return Task.FromResult<IReadOnlyList<string>>(State.UsedByItemIds);
     }
 
     public async Task ArchiveAsync(Guid? archivedBy = null, string? reason = null)
     {
         EnsureInitialized();
 
-        if (_state.State.UsedByItemIds.Count > 0)
-            throw new InvalidOperationException($"Cannot archive modifier block that is used by {_state.State.UsedByItemIds.Count} items");
+        if (State.UsedByItemIds.Count > 0)
+            throw new InvalidOperationException($"Cannot archive modifier block that is used by {State.UsedByItemIds.Count} items");
 
-        _state.State.IsArchived = true;
+        RaiseEvent(new ModifierBlockWasArchived(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ArchivedBy: archivedBy,
+            Reason: reason
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Archived",
-            UserId = archivedBy,
-            Note = reason
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RestoreAsync(Guid? restoredBy = null)
     {
         EnsureInitialized();
 
-        _state.State.IsArchived = false;
+        RaiseEvent(new ModifierBlockWasRestored(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            RestoredBy: restoredBy
+        ));
 
-        _state.State.AuditLog.Add(new AuditEntry
-        {
-            Action = "Restored",
-            UserId = restoredBy
-        });
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public Task<ModifierBlockSnapshot> GetSnapshotAsync()
@@ -1318,35 +1438,44 @@ public class ModifierBlockGrain : Grain, IModifierBlockGrain
         return Task.FromResult(GetSnapshot());
     }
 
+    /// <summary>
+    /// Gets the full event history for this modifier block.
+    /// </summary>
+    public async Task<IReadOnlyList<IModifierBlockEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100)
+    {
+        var events = await RetrieveConfirmedEvents(fromVersion, maxCount);
+        return events.ToList();
+    }
+
     private ModifierBlockSnapshot GetSnapshot()
     {
         ModifierBlockVersionSnapshot? published = null;
         ModifierBlockVersionSnapshot? draft = null;
 
-        if (_state.State.PublishedVersion.HasValue)
+        if (State.PublishedVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.PublishedVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.PublishedVersion.Value);
             published = ToVersionSnapshot(v);
         }
 
-        if (_state.State.DraftVersion.HasValue)
+        if (State.DraftVersion.HasValue)
         {
-            var v = _state.State.Versions.First(x => x.VersionNumber == _state.State.DraftVersion.Value);
+            var v = State.Versions.First(x => x.VersionNumber == State.DraftVersion.Value);
             draft = ToVersionSnapshot(v);
         }
 
         return new ModifierBlockSnapshot(
-            BlockId: _state.State.BlockId,
-            OrgId: _state.State.OrgId,
-            CurrentVersion: _state.State.CurrentVersion,
-            PublishedVersion: _state.State.PublishedVersion,
-            DraftVersion: _state.State.DraftVersion,
-            IsArchived: _state.State.IsArchived,
-            CreatedAt: _state.State.CreatedAt,
+            BlockId: State.BlockId,
+            OrgId: State.OrgId,
+            CurrentVersion: State.CurrentVersion,
+            PublishedVersion: State.PublishedVersion,
+            DraftVersion: State.DraftVersion,
+            IsArchived: State.IsArchived,
+            CreatedAt: State.CreatedAt,
             Published: published,
             Draft: draft,
-            TotalVersions: _state.State.Versions.Count,
-            UsedByItemIds: _state.State.UsedByItemIds);
+            TotalVersions: State.Versions.Count,
+            UsedByItemIds: State.UsedByItemIds);
     }
 
     private static ModifierBlockVersionSnapshot ToVersionSnapshot(ModifierBlockVersionState v)
@@ -1376,7 +1505,7 @@ public class ModifierBlockGrain : Grain, IModifierBlockGrain
 
     private void EnsureInitialized()
     {
-        if (!_state.State.IsCreated)
+        if (!State.IsCreated)
             throw new InvalidOperationException("Modifier block not initialized");
     }
 }

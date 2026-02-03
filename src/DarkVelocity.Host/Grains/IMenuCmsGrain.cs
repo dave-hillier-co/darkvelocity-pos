@@ -1,3 +1,4 @@
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.State;
 
 namespace DarkVelocity.Host.Grains;
@@ -130,6 +131,9 @@ public interface IMenuItemDocumentGrain : IGrainWithStringKey
 
     // Preview at a specific time
     Task<MenuItemVersionSnapshot?> PreviewAtAsync(DateTimeOffset when);
+
+    // Event history (for audit trail via event sourcing)
+    Task<IReadOnlyList<IMenuItemDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100);
 }
 
 // ============================================================================
@@ -233,6 +237,9 @@ public interface IMenuCategoryDocumentGrain : IGrainWithStringKey
 
     // Full snapshot
     Task<MenuCategoryDocumentSnapshot> GetSnapshotAsync();
+
+    // Event history (for audit trail via event sourcing)
+    Task<IReadOnlyList<IMenuCategoryDocumentEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100);
 }
 
 // ============================================================================
@@ -357,6 +364,9 @@ public interface IModifierBlockGrain : IGrainWithStringKey
 
     // Full snapshot
     Task<ModifierBlockSnapshot> GetSnapshotAsync();
+
+    // Event history (for audit trail via event sourcing)
+    Task<IReadOnlyList<IModifierBlockEvent>> GetEventHistoryAsync(int fromVersion = 0, int maxCount = 100);
 }
 
 // ============================================================================
