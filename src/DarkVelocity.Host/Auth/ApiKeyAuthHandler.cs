@@ -1,5 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
+using DarkVelocity.Host.Grains;
+using DarkVelocity.Host.State;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -53,51 +57,170 @@ public class ApiKeyAuthHandler : AuthenticationHandler<ApiKeyAuthOptions>
             return AuthenticateResult.Fail("Invalid authorization header format");
         }
 
-        // Parse API key format: sk_{mode}_{accountId}_{random}
-        // e.g., sk_test_abc123def456_xyz789
-        // or pk_live_abc123def456_xyz789
+        // Parse API key format to get basic info
         var keyInfo = ParseApiKey(apiKey);
         if (keyInfo == null)
         {
             return AuthenticateResult.Fail("Invalid API key format");
         }
 
-        // For now, validate format only. In production, you'd validate against stored keys.
-        // TODO: Validate against IAccountGrain.ValidateApiKeyAsync()
+        // Get client IP for validation and logging
+        var ipAddress = Context.Connection.RemoteIpAddress?.ToString();
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, keyInfo.AccountId),
-            new("account_id", keyInfo.AccountId),
-            new("key_type", keyInfo.IsPublishable ? "publishable" : "secret"),
-            new("test_mode", keyInfo.IsTestMode.ToString().ToLowerInvariant()),
-            new("api_key_id", apiKey[..Math.Min(apiKey.Length, 20)] + "...")
-        };
+        // Validate the API key against stored keys
+        var validationResult = await ValidateApiKeyAsync(apiKey, ipAddress);
 
-        // Secret keys have full access
-        if (!keyInfo.IsPublishable)
+        if (!validationResult.IsValid)
         {
-            claims.Add(new Claim(ClaimTypes.Role, "api_full_access"));
+            Logger.LogWarning(
+                "API key authentication failed: {Error}, KeyPrefix: {KeyPrefix}, IP: {IpAddress}",
+                validationResult.Error,
+                apiKey[..Math.Min(apiKey.Length, 20)] + "...",
+                ipAddress);
+
+            return AuthenticateResult.Fail(validationResult.Error ?? "Invalid API key");
         }
-        else
-        {
-            // Publishable keys have limited access
-            claims.Add(new Claim(ClaimTypes.Role, "api_client_access"));
-        }
+
+        // Build claims from validation result
+        var claims = BuildClaims(validationResult, apiKey);
 
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
+        // Record usage asynchronously (fire and forget)
+        _ = RecordUsageAsync(validationResult.KeyId!.Value, validationResult.OrganizationId!.Value, ipAddress);
+
         return AuthenticateResult.Success(ticket);
+    }
+
+    private async Task<ApiKeyValidationResult> ValidateApiKeyAsync(string apiKey, string? ipAddress)
+    {
+        try
+        {
+            // Hash the API key
+            var keyHash = HashApiKey(apiKey);
+
+            // Look up the key in the global lookup grain
+            var lookupGrain = _grainFactory.GetGrain<IApiKeyLookupGrain>(GrainKeys.ApiKeyLookup());
+            var lookupResult = await lookupGrain.LookupAsync(keyHash);
+
+            if (lookupResult == null)
+            {
+                return new ApiKeyValidationResult(
+                    false, "API key not found", null, null, null, null, false, null, null, null, null, 0);
+            }
+
+            var (organizationId, keyId) = lookupResult.Value;
+
+            // Get the API key grain and validate
+            var apiKeyGrain = _grainFactory.GetGrain<IApiKeyGrain>(GrainKeys.ApiKey(organizationId, keyId));
+            return await apiKeyGrain.ValidateAsync(apiKey, ipAddress);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error validating API key");
+            return new ApiKeyValidationResult(
+                false, "Internal error during API key validation", null, null, null, null, false, null, null, null, null, 0);
+        }
+    }
+
+    private static List<Claim> BuildClaims(ApiKeyValidationResult result, string apiKey)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
+            new("sub", result.UserId.Value.ToString()),
+            new("org_id", result.OrganizationId!.Value.ToString()),
+            new("api_key_id", result.KeyId!.Value.ToString()),
+            new("api_key_prefix", apiKey[..Math.Min(apiKey.Length, 20)] + "..."),
+            new("key_type", result.Type == ApiKeyType.Secret ? "secret" : "publishable"),
+            new("test_mode", result.IsTestMode.ToString().ToLowerInvariant()),
+            new("token_type", "api_key")
+        };
+
+        // Add roles from the API key
+        if (result.Roles != null && result.Roles.Count > 0)
+        {
+            foreach (var role in result.Roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+        else
+        {
+            // Default roles based on key type
+            if (result.Type == ApiKeyType.Secret)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "api_full_access"));
+            }
+            else
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "api_client_access"));
+            }
+        }
+
+        // Add scopes as claims
+        if (result.Scopes != null && result.Scopes.Count > 0)
+        {
+            foreach (var scope in result.Scopes)
+            {
+                foreach (var action in scope.Actions)
+                {
+                    claims.Add(new Claim("scope", $"{scope.Resource}:{action}"));
+                }
+            }
+        }
+
+        // Add custom claims
+        if (result.CustomClaims != null)
+        {
+            foreach (var (key, value) in result.CustomClaims)
+            {
+                claims.Add(new Claim(key, value));
+            }
+        }
+
+        // Add allowed site IDs as a claim
+        if (result.AllowedSiteIds != null && result.AllowedSiteIds.Count > 0)
+        {
+            claims.Add(new Claim("allowed_sites", string.Join(",", result.AllowedSiteIds)));
+        }
+
+        // Add rate limit info
+        if (result.RateLimitPerMinute > 0)
+        {
+            claims.Add(new Claim("rate_limit", result.RateLimitPerMinute.ToString()));
+        }
+
+        return claims;
+    }
+
+    private async Task RecordUsageAsync(Guid keyId, Guid organizationId, string? ipAddress)
+    {
+        try
+        {
+            var apiKeyGrain = _grainFactory.GetGrain<IApiKeyGrain>(GrainKeys.ApiKey(organizationId, keyId));
+            await apiKeyGrain.RecordUsageAsync(ipAddress);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error recording API key usage for key {KeyId}", keyId);
+        }
+    }
+
+    private static string HashApiKey(string apiKey)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(apiKey));
+        return Convert.ToBase64String(bytes);
     }
 
     private static ApiKeyInfo? ParseApiKey(string apiKey)
     {
-        // Format: {prefix}_{mode}_{accountId}_{random}
+        // Format: {prefix}_{mode}_{keyIdPart}_{random}
         // Prefix: sk (secret) or pk (publishable)
         // Mode: test or live
-        // AccountId: GUID without hyphens (32 chars)
+        // KeyIdPart: First 12 chars of GUID without hyphens
         // Random: Random string for uniqueness
 
         var parts = apiKey.Split('_');
@@ -108,7 +231,7 @@ public class ApiKeyAuthHandler : AuthenticationHandler<ApiKeyAuthOptions>
 
         var prefix = parts[0];
         var mode = parts[1];
-        var accountId = parts[2];
+        var keyIdPart = parts[2];
 
         var isPublishable = prefix.Equals("pk", StringComparison.OrdinalIgnoreCase);
         var isSecret = prefix.Equals("sk", StringComparison.OrdinalIgnoreCase);
@@ -126,19 +249,19 @@ public class ApiKeyAuthHandler : AuthenticationHandler<ApiKeyAuthOptions>
             return null;
         }
 
-        // Validate account ID format (should be parseable as GUID or be alphanumeric)
-        if (string.IsNullOrEmpty(accountId) || accountId.Length < 8)
+        // Validate key ID part format (should be alphanumeric, minimum length)
+        if (string.IsNullOrEmpty(keyIdPart) || keyIdPart.Length < 8)
         {
             return null;
         }
 
         return new ApiKeyInfo(
-            AccountId: accountId,
+            KeyIdPart: keyIdPart,
             IsPublishable: isPublishable,
             IsTestMode: isTestMode);
     }
 
-    private record ApiKeyInfo(string AccountId, bool IsPublishable, bool IsTestMode);
+    private record ApiKeyInfo(string KeyIdPart, bool IsPublishable, bool IsTestMode);
 }
 
 public static class ApiKeyAuthExtensions

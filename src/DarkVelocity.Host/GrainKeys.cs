@@ -652,4 +652,23 @@ public static class GrainKeys
         }
         return new string(result);
     }
+
+    // ============================================================================
+    // API Key Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for an API key grain.
+    /// </summary>
+    public static string ApiKey(Guid orgId, Guid keyId) => OrgEntity(orgId, "apikey", keyId);
+
+    /// <summary>
+    /// Creates a key for an API key registry grain (one per user).
+    /// </summary>
+    public static string ApiKeyRegistry(Guid orgId, Guid userId) => $"{orgId}:apikeyregistry:{userId}";
+
+    /// <summary>
+    /// Creates a key for the global API key lookup grain.
+    /// </summary>
+    public static string ApiKeyLookup() => "global:apikeylookup";
 }

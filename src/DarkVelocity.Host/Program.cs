@@ -76,6 +76,7 @@ app.MapOrleansDashboard(routePrefix: "/dashboard");
 // Map all API endpoints
 app.MapOAuthEndpoints()
    .MapAuthEndpoints()
+   .MapApiKeyEndpoints()
    .MapDeviceEndpoints()
    .MapOrganizationEndpoints()
    .MapSiteEndpoints()
