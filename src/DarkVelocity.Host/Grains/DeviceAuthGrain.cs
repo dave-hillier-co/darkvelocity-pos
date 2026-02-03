@@ -619,6 +619,40 @@ public class UserLookupGrain : Grain, IUserLookupGrain
 
         return new UserLookupResult(userId, userState.DisplayName, orgId);
     }
+
+    public async Task<IReadOnlyList<PinUserSummary>> GetUsersForSiteAsync(Guid siteId)
+    {
+        var key = this.GetPrimaryKeyString();
+        var orgId = GrainKeys.ExtractOrgId(key);
+
+        var results = new List<PinUserSummary>();
+
+        // Get all users who have PINs registered
+        foreach (var (_, userId) in _state.State.PinToUserMap)
+        {
+            var userGrain = _grainFactory.GetGrain<IUserGrain>(GrainKeys.User(orgId, userId));
+            var userState = await userGrain.GetStateAsync();
+
+            // Skip if user doesn't exist, is inactive, or doesn't have site access
+            if (userState.Id == Guid.Empty)
+                continue;
+
+            if (userState.Status != UserStatus.Active)
+                continue;
+
+            if (!userState.SiteAccess.Contains(siteId))
+                continue;
+
+            results.Add(new PinUserSummary(
+                userId,
+                userState.DisplayName,
+                userState.FirstName,
+                userState.LastName,
+                null));
+        }
+
+        return results;
+    }
 }
 
 [GenerateSerializer]
