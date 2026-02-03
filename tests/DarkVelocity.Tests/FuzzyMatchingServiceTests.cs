@@ -53,10 +53,10 @@ public class FuzzyMatchingServiceTests
     [InlineData("chicken breast", "chicken breat", 0.9)] // typo
     [InlineData("chicken breast", "beef steak", 0.2)] // different - Levenshtein similarity is ~0.28
     public void CalculateSimilarity_ShouldReturnExpectedRange(
-        string a, string b, decimal minExpected)
+        string a, string b, double minExpected)
     {
         var result = _service.CalculateSimilarity(a, b);
-        result.Should().BeGreaterThanOrEqualTo(minExpected);
+        result.Should().BeGreaterThanOrEqualTo((decimal)minExpected);
     }
 
     [Fact]
