@@ -95,7 +95,7 @@ public interface IApiKeyGrain : IGrainWithStringKey
     /// <summary>
     /// Gets the current state of the API key.
     /// </summary>
-    Task<ApiKeyState> GetStateAsync();
+    Task<UserApiKeyState> GetStateAsync();
 
     /// <summary>
     /// Updates the API key settings. Cannot change key type or mode.

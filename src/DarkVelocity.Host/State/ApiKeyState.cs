@@ -56,11 +56,12 @@ public record ApiKeyScope
 }
 
 /// <summary>
-/// State for an API key with custom claims support.
+/// State for a user-issued API key with custom claims support.
 /// Users can issue themselves API keys with a subset of their functionality.
+/// Named UserApiKeyState to distinguish from PaymentGatewayState.ApiKeyState.
 /// </summary>
 [GenerateSerializer]
-public sealed class ApiKeyState
+public sealed class UserApiKeyState
 {
     /// <summary>
     /// Unique identifier for the API key.
@@ -199,10 +200,10 @@ public sealed class ApiKeyState
 }
 
 /// <summary>
-/// State for the API key registry - tracks all API keys for a user.
+/// State for the user API key registry - tracks all API keys for a user.
 /// </summary>
 [GenerateSerializer]
-public sealed class ApiKeyRegistryState
+public sealed class UserApiKeyRegistryState
 {
     /// <summary>
     /// The user this registry belongs to.

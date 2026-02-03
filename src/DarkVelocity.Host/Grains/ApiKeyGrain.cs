@@ -9,12 +9,12 @@ namespace DarkVelocity.Host.Grains;
 
 public class ApiKeyGrain : Grain, IApiKeyGrain
 {
-    private readonly IPersistentState<ApiKeyState> _state;
+    private readonly IPersistentState<UserApiKeyState> _state;
     private IAsyncStream<IStreamEvent>? _stream;
 
     public ApiKeyGrain(
         [PersistentState("apikey", "OrleansStorage")]
-        IPersistentState<ApiKeyState> state)
+        IPersistentState<UserApiKeyState> state)
     {
         _state = state;
     }
@@ -42,7 +42,7 @@ public class ApiKeyGrain : Grain, IApiKeyGrain
         var (apiKey, keyHash) = GenerateApiKey(command.Type, command.IsTestMode, keyId);
         var keyPrefix = apiKey[..Math.Min(apiKey.Length, 20)] + "...";
 
-        _state.State = new ApiKeyState
+        _state.State = new UserApiKeyState
         {
             Id = keyId,
             OrganizationId = command.OrganizationId,
@@ -94,7 +94,7 @@ public class ApiKeyGrain : Grain, IApiKeyGrain
         return new ApiKeyCreatedResult(keyId, apiKey, keyPrefix, _state.State.CreatedAt);
     }
 
-    public Task<ApiKeyState> GetStateAsync()
+    public Task<UserApiKeyState> GetStateAsync()
     {
         return Task.FromResult(_state.State);
     }
@@ -377,11 +377,11 @@ public class ApiKeyGrain : Grain, IApiKeyGrain
 
 public class ApiKeyRegistryGrain : Grain, IApiKeyRegistryGrain
 {
-    private readonly IPersistentState<ApiKeyRegistryState> _state;
+    private readonly IPersistentState<UserApiKeyRegistryState> _state;
 
     public ApiKeyRegistryGrain(
         [PersistentState("apikeyregistry", "OrleansStorage")]
-        IPersistentState<ApiKeyRegistryState> state)
+        IPersistentState<UserApiKeyRegistryState> state)
     {
         _state = state;
     }
@@ -391,7 +391,7 @@ public class ApiKeyRegistryGrain : Grain, IApiKeyRegistryGrain
         if (_state.State.UserId != Guid.Empty)
             return; // Already initialized
 
-        _state.State = new ApiKeyRegistryState
+        _state.State = new UserApiKeyRegistryState
         {
             OrganizationId = organizationId,
             UserId = userId,
