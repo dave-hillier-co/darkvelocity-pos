@@ -1,4 +1,5 @@
 using DarkVelocity.Host.Auth;
+using DarkVelocity.Host.Authorization;
 using DarkVelocity.Host.Contracts;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
@@ -711,7 +712,8 @@ public static class OAuthEndpoints
             [FromBody] PinAuthenticateRequest request,
             IGrainFactory grainFactory,
             JwtTokenService tokenService,
-            IMemoryCache cache) =>
+            IMemoryCache cache,
+            IAuthorizationService authService) =>
         {
             if (string.IsNullOrEmpty(request.PendingToken))
             {
@@ -776,6 +778,13 @@ public static class OAuthEndpoints
 
             // Record login
             await userGrain.RecordLoginAsync();
+
+            // Create SpiceDB session with PIN scope (restricted to POS operations)
+            await authService.CreateSessionAsync(
+                request.UserId,
+                pendingState.OrganizationId,
+                pendingState.SiteId,
+                "pin");
 
             // Get user roles
             var roles = await userGrain.GetRolesAsync();

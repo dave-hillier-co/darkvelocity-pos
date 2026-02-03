@@ -1,0 +1,236 @@
+// DarkVelocity SpiceDB Authorization Schema
+// Relationship-based access control with session-scoped caveats for PIN vs full auth
+
+// =============================================================================
+// Caveats
+// =============================================================================
+
+// Session scope caveat - attached to active session relationships at login time
+// PIN login sets scope="pos", OAuth/password sets scope="full"
+caveat session_scope(scope string) {
+    scope == "pos" || scope == "full"
+}
+
+// Requires full auth - used for backoffice-only permissions
+caveat requires_full_auth(scope string) {
+    scope == "full"
+}
+
+// =============================================================================
+// Core Entities
+// =============================================================================
+
+definition user {}
+
+definition organization {
+    relation owner: user
+    relation admin: user
+    relation member: user
+
+    // Permissions
+    permission delete = owner
+    permission manage = owner + admin
+    permission view = manage + member
+
+    // Backoffice requires full auth (checked via site->backoffice)
+    permission backoffice = manage
+}
+
+definition site {
+    relation organization: organization
+    relation manager: user
+    relation supervisor: user
+    relation staff: user
+
+    // Active session - written at login with session_scope caveat
+    // PIN login: scope="pos", Full login: scope="full"
+    relation active_session: user with session_scope
+
+    // Role hierarchy (no auth check - just role membership)
+    permission is_manager = manager + organization->manage
+    permission is_supervisor = supervisor + is_manager
+    permission is_staff = staff + is_supervisor
+
+    // POS operations - require active session with any scope (pos or full)
+    permission operate = is_staff & active_session
+    permission supervise = is_supervisor & active_session
+    permission manage = is_manager & active_session
+
+    // Backoffice - requires active session with full scope
+    permission backoffice = is_manager & (active_session with requires_full_auth)
+
+    // View permission for read-only access
+    permission view = operate
+}
+
+// =============================================================================
+// POS Resources (PIN authentication allowed)
+// =============================================================================
+
+definition order {
+    relation site: site
+    relation created_by: user
+
+    permission view = site->view
+    permission create = site->operate
+    permission add_line = site->operate
+    permission remove_line = site->operate
+    permission send = site->operate
+    permission close = site->operate
+    permission discount = site->supervise
+    permission void = site->manage
+}
+
+definition payment {
+    relation site: site
+    relation order: order
+
+    permission view = site->view
+    permission create = site->operate
+    permission complete = site->operate
+    permission refund = site->supervise
+    permission void = site->manage
+}
+
+definition inventory {
+    relation site: site
+
+    permission view = site->view
+    permission receive = site->operate
+    permission consume = site->operate
+    permission adjust = site->supervise
+    permission transfer = site->manage
+    permission count = site->supervise
+}
+
+definition table {
+    relation site: site
+
+    permission view = site->view
+    permission seat = site->operate
+    permission clear = site->operate
+    permission set_status = site->operate
+    permission create = site->manage
+    permission update = site->manage
+    permission delete = site->manage
+}
+
+definition floor_plan {
+    relation site: site
+
+    permission view = site->view
+    permission manage = site->manage
+}
+
+definition booking {
+    relation site: site
+
+    permission view = site->view
+    permission request = site->operate
+    permission checkin = site->operate
+    permission seat = site->operate
+    permission confirm = site->supervise
+    permission cancel = site->supervise
+}
+
+definition waitlist {
+    relation site: site
+
+    permission view = site->view
+    permission add = site->operate
+    permission notify = site->operate
+    permission seat = site->operate
+    permission remove = site->supervise
+}
+
+definition booking_settings {
+    relation site: site
+
+    permission view = site->view
+    permission manage = site->manage
+}
+
+// =============================================================================
+// Backoffice Resources (Full authentication required)
+// =============================================================================
+
+definition menu_cms {
+    relation organization: organization
+
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition recipe_cms {
+    relation organization: organization
+
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition employee {
+    relation organization: organization
+    relation self: user
+
+    // Clock in/out - any auth method, self or manager
+    permission clock = self + organization->view
+
+    // Management requires org-level manage permission
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition customer {
+    relation organization: organization
+
+    permission view = organization->view
+    permission create = organization->view
+    permission update = organization->view
+    permission loyalty = organization->manage
+}
+
+definition expense {
+    relation site: site
+    relation submitted_by: user
+
+    permission view = site->backoffice
+    permission submit = site->backoffice
+    permission approve = site->backoffice
+    permission reject = site->backoffice
+}
+
+definition purchase_document {
+    relation site: site
+
+    permission view = site->backoffice
+    permission upload = site->backoffice
+    permission process = site->backoffice
+    permission confirm = site->backoffice
+}
+
+definition channel {
+    relation organization: organization
+
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition device {
+    relation organization: organization
+
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition webhook {
+    relation organization: organization
+
+    permission view = organization->view
+    permission manage = organization->manage
+}
+
+definition reporting {
+    relation site: site
+
+    permission view = site->backoffice
+}

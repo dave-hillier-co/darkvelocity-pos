@@ -160,6 +160,9 @@ cd apps/backoffice && npm install && npm run dev
 | Kafka | 9092 |
 | Kafka UI | 8080 |
 | Zookeeper | 2181 |
+| SpiceDB gRPC | 50051 |
+| SpiceDB HTTP | 8443 |
+| SpiceDB Metrics | 9090 |
 
 Database credentials (dev): `darkvelocity` / `darkvelocity_dev`
 
@@ -167,12 +170,14 @@ Azure Storage (dev): `UseDevelopmentStorage=true` (Azurite default connection st
 
 Kafka (dev): `localhost:9092` (Docker)
 
+SpiceDB (dev): `localhost:50051` with preshared key `darkvelocity_dev_key`
+
 ## Multi-Tenancy
 
 - Organization is the tenant boundary
 - Sites are physical venues within an organization
 - All grain keys include organization ID prefix
-- SpiceDB planned for relationship-based authorization
+- SpiceDB for relationship-based authorization
 
 ## Domain Concepts
 

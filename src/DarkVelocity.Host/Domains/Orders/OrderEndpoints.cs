@@ -1,3 +1,4 @@
+using DarkVelocity.Host.Authorization;
 using DarkVelocity.Host.Contracts;
 using DarkVelocity.Host.Grains;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,9 @@ public static class OrderEndpoints
 {
     public static WebApplication MapOrderEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/orgs/{orgId}/sites/{siteId}/orders").WithTags("Orders");
+        var group = app.MapGroup("/api/orgs/{orgId}/sites/{siteId}/orders")
+            .WithTags("Orders")
+            .RequireSpiceDbAuthorization();
 
         group.MapPost("/", async (
             Guid orgId,
@@ -32,7 +35,7 @@ public static class OrderEndpoints
                 ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
                 ["lines"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/lines" }
             }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
         group.MapGet("/{orderId}", async (Guid orgId, Guid siteId, Guid orderId, IGrainFactory grainFactory) =>
         {
@@ -49,7 +52,7 @@ public static class OrderEndpoints
                 ["send"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/send" },
                 ["close"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/close" }
             }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
 
         group.MapPost("/{orderId}/lines", async (
             Guid orgId,
@@ -71,7 +74,7 @@ public static class OrderEndpoints
                     ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/lines/{result.LineId}" },
                     ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
                 }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
         group.MapGet("/{orderId}/lines", async (Guid orgId, Guid siteId, Guid orderId, IGrainFactory grainFactory) =>
         {
@@ -86,7 +89,7 @@ public static class OrderEndpoints
             })).ToList();
 
             return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/lines", items, items.Count));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
 
         group.MapDelete("/{orderId}/lines/{lineId}", async (
             Guid orgId, Guid siteId, Guid orderId, Guid lineId, IGrainFactory grainFactory) =>
@@ -97,7 +100,7 @@ public static class OrderEndpoints
 
             await grain.RemoveLineAsync(lineId);
             return Results.NoContent();
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
         group.MapPost("/{orderId}/send", async (
             Guid orgId, Guid siteId, Guid orderId,
@@ -115,7 +118,7 @@ public static class OrderEndpoints
             {
                 ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
             }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
         group.MapPost("/{orderId}/close", async (
             Guid orgId, Guid siteId, Guid orderId,
@@ -128,8 +131,9 @@ public static class OrderEndpoints
 
             await grain.CloseAsync(request.ClosedBy);
             return Results.Ok(new { message = "Order closed" });
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
+        // Void requires manager-level permission
         group.MapPost("/{orderId}/void", async (
             Guid orgId, Guid siteId, Guid orderId,
             [FromBody] VoidOrderRequest request,
@@ -141,8 +145,9 @@ public static class OrderEndpoints
 
             await grain.VoidAsync(new VoidOrderCommand(request.VoidedBy, request.Reason));
             return Results.Ok(new { message = "Order voided" });
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Manage, isSiteScoped: true));
 
+        // Discounts require supervisor-level permission
         group.MapPost("/{orderId}/discounts", async (
             Guid orgId, Guid siteId, Guid orderId,
             [FromBody] ApplyDiscountRequest request,
@@ -160,7 +165,7 @@ public static class OrderEndpoints
             {
                 ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
             }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Supervise, isSiteScoped: true));
 
         group.MapGet("/{orderId}/totals", async (Guid orgId, Guid siteId, Guid orderId, IGrainFactory grainFactory) =>
         {
@@ -173,7 +178,7 @@ public static class OrderEndpoints
             {
                 ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
             }));
-        });
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
 
         return app;
     }

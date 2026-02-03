@@ -1,3 +1,4 @@
+using DarkVelocity.Host.Authorization;
 using DarkVelocity.Host.Contracts;
 using DarkVelocity.Host.Grains;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,8 @@ public static class AuthEndpoints
 
         group.MapPost("/pin", async (
             [FromBody] PinLoginApiRequest request,
-            IGrainFactory grainFactory) =>
+            IGrainFactory grainFactory,
+            IAuthorizationService authService) =>
         {
             var deviceGrain = grainFactory.GetGrain<IDeviceGrain>(GrainKeys.Device(request.OrganizationId, request.DeviceId));
             if (!await deviceGrain.IsAuthorizedAsync())
@@ -44,6 +46,13 @@ public static class AuthEndpoints
                 null
             ));
 
+            // Create SpiceDB session with PIN scope (restricted to POS operations)
+            await authService.CreateSessionAsync(
+                lookupResult.UserId,
+                request.OrganizationId,
+                request.SiteId,
+                "pin");
+
             await deviceGrain.SetCurrentUserAsync(lookupResult.UserId);
             await userGrain.RecordLoginAsync();
 
@@ -58,10 +67,21 @@ public static class AuthEndpoints
 
         group.MapPost("/logout", async (
             [FromBody] LogoutApiRequest request,
-            IGrainFactory grainFactory) =>
+            IGrainFactory grainFactory,
+            IAuthorizationService authService) =>
         {
             var sessionGrain = grainFactory.GetGrain<ISessionGrain>(GrainKeys.Session(request.OrganizationId, request.SessionId));
+            var sessionState = await sessionGrain.GetStateAsync();
             await sessionGrain.RevokeAsync();
+
+            // Revoke SpiceDB session
+            if (sessionState.SiteId.HasValue)
+            {
+                await authService.RevokeSessionAsync(
+                    sessionState.UserId,
+                    request.OrganizationId,
+                    sessionState.SiteId.Value);
+            }
 
             var deviceGrain = grainFactory.GetGrain<IDeviceGrain>(GrainKeys.Device(request.OrganizationId, request.DeviceId));
             await deviceGrain.SetCurrentUserAsync(null);
