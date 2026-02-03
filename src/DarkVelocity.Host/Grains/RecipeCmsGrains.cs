@@ -230,6 +230,23 @@ public class RecipeDocumentGrain : JournaledGrain<RecipeDocumentState, IRecipeDo
             case RecipeUnlinkedFromMenu e:
                 state.LinkedMenuItemIds.Remove(e.MenuItemDocumentId);
                 break;
+
+            case RecipeCostWasRecalculated e:
+                if (e.UpdatedIngredientPrices != null)
+                {
+                    var versionToUpdate = state.Versions.FirstOrDefault(v => v.VersionNumber == e.VersionNumber);
+                    if (versionToUpdate != null)
+                    {
+                        foreach (var ingredient in versionToUpdate.Ingredients)
+                        {
+                            if (e.UpdatedIngredientPrices.TryGetValue(ingredient.IngredientId, out var newPrice))
+                            {
+                                ingredient.UnitCost = newPrice;
+                            }
+                        }
+                    }
+                }
+                break;
         }
     }
 
@@ -535,15 +552,55 @@ public class RecipeDocumentGrain : JournaledGrain<RecipeDocumentState, IRecipeDo
         await ConfirmEvents();
     }
 
-    public Task RecalculateCostAsync(IReadOnlyDictionary<Guid, decimal>? ingredientPrices = null)
+    public async Task RecalculateCostAsync(IReadOnlyDictionary<Guid, decimal>? ingredientPrices = null)
     {
         EnsureInitialized();
 
-        // Cost recalculation is a derived computation that doesn't change the core document state.
-        // The ingredient unit costs are updated when drafts are created.
-        // This method can be used for read-only cost computation if needed.
+        if (ingredientPrices == null || ingredientPrices.Count == 0)
+            return;
 
-        return Task.CompletedTask;
+        // Get the version to update (published or draft)
+        var versionNumber = State.PublishedVersion ?? State.DraftVersion;
+        if (!versionNumber.HasValue)
+            return;
+
+        var version = State.Versions.FirstOrDefault(v => v.VersionNumber == versionNumber.Value);
+        if (version == null)
+            return;
+
+        var previousCost = version.TheoreticalCost;
+
+        // Create a dictionary of prices that actually apply to this recipe's ingredients
+        var applicablePrices = new Dictionary<Guid, decimal>();
+        foreach (var ingredient in version.Ingredients)
+        {
+            if (ingredientPrices.TryGetValue(ingredient.IngredientId, out var newPrice))
+            {
+                applicablePrices[ingredient.IngredientId] = newPrice;
+            }
+        }
+
+        if (applicablePrices.Count == 0)
+            return;
+
+        // Calculate what the new cost will be
+        var newCost = version.Ingredients.Sum(i =>
+        {
+            var unitCost = applicablePrices.TryGetValue(i.IngredientId, out var newPrice) ? newPrice : i.UnitCost;
+            var effectiveQty = i.WastePercentage > 0 ? i.Quantity / (1 - i.WastePercentage / 100) : i.Quantity;
+            return effectiveQty * unitCost;
+        });
+
+        RaiseEvent(new RecipeCostWasRecalculated(
+            DocumentId: State.DocumentId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            VersionNumber: versionNumber.Value,
+            PreviousCost: previousCost,
+            NewCost: newCost,
+            UpdatedIngredientPrices: applicablePrices
+        ));
+
+        await ConfirmEvents();
     }
 
     public async Task LinkMenuItemAsync(string menuItemDocumentId)
