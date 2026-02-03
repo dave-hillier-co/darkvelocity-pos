@@ -27,10 +27,54 @@ public sealed record PendingOAuthState(
     List<EmailUserMapping> Organizations,
     DateTime ExpiresAt);
 
+/// <summary>
+/// Pending PIN auth state for OAuth-style PIN login.
+/// </summary>
+public sealed record PendingPinAuthState(
+    Guid OrganizationId,
+    Guid SiteId,
+    string ClientId,
+    string RedirectUri,
+    string? CodeChallenge,
+    string? CodeChallengeMethod,
+    string? Scope,
+    string? Nonce,
+    string? ClientState,
+    DateTime ExpiresAt);
+
+/// <summary>
+/// Response for PIN auth user selection.
+/// </summary>
+public record PinAuthUsersResponse(
+    string PendingToken,
+    Guid OrganizationId,
+    Guid SiteId,
+    List<PinUserOption> Users);
+
+/// <summary>
+/// User option for PIN selection.
+/// </summary>
+public record PinUserOption(
+    Guid UserId,
+    string DisplayName,
+    string? FirstName,
+    string? LastName,
+    string? AvatarUrl);
+
+/// <summary>
+/// Request to authenticate with PIN.
+/// </summary>
+public record PinAuthenticateRequest(
+    string PendingToken,
+    Guid UserId,
+    string Pin);
+
 public static class OAuthEndpoints
 {
     private const string PendingOAuthCachePrefix = "pending_oauth_";
+    private const string PendingPinAuthCachePrefix = "pending_pin_auth_";
     private static readonly TimeSpan PendingOAuthExpiry = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan PendingPinAuthExpiry = TimeSpan.FromMinutes(10);
 
     public static WebApplication MapOAuthEndpoints(this WebApplication app)
     {
@@ -548,6 +592,224 @@ public static class OAuthEndpoints
         }).WithName("JWKS")
           .WithDescription("JSON Web Key Set for token verification")
           .WithTags("OAuth");
+
+        // ========================================================================
+        // PIN Authentication - OAuth-Style Flow
+        // ========================================================================
+
+        // Initiate PIN auth - returns list of users for selection
+        group.MapGet("/pin/authorize", async (
+            HttpContext context,
+            IGrainFactory grainFactory,
+            IMemoryCache cache,
+            string response_type,
+            string client_id,
+            string redirect_uri,
+            Guid organization_id,
+            Guid site_id,
+            string? scope = null,
+            string? state = null,
+            string? nonce = null,
+            string? code_challenge = null,
+            string? code_challenge_method = null) =>
+        {
+            // Validate response type
+            if (response_type != "code")
+            {
+                return Results.BadRequest(new OAuthError("unsupported_response_type",
+                    "PIN auth only supports response_type=code"));
+            }
+
+            // Validate client
+            if (!IsValidClient(client_id, redirect_uri))
+            {
+                return Results.BadRequest(new OAuthError("invalid_client",
+                    "Unknown client_id or invalid redirect_uri"));
+            }
+
+            // Get users available for PIN login at this site
+            var userLookup = grainFactory.GetGrain<IUserLookupGrain>(GrainKeys.UserLookup(organization_id));
+            var users = await userLookup.GetUsersForSiteAsync(site_id);
+
+            if (users.Count == 0)
+            {
+                return Results.BadRequest(new OAuthError("no_users",
+                    "No users with PINs are available for this site"));
+            }
+
+            // Store pending state
+            var pendingToken = Guid.NewGuid().ToString("N");
+            var pendingState = new PendingPinAuthState(
+                organization_id,
+                site_id,
+                client_id,
+                redirect_uri,
+                code_challenge,
+                code_challenge_method,
+                scope,
+                nonce,
+                state,
+                DateTime.UtcNow.Add(PendingPinAuthExpiry));
+
+            cache.Set(
+                PendingPinAuthCachePrefix + pendingToken,
+                pendingState,
+                PendingPinAuthExpiry);
+
+            // Return users for selection
+            var userOptions = users.Select(u => new PinUserOption(
+                u.UserId,
+                u.DisplayName,
+                u.FirstName,
+                u.LastName,
+                u.AvatarUrl)).ToList();
+
+            return Results.Ok(new PinAuthUsersResponse(
+                pendingToken,
+                organization_id,
+                site_id,
+                userOptions));
+        }).WithName("OAuthPinAuthorize")
+          .WithDescription("OAuth-style PIN authorization - returns users for PIN selection");
+
+        // Get pending PIN auth state (for resuming flow)
+        group.MapGet("/pin/pending", (
+            [FromQuery] string pending_token,
+            IGrainFactory grainFactory,
+            IMemoryCache cache) =>
+        {
+            if (string.IsNullOrEmpty(pending_token))
+            {
+                return Results.BadRequest(Hal.Error("missing_token", "Pending token is required"));
+            }
+
+            if (!cache.TryGetValue<PendingPinAuthState>(PendingPinAuthCachePrefix + pending_token, out var pendingState) ||
+                pendingState == null)
+            {
+                return Results.NotFound(Hal.Error("expired_or_invalid", "Pending PIN auth session not found or expired"));
+            }
+
+            if (pendingState.ExpiresAt < DateTime.UtcNow)
+            {
+                cache.Remove(PendingPinAuthCachePrefix + pending_token);
+                return Results.NotFound(Hal.Error("expired", "Pending PIN auth session expired"));
+            }
+
+            return Results.Ok(new
+            {
+                pending_token,
+                organization_id = pendingState.OrganizationId,
+                site_id = pendingState.SiteId,
+                client_id = pendingState.ClientId,
+                redirect_uri = pendingState.RedirectUri
+            });
+        }).WithName("OAuthPinPending")
+          .WithDescription("Get pending PIN auth state");
+
+        // Authenticate with PIN - returns authorization code
+        group.MapPost("/pin/authenticate", async (
+            [FromBody] PinAuthenticateRequest request,
+            IGrainFactory grainFactory,
+            JwtTokenService tokenService,
+            IMemoryCache cache) =>
+        {
+            if (string.IsNullOrEmpty(request.PendingToken))
+            {
+                return Results.BadRequest(new OAuthError("missing_token", "Pending token is required"));
+            }
+
+            if (string.IsNullOrEmpty(request.Pin))
+            {
+                return Results.BadRequest(new OAuthError("missing_pin", "PIN is required"));
+            }
+
+            // Retrieve and validate pending state
+            if (!cache.TryGetValue<PendingPinAuthState>(PendingPinAuthCachePrefix + request.PendingToken, out var pendingState) ||
+                pendingState == null)
+            {
+                return Results.BadRequest(new OAuthError("invalid_token", "Pending PIN auth session not found or expired"));
+            }
+
+            if (pendingState.ExpiresAt < DateTime.UtcNow)
+            {
+                cache.Remove(PendingPinAuthCachePrefix + request.PendingToken);
+                return Results.BadRequest(new OAuthError("expired", "Pending PIN auth session expired"));
+            }
+
+            // Verify the user has a PIN and verify it
+            var userGrain = grainFactory.GetGrain<IUserGrain>(
+                GrainKeys.User(pendingState.OrganizationId, request.UserId));
+
+            if (!await userGrain.ExistsAsync())
+            {
+                return Results.BadRequest(new OAuthError("invalid_user", "User not found"));
+            }
+
+            var userState = await userGrain.GetStateAsync();
+
+            // Check user status
+            if (userState.Status == UserStatus.Inactive)
+            {
+                return Results.BadRequest(new OAuthError("user_inactive", "User account is inactive"));
+            }
+
+            if (userState.Status == UserStatus.Locked)
+            {
+                return Results.BadRequest(new OAuthError("user_locked", "User account is locked"));
+            }
+
+            // Verify site access
+            if (!userState.SiteAccess.Contains(pendingState.SiteId))
+            {
+                return Results.BadRequest(new OAuthError("no_site_access", "User does not have access to this site"));
+            }
+
+            // Verify PIN
+            var authResult = await userGrain.VerifyPinAsync(request.Pin);
+            if (!authResult.Success)
+            {
+                return Results.BadRequest(new OAuthError("invalid_pin", authResult.Error ?? "Invalid PIN"));
+            }
+
+            // Consume the pending state
+            cache.Remove(PendingPinAuthCachePrefix + request.PendingToken);
+
+            // Record login
+            await userGrain.RecordLoginAsync();
+
+            // Get user roles
+            var roles = await userGrain.GetRolesAsync();
+
+            // Generate authorization code
+            var code = GrainKeys.GenerateAuthorizationCode();
+            var codeGrain = grainFactory.GetGrain<IAuthorizationCodeGrain>(GrainKeys.AuthorizationCode(code));
+            await codeGrain.IssueAsync(new AuthorizationCodeRequest(
+                request.UserId,
+                pendingState.OrganizationId,
+                pendingState.ClientId,
+                pendingState.RedirectUri,
+                pendingState.Scope,
+                pendingState.CodeChallenge,
+                pendingState.CodeChallengeMethod,
+                pendingState.Nonce,
+                userState.DisplayName,
+                roles));
+
+            // Build redirect URL with code
+            var redirectUrl = AddQueryParam(pendingState.RedirectUri, "code", code);
+            if (!string.IsNullOrEmpty(pendingState.ClientState))
+            {
+                redirectUrl = AddQueryParam(redirectUrl, "state", pendingState.ClientState);
+            }
+
+            return Results.Ok(new
+            {
+                code,
+                redirect_uri = redirectUrl,
+                state = pendingState.ClientState
+            });
+        }).WithName("OAuthPinAuthenticate")
+          .WithDescription("Authenticate with PIN and receive authorization code");
 
         return app;
     }

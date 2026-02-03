@@ -172,6 +172,17 @@ public record UserLookupResult(
     [property: Id(2)] Guid OrganizationId);
 
 /// <summary>
+/// Summary of a user available for PIN login.
+/// </summary>
+[GenerateSerializer]
+public record PinUserSummary(
+    [property: Id(0)] Guid UserId,
+    [property: Id(1)] string DisplayName,
+    [property: Id(2)] string? FirstName,
+    [property: Id(3)] string? LastName,
+    [property: Id(4)] string? AvatarUrl);
+
+/// <summary>
 /// Grain for looking up users within an organization (e.g., by PIN).
 /// Key: "{orgId}:userlookup"
 /// </summary>
@@ -192,4 +203,10 @@ public interface IUserLookupGrain : IGrainWithStringKey
     /// Optionally filters by site access.
     /// </summary>
     Task<UserLookupResult?> FindByPinHashAsync(string pinHash, Guid? siteId = null);
+
+    /// <summary>
+    /// Gets all users with PINs set who have access to the specified site.
+    /// Used for OAuth-style PIN authentication user selection.
+    /// </summary>
+    Task<IReadOnlyList<PinUserSummary>> GetUsersForSiteAsync(Guid siteId);
 }
