@@ -71,16 +71,16 @@ public static class AuthEndpoints
             IAuthorizationService authService) =>
         {
             var sessionGrain = grainFactory.GetGrain<ISessionGrain>(GrainKeys.Session(request.OrganizationId, request.SessionId));
-            var sessionInfo = await sessionGrain.GetInfoAsync();
+            var sessionState = await sessionGrain.GetStateAsync();
             await sessionGrain.RevokeAsync();
 
             // Revoke SpiceDB session
-            if (sessionInfo != null)
+            if (sessionState.SiteId.HasValue)
             {
                 await authService.RevokeSessionAsync(
-                    sessionInfo.UserId,
+                    sessionState.UserId,
                     request.OrganizationId,
-                    sessionInfo.SiteId);
+                    sessionState.SiteId.Value);
             }
 
             var deviceGrain = grainFactory.GetGrain<IDeviceGrain>(GrainKeys.Device(request.OrganizationId, request.DeviceId));
