@@ -28,7 +28,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
 
     <!-- Authorization -->
-    <PackageReference Include="Authzed.Api" Version="1.2.0" />
+    <PackageReference Include="Authzed.Net" Version="1.2.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
   </ItemGroup>
 
