@@ -6,6 +6,7 @@ using FluentAssertions;
 namespace DarkVelocity.Tests;
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class BookingSettingsGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -204,6 +205,7 @@ public class BookingSettingsGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class BookingCalendarGrainTests
 {
     private readonly TestClusterFixture _fixture;

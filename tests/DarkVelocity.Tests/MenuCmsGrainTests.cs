@@ -6,6 +6,7 @@ using FluentAssertions;
 namespace DarkVelocity.Tests;
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class MenuItemDocumentGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -356,6 +357,7 @@ public class MenuItemDocumentGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class MenuCategoryDocumentGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -467,6 +469,7 @@ public class MenuCategoryDocumentGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class ModifierBlockGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -580,6 +583,7 @@ public class ModifierBlockGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class ContentTagGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -661,6 +665,7 @@ public class ContentTagGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class SiteMenuOverridesGrainTests
 {
     private readonly TestClusterFixture _fixture;

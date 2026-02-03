@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// Ensures invalid state transitions are properly rejected.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class StateTransitionValidationTests
 {
     private readonly TestClusterFixture _fixture;

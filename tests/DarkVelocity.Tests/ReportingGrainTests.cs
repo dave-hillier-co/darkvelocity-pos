@@ -11,6 +11,7 @@ namespace DarkVelocity.Tests;
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class DailyInventorySnapshotGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -157,6 +158,7 @@ public class DailyInventorySnapshotGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class DailyConsumptionGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -276,6 +278,7 @@ public class DailyConsumptionGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class DailyWasteGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -405,6 +408,7 @@ public class DailyWasteGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class PeriodAggregationGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -538,6 +542,7 @@ public class PeriodAggregationGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class SiteDashboardGrainTests
 {
     private readonly TestClusterFixture _fixture;

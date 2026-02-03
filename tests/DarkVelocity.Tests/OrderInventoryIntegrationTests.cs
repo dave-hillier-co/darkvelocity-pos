@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// Tests the flow of inventory consumption when orders are processed.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class OrderInventoryIntegrationTests
 {
     private readonly TestClusterFixture _fixture;

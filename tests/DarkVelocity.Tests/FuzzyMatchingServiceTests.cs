@@ -5,6 +5,7 @@ using FluentAssertions;
 
 namespace DarkVelocity.Tests;
 
+[Trait("Category", "Unit")]
 public class FuzzyMatchingServiceTests
 {
     private readonly FuzzyMatchingService _service = new();

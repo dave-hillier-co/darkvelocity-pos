@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// These tests verify the system behaves correctly with larger data volumes.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class PerformanceBoundaryTests
 {
     private readonly TestClusterFixture _fixture;

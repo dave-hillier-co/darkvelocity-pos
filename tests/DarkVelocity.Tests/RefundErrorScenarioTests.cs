@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// edge cases, and refund reversal handling.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class RefundErrorScenarioTests
 {
     private readonly TestClusterFixture _fixture;

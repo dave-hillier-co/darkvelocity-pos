@@ -5,6 +5,7 @@ using FluentAssertions;
 namespace DarkVelocity.Tests.Api;
 
 [Collection(ApiCollection.Name)]
+[Trait("Category", "Integration")]
 public class HealthApiTests
 {
     private readonly HttpClient _client;

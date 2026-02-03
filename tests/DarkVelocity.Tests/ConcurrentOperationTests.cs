@@ -11,6 +11,7 @@ namespace DarkVelocity.Tests;
 /// verify that concurrent requests are properly serialized and state remains consistent.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class ConcurrentOperationTests
 {
     private readonly TestClusterFixture _fixture;

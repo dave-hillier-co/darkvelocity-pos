@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// partial payments, and split bill handling.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class PaymentSplitScenarioTests
 {
     private readonly TestClusterFixture _fixture;

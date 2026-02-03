@@ -13,6 +13,7 @@ namespace DarkVelocity.Tests;
 /// Ensures that state changes emit proper events with correct metadata.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class AuditTrailVerificationTests
 {
     private readonly TestCluster _cluster;

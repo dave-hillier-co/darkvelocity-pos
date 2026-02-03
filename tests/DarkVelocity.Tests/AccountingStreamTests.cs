@@ -8,6 +8,7 @@ using Orleans.TestingHost;
 namespace DarkVelocity.Tests;
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class AccountingStreamTests
 {
     private readonly TestCluster _cluster;

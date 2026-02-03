@@ -8,6 +8,7 @@ namespace DarkVelocity.Tests;
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class DeliveryPlatformGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -279,6 +280,7 @@ public class DeliveryPlatformGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class ExternalOrderGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -570,6 +572,7 @@ public class ExternalOrderGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class MenuSyncGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -710,6 +713,7 @@ public class MenuSyncGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class PlatformPayoutGrainTests
 {
     private readonly TestClusterFixture _fixture;

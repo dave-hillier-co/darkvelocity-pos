@@ -6,6 +6,7 @@ using FluentAssertions;
 namespace DarkVelocity.Tests.Api;
 
 [Collection(ApiCollection.Name)]
+[Trait("Category", "Integration")]
 public class BookingApiTests
 {
     private readonly HttpClient _client;

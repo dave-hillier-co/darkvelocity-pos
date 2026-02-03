@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// station assignment, and station failure handling.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class KitchenTicketRoutingTests
 {
     private readonly TestClusterFixture _fixture;

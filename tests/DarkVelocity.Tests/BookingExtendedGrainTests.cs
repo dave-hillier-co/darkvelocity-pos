@@ -8,6 +8,7 @@ using Xunit;
 namespace DarkVelocity.Tests;
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class BookingExtendedGrainTests
 {
     private readonly TestCluster _cluster;

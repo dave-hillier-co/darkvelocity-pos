@@ -10,6 +10,7 @@ namespace DarkVelocity.Tests;
 /// negative values, empty collections, maximum values, and null handling.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class BoundaryAndEdgeCaseTests
 {
     private readonly TestClusterFixture _fixture;

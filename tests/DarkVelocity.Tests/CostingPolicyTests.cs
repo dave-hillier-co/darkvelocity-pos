@@ -4,6 +4,7 @@ using FluentAssertions;
 
 namespace DarkVelocity.Tests;
 
+[Trait("Category", "Unit")]
 public class CostingPolicyTests
 {
     private static List<StockBatch> CreateTestBatches()

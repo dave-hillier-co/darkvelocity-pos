@@ -25,4 +25,4 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Run unit tests
-        run: dotnet test --no-build --verbosity normal --filter "FullyQualifiedName~CardValidationServiceTests|FullyQualifiedName~CostingPolicyTests|FullyQualifiedName~FuzzyMatchingServiceTests"
+        run: dotnet test --no-build --verbosity normal --filter "Category=Unit"

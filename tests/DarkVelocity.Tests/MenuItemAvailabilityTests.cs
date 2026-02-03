@@ -8,6 +8,7 @@ namespace DarkVelocity.Tests;
 /// and time-based availability.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class MenuItemAvailabilityTests
 {
     private readonly TestClusterFixture _fixture;

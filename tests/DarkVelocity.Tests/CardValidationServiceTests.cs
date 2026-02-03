@@ -3,6 +3,7 @@ using FluentAssertions;
 
 namespace DarkVelocity.Tests;
 
+[Trait("Category", "Unit")]
 public class CardValidationServiceTests
 {
     private readonly CardValidationService _service = new();

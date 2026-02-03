@@ -8,6 +8,7 @@ namespace DarkVelocity.Tests;
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class FiscalDeviceGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -232,6 +233,7 @@ public class FiscalDeviceGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class FiscalTransactionGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -497,6 +499,7 @@ public class FiscalTransactionGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class FiscalJournalGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -673,6 +676,7 @@ public class FiscalJournalGrainTests
 // ============================================================================
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class TaxRateGrainTests
 {
     private readonly TestClusterFixture _fixture;

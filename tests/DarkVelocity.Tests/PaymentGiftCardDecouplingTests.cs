@@ -15,6 +15,7 @@ namespace DarkVelocity.Tests;
 /// When a gift card payment is refunded, the subscriber should credit back to the card.
 /// </summary>
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class PaymentGiftCardDecouplingTests
 {
     private readonly TestCluster _cluster;

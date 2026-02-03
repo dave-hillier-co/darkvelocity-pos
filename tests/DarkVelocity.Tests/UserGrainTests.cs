@@ -6,6 +6,7 @@ using FluentAssertions;
 namespace DarkVelocity.Tests;
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class UserGrainTests
 {
     private readonly TestClusterFixture _fixture;
@@ -283,6 +284,7 @@ public class UserGrainTests
 }
 
 [Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
 public class UserGroupGrainTests
 {
     private readonly TestClusterFixture _fixture;
