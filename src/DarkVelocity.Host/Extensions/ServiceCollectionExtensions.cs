@@ -134,12 +134,46 @@ public static class ServiceCollectionExtensions
                 }
             });
 
+            // JWT Bearer Token (for direct API access)
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token.",
                 Name = "Authorization",
                 In = ParameterLocation.Header,
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT"
+            });
+
+            // OAuth 2.0 Authorization Code Flow (Google/Microsoft)
+            options.AddSecurityDefinition("OAuth2", new OpenApiSecurityScheme
+            {
+                Description = "OAuth 2.0 Authorization Code flow with Google or Microsoft",
+                Type = SecuritySchemeType.OAuth2,
+                Flows = new OpenApiOAuthFlows
+                {
+                    AuthorizationCode = new OpenApiOAuthFlow
+                    {
+                        AuthorizationUrl = new Uri("/api/oauth/authorize", UriKind.Relative),
+                        TokenUrl = new Uri("/api/oauth/token", UriKind.Relative),
+                        Scopes = new Dictionary<string, string>
+                        {
+                            ["openid"] = "OpenID Connect scope",
+                            ["profile"] = "Access user profile information",
+                            ["email"] = "Access user email",
+                            ["offline_access"] = "Request refresh tokens"
+                        }
+                    }
+                }
+            });
+
+            // PIN Authentication (for POS devices)
+            options.AddSecurityDefinition("PinAuth", new OpenApiSecurityScheme
+            {
+                Description = "PIN-based authentication for POS devices. Use POST /api/auth/pin with organizationId, siteId, deviceId, and pin to obtain a JWT token, or use the OAuth-style flow at /api/oauth/pin/authorize.",
                 Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Header,
+                Name = "Authorization",
                 Scheme = "Bearer"
             });
 
@@ -155,6 +189,17 @@ public static class ServiceCollectionExtensions
                         }
                     },
                     Array.Empty<string>()
+                },
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "OAuth2"
+                        }
+                    },
+                    new[] { "openid", "profile", "email" }
                 }
             });
         });
