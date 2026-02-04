@@ -251,3 +251,152 @@ public enum MarginAlertType
     NegativeMargin,
     CostSpike
 }
+
+// ============================================================================
+// Batch Prep Production Events
+// ============================================================================
+
+/// <summary>
+/// Batch prep production started. Ingredients will be consumed.
+/// </summary>
+public sealed record BatchPrepProductionStarted : DomainEvent
+{
+    public override string EventType => "recipe.batch_prep.production_started";
+    public override string AggregateType => "BatchPrepProduction";
+    public override Guid AggregateId => ProductionId;
+
+    public required Guid ProductionId { get; init; }
+    public required Guid RecipeId { get; init; }
+    public required string RecipeDocumentId { get; init; }
+    public required Guid RecipeVersionId { get; init; }
+    public required int RecipeVersion { get; init; }
+    public required string RecipeName { get; init; }
+    public required decimal BatchMultiplier { get; init; }
+    public required decimal ExpectedYieldQuantity { get; init; }
+    public required string YieldUnit { get; init; }
+    public required decimal ExpectedOutputQuantity { get; init; }
+    public required string OutputUnit { get; init; }
+    public required Guid OutputInventoryItemId { get; init; }
+    public required string OutputInventoryItemName { get; init; }
+    public required IReadOnlyList<ProductionIngredient> Ingredients { get; init; }
+    public required decimal EstimatedCost { get; init; }
+    public required Guid StartedBy { get; init; }
+    public string? Notes { get; init; }
+}
+
+/// <summary>
+/// Ingredient to be consumed in batch prep production.
+/// </summary>
+public sealed record ProductionIngredient
+{
+    public required Guid IngredientId { get; init; }
+    public required string IngredientName { get; init; }
+    public required decimal RequiredQuantity { get; init; }
+    public required string Unit { get; init; }
+    public required decimal EstimatedCost { get; init; }
+}
+
+/// <summary>
+/// Batch prep production completed. Output stock created with shelf life.
+/// </summary>
+public sealed record BatchPrepProductionCompleted : DomainEvent
+{
+    public override string EventType => "recipe.batch_prep.production_completed";
+    public override string AggregateType => "BatchPrepProduction";
+    public override Guid AggregateId => ProductionId;
+
+    public required Guid ProductionId { get; init; }
+    public required Guid RecipeId { get; init; }
+    public required string RecipeDocumentId { get; init; }
+    public required Guid RecipeVersionId { get; init; }
+    public required string RecipeName { get; init; }
+
+    // What was actually produced
+    public required decimal ActualYieldQuantity { get; init; }
+    public required string YieldUnit { get; init; }
+    public required decimal ActualOutputQuantity { get; init; }
+    public required string OutputUnit { get; init; }
+
+    // Output batch created in inventory
+    public required Guid OutputBatchId { get; init; }
+    public required string OutputBatchNumber { get; init; }
+    public required Guid OutputInventoryItemId { get; init; }
+    public required string OutputInventoryItemName { get; init; }
+    public required DateTime ExpiryDate { get; init; }
+    public required int ShelfLifeHours { get; init; }
+
+    // Costing
+    public required IReadOnlyList<ProductionIngredientConsumed> IngredientsConsumed { get; init; }
+    public required decimal TotalIngredientCost { get; init; }
+    public required decimal CostPerOutputUnit { get; init; }
+
+    // Yield variance
+    public required decimal ExpectedYieldQuantity { get; init; }
+    public required decimal YieldVariance { get; init; }
+    public required decimal YieldVariancePercent { get; init; }
+
+    public required Guid CompletedBy { get; init; }
+    public string? Notes { get; init; }
+}
+
+/// <summary>
+/// Ingredient actually consumed during batch prep production.
+/// </summary>
+public sealed record ProductionIngredientConsumed
+{
+    public required Guid IngredientId { get; init; }
+    public required string IngredientName { get; init; }
+    public required decimal PlannedQuantity { get; init; }
+    public required decimal ActualQuantity { get; init; }
+    public required string Unit { get; init; }
+    public required decimal ActualCost { get; init; }
+    public required IReadOnlyList<ProductionBatchConsumption> BatchBreakdown { get; init; }
+}
+
+/// <summary>
+/// Batch breakdown for ingredient consumption during production.
+/// </summary>
+public sealed record ProductionBatchConsumption
+{
+    public required Guid BatchId { get; init; }
+    public required string BatchNumber { get; init; }
+    public required decimal Quantity { get; init; }
+    public required decimal UnitCost { get; init; }
+    public required decimal TotalCost { get; init; }
+}
+
+/// <summary>
+/// Batch prep production aborted before completion.
+/// </summary>
+public sealed record BatchPrepProductionAborted : DomainEvent
+{
+    public override string EventType => "recipe.batch_prep.production_aborted";
+    public override string AggregateType => "BatchPrepProduction";
+    public override Guid AggregateId => ProductionId;
+
+    public required Guid ProductionId { get; init; }
+    public required Guid RecipeId { get; init; }
+    public required string RecipeDocumentId { get; init; }
+    public required string RecipeName { get; init; }
+    public required BatchPrepAbortReason Reason { get; init; }
+    public required string ReasonDetails { get; init; }
+
+    // Ingredients already consumed (if any)
+    public IReadOnlyList<ProductionIngredientConsumed>? IngredientsConsumed { get; init; }
+    public decimal? WastedCost { get; init; }
+
+    public required Guid AbortedBy { get; init; }
+}
+
+/// <summary>
+/// Reasons for aborting batch prep production.
+/// </summary>
+public enum BatchPrepAbortReason
+{
+    InsufficientIngredients,
+    EquipmentFailure,
+    QualityFailure,
+    StaffError,
+    ContaminationRisk,
+    Other
+}

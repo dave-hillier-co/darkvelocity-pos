@@ -5,6 +5,25 @@ namespace DarkVelocity.Host.State;
 // ============================================================================
 
 /// <summary>
+/// Defines how a recipe is produced and consumed.
+/// </summary>
+public enum RecipeType
+{
+    /// <summary>
+    /// Made at sale time. Ingredients are consumed when the item is sold.
+    /// Example: a cocktail mixed when ordered, a sandwich made to order.
+    /// </summary>
+    MadeToOrder,
+
+    /// <summary>
+    /// Made in advance as batch prep. Consumes ingredients during production
+    /// and creates stocked inventory with a shelf life that is consumed when sold.
+    /// Example: a house sauce prepped daily, pre-portioned proteins, soup stock.
+    /// </summary>
+    BatchPrep
+}
+
+/// <summary>
 /// A recipe ingredient within a version.
 /// </summary>
 [GenerateSerializer]
@@ -62,6 +81,48 @@ public sealed class RecipeVersionState
     // References
     [Id(14)] public Guid? CategoryId { get; set; }
 
+    // Recipe type and batch prep configuration
+    [Id(15)] public RecipeType RecipeType { get; set; } = RecipeType.MadeToOrder;
+
+    /// <summary>
+    /// For BatchPrep recipes: the inventory item ID that this recipe produces.
+    /// When a batch is produced, stock of this item is created.
+    /// </summary>
+    [Id(16)] public Guid? OutputInventoryItemId { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: the name of the output item (for display).
+    /// </summary>
+    [Id(17)] public string? OutputInventoryItemName { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: how long the produced item lasts in hours.
+    /// Used to calculate expiry date when production batches are created.
+    /// </summary>
+    [Id(18)] public int? ShelfLifeHours { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: minimum batch size for production (optional).
+    /// </summary>
+    [Id(19)] public decimal? MinBatchSize { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: maximum batch size for production (optional).
+    /// </summary>
+    [Id(20)] public decimal? MaxBatchSize { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: the unit for the output item (may differ from yield unit).
+    /// Example: recipe yields "2 liters" but output is stocked in "portions" (8 portions per 2L).
+    /// </summary>
+    [Id(21)] public string? OutputUnit { get; set; }
+
+    /// <summary>
+    /// For BatchPrep recipes: how many output units are created per recipe yield.
+    /// Example: 1 batch yields 2L, which equals 8 portions, so OutputQuantityPerYield = 8.
+    /// </summary>
+    [Id(22)] public decimal? OutputQuantityPerYield { get; set; }
+
     /// <summary>
     /// Theoretical cost: sum of all ingredient line costs.
     /// </summary>
@@ -71,6 +132,13 @@ public sealed class RecipeVersionState
     /// Cost per portion: TheoreticalCost / PortionYield
     /// </summary>
     public decimal CostPerPortion => PortionYield > 0 ? TheoreticalCost / PortionYield : 0;
+
+    /// <summary>
+    /// For BatchPrep recipes: cost per output unit.
+    /// </summary>
+    public decimal? CostPerOutputUnit => OutputQuantityPerYield.HasValue && OutputQuantityPerYield > 0
+        ? TheoreticalCost / OutputQuantityPerYield.Value
+        : null;
 }
 
 /// <summary>
@@ -194,6 +262,9 @@ public sealed class RecipeRegistryEntry
     [Id(6)] public int PublishedVersion { get; set; }
     [Id(7)] public DateTimeOffset LastModified { get; set; } = DateTimeOffset.UtcNow;
     [Id(8)] public int LinkedMenuItemCount { get; set; }
+    [Id(9)] public RecipeType RecipeType { get; set; } = RecipeType.MadeToOrder;
+    [Id(10)] public Guid? OutputInventoryItemId { get; set; }
+    [Id(11)] public int? ShelfLifeHours { get; set; }
 }
 
 /// <summary>

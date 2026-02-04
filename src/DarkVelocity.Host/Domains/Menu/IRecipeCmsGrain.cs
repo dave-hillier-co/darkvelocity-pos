@@ -26,7 +26,15 @@ public record CreateRecipeDocumentCommand(
     [property: Id(11)] Guid? CategoryId = null,
     [property: Id(12)] string Locale = "en-US",
     [property: Id(13)] Guid? CreatedBy = null,
-    [property: Id(14)] bool PublishImmediately = false);
+    [property: Id(14)] bool PublishImmediately = false,
+    [property: Id(15)] RecipeType RecipeType = RecipeType.MadeToOrder,
+    [property: Id(16)] Guid? OutputInventoryItemId = null,
+    [property: Id(17)] string? OutputInventoryItemName = null,
+    [property: Id(18)] int? ShelfLifeHours = null,
+    [property: Id(19)] decimal? MinBatchSize = null,
+    [property: Id(20)] decimal? MaxBatchSize = null,
+    [property: Id(21)] string? OutputUnit = null,
+    [property: Id(22)] decimal? OutputQuantityPerYield = null);
 
 /// <summary>
 /// Command to create a recipe ingredient.
@@ -62,7 +70,15 @@ public record CreateRecipeDraftCommand(
     [property: Id(10)] string? ImageUrl = null,
     [property: Id(11)] Guid? CategoryId = null,
     [property: Id(12)] string? ChangeNote = null,
-    [property: Id(13)] Guid? CreatedBy = null);
+    [property: Id(13)] Guid? CreatedBy = null,
+    [property: Id(14)] RecipeType? RecipeType = null,
+    [property: Id(15)] Guid? OutputInventoryItemId = null,
+    [property: Id(16)] string? OutputInventoryItemName = null,
+    [property: Id(17)] int? ShelfLifeHours = null,
+    [property: Id(18)] decimal? MinBatchSize = null,
+    [property: Id(19)] decimal? MaxBatchSize = null,
+    [property: Id(20)] string? OutputUnit = null,
+    [property: Id(21)] decimal? OutputQuantityPerYield = null);
 
 /// <summary>
 /// Command to add a localized translation to a recipe.
@@ -115,7 +131,16 @@ public record RecipeVersionSnapshot(
     [property: Id(15)] Guid? CategoryId,
     [property: Id(16)] decimal TheoreticalCost,
     [property: Id(17)] decimal CostPerPortion,
-    [property: Id(18)] IReadOnlyDictionary<string, LocalizedStrings> Translations);
+    [property: Id(18)] IReadOnlyDictionary<string, LocalizedStrings> Translations,
+    [property: Id(19)] RecipeType RecipeType = RecipeType.MadeToOrder,
+    [property: Id(20)] Guid? OutputInventoryItemId = null,
+    [property: Id(21)] string? OutputInventoryItemName = null,
+    [property: Id(22)] int? ShelfLifeHours = null,
+    [property: Id(23)] decimal? MinBatchSize = null,
+    [property: Id(24)] decimal? MaxBatchSize = null,
+    [property: Id(25)] string? OutputUnit = null,
+    [property: Id(26)] decimal? OutputQuantityPerYield = null,
+    [property: Id(27)] decimal? CostPerOutputUnit = null);
 
 /// <summary>
 /// Snapshot of a recipe document with full metadata.
@@ -309,7 +334,10 @@ public record RecipeDocumentSummary(
     [property: Id(5)] bool IsArchived,
     [property: Id(6)] int PublishedVersion,
     [property: Id(7)] DateTimeOffset LastModified,
-    [property: Id(8)] int LinkedMenuItemCount);
+    [property: Id(8)] int LinkedMenuItemCount,
+    [property: Id(9)] RecipeType RecipeType = RecipeType.MadeToOrder,
+    [property: Id(10)] Guid? OutputInventoryItemId = null,
+    [property: Id(11)] int? ShelfLifeHours = null);
 
 /// <summary>
 /// Summary of a recipe category document for listing.
@@ -332,10 +360,34 @@ public record RecipeCategoryDocumentSummary(
 public interface IRecipeRegistryGrain : IGrainWithStringKey
 {
     // Recipes
-    Task RegisterRecipeAsync(string documentId, string name, decimal costPerPortion, string? categoryId, int linkedMenuItemCount = 0);
-    Task UpdateRecipeAsync(string documentId, string name, decimal costPerPortion, string? categoryId, bool hasDraft, bool isArchived, int linkedMenuItemCount);
+    Task RegisterRecipeAsync(
+        string documentId,
+        string name,
+        decimal costPerPortion,
+        string? categoryId,
+        int linkedMenuItemCount = 0,
+        RecipeType recipeType = RecipeType.MadeToOrder,
+        Guid? outputInventoryItemId = null,
+        int? shelfLifeHours = null);
+
+    Task UpdateRecipeAsync(
+        string documentId,
+        string name,
+        decimal costPerPortion,
+        string? categoryId,
+        bool hasDraft,
+        bool isArchived,
+        int linkedMenuItemCount,
+        RecipeType recipeType = RecipeType.MadeToOrder,
+        Guid? outputInventoryItemId = null,
+        int? shelfLifeHours = null);
+
     Task UnregisterRecipeAsync(string documentId);
-    Task<IReadOnlyList<RecipeDocumentSummary>> GetRecipesAsync(string? categoryId = null, bool includeArchived = false);
+
+    Task<IReadOnlyList<RecipeDocumentSummary>> GetRecipesAsync(
+        string? categoryId = null,
+        bool includeArchived = false,
+        RecipeType? filterByType = null);
 
     // Categories
     Task RegisterCategoryAsync(string documentId, string name, int displayOrder, string? color);
@@ -344,5 +396,9 @@ public interface IRecipeRegistryGrain : IGrainWithStringKey
     Task<IReadOnlyList<RecipeCategoryDocumentSummary>> GetCategoriesAsync(bool includeArchived = false);
 
     // Search
-    Task<IReadOnlyList<RecipeDocumentSummary>> SearchRecipesAsync(string query, int take = 20);
+    Task<IReadOnlyList<RecipeDocumentSummary>> SearchRecipesAsync(string query, int take = 20, RecipeType? filterByType = null);
+
+    // Batch prep specific queries
+    Task<IReadOnlyList<RecipeDocumentSummary>> GetBatchPrepRecipesAsync(bool includeArchived = false);
+    Task<IReadOnlyList<RecipeDocumentSummary>> GetRecipesByOutputItemAsync(Guid outputInventoryItemId);
 }
