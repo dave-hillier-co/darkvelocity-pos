@@ -110,6 +110,31 @@ public record OrderPaymentSummary
     [Id(4)] public DateTime PaidAt { get; init; }
 }
 
+/// <summary>
+/// Reference to a child order created from a bill split.
+/// </summary>
+[GenerateSerializer]
+public record SplitOrderReference
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public string OrderNumber { get; init; } = string.Empty;
+    [Id(2)] public List<Guid> LineIds { get; init; } = [];
+    [Id(3)] public DateTime SplitAt { get; init; }
+}
+
+/// <summary>
+/// Represents a calculated split share for payment splitting.
+/// </summary>
+[GenerateSerializer]
+public record SplitShare
+{
+    [Id(0)] public int ShareNumber { get; init; }
+    [Id(1)] public decimal Amount { get; init; }
+    [Id(2)] public decimal Tax { get; init; }
+    [Id(3)] public decimal Total { get; init; }
+    [Id(4)] public string? Label { get; init; }
+}
+
 [GenerateSerializer]
 public sealed class OrderState
 {
@@ -145,6 +170,11 @@ public sealed class OrderState
     [Id(26)] public Guid? BookingId { get; set; }
     [Id(27)] public string? ExternalOrderId { get; set; }
     [Id(28)] public string? ExternalSource { get; set; }
+
+    // Bill splitting tracking
+    [Id(37)] public Guid? ParentOrderId { get; set; }
+    [Id(38)] public string? ParentOrderNumber { get; set; }
+    [Id(39)] public List<SplitOrderReference> ChildOrders { get; set; } = [];
 
     [Id(29)] public Guid CreatedBy { get; set; }
     [Id(30)] public DateTime CreatedAt { get; set; }

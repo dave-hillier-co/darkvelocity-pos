@@ -190,3 +190,41 @@ public sealed record OrderReopened : IOrderEvent
     [Id(2)] public string Reason { get; init; } = "";
     [Id(3)] public DateTime OccurredAt { get; init; }
 }
+
+/// <summary>
+/// Event when an order is split by moving items to a new order.
+/// Recorded on the source order.
+/// </summary>
+[GenerateSerializer]
+public sealed record OrderSplitByItems : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid NewOrderId { get; init; }
+    [Id(2)] public string NewOrderNumber { get; init; } = "";
+    [Id(3)] public List<Guid> MovedLineIds { get; init; } = [];
+    [Id(4)] public Guid SplitBy { get; init; }
+    [Id(5)] public DateTime OccurredAt { get; init; }
+}
+
+/// <summary>
+/// Event when an order is created from splitting another order.
+/// Recorded on the new child order.
+/// </summary>
+[GenerateSerializer]
+public sealed record OrderCreatedFromSplit : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid OrganizationId { get; init; }
+    [Id(2)] public Guid SiteId { get; init; }
+    [Id(3)] public string OrderNumber { get; init; } = "";
+    [Id(4)] public OrderType Type { get; init; }
+    [Id(5)] public Guid ParentOrderId { get; init; }
+    [Id(6)] public string ParentOrderNumber { get; init; } = "";
+    [Id(7)] public Guid? TableId { get; init; }
+    [Id(8)] public string? TableNumber { get; init; }
+    [Id(9)] public Guid? CustomerId { get; init; }
+    [Id(10)] public int GuestCount { get; init; }
+    [Id(11)] public Guid CreatedBy { get; init; }
+    [Id(12)] public List<OrderLine> Lines { get; init; } = [];
+    [Id(13)] public DateTime OccurredAt { get; init; }
+}

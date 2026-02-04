@@ -101,6 +101,31 @@ public interface IOrderGrain : IGrainWithStringKey
     /// Similar to Square's POST /v2/orders/clone
     /// </summary>
     Task<CloneOrderResult> CloneAsync(CloneOrderCommand command);
+
+    // Bill Splitting
+    /// <summary>
+    /// Split specific line items into a new order that can be paid independently.
+    /// </summary>
+    Task<SplitByItemsResult> SplitByItemsAsync(SplitByItemsCommand command);
+
+    /// <summary>
+    /// Initialize this order as a child order created from a split.
+    /// Called on the new order grain to set up parent relationship and lines.
+    /// </summary>
+    Task<OrderCreatedResult> CreateFromSplitAsync(CreateFromSplitCommand command);
+
+    /// <summary>
+    /// Calculate equal payment splits for a given number of people.
+    /// Returns the share amounts without modifying the order.
+    /// </summary>
+    Task<SplitPaymentResult> CalculateSplitByPeopleAsync(int numberOfPeople);
+
+    /// <summary>
+    /// Calculate custom payment splits by specified amounts.
+    /// Validates that amounts sum to the balance due.
+    /// Returns the share details without modifying the order.
+    /// </summary>
+    Task<SplitPaymentResult> CalculateSplitByAmountsAsync(List<decimal> amounts);
 }
 
 [GenerateSerializer]
@@ -117,3 +142,39 @@ public record CloneOrderResult(
     [property: Id(0)] Guid NewOrderId,
     [property: Id(1)] string NewOrderNumber,
     [property: Id(2)] int LinesCloned);
+
+// Bill Splitting Commands and Results
+[GenerateSerializer]
+public record SplitByItemsCommand(
+    [property: Id(0)] List<Guid> LineIds,
+    [property: Id(1)] Guid SplitBy,
+    [property: Id(2)] int? GuestCount = null);
+
+[GenerateSerializer]
+public record SplitByItemsResult(
+    [property: Id(0)] Guid NewOrderId,
+    [property: Id(1)] string NewOrderNumber,
+    [property: Id(2)] int LinesMoved,
+    [property: Id(3)] decimal NewOrderTotal,
+    [property: Id(4)] decimal RemainingOrderTotal);
+
+[GenerateSerializer]
+public record CreateFromSplitCommand(
+    [property: Id(0)] Guid OrganizationId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid ParentOrderId,
+    [property: Id(3)] string ParentOrderNumber,
+    [property: Id(4)] OrderType Type,
+    [property: Id(5)] List<OrderLine> Lines,
+    [property: Id(6)] Guid CreatedBy,
+    [property: Id(7)] Guid? TableId = null,
+    [property: Id(8)] string? TableNumber = null,
+    [property: Id(9)] Guid? CustomerId = null,
+    [property: Id(10)] int GuestCount = 1);
+
+[GenerateSerializer]
+public record SplitPaymentResult(
+    [property: Id(0)] decimal TotalAmount,
+    [property: Id(1)] decimal BalanceDue,
+    [property: Id(2)] List<SplitShare> Shares,
+    [property: Id(3)] bool IsValid);

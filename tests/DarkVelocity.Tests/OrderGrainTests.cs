@@ -430,4 +430,339 @@ public class OrderGrainTests
         state.CustomerId.Should().Be(customerId);
         state.CustomerName.Should().Be("Jane Doe");
     }
+
+    // Bill Splitting Tests
+
+    [Fact]
+    public async Task SplitByItemsAsync_ShouldCreateNewOrderWithMovedItems()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn, Guid.NewGuid(), "T1"));
+        var line1 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 15.00m));
+        var line2 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Fries", 1, 5.00m));
+        var line3 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Soda", 1, 3.00m));
+
+        // Act
+        var result = await grain.SplitByItemsAsync(new SplitByItemsCommand(
+            new List<Guid> { line2.LineId, line3.LineId },
+            userId,
+            1));
+
+        // Assert
+        result.NewOrderId.Should().NotBeEmpty();
+        result.NewOrderNumber.Should().EndWith("-S");
+        result.LinesMoved.Should().Be(2);
+
+        // Verify original order has only the burger
+        var originalState = await grain.GetStateAsync();
+        originalState.Lines.Should().HaveCount(1);
+        originalState.Lines[0].Name.Should().Be("Burger");
+        originalState.ChildOrders.Should().HaveCount(1);
+        originalState.ChildOrders[0].OrderId.Should().Be(result.NewOrderId);
+
+        // Verify new order has fries and soda
+        var newOrderGrain = GetOrderGrain(orgId, siteId, result.NewOrderId);
+        var newOrderState = await newOrderGrain.GetStateAsync();
+        newOrderState.Lines.Should().HaveCount(2);
+        newOrderState.ParentOrderId.Should().Be(orderId);
+        newOrderState.TableNumber.Should().Be("T1");
+    }
+
+    [Fact]
+    public async Task SplitByItemsAsync_ShouldFailWhenNoLinesSpecified()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 15.00m));
+
+        // Act
+        var act = () => grain.SplitByItemsAsync(new SplitByItemsCommand(new List<Guid>(), userId));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*At least one line must be specified*");
+    }
+
+    [Fact]
+    public async Task SplitByItemsAsync_ShouldFailWhenAllLinesSelected()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line1 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 15.00m));
+
+        // Act
+        var act = () => grain.SplitByItemsAsync(new SplitByItemsCommand(
+            new List<Guid> { line1.LineId },
+            userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*at least one line must remain*");
+    }
+
+    [Fact]
+    public async Task SplitByItemsAsync_ShouldFailForClosedOrder()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line1 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 15.00m));
+        var line2 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Fries", 1, 5.00m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), totals.GrandTotal, 0m, "Cash");
+        await grain.CloseAsync(userId);
+
+        // Act
+        var act = () => grain.SplitByItemsAsync(new SplitByItemsCommand(
+            new List<Guid> { line1.LineId },
+            userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*closed or voided*");
+    }
+
+    [Fact]
+    public async Task SplitByItemsAsync_BothOrdersShouldBeIndependentlyPayable()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line1 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100.00m));
+        var line2 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Fries", 1, 50.00m));
+
+        var splitResult = await grain.SplitByItemsAsync(new SplitByItemsCommand(
+            new List<Guid> { line2.LineId },
+            userId));
+
+        // Act - Pay original order
+        var originalTotals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), originalTotals.GrandTotal, 0m, "Cash");
+        await grain.CloseAsync(userId);
+
+        // Act - Pay new order
+        var newOrderGrain = GetOrderGrain(orgId, siteId, splitResult.NewOrderId);
+        var newTotals = await newOrderGrain.GetTotalsAsync();
+        await newOrderGrain.RecordPaymentAsync(Guid.NewGuid(), newTotals.GrandTotal, 0m, "Card");
+        await newOrderGrain.CloseAsync(userId);
+
+        // Assert - Both orders should be closed
+        var originalState = await grain.GetStateAsync();
+        var newState = await newOrderGrain.GetStateAsync();
+
+        originalState.Status.Should().Be(OrderStatus.Closed);
+        newState.Status.Should().Be(OrderStatus.Closed);
+    }
+
+    [Fact]
+    public async Task CalculateSplitByPeopleAsync_ShouldCalculateEqualShares()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        // Act
+        var result = await grain.CalculateSplitByPeopleAsync(4);
+
+        // Assert
+        result.IsValid.Should().BeTrue();
+        result.Shares.Should().HaveCount(4);
+        result.Shares.Sum(s => s.Total).Should().Be(result.BalanceDue);
+        result.Shares.All(s => s.Label!.StartsWith("Guest")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CalculateSplitByPeopleAsync_ShouldHandleRemainderCorrectly()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        // Create amount that doesn't divide evenly by 3 (after tax)
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        var totals = await grain.GetTotalsAsync();
+
+        // Act
+        var result = await grain.CalculateSplitByPeopleAsync(3);
+
+        // Assert
+        result.IsValid.Should().BeTrue();
+        result.Shares.Should().HaveCount(3);
+        // Sum should equal balance due exactly
+        result.Shares.Sum(s => s.Total).Should().Be(result.BalanceDue);
+    }
+
+    [Fact]
+    public async Task CalculateSplitByPeopleAsync_ShouldFailWithZeroPeople()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        // Act
+        var act = () => grain.CalculateSplitByPeopleAsync(0);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*greater than zero*");
+    }
+
+    [Fact]
+    public async Task CalculateSplitByPeopleAsync_ShouldReturnInvalidWhenFullyPaid()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), totals.GrandTotal, 0m, "Cash");
+
+        // Act
+        var result = await grain.CalculateSplitByPeopleAsync(2);
+
+        // Assert
+        result.IsValid.Should().BeFalse();
+        result.BalanceDue.Should().Be(0);
+        result.Shares.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CalculateSplitByAmountsAsync_ShouldValidateAmountsMatchBalance()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+        var totals = await grain.GetTotalsAsync();
+
+        // Act - Amounts that match balance
+        var result = await grain.CalculateSplitByAmountsAsync(new List<decimal>
+        {
+            totals.BalanceDue / 2,
+            totals.BalanceDue / 2
+        });
+
+        // Assert
+        result.IsValid.Should().BeTrue();
+        result.Shares.Should().HaveCount(2);
+        result.Shares.Sum(s => s.Total).Should().BeApproximately(totals.BalanceDue, 0.01m);
+    }
+
+    [Fact]
+    public async Task CalculateSplitByAmountsAsync_ShouldReturnInvalidWhenAmountsDontMatch()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        // Act - Amounts that don't match balance
+        var result = await grain.CalculateSplitByAmountsAsync(new List<decimal> { 30.00m, 30.00m });
+
+        // Assert
+        result.IsValid.Should().BeFalse();
+        result.Shares.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task CalculateSplitByAmountsAsync_ShouldFailWithNegativeAmounts()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        // Act
+        var act = () => grain.CalculateSplitByAmountsAsync(new List<decimal> { -10.00m, 50.00m });
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*cannot be negative*");
+    }
+
+    [Fact]
+    public async Task CalculateSplitByAmountsAsync_ShouldFailWithEmptyList()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Meal", 1, 100.00m));
+
+        // Act
+        var act = () => grain.CalculateSplitByAmountsAsync(new List<decimal>());
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*At least one amount*");
+    }
 }

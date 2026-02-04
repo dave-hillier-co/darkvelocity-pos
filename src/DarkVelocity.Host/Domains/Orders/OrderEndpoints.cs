@@ -180,6 +180,86 @@ public static class OrderEndpoints
             }));
         }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
 
+        // Bill Splitting Endpoints
+
+        // Split order by moving specific items to a new order
+        group.MapPost("/{orderId}/split/by-items", async (
+            Guid orgId, Guid siteId, Guid orderId,
+            [FromBody] SplitByItemsRequest request,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IOrderGrain>(GrainKeys.Order(orgId, siteId, orderId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Order not found"));
+
+            var result = await grain.SplitByItemsAsync(new SplitByItemsCommand(
+                request.LineIds, request.SplitBy, request.GuestCount));
+
+            var response = new SplitByItemsResponse(
+                result.NewOrderId,
+                result.NewOrderNumber,
+                result.LinesMoved,
+                result.NewOrderTotal,
+                result.RemainingOrderTotal);
+
+            return Results.Created($"/api/orgs/{orgId}/sites/{siteId}/orders/{result.NewOrderId}",
+                Hal.Resource(response, new Dictionary<string, object>
+                {
+                    ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" },
+                    ["newOrder"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{result.NewOrderId}" }
+                }));
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
+
+        // Calculate split payment by number of people (equal split)
+        group.MapGet("/{orderId}/split/by-people", async (
+            Guid orgId, Guid siteId, Guid orderId,
+            [FromQuery] int count,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IOrderGrain>(GrainKeys.Order(orgId, siteId, orderId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Order not found"));
+
+            var result = await grain.CalculateSplitByPeopleAsync(count);
+
+            var response = new SplitPaymentResponse(
+                result.TotalAmount,
+                result.BalanceDue,
+                result.Shares.Select(s => new SplitShareResponse(
+                    s.ShareNumber, s.Amount, s.Tax, s.Total, s.Label)).ToList(),
+                result.IsValid);
+
+            return Results.Ok(Hal.Resource(response, new Dictionary<string, object>
+            {
+                ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
+            }));
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
+
+        // Calculate split payment by custom amounts
+        group.MapPost("/{orderId}/split/by-amounts", async (
+            Guid orgId, Guid siteId, Guid orderId,
+            [FromBody] SplitByAmountsRequest request,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IOrderGrain>(GrainKeys.Order(orgId, siteId, orderId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Order not found"));
+
+            var result = await grain.CalculateSplitByAmountsAsync(request.Amounts);
+
+            var response = new SplitPaymentResponse(
+                result.TotalAmount,
+                result.BalanceDue,
+                result.Shares.Select(s => new SplitShareResponse(
+                    s.ShareNumber, s.Amount, s.Tax, s.Total, s.Label)).ToList(),
+                result.IsValid);
+
+            return Results.Ok(Hal.Resource(response, new Dictionary<string, object>
+            {
+                ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" }
+            }));
+        }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.View, isSiteScoped: true));
+
         return app;
     }
 }

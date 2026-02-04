@@ -247,6 +247,43 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
                 state.VoidReason = null;
                 state.UpdatedAt = e.OccurredAt;
                 break;
+
+            case OrderSplitByItems e:
+                // Remove the lines that were moved to the new order
+                state.Lines.RemoveAll(l => e.MovedLineIds.Contains(l.Id));
+                state.ChildOrders.Add(new SplitOrderReference
+                {
+                    OrderId = e.NewOrderId,
+                    OrderNumber = e.NewOrderNumber,
+                    LineIds = e.MovedLineIds,
+                    SplitAt = e.OccurredAt
+                });
+                state.RecalculateTotals();
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case OrderCreatedFromSplit e:
+                state.Id = e.OrderId;
+                state.OrganizationId = e.OrganizationId;
+                state.SiteId = e.SiteId;
+                state.OrderNumber = e.OrderNumber;
+                state.Status = OrderStatus.Open;
+                state.Type = e.Type;
+                state.TableId = e.TableId;
+                state.TableNumber = e.TableNumber;
+                state.CustomerId = e.CustomerId;
+                state.GuestCount = e.GuestCount;
+                state.CreatedBy = e.CreatedBy;
+                state.CreatedAt = e.OccurredAt;
+                state.ParentOrderId = e.ParentOrderId;
+                state.ParentOrderNumber = e.ParentOrderNumber;
+                // Add all lines from the split
+                foreach (var line in e.Lines)
+                {
+                    state.Lines.Add(line);
+                }
+                state.RecalculateTotals();
+                break;
         }
     }
 
@@ -764,6 +801,214 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
 
         // Note: Actual cloning should be orchestrated by a service/controller that creates a new OrderGrain
         throw new NotImplementedException("Clone should be orchestrated by the calling service");
+    }
+
+    // Bill Splitting Implementation
+
+    public async Task<SplitByItemsResult> SplitByItemsAsync(SplitByItemsCommand command)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        if (command.LineIds == null || command.LineIds.Count == 0)
+            throw new ArgumentException("At least one line must be specified for splitting", nameof(command));
+
+        // Validate all lines exist and are not voided
+        var linesToMove = State.Lines
+            .Where(l => command.LineIds.Contains(l.Id) && l.Status != OrderLineStatus.Voided)
+            .ToList();
+
+        if (linesToMove.Count != command.LineIds.Count)
+            throw new InvalidOperationException("One or more specified lines do not exist or are voided");
+
+        // Cannot split if it would leave the original order empty
+        var remainingLines = State.Lines
+            .Where(l => !command.LineIds.Contains(l.Id) && l.Status != OrderLineStatus.Voided)
+            .ToList();
+
+        if (remainingLines.Count == 0)
+            throw new InvalidOperationException("Cannot split all lines - at least one line must remain on the original order");
+
+        // Create the new order for the split items
+        var newOrderId = Guid.NewGuid();
+        var newOrderNumber = $"ORD-{Interlocked.Increment(ref _orderCounter):D6}-S";
+        var now = DateTime.UtcNow;
+
+        // Create the new order grain
+        var newOrderGrain = GrainFactory.GetGrain<IOrderGrain>(
+            GrainKeys.Order(State.OrganizationId, State.SiteId, newOrderId));
+
+        var createFromSplitResult = await newOrderGrain.CreateFromSplitAsync(new CreateFromSplitCommand(
+            State.OrganizationId,
+            State.SiteId,
+            State.Id,
+            State.OrderNumber,
+            State.Type,
+            linesToMove,
+            command.SplitBy,
+            State.TableId,
+            State.TableNumber,
+            State.CustomerId,
+            command.GuestCount ?? 1));
+
+        // Record the split on this (source) order
+        RaiseEvent(new OrderSplitByItems
+        {
+            OrderId = State.Id,
+            NewOrderId = newOrderId,
+            NewOrderNumber = createFromSplitResult.OrderNumber,
+            MovedLineIds = command.LineIds,
+            SplitBy = command.SplitBy,
+            OccurredAt = now
+        });
+
+        await ConfirmEvents();
+
+        // Get the totals for both orders
+        var newOrderState = await newOrderGrain.GetStateAsync();
+
+        return new SplitByItemsResult(
+            newOrderId,
+            createFromSplitResult.OrderNumber,
+            linesToMove.Count,
+            newOrderState.GrandTotal,
+            State.GrandTotal);
+    }
+
+    public async Task<OrderCreatedResult> CreateFromSplitAsync(CreateFromSplitCommand command)
+    {
+        if (State.Id != Guid.Empty)
+            throw new InvalidOperationException("Order already exists");
+
+        var key = this.GetPrimaryKeyString();
+        var (orgId, siteId, _, orderId) = GrainKeys.ParseSiteEntity(key);
+
+        var orderNumber = $"ORD-{Interlocked.Increment(ref _orderCounter):D6}-S";
+        var now = DateTime.UtcNow;
+
+        RaiseEvent(new OrderCreatedFromSplit
+        {
+            OrderId = orderId,
+            OrganizationId = orgId,
+            SiteId = siteId,
+            OrderNumber = orderNumber,
+            Type = command.Type,
+            ParentOrderId = command.ParentOrderId,
+            ParentOrderNumber = command.ParentOrderNumber,
+            TableId = command.TableId,
+            TableNumber = command.TableNumber,
+            CustomerId = command.CustomerId,
+            GuestCount = command.GuestCount,
+            CreatedBy = command.CreatedBy,
+            Lines = command.Lines,
+            OccurredAt = now
+        });
+
+        await ConfirmEvents();
+        InitializeStreams();
+
+        // Publish order created event
+        if (OrderStream != null)
+        {
+            await OrderStream.OnNextAsync(new OrderCreatedEvent(
+                orderId,
+                siteId,
+                orderNumber,
+                command.CreatedBy)
+            {
+                OrganizationId = orgId
+            });
+        }
+
+        return new OrderCreatedResult(orderId, orderNumber, State.CreatedAt);
+    }
+
+    public Task<SplitPaymentResult> CalculateSplitByPeopleAsync(int numberOfPeople)
+    {
+        EnsureExists();
+
+        if (numberOfPeople <= 0)
+            throw new ArgumentException("Number of people must be greater than zero", nameof(numberOfPeople));
+
+        var balanceDue = State.BalanceDue;
+        if (balanceDue <= 0)
+        {
+            return Task.FromResult(new SplitPaymentResult(
+                State.GrandTotal,
+                balanceDue,
+                [],
+                false));
+        }
+
+        // Calculate equal shares with proper rounding
+        var baseShare = Math.Floor(balanceDue / numberOfPeople * 100) / 100; // Round down to 2 decimal places
+        var remainder = balanceDue - (baseShare * numberOfPeople);
+
+        var shares = new List<SplitShare>();
+        for (int i = 0; i < numberOfPeople; i++)
+        {
+            // Add remainder to the first share to ensure total matches
+            var shareAmount = i == 0 ? baseShare + remainder : baseShare;
+            var shareTax = State.TaxTotal / numberOfPeople;
+            if (i == 0)
+                shareTax = State.TaxTotal - (Math.Floor(State.TaxTotal / numberOfPeople * 100) / 100 * (numberOfPeople - 1));
+
+            shares.Add(new SplitShare
+            {
+                ShareNumber = i + 1,
+                Amount = shareAmount - shareTax,
+                Tax = shareTax,
+                Total = shareAmount,
+                Label = $"Guest {i + 1}"
+            });
+        }
+
+        return Task.FromResult(new SplitPaymentResult(
+            State.GrandTotal,
+            balanceDue,
+            shares,
+            true));
+    }
+
+    public Task<SplitPaymentResult> CalculateSplitByAmountsAsync(List<decimal> amounts)
+    {
+        EnsureExists();
+
+        if (amounts == null || amounts.Count == 0)
+            throw new ArgumentException("At least one amount must be specified", nameof(amounts));
+
+        if (amounts.Any(a => a < 0))
+            throw new ArgumentException("Amounts cannot be negative", nameof(amounts));
+
+        var balanceDue = State.BalanceDue;
+        var totalSpecified = amounts.Sum();
+
+        // Validate that amounts sum to balance due (with small tolerance for rounding)
+        var isValid = Math.Abs(totalSpecified - balanceDue) < 0.01m;
+
+        var shares = new List<SplitShare>();
+        var taxRatio = State.TaxTotal / State.GrandTotal;
+
+        for (int i = 0; i < amounts.Count; i++)
+        {
+            var shareAmount = amounts[i];
+            var shareTax = Math.Round(shareAmount * taxRatio, 2);
+
+            shares.Add(new SplitShare
+            {
+                ShareNumber = i + 1,
+                Amount = shareAmount - shareTax,
+                Tax = shareTax,
+                Total = shareAmount,
+                Label = $"Payment {i + 1}"
+            });
+        }
+
+        return Task.FromResult(new SplitPaymentResult(
+            State.GrandTotal,
+            balanceDue,
+            shares,
+            isValid));
     }
 
     private void EnsureExists()

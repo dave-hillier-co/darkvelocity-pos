@@ -30,3 +30,33 @@ public record ApplyDiscountRequest(
     Guid? DiscountId = null,
     string? Reason = null,
     Guid? ApprovedBy = null);
+
+// Bill Splitting Requests
+public record SplitByItemsRequest(
+    List<Guid> LineIds,
+    Guid SplitBy,
+    int? GuestCount = null);
+
+public record SplitByAmountsRequest(
+    List<decimal> Amounts);
+
+// Bill Splitting Responses
+public record SplitByItemsResponse(
+    Guid NewOrderId,
+    string NewOrderNumber,
+    int LinesMoved,
+    decimal NewOrderTotal,
+    decimal RemainingOrderTotal);
+
+public record SplitPaymentResponse(
+    decimal TotalAmount,
+    decimal BalanceDue,
+    List<SplitShareResponse> Shares,
+    bool IsValid);
+
+public record SplitShareResponse(
+    int ShareNumber,
+    decimal Amount,
+    decimal Tax,
+    decimal Total,
+    string? Label);
