@@ -854,4 +854,221 @@ public class OrderGrainTests
         state.TaxTotal.Should().Be(3.00m);
         state.GrandTotal.Should().Be(33.00m);
     }
+
+    // Bundle/Combo Meal Tests
+
+    [Fact]
+    public async Task AddLineAsync_WithBundle_ShouldStoreBundleComponents()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        var bundleComponents = new List<OrderLineBundleComponent>
+        {
+            new() { SlotId = "main", SlotName = "Main", ItemDocumentId = "burger-doc", ItemName = "Cheeseburger", Quantity = 1 },
+            new() { SlotId = "side", SlotName = "Side", ItemDocumentId = "fries-doc", ItemName = "Large Fries", Quantity = 1 },
+            new() { SlotId = "drink", SlotName = "Drink", ItemDocumentId = "coke-doc", ItemName = "Large Coke", Quantity = 1 }
+        };
+
+        // Act
+        var result = await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(),
+            "Combo Meal",
+            1,
+            9.99m,
+            IsBundle: true,
+            BundleComponents: bundleComponents));
+
+        // Assert
+        var lines = await grain.GetLinesAsync();
+        lines.Should().HaveCount(1);
+        lines[0].IsBundle.Should().BeTrue();
+        lines[0].BundleComponents.Should().HaveCount(3);
+        lines[0].BundleComponents[0].SlotName.Should().Be("Main");
+        lines[0].BundleComponents[0].ItemName.Should().Be("Cheeseburger");
+        lines[0].BundleComponents[1].SlotName.Should().Be("Side");
+        lines[0].BundleComponents[2].SlotName.Should().Be("Drink");
+    }
+
+    [Fact]
+    public async Task AddLineAsync_WithBundleUpgrade_ShouldIncludePriceAdjustment()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        var bundleComponents = new List<OrderLineBundleComponent>
+        {
+            new() { SlotId = "main", SlotName = "Main", ItemDocumentId = "burger-doc", ItemName = "Cheeseburger", Quantity = 1, PriceAdjustment = 0 },
+            new() { SlotId = "side", SlotName = "Side", ItemDocumentId = "onion-rings-doc", ItemName = "Onion Rings", Quantity = 1, PriceAdjustment = 1.50m }, // Upgrade from fries
+            new() { SlotId = "drink", SlotName = "Drink", ItemDocumentId = "shake-doc", ItemName = "Milkshake", Quantity = 1, PriceAdjustment = 2.00m } // Upgrade from soda
+        };
+
+        // Act
+        var result = await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(),
+            "Combo Meal",
+            1,
+            9.99m,
+            IsBundle: true,
+            BundleComponents: bundleComponents));
+
+        // Assert
+        // Line total should be base price + upgrades: 9.99 + 1.50 + 2.00 = 13.49
+        result.LineTotal.Should().Be(13.49m);
+
+        var lines = await grain.GetLinesAsync();
+        lines[0].LineTotal.Should().Be(13.49m);
+    }
+
+    [Fact]
+    public async Task AddLineAsync_WithBundleAndTax_ShouldCalculateTaxOnTotalIncludingUpgrades()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        var bundleComponents = new List<OrderLineBundleComponent>
+        {
+            new() { SlotId = "main", SlotName = "Main", ItemDocumentId = "burger-doc", ItemName = "Burger", Quantity = 1 },
+            new() { SlotId = "side", SlotName = "Side", ItemDocumentId = "fries-doc", ItemName = "Large Fries", Quantity = 1, PriceAdjustment = 1.00m }
+        };
+
+        // Act
+        await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(),
+            "Combo Meal",
+            1,
+            10.00m,
+            TaxRate: 10,
+            IsBundle: true,
+            BundleComponents: bundleComponents));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        // Line total: 10.00 + 1.00 = 11.00
+        // Tax: 11.00 * 0.10 = 1.10
+        state.Subtotal.Should().Be(11.00m);
+        state.TaxTotal.Should().Be(1.10m);
+        state.GrandTotal.Should().Be(12.10m);
+    }
+
+    [Fact]
+    public async Task AddLineAsync_WithBundleQuantityGreaterThanOne_ShouldMultiplyCorrectly()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        var bundleComponents = new List<OrderLineBundleComponent>
+        {
+            new() { SlotId = "main", SlotName = "Main", ItemDocumentId = "burger-doc", ItemName = "Burger", Quantity = 1 },
+            new() { SlotId = "side", SlotName = "Side", ItemDocumentId = "fries-doc", ItemName = "Fries", Quantity = 1, PriceAdjustment = 0.50m }
+        };
+
+        // Act - Order 2 combo meals
+        var result = await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(),
+            "Combo Meal",
+            2,
+            10.00m,
+            IsBundle: true,
+            BundleComponents: bundleComponents));
+
+        // Assert
+        // Base: 10.00 * 2 = 20.00
+        // Upgrade: 0.50 * 1 = 0.50 (component quantity is 1, line quantity is 2)
+        // Total: 20.50
+        result.LineTotal.Should().Be(20.50m);
+    }
+
+    [Fact]
+    public async Task AddLineAsync_WithBundleComponentModifiers_ShouldStoreModifiers()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        var componentModifiers = new List<OrderLineModifier>
+        {
+            new() { ModifierId = Guid.NewGuid(), Name = "No Pickles", Price = 0, Quantity = 1 },
+            new() { ModifierId = Guid.NewGuid(), Name = "Extra Cheese", Price = 0.75m, Quantity = 1 }
+        };
+
+        var bundleComponents = new List<OrderLineBundleComponent>
+        {
+            new()
+            {
+                SlotId = "main",
+                SlotName = "Main",
+                ItemDocumentId = "burger-doc",
+                ItemName = "Cheeseburger",
+                Quantity = 1,
+                Modifiers = componentModifiers
+            },
+            new() { SlotId = "side", SlotName = "Side", ItemDocumentId = "fries-doc", ItemName = "Fries", Quantity = 1 }
+        };
+
+        // Act
+        await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(),
+            "Combo Meal",
+            1,
+            9.99m,
+            IsBundle: true,
+            BundleComponents: bundleComponents));
+
+        // Assert
+        var lines = await grain.GetLinesAsync();
+        lines[0].BundleComponents[0].Modifiers.Should().HaveCount(2);
+        lines[0].BundleComponents[0].Modifiers[0].Name.Should().Be("No Pickles");
+        lines[0].BundleComponents[0].Modifiers[1].Name.Should().Be("Extra Cheese");
+    }
+
+    [Fact]
+    public async Task AddLineAsync_NonBundle_ShouldHaveEmptyBundleComponents()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        // Act - Add a regular (non-bundle) item
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 12.99m));
+
+        // Assert
+        var lines = await grain.GetLinesAsync();
+        lines[0].IsBundle.Should().BeFalse();
+        lines[0].BundleComponents.Should().BeEmpty();
+    }
 }
