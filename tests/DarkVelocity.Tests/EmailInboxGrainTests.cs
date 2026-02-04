@@ -443,4 +443,364 @@ public class EmailInboxGrainTests
         result.Accepted.Should().BeFalse();
         result.RejectionReason.Should().Be(EmailRejectionReason.NoAttachments);
     }
+
+    // ============================================================================
+    // Auto-Processing Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task ProcessEmailAsync_AutoProcessEnabled_ShouldProcessDocument()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: true)); // Enable auto-processing
+
+        var email = CreateTestEmail(subject: "Invoice #INV-2024-001");
+
+        // Act
+        var result = await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+
+        // Assert
+        result.Accepted.Should().BeTrue();
+        result.DocumentIds.Should().HaveCount(1);
+
+        // Verify the document was created and auto-processing was attempted
+        var documentGrain = _fixture.Cluster.GrainFactory.GetGrain<IPurchaseDocumentGrain>(
+            GrainKeys.PurchaseDocument(orgId, siteId, result.DocumentIds![0]));
+        var docSnapshot = await documentGrain.GetSnapshotAsync();
+        docSnapshot.Should().NotBeNull();
+        docSnapshot.DocumentId.Should().Be(result.DocumentIds![0]);
+    }
+
+    [Fact]
+    public async Task ProcessEmailAsync_AutoProcessDisabled_ShouldNotProcessDocument()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false)); // Disable auto-processing
+
+        var email = CreateTestEmail();
+
+        // Act
+        var result = await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+
+        // Assert
+        result.Accepted.Should().BeTrue();
+        result.DocumentIds.Should().HaveCount(1);
+
+        // Document should exist but not be processed yet
+        var documentGrain = _fixture.Cluster.GrainFactory.GetGrain<IPurchaseDocumentGrain>(
+            GrainKeys.PurchaseDocument(orgId, siteId, result.DocumentIds![0]));
+        var docSnapshot = await documentGrain.GetSnapshotAsync();
+        docSnapshot.Status.Should().Be(PurchaseDocumentStatus.Received);
+    }
+
+    // ============================================================================
+    // Deduplication Boundary Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task ProcessEmailAsync_DeduplicationBoundary_ShouldMaintainMaxMessageIds()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        // Process more than MaxRecentMessageIds (1000) emails
+        var messageIds = new List<string>();
+        for (int i = 0; i < 1005; i++)
+        {
+            var messageId = $"bulk-test-{i:D4}@test.local";
+            messageIds.Add(messageId);
+            var email = CreateTestEmail(messageId: messageId);
+            await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+        }
+
+        // Assert - the first few message IDs should have been evicted
+        // but the grain should still be functional
+        var state = await grain.GetStateAsync();
+        state.RecentMessageIds.Count.Should().BeLessOrEqualTo(1000);
+        state.TotalEmailsReceived.Should().Be(1005);
+
+        // Recent messages should still be tracked
+        (await grain.IsMessageProcessedAsync(messageIds[1004])).Should().BeTrue();
+        (await grain.IsMessageProcessedAsync(messageIds[1003])).Should().BeTrue();
+
+        // Very old message IDs may have been evicted (exact behavior depends on HashSet implementation)
+        // The important thing is we don't exceed 1000 tracked IDs
+    }
+
+    [Fact]
+    public async Task ProcessEmailAsync_AtDeduplicationLimit_ShouldHandleGracefully()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        // Process exactly 1000 emails
+        for (int i = 0; i < 1000; i++)
+        {
+            var email = CreateTestEmail(messageId: $"limit-test-{i:D4}@test.local");
+            await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+        }
+
+        // Assert - all should be tracked
+        var state = await grain.GetStateAsync();
+        state.RecentMessageIds.Count.Should().Be(1000);
+        state.TotalEmailsReceived.Should().Be(1000);
+
+        // Process one more
+        var extraEmail = CreateTestEmail(messageId: "limit-test-extra@test.local");
+        var result = await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(extraEmail));
+
+        result.Accepted.Should().BeTrue();
+        var stateAfter = await grain.GetStateAsync();
+        stateAfter.RecentMessageIds.Count.Should().Be(1000); // Still capped at 1000
+    }
+
+    // ============================================================================
+    // Statistics Accuracy Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task Statistics_ShouldAccuratelyTrackEmailCounts()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        // Restrict to specific domain for rejection testing
+        await grain.UpdateSettingsAsync(new UpdateInboxSettingsCommand(
+            AllowedSenderDomains: new List<string> { "trusted.com" }));
+
+        // Act - Process various emails
+        // 3 accepted emails from trusted domain
+        for (int i = 0; i < 3; i++)
+        {
+            var email = CreateTestEmail(
+                from: $"supplier{i}@trusted.com",
+                messageId: $"stats-accepted-{i}@test.local");
+            await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+        }
+
+        // 2 rejected emails from untrusted domain
+        for (int i = 0; i < 2; i++)
+        {
+            var email = CreateTestEmail(
+                from: $"spammer{i}@untrusted.com",
+                messageId: $"stats-rejected-{i}@test.local");
+            await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+        }
+
+        // 1 duplicate email (should be rejected)
+        var duplicateEmail = CreateTestEmail(
+            from: "supplier1@trusted.com",
+            messageId: "stats-accepted-0@test.local"); // Same as first email
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(duplicateEmail));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.TotalEmailsReceived.Should().Be(3); // Only accepted emails count
+        state.TotalEmailsRejected.Should().Be(3); // 2 unauthorized + 1 duplicate
+        state.TotalDocumentsCreated.Should().Be(3); // One document per accepted email
+        state.TotalEmailsProcessed.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Statistics_ShouldTrackDocumentsCreatedPerEmail()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        // Email with 3 attachments
+        var multiAttachmentEmail = CreateTestEmail(
+            messageId: "multi-attach@test.local",
+            attachments: new List<EmailAttachment>
+            {
+                new EmailAttachment
+                {
+                    Filename = "invoice1.pdf",
+                    ContentType = "application/pdf",
+                    SizeBytes = 1024,
+                    Content = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\ntest1\n%%EOF")
+                },
+                new EmailAttachment
+                {
+                    Filename = "invoice2.pdf",
+                    ContentType = "application/pdf",
+                    SizeBytes = 1024,
+                    Content = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\ntest2\n%%EOF")
+                },
+                new EmailAttachment
+                {
+                    Filename = "invoice3.pdf",
+                    ContentType = "application/pdf",
+                    SizeBytes = 1024,
+                    Content = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\ntest3\n%%EOF")
+                }
+            });
+
+        // Email with 1 attachment
+        var singleAttachmentEmail = CreateTestEmail(messageId: "single-attach@test.local");
+
+        // Act
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(multiAttachmentEmail));
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(singleAttachmentEmail));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TotalEmailsReceived.Should().Be(2);
+        snapshot.TotalDocumentsCreated.Should().Be(4); // 3 + 1
+    }
+
+    [Fact]
+    public async Task Statistics_LastEmailReceivedAt_ShouldUpdate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        var snapshotBefore = await grain.GetSnapshotAsync();
+        snapshotBefore.LastEmailReceivedAt.Should().BeNull();
+
+        var beforeFirstEmail = DateTime.UtcNow;
+
+        // Act - process first email
+        var email1 = CreateTestEmail(messageId: "first@test.local");
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email1));
+
+        var snapshotAfterFirst = await grain.GetSnapshotAsync();
+        snapshotAfterFirst.LastEmailReceivedAt.Should().NotBeNull();
+        snapshotAfterFirst.LastEmailReceivedAt.Should().BeOnOrAfter(beforeFirstEmail);
+
+        var firstReceivedAt = snapshotAfterFirst.LastEmailReceivedAt;
+
+        // Small delay
+        await Task.Delay(10);
+
+        // Process second email
+        var email2 = CreateTestEmail(messageId: "second@test.local");
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email2));
+
+        // Assert - timestamp should be updated
+        var snapshotAfterSecond = await grain.GetSnapshotAsync();
+        snapshotAfterSecond.LastEmailReceivedAt.Should().BeOnOrAfter(firstReceivedAt!.Value);
+    }
+
+    // ============================================================================
+    // Edge Cases and Validation Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task ProcessEmailAsync_MixedValidAndInvalidAttachments_ShouldProcessValidOnes()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        // Set max attachment size to filter out large files
+        await grain.UpdateSettingsAsync(new UpdateInboxSettingsCommand(
+            MaxAttachmentSizeBytes: 2000));
+
+        var mixedAttachments = new List<EmailAttachment>
+        {
+            new EmailAttachment
+            {
+                Filename = "small.pdf",
+                ContentType = "application/pdf",
+                SizeBytes = 1024, // Under limit
+                Content = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\nsmall\n%%EOF")
+            },
+            new EmailAttachment
+            {
+                Filename = "large.pdf",
+                ContentType = "application/pdf",
+                SizeBytes = 5000, // Over limit
+                Content = new byte[5000]
+            },
+            new EmailAttachment
+            {
+                Filename = "another-small.pdf",
+                ContentType = "application/pdf",
+                SizeBytes = 500, // Under limit
+                Content = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\nanother\n%%EOF")
+            }
+        };
+
+        var email = CreateTestEmail(
+            messageId: "mixed-attachments@test.local",
+            attachments: mixedAttachments);
+
+        // Act
+        var result = await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+
+        // Assert - should accept and create documents only for valid attachments
+        result.Accepted.Should().BeTrue();
+        result.DocumentIds.Should().HaveCount(2); // Only the two small PDFs
+    }
+
+    [Fact]
+    public async Task ProcessEmailAsync_Version_ShouldIncrementOnSuccess()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = GetGrain(orgId, siteId);
+
+        await grain.InitializeAsync(new InitializeEmailInboxCommand(
+            orgId, siteId, $"invoices-{siteId}@test.io",
+            AutoProcess: false));
+
+        var initialState = await grain.GetStateAsync();
+        var initialVersion = initialState.Version;
+
+        // Act
+        var email = CreateTestEmail(messageId: "version-test@test.local");
+        await grain.ProcessEmailAsync(new ProcessIncomingEmailCommand(email));
+
+        // Assert
+        var stateAfter = await grain.GetStateAsync();
+        stateAfter.Version.Should().Be(initialVersion + 1);
+    }
 }

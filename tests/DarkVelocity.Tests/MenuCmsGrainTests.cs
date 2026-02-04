@@ -457,6 +457,101 @@ public class MenuItemDocumentGrainTests
         result.Published.TagIds.Should().Contain("tag-gluten-free");
         result.Published.TagIds.Should().Contain("tag-vegetarian");
     }
+
+    [Fact]
+    public async Task RemoveTranslationAsync_ShouldRemoveLocalization()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuItemDocumentCommand(
+            Name: "Chicken",
+            Price: 15.00m,
+            Description: "Grilled chicken",
+            PublishImmediately: true));
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "es-ES",
+            Name: "Pollo",
+            Description: "Pollo a la parrilla"));
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "fr-FR",
+            Name: "Poulet",
+            Description: "Poulet grille"));
+
+        // Act
+        await grain.RemoveTranslationAsync("es-ES");
+
+        // Assert
+        var version = await grain.GetPublishedAsync();
+        version!.Translations.Should().NotContainKey("es-ES");
+        version.Translations.Should().ContainKey("fr-FR");
+        version.Translations.Should().ContainKey("en-US");
+    }
+
+    [Fact]
+    public async Task RemoveTranslationAsync_DefaultLocale_ShouldThrowException()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuItemDocumentCommand(
+            Name: "Test Item",
+            Price: 10.00m,
+            Locale: "en-US",
+            PublishImmediately: true));
+
+        // Act
+        var action = () => grain.RemoveTranslationAsync("en-US");
+
+        // Assert
+        await action.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*default locale*");
+    }
+
+    [Fact]
+    public async Task AddTranslationAsync_MultipleLocales_ShouldStoreAll()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuItemDocumentCommand(
+            Name: "Pizza",
+            Price: 12.99m,
+            Description: "Classic Italian pizza",
+            Locale: "en-US",
+            PublishImmediately: true));
+
+        // Act
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "es-ES",
+            Name: "Pizza",
+            Description: "Pizza italiana clasica"));
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "fr-FR",
+            Name: "Pizza",
+            Description: "Pizza italienne classique"));
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "de-DE",
+            Name: "Pizza",
+            Description: "Klassische italienische Pizza"));
+        await grain.AddTranslationAsync(new AddMenuItemTranslationCommand(
+            Locale: "it-IT",
+            Name: "Pizza",
+            Description: "Pizza italiana classica"));
+
+        // Assert
+        var version = await grain.GetPublishedAsync();
+        version!.Translations.Should().HaveCount(5);
+        version.Translations.Should().ContainKey("en-US");
+        version.Translations.Should().ContainKey("es-ES");
+        version.Translations.Should().ContainKey("fr-FR");
+        version.Translations.Should().ContainKey("de-DE");
+        version.Translations.Should().ContainKey("it-IT");
+        version.Translations["de-DE"].Description.Should().Be("Klassische italienische Pizza");
+    }
 }
 
 [Collection(ClusterCollection.Name)]
@@ -568,6 +663,184 @@ public class MenuCategoryDocumentGrainTests
         snapshot.Published!.ItemDocumentIds[0].Should().Be(itemId3);
         snapshot.Published.ItemDocumentIds[1].Should().Be(itemId1);
         snapshot.Published.ItemDocumentIds[2].Should().Be(itemId2);
+    }
+
+    [Fact]
+    public async Task CreateDraftAsync_ShouldCreateNewDraftVersion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "Original Category",
+            DisplayOrder: 1,
+            PublishImmediately: true));
+
+        // Act
+        var draft = await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(
+            Name: "Updated Category",
+            DisplayOrder: 2,
+            ChangeNote: "Updating display order"));
+
+        // Assert
+        draft.VersionNumber.Should().Be(2);
+        draft.Name.Should().Be("Updated Category");
+        draft.DisplayOrder.Should().Be(2);
+        draft.ChangeNote.Should().Be("Updating display order");
+
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(1);
+        snapshot.DraftVersion.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task PublishDraftAsync_ShouldMakeDraftLive()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "Original",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(
+            Name: "New Version",
+            Color: "#00FF00"));
+
+        // Act
+        await grain.PublishDraftAsync(note: "Publishing new color");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(2);
+        snapshot.DraftVersion.Should().BeNull();
+        snapshot.Published!.Name.Should().Be("New Version");
+        snapshot.Published.Color.Should().Be("#00FF00");
+    }
+
+    [Fact]
+    public async Task DiscardDraftAsync_ShouldRemoveDraft()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "Original",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(
+            Name: "Bad Draft"));
+
+        // Act
+        await grain.DiscardDraftAsync();
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.DraftVersion.Should().BeNull();
+        snapshot.Draft.Should().BeNull();
+        snapshot.PublishedVersion.Should().Be(1);
+        snapshot.TotalVersions.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RevertToVersionAsync_ShouldRevertToOlderVersion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "Version 1",
+            DisplayOrder: 1,
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(
+            Name: "Version 2",
+            DisplayOrder: 2));
+        await grain.PublishDraftAsync();
+
+        // Act
+        await grain.RevertToVersionAsync(1, reason: "Reverting changes");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(3);
+        snapshot.Published!.Name.Should().Be("Version 1");
+        snapshot.Published.DisplayOrder.Should().Be(1);
+        snapshot.TotalVersions.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ScheduleChangeAsync_ShouldCreateSchedule()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "Regular Category",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(
+            Name: "Seasonal Category"));
+        await grain.PublishDraftAsync();
+
+        var activateAt = DateTimeOffset.UtcNow.AddDays(1);
+
+        // Act
+        var schedule = await grain.ScheduleChangeAsync(
+            version: 2,
+            activateAt: activateAt,
+            name: "Seasonal Menu Activation");
+
+        // Assert
+        schedule.VersionToActivate.Should().Be(2);
+        schedule.ActivateAt.Should().Be(activateAt);
+        schedule.Name.Should().Be("Seasonal Menu Activation");
+        schedule.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ArchiveAsync_ShouldArchiveCategory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "To Archive",
+            PublishImmediately: true));
+
+        // Act
+        await grain.ArchiveAsync(reason: "Discontinued");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.IsArchived.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetVersionHistoryAsync_ShouldReturnHistory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateMenuCategoryDocumentCommand(
+            Name: "V1", PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(Name: "V2"));
+        await grain.PublishDraftAsync();
+        await grain.CreateDraftAsync(new CreateMenuCategoryDraftCommand(Name: "V3"));
+        await grain.PublishDraftAsync();
+
+        // Act
+        var history = await grain.GetVersionHistoryAsync();
+
+        // Assert
+        history.Should().HaveCount(3);
+        history[0].VersionNumber.Should().Be(3);
+        history[0].Name.Should().Be("V3");
+        history[1].VersionNumber.Should().Be(2);
+        history[2].VersionNumber.Should().Be(1);
     }
 }
 
@@ -682,6 +955,136 @@ public class ModifierBlockGrainTests
         // Assert
         var usage = await grain.GetUsageAsync();
         usage.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateDraftAsync_ShouldCreateNewDraftVersion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var blockId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, blockId);
+        await grain.CreateAsync(new CreateModifierBlockCommand(
+            Name: "Original Size",
+            SelectionRule: ModifierSelectionRule.ChooseOne,
+            MinSelections: 1,
+            MaxSelections: 1,
+            IsRequired: true,
+            Options:
+            [
+                new CreateModifierOptionCommand("Small", 0m, true, 1),
+                new CreateModifierOptionCommand("Large", 1.00m, false, 2)
+            ],
+            PublishImmediately: true));
+
+        // Act
+        var draft = await grain.CreateDraftAsync(new CreateModifierBlockDraftCommand(
+            Name: "Updated Size",
+            ChangeNote: "Adding medium option",
+            Options:
+            [
+                new CreateModifierOptionCommand("Small", 0m, true, 1),
+                new CreateModifierOptionCommand("Medium", 0.50m, false, 2),
+                new CreateModifierOptionCommand("Large", 1.00m, false, 3)
+            ]));
+
+        // Assert
+        draft.VersionNumber.Should().Be(2);
+        draft.Name.Should().Be("Updated Size");
+        draft.Options.Should().HaveCount(3);
+        draft.ChangeNote.Should().Be("Adding medium option");
+
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(1);
+        snapshot.DraftVersion.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task PublishDraftAsync_ShouldMakeDraftLive()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var blockId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, blockId);
+        await grain.CreateAsync(new CreateModifierBlockCommand(
+            Name: "Original",
+            Options:
+            [
+                new CreateModifierOptionCommand("Option 1", 0m, true, 1)
+            ],
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateModifierBlockDraftCommand(
+            Name: "Updated",
+            Options:
+            [
+                new CreateModifierOptionCommand("New Option 1", 0m, true, 1),
+                new CreateModifierOptionCommand("New Option 2", 0.50m, false, 2)
+            ]));
+
+        // Act
+        await grain.PublishDraftAsync(note: "Publishing new options");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(2);
+        snapshot.DraftVersion.Should().BeNull();
+        snapshot.Published!.Name.Should().Be("Updated");
+        snapshot.Published.Options.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ChooseMultiple_ShouldAllowMultipleSelections()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var blockId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, blockId);
+
+        // Act
+        var result = await grain.CreateAsync(new CreateModifierBlockCommand(
+            Name: "Toppings",
+            SelectionRule: ModifierSelectionRule.ChooseMultiple,
+            MinSelections: 0,
+            MaxSelections: 5,
+            IsRequired: false,
+            Options:
+            [
+                new CreateModifierOptionCommand("Pepperoni", 1.50m, false, 1),
+                new CreateModifierOptionCommand("Mushrooms", 1.00m, false, 2),
+                new CreateModifierOptionCommand("Olives", 1.00m, false, 3),
+                new CreateModifierOptionCommand("Extra Cheese", 2.00m, false, 4)
+            ],
+            PublishImmediately: true));
+
+        // Assert
+        result.Published!.SelectionRule.Should().Be(ModifierSelectionRule.ChooseMultiple);
+        result.Published.MinSelections.Should().Be(0);
+        result.Published.MaxSelections.Should().Be(5);
+        result.Published.IsRequired.Should().BeFalse();
+        result.Published.Options.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task ArchiveAsync_WithoutUsage_ShouldSucceed()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var blockId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, blockId);
+        await grain.CreateAsync(new CreateModifierBlockCommand(
+            Name: "Unused Modifier",
+            Options:
+            [
+                new CreateModifierOptionCommand("Option", 0m, true, 1)
+            ],
+            PublishImmediately: true));
+
+        // Act
+        await grain.ArchiveAsync(reason: "No longer needed");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.IsArchived.Should().BeTrue();
     }
 }
 
@@ -939,5 +1342,109 @@ public class SiteMenuOverridesGrainTests
         // Assert
         var windows = await grain.GetAvailabilityWindowsAsync();
         windows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HideCategoryAsync_ShouldHideCategory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var categoryId = "category-to-hide";
+        var grain = GetGrain(orgId, siteId);
+
+        // Act
+        await grain.HideCategoryAsync(categoryId);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HiddenCategoryIds.Should().Contain(categoryId);
+    }
+
+    [Fact]
+    public async Task UnhideCategoryAsync_ShouldUnhideCategory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var categoryId = "category-to-unhide";
+        var grain = GetGrain(orgId, siteId);
+        await grain.HideCategoryAsync(categoryId);
+
+        // Act
+        await grain.UnhideCategoryAsync(categoryId);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HiddenCategoryIds.Should().NotContain(categoryId);
+    }
+
+    [Fact]
+    public async Task AddLocalItemAsync_ShouldTrackLocalItem()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var localItemId1 = "local-item-1";
+        var localItemId2 = "local-item-2";
+        var grain = GetGrain(orgId, siteId);
+
+        // Act
+        await grain.AddLocalItemAsync(localItemId1);
+        await grain.AddLocalItemAsync(localItemId2);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.LocalItemIds.Should().Contain(localItemId1);
+        snapshot.LocalItemIds.Should().Contain(localItemId2);
+        snapshot.LocalItemIds.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task SetPriceOverrideAsync_WithEffectiveDates_ShouldRespectDates()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var itemId = "item-with-dated-override";
+        var grain = GetGrain(orgId, siteId);
+        var effectiveFrom = DateTimeOffset.UtcNow.AddHours(-1);
+        var effectiveUntil = DateTimeOffset.UtcNow.AddHours(2);
+
+        // Act
+        await grain.SetPriceOverrideAsync(new SetSitePriceOverrideCommand(
+            ItemDocumentId: itemId,
+            Price: 9.99m,
+            EffectiveFrom: effectiveFrom,
+            EffectiveUntil: effectiveUntil,
+            Reason: "Happy hour pricing"));
+
+        // Assert - current time is within effective range
+        var price = await grain.GetPriceOverrideAsync(itemId);
+        price.Should().Be(9.99m);
+    }
+
+    [Fact]
+    public async Task GetPriceOverrideAsync_ExpiredOverride_ShouldReturnNull()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var itemId = "item-with-expired-override";
+        var grain = GetGrain(orgId, siteId);
+
+        // Set an override that ended in the past
+        await grain.SetPriceOverrideAsync(new SetSitePriceOverrideCommand(
+            ItemDocumentId: itemId,
+            Price: 5.99m,
+            EffectiveFrom: DateTimeOffset.UtcNow.AddHours(-5),
+            EffectiveUntil: DateTimeOffset.UtcNow.AddHours(-1),
+            Reason: "Past promotion"));
+
+        // Act
+        var price = await grain.GetPriceOverrideAsync(itemId);
+
+        // Assert - override has expired so should return null
+        price.Should().BeNull();
     }
 }

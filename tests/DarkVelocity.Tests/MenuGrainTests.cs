@@ -568,6 +568,134 @@ public class MenuItemGrainTests
         // Assert
         result.RecipeId.Should().Be(recipeId);
     }
+
+    [Fact]
+    public async Task CreateAsync_WithNegativePrice_ShouldThrowException()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var grain = GetGrain(orgId, itemId);
+
+        // Act
+        var action = () => grain.CreateAsync(new CreateMenuItemCommand(
+            LocationId: Guid.NewGuid(),
+            CategoryId: Guid.NewGuid(),
+            AccountingGroupId: null,
+            RecipeId: null,
+            Name: "Invalid Item",
+            Description: null,
+            Price: -5.00m,
+            ImageUrl: null,
+            Sku: null,
+            TrackInventory: false));
+
+        // Assert
+        await action.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*negative*");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithEmptyName_ShouldThrowException()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var grain = GetGrain(orgId, itemId);
+
+        // Act
+        var action = () => grain.CreateAsync(new CreateMenuItemCommand(
+            LocationId: Guid.NewGuid(),
+            CategoryId: Guid.NewGuid(),
+            AccountingGroupId: null,
+            RecipeId: null,
+            Name: "",
+            Description: null,
+            Price: 10.00m,
+            ImageUrl: null,
+            Sku: null,
+            TrackInventory: false));
+
+        // Assert
+        await action.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*empty*");
+    }
+
+    [Fact]
+    public async Task AddModifierAsync_WithNoOptions_ShouldThrowException()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var grain = GetGrain(orgId, itemId);
+        await grain.CreateAsync(new CreateMenuItemCommand(
+            LocationId: Guid.NewGuid(),
+            CategoryId: Guid.NewGuid(),
+            AccountingGroupId: null,
+            RecipeId: null,
+            Name: "Test Item",
+            Description: null,
+            Price: 10.00m,
+            ImageUrl: null,
+            Sku: null,
+            TrackInventory: false));
+
+        var modifier = new MenuItemModifier(
+            ModifierId: Guid.NewGuid(),
+            Name: "Empty Modifier",
+            PriceAdjustment: 0,
+            IsRequired: false,
+            MinSelections: 0,
+            MaxSelections: 1,
+            Options: new List<MenuItemModifierOption>());
+
+        // Act
+        var action = () => grain.AddModifierAsync(modifier);
+
+        // Assert
+        await action.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*at least one option*");
+    }
+
+    [Fact]
+    public async Task AddModifierAsync_MinGreaterThanMax_ShouldThrowException()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var grain = GetGrain(orgId, itemId);
+        await grain.CreateAsync(new CreateMenuItemCommand(
+            LocationId: Guid.NewGuid(),
+            CategoryId: Guid.NewGuid(),
+            AccountingGroupId: null,
+            RecipeId: null,
+            Name: "Test Item",
+            Description: null,
+            Price: 10.00m,
+            ImageUrl: null,
+            Sku: null,
+            TrackInventory: false));
+
+        var modifier = new MenuItemModifier(
+            ModifierId: Guid.NewGuid(),
+            Name: "Invalid Modifier",
+            PriceAdjustment: 0,
+            IsRequired: true,
+            MinSelections: 5,
+            MaxSelections: 2,
+            Options: new List<MenuItemModifierOption>
+            {
+                new(Guid.NewGuid(), "Option 1", 0m, false),
+                new(Guid.NewGuid(), "Option 2", 0m, false)
+            });
+
+        // Act
+        var action = () => grain.AddModifierAsync(modifier);
+
+        // Assert
+        await action.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*MinSelections*MaxSelections*");
+    }
 }
 
 [Collection(ClusterCollection.Name)]

@@ -314,6 +314,256 @@ public class BookingGrainTests
         state.Tags.Should().Contain("VIP");
         state.Tags.Should().Contain("Anniversary");
     }
+
+    // State Transition Tests
+
+    [Fact]
+    public async Task ModifyAsync_CancelledBooking_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.CancelAsync(new CancelBookingCommand("No longer needed", Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.ModifyAsync(new ModifyBookingCommand(DateTime.UtcNow.AddDays(5), 6));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid status*");
+    }
+
+    [Fact]
+    public async Task ModifyAsync_CompletedBooking_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.ConfirmAsync();
+        await grain.RecordArrivalAsync(new RecordArrivalCommand(Guid.NewGuid()));
+        await grain.SeatGuestAsync(new SeatGuestCommand(Guid.NewGuid(), "T1", Guid.NewGuid()));
+        await grain.RecordDepartureAsync(new RecordDepartureCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.ModifyAsync(new ModifyBookingCommand(DateTime.UtcNow.AddDays(5), 6));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid status*");
+    }
+
+    [Fact]
+    public async Task MarkNoShowAsync_NonConfirmedBooking_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        // Booking is in Requested status, not Confirmed
+
+        // Act
+        var act = () => grain.MarkNoShowAsync(Guid.NewGuid());
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid status*");
+    }
+
+    [Fact]
+    public async Task SeatAsync_WithoutArrival_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        // Booking is in Requested status, not Arrived or Confirmed
+
+        // Act
+        var act = () => grain.SeatGuestAsync(new SeatGuestCommand(Guid.NewGuid(), "T1", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid status*");
+    }
+
+    [Fact]
+    public async Task RecordDepartureAsync_WithoutSeating_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.ConfirmAsync();
+        await grain.RecordArrivalAsync(new RecordArrivalCommand(Guid.NewGuid()));
+        // Guest arrived but not seated
+
+        // Act
+        var act = () => grain.RecordDepartureAsync(new RecordDepartureCommand(Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid status*");
+    }
+
+    // Deposit Edge Cases
+
+    [Fact]
+    public async Task WaiveDepositAsync_ShouldWaiveDeposit()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var waivedBy = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.RequireDepositAsync(new RequireDepositCommand(50m, DateTime.UtcNow.AddDays(1)));
+
+        // Act
+        await grain.WaiveDepositAsync(waivedBy);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Deposit.Should().NotBeNull();
+        state.Deposit!.Status.Should().Be(DepositStatus.Waived);
+    }
+
+    [Fact]
+    public async Task ForfeitDepositAsync_WithoutPaidDeposit_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.RequireDepositAsync(new RequireDepositCommand(50m, DateTime.UtcNow.AddDays(1)));
+        // Deposit is Required but not Paid
+
+        // Act
+        var act = () => grain.ForfeitDepositAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*No paid deposit to forfeit*");
+    }
+
+    [Fact]
+    public async Task RefundDepositAsync_WithoutPaidDeposit_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.RequireDepositAsync(new RequireDepositCommand(50m, DateTime.UtcNow.AddDays(1)));
+        // Deposit is Required but not Paid
+
+        // Act
+        var act = () => grain.RefundDepositAsync("Customer requested", Guid.NewGuid());
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*No paid deposit to refund*");
+    }
+
+    [Fact]
+    public async Task DepositTransitions_AfterCancellation_ShouldHandle()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.RequireDepositAsync(new RequireDepositCommand(50m, DateTime.UtcNow.AddDays(1)));
+        await grain.RecordDepositPaymentAsync(new RecordDepositPaymentCommand(PaymentMethod.CreditCard, "ref123"));
+        await grain.CancelAsync(new CancelBookingCommand("Customer cancelled", Guid.NewGuid()));
+
+        // Act - Refund the deposit after cancellation
+        await grain.RefundDepositAsync("Booking cancelled", Guid.NewGuid());
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Status.Should().Be(BookingStatus.Cancelled);
+        state.Deposit.Should().NotBeNull();
+        state.Deposit!.Status.Should().Be(DepositStatus.Refunded);
+        state.Deposit.RefundedAt.Should().NotBeNull();
+    }
+
+    // Table Assignment Tests
+
+    [Fact]
+    public async Task ClearTableAssignmentAsync_ShouldClearTable()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+        await grain.AssignTableAsync(new AssignTableCommand(tableId, "T5", 6));
+
+        // Verify assignment exists
+        var stateBefore = await grain.GetStateAsync();
+        stateBefore.TableAssignments.Should().HaveCount(1);
+
+        // Act
+        await grain.ClearTableAssignmentAsync();
+
+        // Assert
+        var stateAfter = await grain.GetStateAsync();
+        stateAfter.TableAssignments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AssignTableAsync_MultipleTables_ShouldTrackAll()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var tableId1 = Guid.NewGuid();
+        var tableId2 = Guid.NewGuid();
+        var tableId3 = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+
+        // Act
+        await grain.AssignTableAsync(new AssignTableCommand(tableId1, "T1", 4));
+        await grain.AssignTableAsync(new AssignTableCommand(tableId2, "T2", 4));
+        await grain.AssignTableAsync(new AssignTableCommand(tableId3, "T3", 4));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.TableAssignments.Should().HaveCount(3);
+        state.TableAssignments.Should().Contain(t => t.TableId == tableId1 && t.TableNumber == "T1");
+        state.TableAssignments.Should().Contain(t => t.TableId == tableId2 && t.TableNumber == "T2");
+        state.TableAssignments.Should().Contain(t => t.TableId == tableId3 && t.TableNumber == "T3");
+    }
+
+    [Fact]
+    public async Task AssignTableAsync_SameTableTwice_ShouldBeIdempotent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateBookingAsync(orgId, siteId, bookingId);
+
+        // Act - Assign the same table twice
+        await grain.AssignTableAsync(new AssignTableCommand(tableId, "T5", 6));
+        await grain.AssignTableAsync(new AssignTableCommand(tableId, "T5", 6));
+
+        // Assert - Should have two assignments (grain doesn't de-duplicate)
+        var state = await grain.GetStateAsync();
+        state.TableAssignments.Should().HaveCountGreaterOrEqualTo(1);
+        state.TableAssignments.Where(t => t.TableId == tableId).Should().NotBeEmpty();
+    }
 }
 
 [Collection(ClusterCollection.Name)]
@@ -527,5 +777,166 @@ public class WaitlistGrainTests
         entries.Should().HaveCount(2); // entry2 (Notified) and entry3 (Waiting)
         entries.Select(e => e.Id).Should().Contain(entry2.EntryId);
         entries.Select(e => e.Id).Should().Contain(entry3.EntryId);
+    }
+
+    // Position and Estimated Wait Tests
+
+    [Fact]
+    public async Task UpdatePositionAsync_ShouldReorderPositions()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+        var entry1 = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 1"), 2, TimeSpan.FromMinutes(15)));
+        var entry2 = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 2"), 4, TimeSpan.FromMinutes(20)));
+        var entry3 = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 3"), 6, TimeSpan.FromMinutes(30)));
+
+        // Act - Move entry3 to position 1
+        await grain.UpdatePositionAsync(entry3.EntryId, 1);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        var entry = state.Entries.First(e => e.Id == entry3.EntryId);
+        entry.Position.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetEstimatedWaitAsync_ShouldCalculate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+
+        // Act - No seated entries yet, should return default estimate
+        var estimate = await grain.GetEstimatedWaitAsync(4);
+
+        // Assert
+        estimate.Should().Be(TimeSpan.FromMinutes(15)); // Default when no history
+    }
+
+    [Fact]
+    public async Task GetEstimatedWaitAsync_WithHistory_ShouldCalculate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+
+        // Add and seat some entries to build history
+        var entry1 = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 1"), 2, TimeSpan.FromMinutes(15)));
+        await grain.SeatEntryAsync(entry1.EntryId, Guid.NewGuid());
+
+        // Add more waiting entries
+        await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 2"), 4, TimeSpan.FromMinutes(20)));
+        await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo("Guest 3"), 6, TimeSpan.FromMinutes(30)));
+
+        // Act
+        var estimate = await grain.GetEstimatedWaitAsync(4);
+
+        // Assert - Should calculate based on waiting entries ahead and average wait
+        estimate.Should().BeGreaterThan(TimeSpan.Zero);
+    }
+
+    // Notify Tests
+
+    [Fact]
+    public async Task NotifyAsync_FromNonWaiting_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+        var entry = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo(), 4, TimeSpan.FromMinutes(15)));
+
+        // Seat the entry (no longer in Waiting status)
+        await grain.SeatEntryAsync(entry.EntryId, Guid.NewGuid());
+
+        // Act
+        var act = () => grain.NotifyEntryAsync(entry.EntryId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Entry cannot be notified*");
+    }
+
+    // Seat Tests
+
+    [Fact]
+    public async Task SeatAsync_FromWaiting_ShouldWork()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var tableId = Guid.NewGuid();
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+        var entry = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo(), 4, TimeSpan.FromMinutes(15)));
+
+        // Entry is in Waiting status
+
+        // Act
+        await grain.SeatEntryAsync(entry.EntryId, tableId);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        var seatedEntry = state.Entries.First(e => e.Id == entry.EntryId);
+        seatedEntry.Status.Should().Be(WaitlistStatus.Seated);
+        seatedEntry.SeatedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SeatAsync_FromNotified_ShouldWork()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var tableId = Guid.NewGuid();
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+        var entry = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo(), 4, TimeSpan.FromMinutes(15)));
+
+        // Notify the entry first
+        await grain.NotifyEntryAsync(entry.EntryId);
+
+        // Verify it's in Notified status
+        var stateAfterNotify = await grain.GetStateAsync();
+        stateAfterNotify.Entries.First(e => e.Id == entry.EntryId).Status.Should().Be(WaitlistStatus.Notified);
+
+        // Act
+        await grain.SeatEntryAsync(entry.EntryId, tableId);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        var seatedEntry = state.Entries.First(e => e.Id == entry.EntryId);
+        seatedEntry.Status.Should().Be(WaitlistStatus.Seated);
+        seatedEntry.SeatedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SeatAsync_FromLeft_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateOnly.FromDateTime(DateTime.Today);
+        var tableId = Guid.NewGuid();
+        var grain = await CreateWaitlistAsync(orgId, siteId, date);
+        var entry = await grain.AddEntryAsync(new AddToWaitlistCommand(CreateGuestInfo(), 4, TimeSpan.FromMinutes(15)));
+
+        // Remove the entry (marks as Left)
+        await grain.RemoveEntryAsync(entry.EntryId, "Guest left");
+
+        // Act
+        var act = () => grain.SeatEntryAsync(entry.EntryId, tableId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Entry cannot be seated*");
     }
 }

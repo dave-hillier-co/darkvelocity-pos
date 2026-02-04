@@ -306,4 +306,263 @@ public class DailySalesGrainTests
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task RecordSaleAsync_FromStream_ShouldAggregate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Main Street"));
+
+        // Act
+        await grain.RecordSaleAsync(new RecordSaleFromStreamCommand(
+            OrderId: Guid.NewGuid(),
+            GrossSales: 50.00m,
+            Discounts: 5.00m,
+            Tax: 3.60m,
+            GuestCount: 2,
+            ItemCount: 3,
+            Channel: "DineIn",
+            TheoreticalCOGS: 15.00m));
+
+        await grain.RecordSaleAsync(new RecordSaleFromStreamCommand(
+            OrderId: Guid.NewGuid(),
+            GrossSales: 30.00m,
+            Discounts: 0m,
+            Tax: 2.40m,
+            GuestCount: 1,
+            ItemCount: 2,
+            Channel: "TakeOut",
+            TheoreticalCOGS: 9.00m));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.GrossSales.Should().Be(80.00m);
+        snapshot.NetSales.Should().Be(75.00m); // 50-5 + 30-0
+        snapshot.TheoreticalCOGS.Should().Be(24.00m);
+        snapshot.TransactionCount.Should().Be(2);
+        snapshot.GuestCount.Should().Be(3);
+        snapshot.SalesByChannel.Should().ContainKey(SaleChannel.DineIn);
+        snapshot.SalesByChannel.Should().ContainKey(SaleChannel.TakeOut);
+    }
+
+    [Fact]
+    public async Task RecordVoidAsync_ShouldTrackVoids()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Main Street"));
+
+        // Record initial sale
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.DineIn,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Burger",
+            Category: "Mains",
+            Quantity: 1,
+            GrossSales: 20.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 1.60m,
+            NetSales: 18.40m,
+            TheoreticalCOGS: 5.00m,
+            ActualCOGS: 5.50m,
+            GuestCount: 1));
+
+        // Act - void part of the order
+        await grain.RecordVoidAsync(Guid.NewGuid(), 10.00m, "Customer changed mind");
+
+        // Assert
+        var metrics = await grain.GetMetricsAsync();
+        metrics.Voids.Should().Be(10.00m);
+    }
+
+    [Fact]
+    public async Task RecordSaleAsync_ByCategory_ShouldAggregate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Main Street"));
+
+        // Act - record sales in different categories
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.DineIn,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Burger",
+            Category: "Mains",
+            Quantity: 1,
+            GrossSales: 15.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 1.20m,
+            NetSales: 13.80m,
+            TheoreticalCOGS: 4.00m,
+            ActualCOGS: 4.25m,
+            GuestCount: 1));
+
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.DineIn,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Coke",
+            Category: "Beverages",
+            Quantity: 2,
+            GrossSales: 6.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 0.48m,
+            NetSales: 5.52m,
+            TheoreticalCOGS: 1.00m,
+            ActualCOGS: 1.00m,
+            GuestCount: 0));
+
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.DineIn,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Cheesecake",
+            Category: "Desserts",
+            Quantity: 1,
+            GrossSales: 8.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 0.64m,
+            NetSales: 7.36m,
+            TheoreticalCOGS: 2.00m,
+            ActualCOGS: 2.20m,
+            GuestCount: 0));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.SalesByCategory.Should().ContainKey("Mains");
+        snapshot.SalesByCategory.Should().ContainKey("Beverages");
+        snapshot.SalesByCategory.Should().ContainKey("Desserts");
+        snapshot.SalesByCategory["Mains"].Should().Be(13.80m);
+        snapshot.SalesByCategory["Beverages"].Should().Be(5.52m);
+        snapshot.SalesByCategory["Desserts"].Should().Be(7.36m);
+    }
+
+    [Fact]
+    public async Task RecordSaleAsync_SameChannel_ShouldAccumulate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Main Street"));
+
+        // Act - record multiple sales on the same channel
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.Delivery,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Pizza",
+            Category: "Mains",
+            Quantity: 1,
+            GrossSales: 20.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 1.60m,
+            NetSales: 18.40m,
+            TheoreticalCOGS: 5.00m,
+            ActualCOGS: 5.25m,
+            GuestCount: 1));
+
+        await grain.RecordSaleAsync(new RecordSaleCommand(
+            CheckId: Guid.NewGuid(),
+            Channel: SaleChannel.Delivery,
+            ProductId: Guid.NewGuid(),
+            ProductName: "Wings",
+            Category: "Appetizers",
+            Quantity: 1,
+            GrossSales: 12.00m,
+            Discounts: 0,
+            Voids: 0,
+            Comps: 0,
+            Tax: 0.96m,
+            NetSales: 11.04m,
+            TheoreticalCOGS: 3.00m,
+            ActualCOGS: 3.10m,
+            GuestCount: 0));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.SalesByChannel[SaleChannel.Delivery].Should().Be(29.44m); // 18.40 + 11.04
+    }
+
+    [Fact]
+    public async Task GetSnapshotAsync_ZeroTransactions_AverageTicketShouldBeZero()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Empty Store"));
+
+        // Act - don't record any sales
+        var snapshot = await grain.GetSnapshotAsync();
+
+        // Assert
+        snapshot.TransactionCount.Should().Be(0);
+        snapshot.AverageTicket.Should().Be(0);
+        snapshot.GrossProfitPercent.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_Twice_ShouldBeIdempotent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+
+        // Act - initialize twice with different names
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Original Name"));
+        await grain.InitializeAsync(new DailySalesAggregationCommand(date, siteId, "Different Name"));
+
+        // Assert - should keep the original name (idempotent)
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.SiteName.Should().Be("Original Name");
+    }
+
+    [Fact]
+    public async Task NotInitialized_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var date = DateTime.Today;
+
+        var grain = _fixture.Cluster.GrainFactory.GetGrain<IDailySalesGrain>(GetGrainKey(orgId, siteId, date));
+
+        // Act & Assert - calling GetSnapshotAsync without initialization should throw
+        await grain.Invoking(g => g.GetSnapshotAsync())
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not initialized*");
+    }
 }

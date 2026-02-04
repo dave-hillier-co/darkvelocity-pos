@@ -339,4 +339,179 @@ public class PaymentIntentGrainTests
         result.Status.Should().Be(PaymentIntentStatus.RequiresPaymentMethod);
         result.LastPaymentError.Should().Contain("insufficient_funds");
     }
+
+    // =========================================================================
+    // 3DS Flow Tests
+    // =========================================================================
+
+    [Fact]
+    public async Task PaymentIntent_3dsFlow_ShouldCompleteAfterAuthentication()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            5000,
+            "usd",
+            PaymentMethodId: "pm_card_3155")); // 3DS required card
+
+        // Act - Confirm should trigger 3DS
+        var confirmResult = await grain.ConfirmAsync(new ConfirmPaymentIntentCommand());
+
+        // Assert - Should require action
+        confirmResult.Status.Should().Be(PaymentIntentStatus.RequiresAction);
+        confirmResult.NextAction.Should().NotBeNull();
+        confirmResult.NextAction!.Type.Should().Be("redirect_to_url");
+    }
+
+    [Fact]
+    public async Task PaymentIntent_HandleNextAction_ShouldProcessAuthentication()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            5000,
+            "usd",
+            PaymentMethodId: "pm_card_3155")); // 3DS required card
+
+        await grain.ConfirmAsync(new ConfirmPaymentIntentCommand());
+
+        // Act - Handle the 3DS action
+        var result = await grain.HandleNextActionAsync("{\"authenticated\":true}");
+
+        // Assert
+        result.NextAction.Should().BeNull();
+        result.Status.Should().Be(PaymentIntentStatus.Processing);
+    }
+
+    [Fact]
+    public async Task PaymentIntent_RecordAuthorizationAsync_DirectTest()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            2500,
+            "usd",
+            CaptureMethod: CaptureMethod.Manual));
+
+        // Act - Directly record authorization (simulating callback from processor)
+        await grain.RecordAuthorizationAsync("txn_test123", "AUTH456");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Status.Should().Be(PaymentIntentStatus.RequiresCapture);
+        snapshot.ProcessorTransactionId.Should().Be("txn_test123");
+        snapshot.AmountCapturable.Should().Be(2500);
+    }
+
+    [Fact]
+    public async Task PaymentIntent_RecordAuthorizationAsync_AutoCapture()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            1500,
+            "usd",
+            CaptureMethod: CaptureMethod.Automatic));
+
+        // Act - Directly record authorization with automatic capture
+        await grain.RecordAuthorizationAsync("txn_auto456", "AUTH789");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Status.Should().Be(PaymentIntentStatus.Succeeded);
+        snapshot.ProcessorTransactionId.Should().Be("txn_auto456");
+        snapshot.AmountReceived.Should().Be(1500);
+        snapshot.SucceededAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PaymentIntent_RecordDeclineAsync_DirectTest()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            3000,
+            "usd"));
+
+        // Act - Directly record decline (simulating callback from processor)
+        await grain.RecordDeclineAsync("card_declined", "Your card was declined");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Status.Should().Be(PaymentIntentStatus.RequiresPaymentMethod);
+        snapshot.LastPaymentError.Should().Contain("card_declined");
+        snapshot.LastPaymentError.Should().Contain("Your card was declined");
+    }
+
+    [Fact]
+    public async Task PaymentIntent_UpdateWhileProcessing_ShouldThrow()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            1000,
+            "usd",
+            PaymentMethodId: "pm_card_4242"));
+
+        // Complete the payment
+        await grain.ConfirmAsync(new ConfirmPaymentIntentCommand());
+
+        // Act - Try to update after succeeded
+        var act = () => grain.UpdateAsync(new UpdatePaymentIntentCommand(Amount: 2000));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot update*succeeded*");
+    }
+
+    [Fact]
+    public async Task PaymentIntent_RecordCaptureAsync_DirectTest()
+    {
+        // Arrange
+        var accountId = Guid.NewGuid();
+        var paymentIntentId = Guid.NewGuid();
+        var grain = GetPaymentIntentGrain(accountId, paymentIntentId);
+
+        await grain.CreateAsync(new CreatePaymentIntentCommand(
+            accountId,
+            4000,
+            "usd",
+            CaptureMethod: CaptureMethod.Manual));
+
+        await grain.RecordAuthorizationAsync("txn_cap_test", "AUTH_CAP");
+
+        // Act - Directly record capture (simulating callback from processor)
+        await grain.RecordCaptureAsync("txn_cap_test", 4000);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Status.Should().Be(PaymentIntentStatus.Succeeded);
+        snapshot.AmountReceived.Should().Be(4000);
+        snapshot.AmountCapturable.Should().Be(0);
+        snapshot.SucceededAt.Should().NotBeNull();
+    }
 }

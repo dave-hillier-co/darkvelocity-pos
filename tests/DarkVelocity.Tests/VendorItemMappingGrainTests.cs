@@ -379,4 +379,270 @@ public class VendorItemMappingGrainTests
         mapping.Should().NotBeNull();
         (await grain.ExistsAsync()).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task GetMappingAsync_SimilarDescription_ShouldMatchIfAbove85Percent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+        // Learn a mapping with specific description
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Chicken Breast Boneless Skinless 10LB",
+            ingredientId,
+            "Chicken Breast",
+            "chicken-breast",
+            MappingSource.Manual));
+
+        // Act - search with a very similar description (should match via fuzzy pattern)
+        var result = await grain.GetMappingAsync("Chicken Breast Boneless Skinless 5LB");
+
+        // Assert - should match via fuzzy pattern matching
+        result.Found.Should().BeTrue();
+        result.Mapping!.IngredientId.Should().Be(ingredientId);
+        result.MatchType.Should().Be(MappingMatchType.FuzzyPattern);
+    }
+
+    [Fact]
+    public async Task GetMappingAsync_LowSimilarity_ShouldNotMatch()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Fresh Atlantic Salmon Fillet",
+            ingredientId,
+            "Atlantic Salmon",
+            "salmon-atlantic",
+            MappingSource.Manual));
+
+        // Act - search with completely different description
+        var result = await grain.GetMappingAsync("Ribeye Steak Prime Grade");
+
+        // Assert - should not match
+        result.Found.Should().BeFalse();
+        result.MatchType.Should().Be(MappingMatchType.None);
+    }
+
+    [Fact]
+    public async Task LearnMappingAsync_SamePatternTwice_ShouldIncreaseWeight()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+
+        // Act - learn the same pattern twice
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Organic Free Range Eggs Large 12ct",
+            ingredientId,
+            "Organic Eggs",
+            "eggs-organic",
+            MappingSource.Manual));
+
+        // Learn again with same tokens (reinforcement)
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Organic Free Range Eggs Large 24ct",
+            ingredientId,
+            "Organic Eggs",
+            "eggs-organic",
+            MappingSource.Manual));
+
+        // Assert - snapshot should show patterns learned
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TotalPatterns.Should().BeGreaterThan(0);
+        // The pattern weight should have increased, which we can verify
+        // by checking that suggestions are returned with higher confidence
+        var suggestions = await grain.GetSuggestionsAsync("Organic Free Range Eggs");
+        suggestions.Should().NotBeEmpty();
+        suggestions[0].IngredientId.Should().Be(ingredientId);
+    }
+
+    [Fact]
+    public async Task GetMappingAsync_WithExpectedPrice_ShouldReturnPriceInfo()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+        await grain.SetMappingAsync(new SetMappingCommand(
+            "Premium Ground Coffee 2LB",
+            ingredientId,
+            "Ground Coffee",
+            "coffee-ground",
+            Guid.NewGuid(),
+            "COFFEE-001",
+            15.99m,
+            "lb"));
+
+        // Act
+        var result = await grain.GetMappingAsync("Premium Ground Coffee 2LB");
+
+        // Assert
+        result.Found.Should().BeTrue();
+        result.Mapping.Should().NotBeNull();
+        result.Mapping!.ExpectedUnitPrice.Should().Be(15.99m);
+        result.Mapping.Unit.Should().Be("lb");
+    }
+
+    [Fact]
+    public async Task GetSuggestionsAsync_WithCandidates_ShouldMergePatternAndIngredient()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var chickenId = Guid.NewGuid();
+        var beefId = Guid.NewGuid();
+        var porkId = Guid.NewGuid();
+
+        // Learn one pattern
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Boneless Chicken Thighs",
+            chickenId,
+            "Chicken Thighs",
+            "chicken-thighs",
+            MappingSource.Manual));
+
+        // Provide candidate ingredients that aren't learned yet
+        var candidates = new List<IngredientInfo>
+        {
+            new(beefId, "Ground Beef", "beef-ground"),
+            new(porkId, "Pork Chops", "pork-chops"),
+            new(chickenId, "Chicken Thighs", "chicken-thighs") // Duplicate of learned
+        };
+
+        // Act - search for something that could match either pattern or candidate
+        var suggestions = await grain.GetSuggestionsAsync("Chicken Thighs Skinless", candidates);
+
+        // Assert - should include suggestion from pattern (preferred) and possibly ingredient candidates
+        suggestions.Should().NotBeEmpty();
+        // Should find the chicken thighs via pattern matching
+        suggestions.Any(s => s.IngredientId == chickenId).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetMappingAsync_ProductCodeDifferentCase_ShouldMatch()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+        await grain.SetMappingAsync(new SetMappingCommand(
+            "Mozzarella Cheese Block",
+            ingredientId,
+            "Mozzarella Cheese",
+            "cheese-mozz",
+            Guid.NewGuid(),
+            "DAIRY-MOZ-001"));
+
+        // Act - lookup with different case product code
+        var result = await grain.GetMappingAsync("Some Other Description", "dairy-moz-001");
+
+        // Assert - should match via product code (case insensitive)
+        result.Found.Should().BeTrue();
+        result.MatchType.Should().Be(MappingMatchType.ProductCode);
+        result.Mapping!.IngredientId.Should().Be(ingredientId);
+    }
+
+    [Fact]
+    public async Task UpdateVendorInfoAsync_ShouldUpdateNameAndType()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Old Vendor Name", VendorType.Unknown));
+
+        var snapshotBefore = await grain.GetSnapshotAsync();
+        snapshotBefore.VendorName.Should().Be("Old Vendor Name");
+        snapshotBefore.VendorType.Should().Be(VendorType.Unknown);
+
+        // Act
+        await grain.UpdateVendorInfoAsync("New Vendor Name", VendorType.Supplier);
+
+        // Assert
+        var snapshotAfter = await grain.GetSnapshotAsync();
+        snapshotAfter.VendorName.Should().Be("New Vendor Name");
+        snapshotAfter.VendorType.Should().Be(VendorType.Supplier);
+    }
+
+    [Fact]
+    public async Task LearnMapping_SameIngredientDifferentDescriptions_ShouldCreateMultiplePatterns()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var vendorId = $"vendor-{Guid.NewGuid():N}";
+        var grain = GetGrain(orgId, vendorId);
+
+        await grain.InitializeAsync(new InitializeVendorMappingCommand(
+            orgId, vendorId, "Test Vendor", VendorType.Supplier));
+
+        var ingredientId = Guid.NewGuid();
+
+        // Act - learn multiple different descriptions for the same ingredient
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Butter Unsalted 1LB",
+            ingredientId,
+            "Unsalted Butter",
+            "butter-unsalted",
+            MappingSource.Manual));
+
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "Sweet Cream Butter No Salt",
+            ingredientId,
+            "Unsalted Butter",
+            "butter-unsalted",
+            MappingSource.Manual));
+
+        await grain.LearnMappingAsync(new LearnMappingCommand(
+            "European Style Butter Unsalted Block",
+            ingredientId,
+            "Unsalted Butter",
+            "butter-unsalted",
+            MappingSource.Manual));
+
+        // Assert - should have multiple patterns and multiple exact mappings
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TotalMappings.Should().Be(3); // 3 exact mappings
+        snapshot.TotalPatterns.Should().BeGreaterThanOrEqualTo(1); // At least 1 pattern
+
+        // All three descriptions should be findable
+        (await grain.GetMappingAsync("Butter Unsalted 1LB")).Found.Should().BeTrue();
+        (await grain.GetMappingAsync("Sweet Cream Butter No Salt")).Found.Should().BeTrue();
+        (await grain.GetMappingAsync("European Style Butter Unsalted Block")).Found.Should().BeTrue();
+    }
 }

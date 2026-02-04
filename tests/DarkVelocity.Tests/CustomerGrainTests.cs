@@ -786,4 +786,286 @@ public class CustomerGrainTests
         var state = await grain.GetStateAsync();
         state.Status.Should().Be(CustomerStatus.Inactive);
     }
+
+    // ==================== Loyalty Points Error Tests ====================
+
+    [Fact]
+    public async Task EarnPointsAsync_WithoutLoyaltyEnrollment_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        // Note: Customer is NOT enrolled in loyalty
+
+        // Act
+        var act = () => grain.EarnPointsAsync(new EarnPointsCommand(100, "Purchase"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not enrolled in loyalty*");
+    }
+
+    [Fact]
+    public async Task RedeemPointsAsync_WithoutEnrollment_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        // Note: Customer is NOT enrolled in loyalty
+
+        // Act
+        var act = () => grain.RedeemPointsAsync(new RedeemPointsCommand(50, Guid.NewGuid(), "Reward"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not enrolled in loyalty*");
+    }
+
+    // ==================== Reward Redemption Error Tests ====================
+
+    [Fact]
+    public async Task RedeemRewardAsync_ExpiredReward_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(100, "Purchase"));
+
+        // Issue a reward that's already expired
+        var reward = await grain.IssueRewardAsync(new IssueRewardCommand(
+            Guid.NewGuid(),
+            "Expired Coffee",
+            50,
+            DateTime.UtcNow.AddDays(-1))); // Expired yesterday
+
+        // Act
+        var act = () => grain.RedeemRewardAsync(new RedeemRewardCommand(reward.RewardId, Guid.NewGuid(), Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*expired*");
+    }
+
+    [Fact]
+    public async Task RedeemRewardAsync_AlreadyRedeemed_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(100, "Purchase"));
+        var reward = await grain.IssueRewardAsync(new IssueRewardCommand(
+            Guid.NewGuid(),
+            "Free Coffee",
+            50,
+            DateTime.UtcNow.AddDays(30)));
+
+        // Redeem the reward first time
+        await grain.RedeemRewardAsync(new RedeemRewardCommand(reward.RewardId, Guid.NewGuid(), Guid.NewGuid()));
+
+        // Act - Try to redeem the same reward again
+        var act = () => grain.RedeemRewardAsync(new RedeemRewardCommand(reward.RewardId, Guid.NewGuid(), Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not available*");
+    }
+
+    [Fact]
+    public async Task RedeemRewardAsync_NotFound_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act - Try to redeem a reward that doesn't exist
+        var act = () => grain.RedeemRewardAsync(new RedeemRewardCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    // ==================== Points Adjustment Tests ====================
+
+    [Fact]
+    public async Task AdjustPointsAsync_Positive_ShouldIncreaseBalance()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(100, "Initial purchase"));
+
+        // Act
+        var result = await grain.AdjustPointsAsync(new AdjustPointsCommand(50, "Goodwill adjustment", Guid.NewGuid()));
+
+        // Assert
+        result.NewBalance.Should().Be(150);
+        result.LifetimePoints.Should().Be(150); // Positive adjustments add to lifetime
+    }
+
+    [Fact]
+    public async Task AdjustPointsAsync_Negative_ShouldDecreaseBalance()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(100, "Initial purchase"));
+
+        // Act
+        var result = await grain.AdjustPointsAsync(new AdjustPointsCommand(-30, "Correction", Guid.NewGuid()));
+
+        // Assert
+        result.NewBalance.Should().Be(70);
+        result.LifetimePoints.Should().Be(100); // Negative adjustments don't reduce lifetime
+    }
+
+    [Fact]
+    public async Task AdjustPointsAsync_NegativeResultingBalance_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(50, "Initial purchase"));
+
+        // Act - Try to adjust more than available balance
+        var act = () => grain.AdjustPointsAsync(new AdjustPointsCommand(-100, "Over-correction", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*negative balance*");
+    }
+
+    // ==================== Points and Rewards Expiry Tests ====================
+
+    [Fact]
+    public async Task ExpirePointsAsync_ShouldReduceBalance()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(100, "Purchase"));
+
+        // Act
+        await grain.ExpirePointsAsync(30, DateTime.UtcNow);
+
+        // Assert
+        var balance = await grain.GetPointsBalanceAsync();
+        balance.Should().Be(70);
+    }
+
+    [Fact]
+    public async Task ExpireRewardsAsync_ShouldExpireMultiple()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+        await grain.EarnPointsAsync(new EarnPointsCommand(200, "Purchase"));
+
+        // Issue rewards that are already expired (negative days)
+        await grain.IssueRewardAsync(new IssueRewardCommand(
+            Guid.NewGuid(), "Expired Reward 1", 0, DateTime.UtcNow.AddDays(-1)));
+        await grain.IssueRewardAsync(new IssueRewardCommand(
+            Guid.NewGuid(), "Expired Reward 2", 0, DateTime.UtcNow.AddDays(-2)));
+        // Issue one that's still valid
+        await grain.IssueRewardAsync(new IssueRewardCommand(
+            Guid.NewGuid(), "Valid Reward", 0, DateTime.UtcNow.AddDays(30)));
+
+        // Act
+        await grain.ExpireRewardsAsync();
+
+        // Assert
+        var availableRewards = await grain.GetAvailableRewardsAsync();
+        availableRewards.Should().HaveCount(1);
+        availableRewards[0].Name.Should().Be("Valid Reward");
+    }
+
+    // ==================== Enrollment Tests ====================
+
+    [Fact]
+    public async Task EnrollInLoyaltyAsync_AlreadyEnrolled_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+
+        // Act - Try to enroll again
+        var act = () => grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM002", Guid.NewGuid(), "Silver"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already enrolled*");
+    }
+
+    // ==================== Create Tests ====================
+
+    [Fact]
+    public async Task CreateAsync_AlreadyExists_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act - Try to create the same customer again
+        var act = () => grain.CreateAsync(new CreateCustomerCommand(orgId, "Another", "Customer", "other@example.com"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already exists*");
+    }
+
+    // ==================== Update Tests ====================
+
+    [Fact]
+    public async Task UpdateAsync_Email_ShouldUpdateContactInfo()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        await grain.UpdateAsync(new UpdateCustomerCommand(Email: "newemail@example.com"));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Contact.Email.Should().Be("newemail@example.com");
+        state.Contact.Phone.Should().Be("+1234567890"); // Original phone preserved
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Phone_ShouldUpdateContactInfo()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        await grain.UpdateAsync(new UpdateCustomerCommand(Phone: "+9876543210"));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Contact.Phone.Should().Be("+9876543210");
+        state.Contact.Email.Should().Be("john@example.com"); // Original email preserved
+    }
 }

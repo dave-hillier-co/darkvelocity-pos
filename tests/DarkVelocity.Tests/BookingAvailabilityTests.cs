@@ -202,6 +202,79 @@ public class BookingSettingsGrainTests
         slots[1].Time.Should().Be(new TimeOnly(18, 30));
         slots[7].Time.Should().Be(new TimeOnly(21, 30));
     }
+
+    // Settings Validation Tests
+
+    [Fact]
+    public async Task MaxBookingsPerSlot_ShouldEnforce()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateBookingSettingsAsync(orgId, siteId);
+
+        // Act
+        await grain.UpdateAsync(new UpdateBookingSettingsCommand(MaxBookingsPerSlot: 5));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.MaxBookingsPerSlot.Should().Be(5);
+
+        // Verify availability reflects the max bookings per slot
+        var date = DateOnly.FromDateTime(DateTime.Today.AddDays(1));
+        var slots = await grain.GetAvailabilityAsync(new GetAvailabilityQuery(date, 2));
+        slots.Should().NotBeEmpty();
+        slots.All(s => s.AvailableCapacity == 5).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AdvanceBookingDays_ShouldValidate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateBookingSettingsAsync(orgId, siteId);
+
+        // Act
+        await grain.UpdateAsync(new UpdateBookingSettingsCommand(AdvanceBookingDays: 14));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.AdvanceBookingDays.Should().Be(14);
+    }
+
+    [Fact]
+    public async Task DepositPartySizeThreshold_ShouldApply()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateBookingSettingsAsync(orgId, siteId);
+
+        // Act
+        await grain.UpdateAsync(new UpdateBookingSettingsCommand(
+            RequireDeposit: true,
+            DepositAmount: 50m));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.RequireDeposit.Should().BeTrue();
+        state.DepositAmount.Should().Be(50m);
+        state.DepositPartySizeThreshold.Should().Be(6); // Default value
+    }
+
+    [Fact]
+    public async Task CancellationDeadline_ShouldEnforce()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateBookingSettingsAsync(orgId, siteId);
+
+        // Assert - Check default cancellation deadline
+        var state = await grain.GetStateAsync();
+        state.CancellationDeadline.Should().Be(TimeSpan.FromHours(24));
+    }
 }
 
 [Collection(ClusterCollection.Name)]

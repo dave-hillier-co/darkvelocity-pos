@@ -1392,4 +1392,358 @@ public class OrderGrainTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*No valid items to fire*");
     }
+
+    // ============================================================================
+    // Service Charges Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task AddServiceChargeAsync_ShouldCalculateOnSubtotal()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Steak", 1, 100.00m));
+
+        // Act - Add 15% service charge
+        await grain.AddServiceChargeAsync("Service Charge", 15m, isTaxable: false);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Subtotal.Should().Be(100.00m);
+        state.ServiceChargeTotal.Should().Be(15.00m);
+        state.ServiceCharges.Should().HaveCount(1);
+        state.ServiceCharges[0].Name.Should().Be("Service Charge");
+        state.ServiceCharges[0].Rate.Should().Be(15m);
+        state.ServiceCharges[0].Amount.Should().Be(15.00m);
+    }
+
+    [Fact]
+    public async Task AddServiceChargeAsync_Taxable_ShouldIncludeInTax()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Steak", 1, 100.00m, TaxRate: 10m));
+
+        // Act - Add 20% taxable service charge
+        await grain.AddServiceChargeAsync("Gratuity", 20m, isTaxable: true);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Subtotal.Should().Be(100.00m);
+        state.ServiceChargeTotal.Should().Be(20.00m);
+        state.TaxTotal.Should().Be(12.00m);
+        state.GrandTotal.Should().Be(132.00m);
+    }
+
+    [Fact]
+    public async Task MultipleServiceCharges_ShouldAccumulate()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Dinner", 1, 100.00m));
+
+        // Act
+        await grain.AddServiceChargeAsync("Service Charge", 10m, isTaxable: false);
+        await grain.AddServiceChargeAsync("Large Party Fee", 5m, isTaxable: false);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.ServiceCharges.Should().HaveCount(2);
+        state.ServiceChargeTotal.Should().Be(15.00m);
+    }
+
+    // ============================================================================
+    // Discount Removal Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task RemoveDiscountAsync_ShouldRecalculateTotals()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+        await grain.ApplyDiscountAsync(new ApplyDiscountCommand("$20 Off", DiscountType.FixedAmount, 20m, userId));
+
+        var stateBeforeRemoval = await grain.GetStateAsync();
+        var discountId = stateBeforeRemoval.Discounts[0].Id;
+
+        // Act
+        await grain.RemoveDiscountAsync(discountId);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Discounts.Should().BeEmpty();
+        state.DiscountTotal.Should().Be(0m);
+        state.GrandTotal.Should().Be(100m);
+    }
+
+    // ============================================================================
+    // Payment Removal Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task RemovePaymentAsync_ShouldUpdateStatus()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var paymentId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(paymentId, totals.GrandTotal, 0m, "Cash");
+
+        var stateBeforeRemoval = await grain.GetStateAsync();
+        stateBeforeRemoval.Status.Should().Be(OrderStatus.Paid);
+
+        // Act
+        await grain.RemovePaymentAsync(paymentId);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Status.Should().Be(OrderStatus.Open);
+        state.PaidAmount.Should().Be(0m);
+        state.BalanceDue.Should().Be(totals.GrandTotal);
+        state.Payments.Should().BeEmpty();
+    }
+
+    // ============================================================================
+    // Order Reopening Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task ReopenAsync_ClosedOrder_ShouldRevertToOpen()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), totals.GrandTotal, 0m, "Cash");
+        await grain.CloseAsync(userId);
+
+        var closedState = await grain.GetStateAsync();
+        closedState.Status.Should().Be(OrderStatus.Closed);
+
+        // Act
+        await grain.ReopenAsync(userId, "Need to add more items");
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Status.Should().Be(OrderStatus.Open);
+    }
+
+    [Fact]
+    public async Task ReopenAsync_OpenOrder_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+
+        // Act
+        var act = () => grain.ReopenAsync(userId, "Invalid reopen");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*only reopen closed or voided*");
+    }
+
+    // ============================================================================
+    // State Transition Guards Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task VoidAsync_ClosedOrder_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), totals.GrandTotal, 0m, "Cash");
+        await grain.CloseAsync(userId);
+
+        // Act
+        var act = () => grain.VoidAsync(new VoidOrderCommand(userId, "Try to void closed"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*closed or voided*");
+    }
+
+    [Fact]
+    public async Task CloseAsync_ClosedOrder_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100m));
+        var totals = await grain.GetTotalsAsync();
+        await grain.RecordPaymentAsync(Guid.NewGuid(), totals.GrandTotal, 0m, "Cash");
+        await grain.CloseAsync(userId);
+
+        // Act
+        var act = () => grain.CloseAsync(userId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    // ============================================================================
+    // Validation Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task AddLineAsync_WithNegativeQuantity_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        // Act
+        var act = () => grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", -1, 10m));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Quantity must be greater than zero*");
+    }
+
+    // ============================================================================
+    // Payment Edge Cases Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task RecordPaymentAsync_Overpayment_ShouldSucceed()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Coffee", 1, 5.00m));
+
+        // Act - Pay more than owed
+        await grain.RecordPaymentAsync(Guid.NewGuid(), 10.00m, 0m, "Cash");
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.PaidAmount.Should().Be(10.00m);
+        state.BalanceDue.Should().BeLessThan(0);
+        state.Status.Should().Be(OrderStatus.Paid);
+    }
+
+    // ============================================================================
+    // Kitchen Ticket Tests
+    // ============================================================================
+
+    private IKitchenTicketGrain GetKitchenTicketGrain(Guid orgId, Guid siteId, Guid ticketId)
+        => _fixture.Cluster.GrainFactory.GetGrain<IKitchenTicketGrain>(GrainKeys.KitchenOrder(orgId, siteId, ticketId));
+
+    [Fact]
+    public async Task KitchenTicket_ReceiveAsync_ShouldMarkReceived()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var ticketId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var grain = GetKitchenTicketGrain(orgId, siteId, ticketId);
+
+        await grain.CreateAsync(new CreateKitchenTicketCommand(
+            orgId, siteId, orderId, "ORD-001", OrderType.DineIn, "T1", 2, "John"));
+
+        var stateBefore = await grain.GetStateAsync();
+        stateBefore.ReceivedAt.Should().BeNull();
+
+        // Act
+        await grain.ReceiveAsync();
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.ReceivedAt.Should().NotBeNull();
+        state.ReceivedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task KitchenTicket_VoidAlreadyVoided_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var ticketId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var grain = GetKitchenTicketGrain(orgId, siteId, ticketId);
+
+        await grain.CreateAsync(new CreateKitchenTicketCommand(
+            orgId, siteId, orderId, "ORD-001", OrderType.DineIn, "T1", 2, "John"));
+
+        await grain.VoidAsync("First void");
+
+        var voidedState = await grain.GetStateAsync();
+        voidedState.Status.Should().Be(TicketStatus.Voided);
+
+        // Act - Try to void again
+        var act = () => grain.VoidAsync("Second void");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot void*");
+    }
 }

@@ -613,6 +613,140 @@ public class RecipeCategoryDocumentGrainTests
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.IsArchived.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task CreateDraftAsync_ShouldCreateNewDraftVersion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateRecipeCategoryDocumentCommand(
+            Name: "Original Category",
+            DisplayOrder: 1,
+            PublishImmediately: true));
+
+        // Act
+        var draft = await grain.CreateDraftAsync(new CreateRecipeCategoryDraftCommand(
+            Name: "Updated Category",
+            DisplayOrder: 2,
+            ChangeNote: "Updating display order"));
+
+        // Assert
+        draft.VersionNumber.Should().Be(2);
+        draft.Name.Should().Be("Updated Category");
+        draft.DisplayOrder.Should().Be(2);
+        draft.ChangeNote.Should().Be("Updating display order");
+
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(1);
+        snapshot.DraftVersion.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task PublishDraftAsync_ShouldMakeDraftLive()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateRecipeCategoryDocumentCommand(
+            Name: "Original",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateRecipeCategoryDraftCommand(
+            Name: "New Version",
+            Color: "#00FF00"));
+
+        // Act
+        await grain.PublishDraftAsync(note: "Publishing new color");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(2);
+        snapshot.DraftVersion.Should().BeNull();
+        snapshot.Published!.Name.Should().Be("New Version");
+        snapshot.Published.Color.Should().Be("#00FF00");
+    }
+
+    [Fact]
+    public async Task DiscardDraftAsync_ShouldRemoveDraft()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateRecipeCategoryDocumentCommand(
+            Name: "Original",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateRecipeCategoryDraftCommand(
+            Name: "Bad Draft"));
+
+        // Act
+        await grain.DiscardDraftAsync();
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.DraftVersion.Should().BeNull();
+        snapshot.Draft.Should().BeNull();
+        snapshot.PublishedVersion.Should().Be(1);
+        snapshot.TotalVersions.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RevertToVersionAsync_ShouldRevertToOlderVersion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateRecipeCategoryDocumentCommand(
+            Name: "Version 1",
+            DisplayOrder: 1,
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateRecipeCategoryDraftCommand(
+            Name: "Version 2",
+            DisplayOrder: 2));
+        await grain.PublishDraftAsync();
+
+        // Act
+        await grain.RevertToVersionAsync(1, reason: "Reverting changes");
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.PublishedVersion.Should().Be(3);
+        snapshot.Published!.Name.Should().Be("Version 1");
+        snapshot.Published.DisplayOrder.Should().Be(1);
+        snapshot.TotalVersions.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ScheduleChangeAsync_ShouldCreateSchedule()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var documentId = Guid.NewGuid().ToString();
+        var grain = GetGrain(orgId, documentId);
+        await grain.CreateAsync(new CreateRecipeCategoryDocumentCommand(
+            Name: "Regular Category",
+            PublishImmediately: true));
+        await grain.CreateDraftAsync(new CreateRecipeCategoryDraftCommand(
+            Name: "Seasonal Category"));
+        await grain.PublishDraftAsync();
+
+        var activateAt = DateTimeOffset.UtcNow.AddDays(1);
+
+        // Act
+        var schedule = await grain.ScheduleChangeAsync(
+            version: 2,
+            activateAt: activateAt,
+            name: "Seasonal Recipe Activation");
+
+        // Assert
+        schedule.VersionToActivate.Should().Be(2);
+        schedule.ActivateAt.Should().Be(activateAt);
+        schedule.Name.Should().Be("Seasonal Recipe Activation");
+        schedule.IsActive.Should().BeTrue();
+    }
 }
 
 [Collection(ClusterCollection.Name)]
@@ -766,5 +900,81 @@ public class RecipeRegistryGrainTests
         categories[0].Name.Should().Be("Starters");
         categories[1].Name.Should().Be("Mains");
         categories[2].Name.Should().Be("Desserts");
+    }
+
+    [Fact]
+    public async Task UnregisterRecipeAsync_ShouldRemoveFromRegistry()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var grain = GetGrain(orgId);
+        var documentId = Guid.NewGuid().ToString();
+        await grain.RegisterRecipeAsync(documentId, "Recipe to Remove", 5.00m, null);
+
+        // Act
+        await grain.UnregisterRecipeAsync(documentId);
+
+        // Assert
+        var recipes = await grain.GetRecipesAsync(includeArchived: true);
+        recipes.Should().NotContain(r => r.DocumentId == documentId);
+    }
+
+    [Fact]
+    public async Task GetBatchPrepRecipesAsync_ShouldFilterByType()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var grain = GetGrain(orgId);
+        await grain.RegisterRecipeAsync("recipe-1", "Individual Recipe", 5.00m, null, recipeType: RecipeType.MadeToOrder);
+        await grain.RegisterRecipeAsync("recipe-2", "Batch Prep 1", 10.00m, null, recipeType: RecipeType.BatchPrep);
+        await grain.RegisterRecipeAsync("recipe-3", "Batch Prep 2", 15.00m, null, recipeType: RecipeType.BatchPrep);
+        await grain.RegisterRecipeAsync("recipe-4", "Component Recipe", 8.00m, null, recipeType: RecipeType.SubRecipe);
+
+        // Act
+        var batchPrepRecipes = await grain.GetBatchPrepRecipesAsync();
+
+        // Assert
+        batchPrepRecipes.Should().HaveCount(2);
+        batchPrepRecipes.Should().OnlyContain(r => r.RecipeType == RecipeType.BatchPrep);
+    }
+
+    [Fact]
+    public async Task GetRecipesByOutputItemAsync_ShouldFilterByOutputItem()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var grain = GetGrain(orgId);
+        var outputItemId = Guid.NewGuid();
+        var otherItemId = Guid.NewGuid();
+        await grain.RegisterRecipeAsync("recipe-1", "Recipe for Output A", 5.00m, null, outputInventoryItemId: outputItemId);
+        await grain.RegisterRecipeAsync("recipe-2", "Recipe for Output B", 6.00m, null, outputInventoryItemId: otherItemId);
+        await grain.RegisterRecipeAsync("recipe-3", "Another for Output A", 7.00m, null, outputInventoryItemId: outputItemId);
+
+        // Act
+        var recipesForItem = await grain.GetRecipesByOutputItemAsync(outputItemId);
+
+        // Assert
+        recipesForItem.Should().HaveCount(2);
+        recipesForItem.Should().OnlyContain(r => r.OutputInventoryItemId == outputItemId);
+    }
+
+    [Fact]
+    public async Task UpdateCategoryAsync_ShouldUpdateCategory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var grain = GetGrain(orgId);
+        var documentId = Guid.NewGuid().ToString();
+        await grain.RegisterCategoryAsync(documentId, "Old Name", 1, "#FF0000");
+
+        // Act
+        await grain.UpdateCategoryAsync(documentId, "New Name", 2, "#00FF00", hasDraft: false, isArchived: false, recipeCount: 5);
+
+        // Assert
+        var categories = await grain.GetCategoriesAsync();
+        var category = categories.First(c => c.DocumentId == documentId);
+        category.Name.Should().Be("New Name");
+        category.DisplayOrder.Should().Be(2);
+        category.Color.Should().Be("#00FF00");
     }
 }

@@ -398,4 +398,367 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal("VIP", state2.CurrentTier);
         Assert.Equal(2.0m, state2.CurrentTierMultiplier);
     }
+
+    // ==================== Year/Month Rollover Tests ====================
+
+    [Fact]
+    public async Task RecordSpendAsync_InitialState_ShouldSetCurrentYearAndMonth()
+    {
+        // This test verifies that the grain properly tracks year/month for YTD/MTD calculations
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Record some spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 100m,
+            GrossSpend: 108m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 3,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var state = await grain.GetStateAsync();
+        Assert.Equal(DateTime.UtcNow.Year, state.CurrentYear);
+        Assert.Equal(DateTime.UtcNow.Month, state.CurrentMonth);
+        Assert.Equal(100m, state.YearToDateSpend);
+        Assert.Equal(100m, state.MonthToDateSpend);
+    }
+
+    [Fact]
+    public async Task RecordSpendAsync_MultipleInSamePeriod_ShouldAccumulateYtdMtd()
+    {
+        // Verifies that multiple spends in the same year/month accumulate properly
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Record first spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 100m,
+            GrossSpend: 108m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 3,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        // Record second spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 150m,
+            GrossSpend: 162m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 5,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var state = await grain.GetStateAsync();
+        Assert.Equal(250m, state.YearToDateSpend);
+        Assert.Equal(250m, state.MonthToDateSpend);
+        Assert.Equal(250m, state.LifetimeSpend);
+    }
+
+    // ==================== Recent Transactions Tests ====================
+
+    [Fact]
+    public async Task RecordSpendAsync_RecentTransactions_ShouldLimitTo100()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Record 105 transactions
+        for (int i = 0; i < 105; i++)
+        {
+            await grain.RecordSpendAsync(new RecordSpendCommand(
+                OrderId: Guid.NewGuid(),
+                SiteId: siteId,
+                NetSpend: 10m,
+                GrossSpend: 10.80m,
+                DiscountAmount: 0m,
+                TaxAmount: 0m,
+                ItemCount: 1,
+                TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+        }
+
+        var state = await grain.GetStateAsync();
+
+        // Should be limited to 100 recent transactions
+        Assert.Equal(100, state.RecentTransactions.Count);
+        // But lifetime should reflect all 105 transactions
+        Assert.Equal(105, state.LifetimeTransactions);
+    }
+
+    // ==================== Reverse Spend Tests ====================
+
+    [Fact]
+    public async Task ReverseSpendAsync_NonExistentOrder_ShouldHandleGracefully()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Record some initial spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 200m,
+            GrossSpend: 216m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 5,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var stateBefore = await grain.GetStateAsync();
+        Assert.Equal(200m, stateBefore.LifetimeSpend);
+        Assert.Equal(200, stateBefore.AvailablePoints);
+
+        // Try to reverse a non-existent order
+        await grain.ReverseSpendAsync(new ReverseSpendCommand(
+            OrderId: Guid.NewGuid(), // Non-existent order
+            Amount: 50m,
+            Reason: "Non-existent order refund"));
+
+        // Should reduce spend but not crash
+        var stateAfter = await grain.GetStateAsync();
+        Assert.Equal(150m, stateAfter.LifetimeSpend);
+        // Points should remain unchanged since no original transaction found
+        Assert.Equal(200, stateAfter.AvailablePoints);
+    }
+
+    // ==================== Zero Spend Tests ====================
+
+    [Fact]
+    public async Task RecordSpendAsync_ZeroSpend_ShouldHandle()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Record zero spend (e.g., free item, full discount)
+        var result = await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 0m,
+            GrossSpend: 0m,
+            DiscountAmount: 100m, // Full discount
+            TaxAmount: 0m,
+            ItemCount: 1,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        Assert.Equal(0, result.PointsEarned);
+        Assert.Equal(0, result.TotalPoints);
+
+        var state = await grain.GetStateAsync();
+        Assert.Equal(0m, state.LifetimeSpend);
+        Assert.Equal(1, state.LifetimeTransactions); // Still counts as transaction
+    }
+
+    // ==================== First Transaction Tests ====================
+
+    [Fact]
+    public async Task RecordSpendAsync_ShouldTrackFirstTransactionAt()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        var beforeFirstTransaction = DateTime.UtcNow;
+
+        // Record first spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 100m,
+            GrossSpend: 108m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 3,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var stateAfterFirst = await grain.GetStateAsync();
+        Assert.NotNull(stateAfterFirst.FirstTransactionAt);
+        Assert.True(stateAfterFirst.FirstTransactionAt >= beforeFirstTransaction);
+
+        var firstTransactionTime = stateAfterFirst.FirstTransactionAt;
+
+        // Record second spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 50m,
+            GrossSpend: 54m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 2,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var stateAfterSecond = await grain.GetStateAsync();
+        // FirstTransactionAt should NOT change on subsequent transactions
+        Assert.Equal(firstTransactionTime, stateAfterSecond.FirstTransactionAt);
+    }
+
+    // ==================== Version Tests ====================
+
+    [Fact]
+    public async Task RecordSpendAsync_ShouldUpdateVersion()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        var stateInitial = await grain.GetStateAsync();
+        var initialVersion = stateInitial.Version;
+
+        // Record first spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 100m,
+            GrossSpend: 108m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 3,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var stateAfterFirst = await grain.GetStateAsync();
+        Assert.Equal(initialVersion + 1, stateAfterFirst.Version);
+
+        // Record second spend
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 50m,
+            GrossSpend: 54m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 2,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        var stateAfterSecond = await grain.GetStateAsync();
+        Assert.Equal(initialVersion + 2, stateAfterSecond.Version);
+    }
+
+    // ==================== Redemption Details Tests ====================
+
+    [Fact]
+    public async Task RedeemPointsAsync_ShouldTrackRedemptionDetails()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var redemptionOrderId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Earn some points first
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 500m,
+            GrossSpend: 540m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 10,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        // Redeem points
+        var result = await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(
+            Points: 200,
+            OrderId: redemptionOrderId,
+            RewardType: "PercentageDiscount"));
+
+        Assert.Equal(2.00m, result.DiscountValue); // 200 points = $2.00
+        Assert.Equal(300, result.RemainingPoints);
+
+        // Verify redemption is tracked
+        var state = await grain.GetStateAsync();
+        Assert.Equal(200, state.TotalPointsRedeemed);
+        Assert.Single(state.RecentRedemptions);
+
+        var redemption = state.RecentRedemptions[0];
+        Assert.Equal(redemptionOrderId, redemption.OrderId);
+        Assert.Equal(200, redemption.PointsRedeemed);
+        Assert.Equal(2.00m, redemption.DiscountValue);
+        Assert.Equal("PercentageDiscount", redemption.RewardType);
+    }
+
+    [Fact]
+    public async Task RedeemPointsAsync_MultipleRedemptions_ShouldTrackAll()
+    {
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+
+        var grain = _cluster.GrainFactory.GetGrain<ICustomerSpendProjectionGrain>(
+            GrainKeys.CustomerSpendProjection(orgId, customerId));
+
+        await grain.InitializeAsync(orgId, customerId);
+
+        // Earn points
+        await grain.RecordSpendAsync(new RecordSpendCommand(
+            OrderId: Guid.NewGuid(),
+            SiteId: siteId,
+            NetSpend: 1000m,
+            GrossSpend: 1080m,
+            DiscountAmount: 0m,
+            TaxAmount: 0m,
+            ItemCount: 20,
+            TransactionDate: DateOnly.FromDateTime(DateTime.UtcNow)));
+
+        // Multiple redemptions
+        await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(100, Guid.NewGuid(), "Discount"));
+        await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(150, Guid.NewGuid(), "FreeItem"));
+        await grain.RedeemPointsAsync(new RedeemSpendPointsCommand(200, Guid.NewGuid(), "Upgrade"));
+
+        var state = await grain.GetStateAsync();
+        Assert.Equal(450, state.TotalPointsRedeemed);
+        Assert.Equal(3, state.RecentRedemptions.Count);
+
+        // Most recent redemption should be first
+        Assert.Equal("Upgrade", state.RecentRedemptions[0].RewardType);
+    }
 }

@@ -345,6 +345,190 @@ public class SupplierGrainTests
         result.IsActive.Should().BeFalse();
         result.Notes.Should().Be("No longer in business");
     }
+
+    [Fact]
+    public async Task UpdateIngredientPriceAsync_NonExistent_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var nonExistentIngredientId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+        await grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-011",
+            Name: "Test Supplier",
+            ContactName: "Test Contact",
+            ContactEmail: "test@supplier.com",
+            ContactPhone: "555-0011",
+            Address: "123 Test St",
+            PaymentTermsDays: 30,
+            LeadTimeDays: 5,
+            Notes: null));
+
+        // Act
+        var act = () => grain.UpdateIngredientPriceAsync(nonExistentIngredientId, 25.00m);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task GetIngredientPriceAsync_NonExistent_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var nonExistentIngredientId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+        await grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-012",
+            Name: "Test Supplier",
+            ContactName: "Test Contact",
+            ContactEmail: "test@supplier.com",
+            ContactPhone: "555-0012",
+            Address: "456 Test Ave",
+            PaymentTermsDays: 14,
+            LeadTimeDays: 3,
+            Notes: null));
+        // Add one ingredient to ensure the supplier has ingredients
+        await grain.AddIngredientAsync(new SupplierIngredient(
+            Guid.NewGuid(), "Some Ingredient", "ING-001", "SI-001", 10.00m, "kg", 5, 3));
+
+        // Act
+        var act = () => grain.GetIngredientPriceAsync(nonExistentIngredientId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task Operations_OnUninitialized_ShouldThrow()
+    {
+        // Arrange - create grain but don't call CreateAsync
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+
+        // Act & Assert - GetSnapshotAsync
+        var actGetSnapshot = () => grain.GetSnapshotAsync();
+        await actGetSnapshot.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not initialized*");
+
+        // Act & Assert - UpdateAsync
+        var actUpdate = () => grain.UpdateAsync(new UpdateSupplierCommand(
+            "New Name", null, null, null, null, null, null, null, null));
+        await actUpdate.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not initialized*");
+
+        // Act & Assert - AddIngredientAsync
+        var actAddIngredient = () => grain.AddIngredientAsync(new SupplierIngredient(
+            Guid.NewGuid(), "Test", "SKU-001", "SSSKU-001", 10.00m, "unit", 1, 1));
+        await actAddIngredient.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not initialized*");
+
+        // Act & Assert - RecordPurchaseAsync
+        var actRecordPurchase = () => grain.RecordPurchaseAsync(100.00m, true);
+        await actRecordPurchase.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not initialized*");
+    }
+
+    [Fact]
+    public async Task CreateAsync_AlreadyCreated_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+        await grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-013",
+            Name: "First Supplier",
+            ContactName: "First Contact",
+            ContactEmail: "first@supplier.com",
+            ContactPhone: "555-0013",
+            Address: "First Address",
+            PaymentTermsDays: 30,
+            LeadTimeDays: 5,
+            Notes: null));
+
+        // Act
+        var act = () => grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-013-DUP",
+            Name: "Second Supplier",
+            ContactName: "Second Contact",
+            ContactEmail: "second@supplier.com",
+            ContactPhone: "555-0014",
+            Address: "Second Address",
+            PaymentTermsDays: 14,
+            LeadTimeDays: 3,
+            Notes: null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already exists*");
+    }
+
+    [Fact]
+    public async Task RecordPurchaseAsync_AllLate_ShouldCalculateZeroPercent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+        await grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-014",
+            Name: "Late Delivery Supplier",
+            ContactName: "Slow Joe",
+            ContactEmail: "slow@supplier.com",
+            ContactPhone: "555-0015",
+            Address: "Somewhere Far",
+            PaymentTermsDays: 30,
+            LeadTimeDays: 7,
+            Notes: null));
+
+        // Act - record all late deliveries
+        await grain.RecordPurchaseAsync(500.00m, false);
+        await grain.RecordPurchaseAsync(750.00m, false);
+        await grain.RecordPurchaseAsync(300.00m, false);
+        await grain.RecordPurchaseAsync(1000.00m, false);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TotalPurchasesYtd.Should().Be(2550.00m);
+        snapshot.OnTimeDeliveryPercent.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RecordPurchaseAsync_AllOnTime_ShouldCalculate100Percent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var supplierId = Guid.NewGuid();
+        var grain = GetGrain(orgId, supplierId);
+        await grain.CreateAsync(new CreateSupplierCommand(
+            Code: "SUP-015",
+            Name: "Reliable Supplier",
+            ContactName: "Punctual Pat",
+            ContactEmail: "ontime@supplier.com",
+            ContactPhone: "555-0016",
+            Address: "Just Around Corner",
+            PaymentTermsDays: 30,
+            LeadTimeDays: 1,
+            Notes: null));
+
+        // Act - record all on-time deliveries
+        await grain.RecordPurchaseAsync(200.00m, true);
+        await grain.RecordPurchaseAsync(350.00m, true);
+        await grain.RecordPurchaseAsync(500.00m, true);
+        await grain.RecordPurchaseAsync(150.00m, true);
+        await grain.RecordPurchaseAsync(800.00m, true);
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TotalPurchasesYtd.Should().Be(2000.00m);
+        snapshot.OnTimeDeliveryPercent.Should().Be(100);
+    }
 }
 
 [Collection(ClusterCollection.Name)]
@@ -654,6 +838,285 @@ public class PurchaseOrderGrainTests
 
         // Assert
         total.Should().Be(100.00m); // 50 + 50
+    }
+
+    [Fact]
+    public async Task SubmitAsync_EmptyPO_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+
+        // Act
+        var act = () => grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*empty*");
+    }
+
+    [Fact]
+    public async Task SubmitAsync_AlreadySubmitted_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not in draft*");
+    }
+
+    [Fact]
+    public async Task AddLineAsync_SubmittedPO_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Initial Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "New Item", 5, 2.00m, null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*submitted*");
+    }
+
+    [Fact]
+    public async Task UpdateLineAsync_SubmittedPO_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.UpdateLineAsync(new UpdatePurchaseOrderLineCommand(
+            lineId, 20, null, null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*submitted*");
+    }
+
+    [Fact]
+    public async Task RemoveLineAsync_SubmittedPO_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.RemoveLineAsync(lineId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*submitted*");
+    }
+
+    [Fact]
+    public async Task ReceiveLineAsync_DraftStatus_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+
+        // Act
+        var act = () => grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot receive*");
+    }
+
+    [Fact]
+    public async Task ReceiveLineAsync_CancelledStatus_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+        await grain.CancelAsync(new CancelPurchaseOrderCommand("Changed plans", Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot receive*");
+    }
+
+    [Fact]
+    public async Task CancelAsync_ReceivedPO_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+        await grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
+
+        // Assert PO is fully received
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Status.Should().Be(PurchaseOrderStatus.Received);
+
+        // Act
+        var act = () => grain.CancelAsync(new CancelPurchaseOrderCommand("Want to cancel", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot cancel*");
+    }
+
+    [Fact]
+    public async Task CancelAsync_AlreadyCancelled_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+        await grain.CancelAsync(new CancelPurchaseOrderCommand("First cancellation", Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.CancelAsync(new CancelPurchaseOrderCommand("Second cancellation", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot cancel*");
+    }
+
+    [Fact]
+    public async Task UpdateLineAsync_NonExistentLine_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var nonExistentLineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+
+        // Act
+        var act = () => grain.UpdateLineAsync(new UpdatePurchaseOrderLineCommand(
+            nonExistentLineId, 20, null, null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task ReceiveLineAsync_NonExistentLine_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var nonExistentLineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.ReceiveLineAsync(new ReceiveLineCommand(nonExistentLineId, 10));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task ReceiveLineAsync_OverDelivery_ShouldHandle()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var poId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, poId);
+        await grain.CreateAsync(new CreatePurchaseOrderCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTime.UtcNow.AddDays(3), null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
+            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+        await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
+
+        // Act - receive more than ordered
+        await grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 15));
+
+        // Assert - over-delivery should be tracked (negative stock philosophy)
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.Lines[0].QuantityReceived.Should().Be(15);
+        snapshot.Lines[0].QuantityOrdered.Should().Be(10);
+        snapshot.Status.Should().Be(PurchaseOrderStatus.Received);
     }
 }
 
@@ -981,5 +1444,256 @@ public class DeliveryGrainTests
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Lines[0].BatchNumber.Should().Be("CC-2024-0115");
         snapshot.Lines[0].ExpiryDate.Should().BeCloseTo(expiryDate, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task AddLineAsync_AcceptedDelivery_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-010", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Initial Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "New Item",
+            null, 5, 2.00m, null, null, null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*processed*");
+    }
+
+    [Fact]
+    public async Task AddLineAsync_RejectedDelivery_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-011", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Initial Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.RejectAsync(new RejectDeliveryCommand("Wrong order", Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "New Item",
+            null, 5, 2.00m, null, null, null));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*processed*");
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancyAsync_AcceptedDelivery_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-012", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            lineId, Guid.NewGuid(), "Test Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
+            Guid.NewGuid(), lineId, DiscrepancyType.ShortDelivery, 15, 10, "Late discrepancy"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*processed*");
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancyAsync_OverDelivery_ShouldRecord()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-013", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            lineId, Guid.NewGuid(), "Potatoes",
+            Guid.NewGuid(), 120, 0.50m, null, null, null));
+
+        // Act
+        await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
+            Guid.NewGuid(), lineId, DiscrepancyType.OverDelivery, 100, 120, "20 extra units"));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HasDiscrepancies.Should().BeTrue();
+        snapshot.Discrepancies.Should().HaveCount(1);
+        snapshot.Discrepancies[0].Type.Should().Be(DiscrepancyType.OverDelivery);
+        snapshot.Discrepancies[0].ExpectedQuantity.Should().Be(100);
+        snapshot.Discrepancies[0].ActualQuantity.Should().Be(120);
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancyAsync_WrongItem_ShouldRecord()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-014", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            lineId, Guid.NewGuid(), "Chicken Thighs",
+            Guid.NewGuid(), 25, 4.00m, null, null, null));
+
+        // Act
+        await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
+            Guid.NewGuid(), lineId, DiscrepancyType.WrongItem, 25, 25, "Received drumsticks instead of thighs"));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HasDiscrepancies.Should().BeTrue();
+        snapshot.Discrepancies[0].Type.Should().Be(DiscrepancyType.WrongItem);
+        snapshot.Discrepancies[0].Notes.Should().Contain("drumsticks");
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancyAsync_QualityIssue_ShouldRecord()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-015", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            lineId, Guid.NewGuid(), "Bananas",
+            null, 50, 0.30m, "BATCH-BAN-001", DateTime.UtcNow.AddDays(5), null));
+
+        // Act
+        await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
+            Guid.NewGuid(), lineId, DiscrepancyType.QualityIssue, 50, 35, "15 bananas overripe"));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HasDiscrepancies.Should().BeTrue();
+        snapshot.Discrepancies[0].Type.Should().Be(DiscrepancyType.QualityIssue);
+        snapshot.Discrepancies[0].ExpectedQuantity.Should().Be(50);
+        snapshot.Discrepancies[0].ActualQuantity.Should().Be(35);
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancyAsync_IncorrectPrice_ShouldRecord()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-016", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            lineId, Guid.NewGuid(), "Olive Oil",
+            Guid.NewGuid(), 12, 15.00m, null, null, null));
+
+        // Act - note: using quantity fields to represent price discrepancy context
+        await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
+            Guid.NewGuid(), lineId, DiscrepancyType.IncorrectPrice, 12, 12, "Invoiced at $18/unit instead of agreed $15"));
+
+        // Assert
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.HasDiscrepancies.Should().BeTrue();
+        snapshot.Discrepancies[0].Type.Should().Be(DiscrepancyType.IncorrectPrice);
+        snapshot.Discrepancies[0].Notes.Should().Contain("$18");
+    }
+
+    [Fact]
+    public async Task AcceptAsync_AlreadyAccepted_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-017", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not pending*");
+    }
+
+    [Fact]
+    public async Task RejectAsync_AlreadyRejected_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-018", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.RejectAsync(new RejectDeliveryCommand("Quality issues", Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.RejectAsync(new RejectDeliveryCommand("More issues", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not pending*");
+    }
+
+    [Fact]
+    public async Task RejectAsync_Accepted_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var grain = GetGrain(orgId, deliveryId);
+        await grain.CreateAsync(new CreateDeliveryCommand(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), "INV-019", null));
+        await grain.AddLineAsync(new AddDeliveryLineCommand(
+            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            null, 10, 5.00m, null, null, null));
+        await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
+
+        // Act
+        var act = () => grain.RejectAsync(new RejectDeliveryCommand("Changed mind", Guid.NewGuid()));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not pending*");
     }
 }

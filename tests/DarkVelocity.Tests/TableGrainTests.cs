@@ -351,6 +351,221 @@ public class TableGrainTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Cannot seat at table with status*");
     }
+
+    // Status Transition Tests
+
+    [Fact]
+    public async Task SeatAsync_BlockedTable_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        await grain.BlockAsync("Reserved for private event");
+
+        // Act
+        var act = () => grain.SeatAsync(new SeatTableCommand(null, null, "Guest", 2));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot seat at table with status*");
+    }
+
+    [Fact]
+    public async Task SeatAsync_DirtyTable_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        await grain.SeatAsync(new SeatTableCommand(null, null, "First Guest", 2));
+        await grain.ClearAsync(); // Marks table as dirty
+
+        // Act
+        var act = () => grain.SeatAsync(new SeatTableCommand(null, null, "New Guest", 4));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cannot seat at table with status*");
+    }
+
+    [Fact]
+    public async Task MarkCleanAsync_NotDirty_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        // Table is in Available status, not Dirty
+
+        // Act
+        var act = () => grain.MarkCleanAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Table is not dirty*");
+    }
+
+    [Fact]
+    public async Task UnblockAsync_NotBlocked_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        // Table is in Available status, not Blocked
+
+        // Act
+        var act = () => grain.UnblockAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Table is not blocked*");
+    }
+
+    // Combination Tests
+
+    [Fact]
+    public async Task CombineAsync_NonCombinable_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var otherTableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+
+        // Set table as non-combinable
+        await grain.UpdateAsync(new UpdateTableCommand(IsCombinable: false));
+
+        // Act
+        var act = () => grain.CombineWithAsync(otherTableId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Table is not combinable*");
+    }
+
+    [Fact]
+    public async Task CombineAsync_AlreadyCombined_ShouldHandle()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var otherTableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        await grain.CombineWithAsync(otherTableId);
+
+        // Act - Combine again with the same table
+        await grain.CombineWithAsync(otherTableId);
+
+        // Assert - Should be idempotent
+        var state = await grain.GetStateAsync();
+        state.CombinedWith.Should().HaveCount(1);
+        state.CombinedWith.Should().Contain(otherTableId);
+    }
+
+    [Fact]
+    public async Task UncombineAsync_NotCombined_ShouldBeIdempotent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        // Table is not combined with anything
+
+        // Act - Should not throw
+        await grain.UncombineAsync();
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.CombinedWith.Should().BeEmpty();
+    }
+
+    // Occupancy Tests
+
+    [Fact]
+    public async Task SeatAsync_WithAllOptionalFields_ShouldStoreAll()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var serverId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+
+        // Act
+        await grain.SeatAsync(new SeatTableCommand(
+            BookingId: bookingId,
+            OrderId: orderId,
+            GuestName: "VIP Guest",
+            GuestCount: 6,
+            ServerId: serverId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.CurrentOccupancy.Should().NotBeNull();
+        state.CurrentOccupancy!.BookingId.Should().Be(bookingId);
+        state.CurrentOccupancy.OrderId.Should().Be(orderId);
+        state.CurrentOccupancy.GuestName.Should().Be("VIP Guest");
+        state.CurrentOccupancy.GuestCount.Should().Be(6);
+        state.CurrentOccupancy.ServerId.Should().Be(serverId);
+        state.CurrentOccupancy.SeatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task GetOccupancyAsync_AfterSeating_ShouldReturnCorrect()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var bookingId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        await grain.SeatAsync(new SeatTableCommand(bookingId, null, "Smith Party", 4));
+
+        // Act
+        var occupancy = await grain.GetOccupancyAsync();
+
+        // Assert
+        occupancy.Should().NotBeNull();
+        occupancy!.BookingId.Should().Be(bookingId);
+        occupancy.GuestName.Should().Be("Smith Party");
+        occupancy.GuestCount.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task ClearAsync_ShouldClearOccupancy()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var grain = await CreateTableAsync(orgId, siteId, tableId);
+        await grain.SeatAsync(new SeatTableCommand(Guid.NewGuid(), Guid.NewGuid(), "Guest", 3, Guid.NewGuid()));
+
+        // Verify occupancy exists
+        var occupancyBefore = await grain.GetOccupancyAsync();
+        occupancyBefore.Should().NotBeNull();
+
+        // Act
+        await grain.ClearAsync();
+
+        // Assert
+        var occupancyAfter = await grain.GetOccupancyAsync();
+        occupancyAfter.Should().BeNull();
+
+        var state = await grain.GetStateAsync();
+        state.Status.Should().Be(TableStatus.Dirty);
+    }
 }
 
 [Collection(ClusterCollection.Name)]
