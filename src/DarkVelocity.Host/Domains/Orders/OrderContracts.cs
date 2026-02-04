@@ -16,7 +16,13 @@ public record AddLineRequest(
     int Quantity,
     decimal UnitPrice,
     string? Notes = null,
-    List<OrderLineModifier>? Modifiers = null);
+    List<OrderLineModifier>? Modifiers = null,
+    /// <summary>
+    /// Tax rate as a percentage (e.g., 10.0 for 10% tax).
+    /// Should be set based on order type and menu item's contextual tax rates.
+    /// Defaults to 0 (no tax) if not specified.
+    /// </summary>
+    decimal TaxRate = 0);
 
 public record SendOrderRequest(Guid SentBy);
 public record CloseOrderRequest(Guid ClosedBy);

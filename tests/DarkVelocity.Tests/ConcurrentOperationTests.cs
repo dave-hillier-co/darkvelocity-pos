@@ -81,7 +81,8 @@ public class ConcurrentOperationTests
                 MenuItemId: Guid.NewGuid(),
                 Name: $"Item {i}",
                 Quantity: 1,
-                UnitPrice: 10.00m));
+                UnitPrice: 10.00m,
+                TaxRate: 10));
         }
 
         await grain.SendAsync(Guid.NewGuid());
@@ -617,7 +618,8 @@ public class ConcurrentOperationTests
                 MenuItemId: Guid.NewGuid(),
                 Name: $"Item {i}",
                 Quantity: 1,
-                UnitPrice: 5.00m)));
+                UnitPrice: 5.00m,
+                TaxRate: 10)));
         }
 
         await Task.WhenAll(addTasks);

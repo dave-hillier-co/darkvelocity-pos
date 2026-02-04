@@ -41,6 +41,14 @@ public sealed record OrderLineAdded : IOrderEvent
     [Id(7)] public string? Notes { get; init; }
     [Id(8)] public List<OrderLineModifier> Modifiers { get; init; } = [];
     [Id(9)] public DateTime OccurredAt { get; init; }
+    /// <summary>
+    /// Tax rate as a percentage (e.g., 10.0 for 10% tax).
+    /// </summary>
+    [Id(10)] public decimal TaxRate { get; init; }
+    /// <summary>
+    /// Calculated tax amount for this line.
+    /// </summary>
+    [Id(11)] public decimal TaxAmount { get; init; }
 }
 
 [GenerateSerializer]

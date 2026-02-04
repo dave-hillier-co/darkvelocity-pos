@@ -452,7 +452,7 @@ public class PaymentSplitScenarioTests
         // Use truncation to avoid exceeding target (e.g., 90.90 instead of 90.91)
         var preTaxAmount = Math.Truncate(grandTotal / 1.10m * 100) / 100;
         await grain.AddLineAsync(new AddLineCommand(
-            Guid.NewGuid(), "Test Item", 1, preTaxAmount));
+            Guid.NewGuid(), "Test Item", 1, preTaxAmount, TaxRate: 10));
 
         return grain;
     }

@@ -120,7 +120,8 @@ public class PerformanceBoundaryTests
                 MenuItemId: Guid.NewGuid(),
                 Name: $"Item {i}",
                 Quantity: 1,
-                UnitPrice: 10.00m));
+                UnitPrice: 10.00m,
+                TaxRate: 10));
         }
 
         await grain.SendAsync(Guid.NewGuid());

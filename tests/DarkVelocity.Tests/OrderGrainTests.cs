@@ -765,4 +765,93 @@ public class OrderGrainTests
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("*At least one amount*");
     }
+
+    // Per-Item Tax Rate Tests
+
+    [Fact]
+    public async Task AddLineAsync_WithDifferentTaxRates_ShouldCalculateCorrectTax()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        // Act - Add items with different tax rates (e.g., food vs alcohol)
+        // Food item at 10% tax
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 20.00m, TaxRate: 10));
+        // Alcohol item at 20% tax
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Beer", 2, 5.00m, TaxRate: 20));
+        // Non-taxable item (e.g., takeout in some jurisdictions)
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Gift Card", 1, 25.00m, TaxRate: 0));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Subtotal.Should().Be(55.00m); // 20 + 10 + 25
+
+        // Tax breakdown:
+        // Burger: 20 * 0.10 = 2.00
+        // Beer: 10 * 0.20 = 2.00
+        // Gift Card: 25 * 0.00 = 0.00
+        // Total tax: 4.00
+        state.TaxTotal.Should().Be(4.00m);
+        state.GrandTotal.Should().Be(59.00m); // 55 + 4
+
+        // Verify individual line tax amounts
+        state.Lines[0].TaxRate.Should().Be(10);
+        state.Lines[0].TaxAmount.Should().Be(2.00m);
+        state.Lines[1].TaxRate.Should().Be(20);
+        state.Lines[1].TaxAmount.Should().Be(2.00m);
+        state.Lines[2].TaxRate.Should().Be(0);
+        state.Lines[2].TaxAmount.Should().Be(0.00m);
+    }
+
+    [Fact]
+    public async Task AddLineAsync_TakeoutWithReducedTax_ShouldCalculateCorrectTax()
+    {
+        // Arrange - Simulates takeout scenario where tax rate might be lower
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.TakeOut));
+
+        // Act - Add items with takeout tax rate (e.g., 7.5% instead of 10%)
+        await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 100.00m, TaxRate: 7.5m));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Subtotal.Should().Be(100.00m);
+        state.TaxTotal.Should().Be(7.50m); // 100 * 0.075
+        state.GrandTotal.Should().Be(107.50m);
+    }
+
+    [Fact]
+    public async Task UpdateLineAsync_ShouldRecalculateTaxAmount()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var addResult = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 10.00m, TaxRate: 10));
+
+        // Act - Update quantity from 1 to 3
+        await grain.UpdateLineAsync(new UpdateLineCommand(addResult.LineId, Quantity: 3));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Subtotal.Should().Be(30.00m); // 10 * 3
+        state.Lines[0].TaxAmount.Should().Be(3.00m); // 30 * 0.10
+        state.TaxTotal.Should().Be(3.00m);
+        state.GrandTotal.Should().Be(33.00m);
+    }
 }
