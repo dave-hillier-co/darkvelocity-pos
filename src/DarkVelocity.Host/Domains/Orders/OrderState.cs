@@ -41,6 +41,11 @@ public record OrderLine
     [Id(15)] public Guid? VoidedBy { get; init; }
     [Id(16)] public DateTime? VoidedAt { get; init; }
     [Id(17)] public string? VoidReason { get; init; }
+    /// <summary>
+    /// Tax rate as a percentage (e.g., 10.0 for 10% tax).
+    /// Varies by order type (dine-in, takeout, delivery) and item category.
+    /// </summary>
+    [Id(18)] public decimal TaxRate { get; init; }
 }
 
 public enum OrderLineStatus
@@ -189,18 +194,29 @@ public sealed class OrderState
 
     /// <summary>
     /// Recalculates all totals based on current lines, discounts, and service charges.
+    /// Tax is calculated per line item based on each item's tax rate.
     /// </summary>
     public void RecalculateTotals()
     {
-        var activeLines = Lines.Where(l => l.Status != OrderLineStatus.Voided);
+        var activeLines = Lines.Where(l => l.Status != OrderLineStatus.Voided).ToList();
         Subtotal = activeLines.Sum(l => l.LineTotal);
         DiscountTotal = Discounts.Sum(d => d.Amount);
         ServiceChargeTotal = ServiceCharges.Sum(s => s.Amount);
 
-        // Calculate tax (simplified - 10% tax rate)
-        var taxableAmount = Subtotal - DiscountTotal;
-        taxableAmount += ServiceCharges.Where(s => s.IsTaxable).Sum(s => s.Amount);
-        TaxTotal = taxableAmount * 0.10m;
+        // Sum tax from each line item (each has its own rate)
+        var lineTax = activeLines.Sum(l => l.TaxAmount);
+
+        // Calculate tax on taxable service charges using weighted average rate
+        decimal serviceChargeTax = 0;
+        var taxableServiceCharges = ServiceCharges.Where(s => s.IsTaxable).Sum(s => s.Amount);
+        if (taxableServiceCharges > 0 && Subtotal > 0)
+        {
+            // Use weighted average tax rate from line items for service charge tax
+            var weightedTaxRate = activeLines.Sum(l => l.LineTotal * l.TaxRate) / Subtotal;
+            serviceChargeTax = taxableServiceCharges * (weightedTaxRate / 100m);
+        }
+
+        TaxTotal = lineTax + serviceChargeTax;
 
         GrandTotal = Subtotal - DiscountTotal + ServiceChargeTotal + TaxTotal;
         BalanceDue = GrandTotal - PaidAmount;

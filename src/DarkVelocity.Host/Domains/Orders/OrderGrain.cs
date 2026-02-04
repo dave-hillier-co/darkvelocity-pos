@@ -73,7 +73,9 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
                     Notes = e.Notes,
                     Modifiers = e.Modifiers,
                     Status = OrderLineStatus.Pending,
-                    CreatedAt = e.OccurredAt
+                    CreatedAt = e.OccurredAt,
+                    TaxRate = e.TaxRate,
+                    TaxAmount = e.TaxAmount
                 });
                 state.RecalculateTotals();
                 state.UpdatedAt = e.OccurredAt;
@@ -84,12 +86,16 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
                 if (lineToUpdate != null)
                 {
                     var index = state.Lines.FindIndex(l => l.Id == e.LineId);
+                    var newQuantity = e.Quantity ?? lineToUpdate.Quantity;
+                    var newLineTotal = newQuantity * lineToUpdate.UnitPrice +
+                                       lineToUpdate.Modifiers.Sum(m => m.Price * m.Quantity);
+                    var newTaxAmount = newLineTotal * (lineToUpdate.TaxRate / 100m);
                     state.Lines[index] = lineToUpdate with
                     {
-                        Quantity = e.Quantity ?? lineToUpdate.Quantity,
+                        Quantity = newQuantity,
                         Notes = e.Notes ?? lineToUpdate.Notes,
-                        LineTotal = (e.Quantity ?? lineToUpdate.Quantity) * lineToUpdate.UnitPrice +
-                                    lineToUpdate.Modifiers.Sum(m => m.Price * m.Quantity)
+                        LineTotal = newLineTotal,
+                        TaxAmount = newTaxAmount
                     };
                     state.RecalculateTotals();
                 }
@@ -354,10 +360,16 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
         if (command.Quantity <= 0)
             throw new ArgumentException("Quantity must be greater than zero", nameof(command));
 
+        if (command.TaxRate < 0)
+            throw new ArgumentException("Tax rate cannot be negative", nameof(command));
+
         var lineId = Guid.NewGuid();
         var lineTotal = command.UnitPrice * command.Quantity;
         var modifierTotal = command.Modifiers?.Sum(m => m.Price * m.Quantity) ?? 0;
         lineTotal += modifierTotal;
+
+        // Calculate tax amount for this line (tax rate is a percentage, e.g., 10.0 for 10%)
+        var taxAmount = lineTotal * (command.TaxRate / 100m);
         var now = DateTime.UtcNow;
 
         RaiseEvent(new OrderLineAdded
@@ -371,7 +383,9 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
             LineTotal = lineTotal,
             Notes = command.Notes,
             Modifiers = command.Modifiers ?? [],
-            OccurredAt = now
+            OccurredAt = now,
+            TaxRate = command.TaxRate,
+            TaxAmount = taxAmount
         });
 
         await ConfirmEvents();

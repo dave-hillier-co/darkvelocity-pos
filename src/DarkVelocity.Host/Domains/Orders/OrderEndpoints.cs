@@ -66,7 +66,7 @@ public static class OrderEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Order not found"));
 
             var result = await grain.AddLineAsync(new AddLineCommand(
-                request.MenuItemId, request.Name, request.Quantity, request.UnitPrice, request.Notes, request.Modifiers));
+                request.MenuItemId, request.Name, request.Quantity, request.UnitPrice, request.Notes, request.Modifiers, request.TaxRate));
 
             return Results.Created($"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/lines/{result.LineId}",
                 Hal.Resource(result, new Dictionary<string, object>

@@ -20,7 +20,13 @@ public record AddLineCommand(
     [property: Id(2)] int Quantity,
     [property: Id(3)] decimal UnitPrice,
     [property: Id(4)] string? Notes = null,
-    [property: Id(5)] List<OrderLineModifier>? Modifiers = null);
+    [property: Id(5)] List<OrderLineModifier>? Modifiers = null,
+    /// <summary>
+    /// Tax rate as a percentage (e.g., 10.0 for 10% tax).
+    /// Should be set based on order type and menu item's contextual tax rates.
+    /// Defaults to 0 (no tax) if not specified.
+    /// </summary>
+    [property: Id(6)] decimal TaxRate = 0);
 
 [GenerateSerializer]
 public record UpdateLineCommand(
