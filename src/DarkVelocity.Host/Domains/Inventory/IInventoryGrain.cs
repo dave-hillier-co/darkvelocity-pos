@@ -63,6 +63,11 @@ public record ReceiveTransferCommand(
     [property: Id(4)] string? BatchNumber = null);
 
 [GenerateSerializer]
+public record UpdateInventorySettingsCommand(
+    [property: Id(0)] decimal? ReorderPoint = null,
+    [property: Id(1)] decimal? ParLevel = null);
+
+[GenerateSerializer]
 public record BatchReceivedResult([property: Id(0)] Guid BatchId, [property: Id(1)] decimal NewQuantityOnHand, [property: Id(2)] decimal NewWeightedAverageCost);
 
 [GenerateSerializer]
@@ -117,6 +122,7 @@ public interface IInventoryGrain : IGrainWithStringKey
     // Configuration
     Task SetReorderPointAsync(decimal reorderPoint);
     Task SetParLevelAsync(decimal parLevel);
+    Task UpdateSettingsAsync(UpdateInventorySettingsCommand command);
 
     // Queries
     Task<InventoryLevelInfo> GetLevelInfoAsync();

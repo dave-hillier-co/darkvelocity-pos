@@ -140,6 +140,16 @@ cd apps/backoffice && npm install && npm run dev
 - xUnit for backend tests
 - Arrange-Act-Assert pattern
 - Test grain behavior through interfaces
+- **Tests must provide new logical coverage**: Only write tests that exercise grain behavior, not arithmetic or conversions that happen in the calling layer
+  - Unit conversions (pints to liters, oz to grams) happen before calling grains—don't test these in grain tests
+  - Container math (cases + loose bottles) is caller responsibility—grains receive quantities in base units
+  - If a test only exercises math you wrote in the test itself, it's not testing grain behavior
+- BDD-style tests (Given-When-Then) are preferred for complex scenarios
+
+### Inventory Philosophy
+- **Negative stock is the default**: Service doesn't stop for inventory discrepancies—the system tracks reality
+- Sales that exceed recorded stock go negative, flagging a discrepancy for reconciliation
+- Physical counts (stock takes) correct the system to match actual inventory
 
 ## Key Files
 

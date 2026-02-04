@@ -179,7 +179,12 @@ public class LedgerGrain : Grain, ILedgerGrain
         if (amount < 0)
             return LedgerResult.Failure("Debit amount must be non-negative");
 
-        if (amount > _state.State.Balance)
+        // Allow negative balance when explicitly permitted via metadata
+        var allowNegative = metadata?.TryGetValue("allowNegative", out var allowNegativeValue) == true
+            && bool.TryParse(allowNegativeValue, out var allowNegativeBool)
+            && allowNegativeBool;
+
+        if (amount > _state.State.Balance && !allowNegative)
             return LedgerResult.Failure($"Insufficient balance. Available: {_state.State.Balance}, Requested: {amount}");
 
         return await ApplyTransactionAsync(-amount, transactionType, notes, metadata);

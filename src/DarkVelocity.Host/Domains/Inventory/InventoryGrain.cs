@@ -371,16 +371,20 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
     {
         EnsureExists();
 
-        // Check ledger balance for sufficient stock
-        var hasSufficient = await Ledger.HasSufficientBalanceAsync(command.Quantity);
-        if (!hasSufficient)
-            throw new InvalidOperationException("Insufficient stock");
-
         var previousLevel = State.StockLevel;
 
-        // Calculate the breakdown before raising event (for return value)
+        // Calculate FIFO breakdown for available batches
         var breakdown = CalculateFifoBreakdown(command.Quantity);
         var totalCost = breakdown.Sum(b => b.TotalCost);
+
+        // If consuming more than available (negative stock), estimate cost from WAC
+        var consumedFromBatches = breakdown.Sum(b => b.Quantity);
+        if (consumedFromBatches < command.Quantity)
+        {
+            var unbatchedQuantity = command.Quantity - consumedFromBatches;
+            var estimatedCost = unbatchedQuantity * State.WeightedAverageCost;
+            totalCost += estimatedCost;
+        }
 
         RaiseEvent(new StockConsumed
         {
@@ -393,8 +397,8 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
         });
         await ConfirmEvents();
 
-        // Debit ledger for consumed quantity
-        var ledgerResult = await Ledger.DebitAsync(
+        // Debit ledger - always allow negative (service doesn't stop for inventory discrepancies)
+        await Ledger.DebitAsync(
             command.Quantity,
             "consumption",
             command.Reason,
@@ -402,11 +406,9 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             {
                 ["orderId"] = command.OrderId?.ToString() ?? "",
                 ["totalCost"] = totalCost.ToString(),
-                ["performedBy"] = (command.PerformedBy ?? Guid.Empty).ToString()
+                ["performedBy"] = (command.PerformedBy ?? Guid.Empty).ToString(),
+                ["allowNegative"] = "true"
             });
-
-        if (!ledgerResult.Success)
-            throw new InvalidOperationException(ledgerResult.Error ?? "Insufficient stock");
 
         RecordMovement(MovementType.Consumption, -command.Quantity, State.WeightedAverageCost, command.Reason, null, command.PerformedBy ?? Guid.Empty, command.OrderId);
 
@@ -748,6 +750,20 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
         {
             IngredientId = State.IngredientId,
             ParLevel = parLevel,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task UpdateSettingsAsync(UpdateInventorySettingsCommand command)
+    {
+        EnsureExists();
+
+        RaiseEvent(new InventorySettingsUpdated
+        {
+            IngredientId = State.IngredientId,
+            ReorderPoint = command.ReorderPoint,
+            ParLevel = command.ParLevel,
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
