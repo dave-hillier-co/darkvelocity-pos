@@ -189,6 +189,34 @@ public static class GrainKeys
     public static string BookingSettings(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:bookingsettings";
 
     /// <summary>
+    /// Creates a key for a role grain.
+    /// </summary>
+    public static string Role(Guid orgId, Guid roleId) => OrgEntity(orgId, "role", roleId);
+
+    /// <summary>
+    /// Creates a key for a schedule grain (weekly rota).
+    /// </summary>
+    public static string Schedule(Guid orgId, Guid siteId, DateOnly weekStartDate)
+        => $"{orgId}:{siteId}:schedule:{weekStartDate:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a time entry grain.
+    /// </summary>
+    public static string TimeEntry(Guid orgId, Guid timeEntryId) => OrgEntity(orgId, "timeentry", timeEntryId);
+
+    /// <summary>
+    /// Creates a key for a tip pool grain.
+    /// </summary>
+    public static string TipPool(Guid orgId, Guid siteId, DateOnly date, string poolName)
+        => $"{orgId}:{siteId}:tippool:{date:yyyy-MM-dd}:{poolName}";
+
+    /// <summary>
+    /// Creates a key for a payroll period grain.
+    /// </summary>
+    public static string PayrollPeriod(Guid orgId, Guid siteId, DateOnly periodStart)
+        => $"{orgId}:{siteId}:payroll:{periodStart:yyyy-MM-dd}";
+
+    /// <summary>
     /// Creates a key for a shift swap request grain.
     /// </summary>
     public static string ShiftSwapRequest(Guid orgId, Guid requestId) => OrgEntity(orgId, "shiftswap", requestId);
