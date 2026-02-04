@@ -972,19 +972,38 @@ public static class OAuthEndpoints
                 statusCode: 400);
         }
 
+        // Create a session for proper refresh token management
+        var sessionId = Guid.NewGuid();
+        var sessionGrain = grainFactory.GetGrain<ISessionGrain>(
+            GrainKeys.Session(exchange.OrganizationId, sessionId));
+        var sessionTokens = await sessionGrain.CreateAsync(new CreateSessionCommand(
+            exchange.UserId,
+            exchange.OrganizationId,
+            null, // siteId not available from authorization code
+            null, // deviceId not available from authorization code
+            "oauth",
+            null,
+            null));
+
+        // Register the refresh token in the global lookup for OAuth token refresh
+        var refreshTokenHash = HashToken(sessionTokens.RefreshToken);
+        var refreshTokenLookup = grainFactory.GetGrain<IRefreshTokenLookupGrain>(GrainKeys.RefreshTokenLookup());
+        await refreshTokenLookup.RegisterAsync(refreshTokenHash, exchange.OrganizationId, sessionId);
+
+        // Generate access token with session_id claim for proper token management
         var (accessToken, expires) = tokenService.GenerateAccessToken(
             exchange.UserId,
             exchange.DisplayName ?? "User",
             exchange.OrganizationId,
-            roles: exchange.Roles);
-        var refreshToken = tokenService.GenerateRefreshToken();
+            roles: exchange.Roles,
+            sessionId: sessionId);
 
         return Results.Json(new
         {
             access_token = accessToken,
             token_type = "Bearer",
             expires_in = (int)(expires - DateTime.UtcNow).TotalSeconds,
-            refresh_token = refreshToken,
+            refresh_token = sessionTokens.RefreshToken,
             scope = exchange.Scope
         });
     }
@@ -1003,10 +1022,62 @@ public static class OAuthEndpoints
                 statusCode: 400);
         }
 
-        // TODO: Implement proper refresh token validation with stored sessions
-        // For now, return error as stateless refresh is not secure
-        return Results.Json(new OAuthError("invalid_grant", "Refresh token not found or expired"),
-            statusCode: 400);
+        // Look up the session associated with this refresh token
+        var refreshTokenHash = HashToken(refreshToken);
+        var refreshTokenLookup = grainFactory.GetGrain<IRefreshTokenLookupGrain>(GrainKeys.RefreshTokenLookup());
+        var lookupResult = await refreshTokenLookup.LookupAsync(refreshTokenHash);
+
+        if (lookupResult == null)
+        {
+            return Results.Json(new OAuthError("invalid_grant", "Refresh token not found or expired"),
+                statusCode: 400);
+        }
+
+        // Get the session and refresh the tokens
+        var sessionGrain = grainFactory.GetGrain<ISessionGrain>(
+            GrainKeys.Session(lookupResult.OrganizationId, lookupResult.SessionId));
+        var refreshResult = await sessionGrain.RefreshAsync(refreshToken);
+
+        if (!refreshResult.Success)
+        {
+            // Remove the stale lookup entry if refresh failed
+            await refreshTokenLookup.RemoveAsync(refreshTokenHash);
+            return Results.Json(new OAuthError("invalid_grant", refreshResult.Error ?? "Refresh token invalid or expired"),
+                statusCode: 400);
+        }
+
+        // Update the refresh token lookup with the new token (rotation)
+        var newRefreshTokenHash = HashToken(refreshResult.Tokens!.RefreshToken);
+        await refreshTokenLookup.RotateAsync(
+            refreshTokenHash,
+            newRefreshTokenHash,
+            lookupResult.OrganizationId,
+            lookupResult.SessionId);
+
+        // Get user info from session for the access token
+        var sessionState = await sessionGrain.GetStateAsync();
+        var userGrain = grainFactory.GetGrain<IUserGrain>(
+            GrainKeys.User(sessionState.OrganizationId, sessionState.UserId));
+        var userState = await userGrain.GetStateAsync();
+        var roles = await userGrain.GetRolesAsync();
+
+        // Generate new access token with session claim
+        var (accessToken, expires) = tokenService.GenerateAccessToken(
+            sessionState.UserId,
+            userState.DisplayName,
+            sessionState.OrganizationId,
+            sessionState.SiteId,
+            sessionState.DeviceId,
+            roles,
+            lookupResult.SessionId);
+
+        return Results.Json(new
+        {
+            access_token = accessToken,
+            token_type = "Bearer",
+            expires_in = (int)(expires - DateTime.UtcNow).TotalSeconds,
+            refresh_token = refreshResult.Tokens.RefreshToken
+        });
     }
 
     private static IResult HandleClientCredentialsGrant(
@@ -1070,6 +1141,12 @@ public static class OAuthEndpoints
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
     }
 }
 

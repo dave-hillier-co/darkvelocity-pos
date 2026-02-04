@@ -660,3 +660,54 @@ public sealed class UserLookupState
 {
     [Id(0)] public Dictionary<string, Guid> PinToUserMap { get; set; } = new();
 }
+
+/// <summary>
+/// State for refresh token lookup grain.
+/// </summary>
+[GenerateSerializer]
+public sealed class RefreshTokenLookupState
+{
+    /// <summary>
+    /// Maps refresh token hash to (orgId, sessionId).
+    /// </summary>
+    [Id(0)] public Dictionary<string, RefreshTokenLookupResult> TokenToSession { get; set; } = new();
+}
+
+public class RefreshTokenLookupGrain : Grain, IRefreshTokenLookupGrain
+{
+    private readonly IPersistentState<RefreshTokenLookupState> _state;
+
+    public RefreshTokenLookupGrain(
+        [PersistentState("refreshtokenlookup", "OrleansStorage")]
+        IPersistentState<RefreshTokenLookupState> state)
+    {
+        _state = state;
+    }
+
+    public async Task RegisterAsync(string refreshTokenHash, Guid organizationId, Guid sessionId)
+    {
+        _state.State.TokenToSession[refreshTokenHash] = new RefreshTokenLookupResult(organizationId, sessionId);
+        await _state.WriteStateAsync();
+    }
+
+    public Task<RefreshTokenLookupResult?> LookupAsync(string refreshTokenHash)
+    {
+        _state.State.TokenToSession.TryGetValue(refreshTokenHash, out var result);
+        return Task.FromResult(result);
+    }
+
+    public async Task RemoveAsync(string refreshTokenHash)
+    {
+        if (_state.State.TokenToSession.Remove(refreshTokenHash))
+        {
+            await _state.WriteStateAsync();
+        }
+    }
+
+    public async Task RotateAsync(string oldRefreshTokenHash, string newRefreshTokenHash, Guid organizationId, Guid sessionId)
+    {
+        _state.State.TokenToSession.Remove(oldRefreshTokenHash);
+        _state.State.TokenToSession[newRefreshTokenHash] = new RefreshTokenLookupResult(organizationId, sessionId);
+        await _state.WriteStateAsync();
+    }
+}

@@ -699,4 +699,10 @@ public static class GrainKeys
     /// Creates a key for the global API key lookup grain.
     /// </summary>
     public static string ApiKeyLookup() => "global:apikeylookup";
+
+    /// <summary>
+    /// Creates a key for the global refresh token lookup grain.
+    /// Maps refresh token hashes to (orgId, sessionId) for OAuth token refresh.
+    /// </summary>
+    public static string RefreshTokenLookup() => "global:refreshtokenlookup";
 }

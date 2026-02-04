@@ -33,7 +33,8 @@ public sealed class JwtTokenService
         Guid organizationId,
         Guid? siteId = null,
         Guid? deviceId = null,
-        IEnumerable<string>? roles = null)
+        IEnumerable<string>? roles = null,
+        Guid? sessionId = null)
     {
         var expires = DateTime.UtcNow.AddMinutes(_settings.AccessTokenLifetimeMinutes);
 
@@ -50,6 +51,9 @@ public sealed class JwtTokenService
 
         if (deviceId.HasValue)
             claims.Add(new Claim("device_id", deviceId.Value.ToString()));
+
+        if (sessionId.HasValue)
+            claims.Add(new Claim("session_id", sessionId.Value.ToString()));
 
         if (roles != null)
         {

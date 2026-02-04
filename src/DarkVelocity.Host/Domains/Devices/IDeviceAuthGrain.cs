@@ -210,3 +210,44 @@ public interface IUserLookupGrain : IGrainWithStringKey
     /// </summary>
     Task<IReadOnlyList<PinUserSummary>> GetUsersForSiteAsync(Guid siteId);
 }
+
+// ============================================================================
+// Refresh Token Lookup (for OAuth token refresh)
+// ============================================================================
+
+/// <summary>
+/// Result of looking up a refresh token.
+/// </summary>
+[GenerateSerializer]
+public record RefreshTokenLookupResult(
+    [property: Id(0)] Guid OrganizationId,
+    [property: Id(1)] Guid SessionId);
+
+/// <summary>
+/// Global grain for looking up refresh tokens to their sessions.
+/// Maps SHA256(refresh_token) -> (orgId, sessionId).
+/// Key: "global:refreshtokenlookup"
+/// </summary>
+public interface IRefreshTokenLookupGrain : IGrainWithStringKey
+{
+    /// <summary>
+    /// Registers a refresh token hash to a session.
+    /// </summary>
+    Task RegisterAsync(string refreshTokenHash, Guid organizationId, Guid sessionId);
+
+    /// <summary>
+    /// Looks up a session by refresh token hash.
+    /// </summary>
+    Task<RefreshTokenLookupResult?> LookupAsync(string refreshTokenHash);
+
+    /// <summary>
+    /// Removes a refresh token mapping (called when token is rotated or session revoked).
+    /// </summary>
+    Task RemoveAsync(string refreshTokenHash);
+
+    /// <summary>
+    /// Updates the refresh token mapping during token rotation.
+    /// Removes the old hash and registers the new one atomically.
+    /// </summary>
+    Task RotateAsync(string oldRefreshTokenHash, string newRefreshTokenHash, Guid organizationId, Guid sessionId);
+}
