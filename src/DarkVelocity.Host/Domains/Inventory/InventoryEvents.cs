@@ -101,7 +101,6 @@ public sealed record InventorySettingsUpdated : IInventoryEvent
     [Id(1)] public decimal? ReorderPoint { get; init; }
     [Id(2)] public decimal? ParLevel { get; init; }
     [Id(3)] public DateTime OccurredAt { get; init; }
-    [Id(4)] public bool? AllowNegativeStock { get; init; }
 }
 
 [GenerateSerializer]

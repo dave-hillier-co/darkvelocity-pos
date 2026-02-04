@@ -135,8 +135,6 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
                     state.ReorderPoint = e.ReorderPoint.Value;
                 if (e.ParLevel.HasValue)
                     state.ParLevel = e.ParLevel.Value;
-                if (e.AllowNegativeStock.HasValue)
-                    state.AllowNegativeStock = e.AllowNegativeStock.Value;
                 UpdateStockLevel(state);
                 break;
 
@@ -373,26 +371,17 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
     {
         EnsureExists();
 
-        // Check ledger balance for sufficient stock (unless negative stock is allowed)
-        if (!State.AllowNegativeStock)
-        {
-            var hasSufficient = await Ledger.HasSufficientBalanceAsync(command.Quantity);
-            if (!hasSufficient)
-                throw new InvalidOperationException("Insufficient stock");
-        }
-
         var previousLevel = State.StockLevel;
 
-        // Calculate the breakdown before raising event (for return value)
-        // When allowing negative stock, breakdown may be incomplete but we still consume
+        // Calculate FIFO breakdown for available batches
         var breakdown = CalculateFifoBreakdown(command.Quantity);
         var totalCost = breakdown.Sum(b => b.TotalCost);
 
-        // If consuming more than available (negative stock scenario), estimate cost from WAC
-        var consumedQuantity = breakdown.Sum(b => b.Quantity);
-        if (consumedQuantity < command.Quantity && State.AllowNegativeStock)
+        // If consuming more than available (negative stock), estimate cost from WAC
+        var consumedFromBatches = breakdown.Sum(b => b.Quantity);
+        if (consumedFromBatches < command.Quantity)
         {
-            var unbatchedQuantity = command.Quantity - consumedQuantity;
+            var unbatchedQuantity = command.Quantity - consumedFromBatches;
             var estimatedCost = unbatchedQuantity * State.WeightedAverageCost;
             totalCost += estimatedCost;
         }
@@ -408,8 +397,8 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
         });
         await ConfirmEvents();
 
-        // Debit ledger for consumed quantity (allow negative when setting enabled)
-        var ledgerResult = await Ledger.DebitAsync(
+        // Debit ledger - always allow negative (service doesn't stop for inventory discrepancies)
+        await Ledger.DebitAsync(
             command.Quantity,
             "consumption",
             command.Reason,
@@ -418,11 +407,8 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
                 ["orderId"] = command.OrderId?.ToString() ?? "",
                 ["totalCost"] = totalCost.ToString(),
                 ["performedBy"] = (command.PerformedBy ?? Guid.Empty).ToString(),
-                ["allowNegative"] = State.AllowNegativeStock.ToString()
+                ["allowNegative"] = "true"
             });
-
-        if (!ledgerResult.Success && !State.AllowNegativeStock)
-            throw new InvalidOperationException(ledgerResult.Error ?? "Insufficient stock");
 
         RecordMovement(MovementType.Consumption, -command.Quantity, State.WeightedAverageCost, command.Reason, null, command.PerformedBy ?? Guid.Empty, command.OrderId);
 
@@ -778,7 +764,6 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             IngredientId = State.IngredientId,
             ReorderPoint = command.ReorderPoint,
             ParLevel = command.ParLevel,
-            AllowNegativeStock = command.AllowNegativeStock,
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();

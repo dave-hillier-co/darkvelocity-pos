@@ -84,23 +84,6 @@ public class StockInventoryBddTests
         levelInfo.Level.Should().Be(StockLevel.OutOfStock);
     }
 
-    [Fact]
-    public async Task Given_InsufficientStock_When_SaleAttempted_Then_ConsumptionFails()
-    {
-        // Given: Only 10 bottles of premium wine
-        var (inventory, _) = await GivenStockAtLocation(
-            ingredientName: "Chateau Margaux 2015",
-            quantity: 10m,
-            unit: "bottles");
-
-        // When: Attempting to sell 15 bottles
-        var act = () => WhenSaleConsumesStock(inventory, quantity: 15m, Guid.NewGuid());
-
-        // Then: The sale consumption fails with insufficient stock
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Insufficient stock*");
-    }
-
     // ============================================================================
     // Feature: FIFO Batch Consumption
     // As a food safety manager
@@ -817,12 +800,6 @@ public class StockInventoryBddTests
         var inventory = await CreateInventoryGrain(context, "Chef Special", "portions");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("SPECIAL-001", 5m, 15.00m));
 
-        // Allow negative stock for this inventory item
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 2m,
-            ParLevel: 20m,
-            AllowNegativeStock: true));
-
         // When: Busy service sells 8 portions (3 more than recorded)
         // Kitchen had extra stock from unrecorded transfer
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 8m, Guid.NewGuid());
@@ -840,11 +817,6 @@ public class StockInventoryBddTests
         var context = CreateTestContext();
         var inventory = await CreateInventoryGrain(context, "Lobster Tail", "pieces");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("LOBSTER-001", 10m, 25.00m));
-
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 2m,
-            ParLevel: 15m,
-            AllowNegativeStock: true));
 
         // Sell all recorded stock
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 10m, Guid.NewGuid());
@@ -868,11 +840,6 @@ public class StockInventoryBddTests
         var inventory = await CreateInventoryGrain(context, "Ribeye Steak", "portions");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("RIBEYE-001", 20m, 18.00m));
 
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 5m,
-            ParLevel: 30m,
-            AllowNegativeStock: true));
-
         // Oversell by 5 portions
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 25m, Guid.NewGuid());
 
@@ -895,11 +862,6 @@ public class StockInventoryBddTests
         var context = CreateTestContext();
         var inventory = await CreateInventoryGrain(context, "House Wine", "bottles");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("WINE-001", 20m, 6.00m));
-
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 10m,
-            ParLevel: 50m,
-            AllowNegativeStock: true));
 
         // Heavy weekend sales exceeded recorded stock
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 30m, Guid.NewGuid());
@@ -925,11 +887,6 @@ public class StockInventoryBddTests
         var inventory = await CreateInventoryGrain(context, "Festival Lager", "L");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("FEST-001", 100m, 2.00m));
 
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 20m,
-            ParLevel: 150m,
-            AllowNegativeStock: true));
-
         // Already oversold by 20L
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 120m, Guid.NewGuid());
 
@@ -946,39 +903,12 @@ public class StockInventoryBddTests
     }
 
     [Fact]
-    public async Task Given_NegativeStockDisabled_When_OversellAttempted_Then_SaleFails()
-    {
-        // Given: High-value item with strict inventory control
-        var context = CreateTestContext();
-        var inventory = await CreateInventoryGrain(context, "Dom Perignon", "bottles");
-        await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("DOM-001", 6m, 180.00m));
-
-        // Negative stock NOT allowed (default behavior for controlled items)
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 2m,
-            ParLevel: 12m,
-            AllowNegativeStock: false));
-
-        // When: Attempting to sell more than available
-        var act = () => inventory.ConsumeForOrderAsync(Guid.NewGuid(), 8m, Guid.NewGuid());
-
-        // Then: Sale fails - cannot oversell controlled inventory
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Insufficient stock*");
-    }
-
-    [Fact]
     public async Task Given_BusyServiceWithUnrecordedTransfer_When_ReconciliationDone_Then_VarianceCalculated()
     {
         // Given: Normal opening stock
         var context = CreateTestContext();
         var inventory = await CreateInventoryGrain(context, "Burger Patties", "pieces");
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("PATTY-001", 100m, 1.50m));
-
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 20m,
-            ParLevel: 120m,
-            AllowNegativeStock: true));
 
         // Busy Saturday - cooked 80 burgers per POS
         await inventory.ConsumeForOrderAsync(Guid.NewGuid(), 80m, Guid.NewGuid());
@@ -1023,11 +953,6 @@ public class StockInventoryBddTests
 
         // Opening stock: 3 bottles (750ml each) = 2.25L
         await inventory.ReceiveBatchAsync(new ReceiveBatchCommand("BOURBON-001", 2.25m, 28.00m));
-
-        await inventory.UpdateSettingsAsync(new UpdateInventorySettingsCommand(
-            ReorderPoint: 1m,
-            ParLevel: 5m,
-            AllowNegativeStock: true));
 
         const decimal ozToLiters = 0.0296m;
         const decimal standardPour = 1.5m; // 1.5 oz

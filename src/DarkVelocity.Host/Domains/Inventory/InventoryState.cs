@@ -85,7 +85,6 @@ public sealed class InventoryState
 
     [Id(15)] public decimal WeightedAverageCost { get; set; }
     [Id(16)] public StockLevel StockLevel { get; set; }
-    [Id(21)] public bool AllowNegativeStock { get; set; }
 
     [Id(17)] public DateTime? LastReceivedAt { get; set; }
     [Id(18)] public DateTime? LastConsumedAt { get; set; }

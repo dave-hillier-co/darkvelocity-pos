@@ -65,8 +65,7 @@ public record ReceiveTransferCommand(
 [GenerateSerializer]
 public record UpdateInventorySettingsCommand(
     [property: Id(0)] decimal? ReorderPoint = null,
-    [property: Id(1)] decimal? ParLevel = null,
-    [property: Id(2)] bool? AllowNegativeStock = null);
+    [property: Id(1)] decimal? ParLevel = null);
 
 [GenerateSerializer]
 public record BatchReceivedResult([property: Id(0)] Guid BatchId, [property: Id(1)] decimal NewQuantityOnHand, [property: Id(2)] decimal NewWeightedAverageCost);
