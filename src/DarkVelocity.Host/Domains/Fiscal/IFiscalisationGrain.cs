@@ -146,6 +146,24 @@ public record FiscalTransactionSnapshot(
     [property: Id(21)] DateTime? ExportedAt);
 
 /// <summary>
+/// Command to create and sign a transaction using the internal TSE
+/// </summary>
+[GenerateSerializer]
+public record CreateAndSignWithTseCommand(
+    [property: Id(0)] Guid FiscalDeviceId,
+    [property: Id(1)] Guid LocationId,
+    [property: Id(2)] Guid TseId,
+    [property: Id(3)] FiscalTransactionType TransactionType,
+    [property: Id(4)] FiscalProcessType ProcessType,
+    [property: Id(5)] string SourceType,
+    [property: Id(6)] Guid SourceId,
+    [property: Id(7)] decimal GrossAmount,
+    [property: Id(8)] Dictionary<string, decimal> NetAmounts,
+    [property: Id(9)] Dictionary<string, decimal> TaxAmounts,
+    [property: Id(10)] Dictionary<string, decimal> PaymentTypes,
+    [property: Id(11)] string? ClientId);
+
+/// <summary>
 /// Grain for fiscal transaction management.
 /// Key: "{orgId}:fiscaltransaction:{transactionId}"
 /// </summary>
@@ -153,6 +171,13 @@ public interface IFiscalTransactionGrain : IGrainWithStringKey
 {
     Task<FiscalTransactionSnapshot> CreateAsync(CreateFiscalTransactionCommand command);
     Task<FiscalTransactionSnapshot> SignAsync(SignTransactionCommand command);
+
+    /// <summary>
+    /// Create and sign the transaction using the internal TSE grain.
+    /// This method uses the TseGrain to generate TSE events and signatures.
+    /// </summary>
+    Task<FiscalTransactionSnapshot> CreateAndSignWithTseAsync(CreateAndSignWithTseCommand command);
+
     Task MarkFailedAsync(string errorMessage);
     Task IncrementRetryAsync();
     Task MarkExportedAsync();

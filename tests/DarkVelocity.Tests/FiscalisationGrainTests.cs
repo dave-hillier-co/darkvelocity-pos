@@ -832,3 +832,569 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 }
+
+// ============================================================================
+// TSE Grain Tests
+// ============================================================================
+
+[Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
+public class TseGrainTests
+{
+    private readonly TestClusterFixture _fixture;
+
+    public TseGrainTests(TestClusterFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    private ITseGrain GetGrain(Guid orgId, Guid tseId)
+    {
+        var key = $"{orgId}:tse:{tseId}";
+        return _fixture.Cluster.GrainFactory.GetGrain<ITseGrain>(key);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_InitializesTse()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        var snapshot = await grain.InitializeAsync(locationId);
+
+        snapshot.TseId.Should().Be(tseId);
+        snapshot.LocationId.Should().Be(locationId);
+        snapshot.IsInitialized.Should().BeTrue();
+        snapshot.TransactionCounter.Should().Be(0);
+        snapshot.SignatureCounter.Should().Be(0);
+        snapshot.CertificateSerial.Should().NotBeNullOrEmpty();
+        snapshot.PublicKeyBase64.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task StartTransactionAsync_StartsTransaction()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var result = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            LocationId: locationId,
+            ProcessType: "Kassenbeleg",
+            ProcessData: "100.00^NORMAL:84.03^NORMAL:15.97^CASH:100.00",
+            ClientId: "POS-001"));
+
+        result.Success.Should().BeTrue();
+        result.TransactionNumber.Should().Be(1);
+        result.StartTime.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        result.ClientId.Should().Be("POS-001");
+    }
+
+    [Fact]
+    public async Task FinishTransactionAsync_GeneratesSignature()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var startResult = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            LocationId: locationId,
+            ProcessType: "Kassenbeleg",
+            ProcessData: "50.00^NORMAL:42.02^NORMAL:7.98^CARD:50.00",
+            ClientId: null));
+
+        var finishResult = await grain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            TransactionNumber: startResult.TransactionNumber,
+            ProcessType: "Kassenbeleg",
+            ProcessData: "50.00^NORMAL:42.02^NORMAL:7.98^CARD:50.00"));
+
+        finishResult.Success.Should().BeTrue();
+        finishResult.TransactionNumber.Should().Be(1);
+        finishResult.SignatureCounter.Should().Be(1);
+        finishResult.Signature.Should().NotBeNullOrEmpty();
+        finishResult.SignatureAlgorithm.Should().Be("HMAC-SHA256");
+        finishResult.CertificateSerial.Should().NotBeNullOrEmpty();
+        finishResult.QrCodeData.Should().NotBeNullOrEmpty();
+        finishResult.QrCodeData.Should().StartWith("V0;");
+        finishResult.EndTime.Should().BeAfter(finishResult.StartTime);
+    }
+
+    [Fact]
+    public async Task UpdateTransactionAsync_UpdatesProcessData()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var startResult = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            LocationId: locationId,
+            ProcessType: "Kassenbeleg",
+            ProcessData: "25.00",
+            ClientId: null));
+
+        var updateSuccess = await grain.UpdateTransactionAsync(new UpdateTseTransactionCommand(
+            TransactionNumber: startResult.TransactionNumber,
+            ProcessData: "75.00^NORMAL:63.03^NORMAL:11.97^CASH:75.00"));
+
+        updateSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SelfTestAsync_PerformsSelfTest()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var result = await grain.SelfTestAsync();
+
+        result.Passed.Should().BeTrue();
+        result.ErrorMessage.Should().BeNull();
+        result.PerformedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.LastSelfTestAt.Should().NotBeNull();
+        snapshot.LastSelfTestPassed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ConfigureExternalMappingAsync_ConfiguresMapping()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var externalDeviceId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var snapshot = await grain.ConfigureExternalMappingAsync(new ConfigureExternalTseMappingCommand(
+            Enabled: true,
+            ExternalDeviceId: externalDeviceId,
+            ExternalTseType: ExternalTseType.FiskalyCloud,
+            ApiEndpoint: "https://kassensichv.fiskaly.com",
+            ClientId: "fiskaly-client-123",
+            ForwardAllEvents: true,
+            RequireExternalSignature: false));
+
+        snapshot.ExternalMapping.Should().NotBeNull();
+        snapshot.ExternalMapping!.Enabled.Should().BeTrue();
+        snapshot.ExternalMapping.ExternalDeviceId.Should().Be(externalDeviceId);
+        snapshot.ExternalMapping.ExternalTseType.Should().Be(ExternalTseType.FiskalyCloud);
+        snapshot.ExternalMapping.ForwardAllEvents.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MultipleTransactions_IncrementCounters()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        // First transaction
+        var start1 = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            locationId, "Kassenbeleg", "10.00", null));
+        var finish1 = await grain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            start1.TransactionNumber, "Kassenbeleg", "10.00"));
+
+        // Second transaction
+        var start2 = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            locationId, "Kassenbeleg", "20.00", null));
+        var finish2 = await grain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            start2.TransactionNumber, "Kassenbeleg", "20.00"));
+
+        // Third transaction
+        var start3 = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            locationId, "Kassenbeleg", "30.00", null));
+        var finish3 = await grain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            start3.TransactionNumber, "Kassenbeleg", "30.00"));
+
+        finish1.TransactionNumber.Should().Be(1);
+        finish1.SignatureCounter.Should().Be(1);
+        finish2.TransactionNumber.Should().Be(2);
+        finish2.SignatureCounter.Should().Be(2);
+        finish3.TransactionNumber.Should().Be(3);
+        finish3.SignatureCounter.Should().Be(3);
+
+        var snapshot = await grain.GetSnapshotAsync();
+        snapshot.TransactionCounter.Should().Be(3);
+        snapshot.SignatureCounter.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task FinishTransactionAsync_WithInvalidTransactionNumber_Fails()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        var result = await grain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            TransactionNumber: 999,
+            ProcessType: "Kassenbeleg",
+            ProcessData: "100.00"));
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("not found");
+    }
+
+    [Fact]
+    public async Task ReceiveExternalResponseAsync_ProcessesExternalResponse()
+    {
+        var orgId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var grain = GetGrain(orgId, tseId);
+
+        await grain.InitializeAsync(locationId);
+
+        // Start a transaction
+        var startResult = await grain.StartTransactionAsync(new StartTseTransactionCommand(
+            locationId, "Kassenbeleg", "100.00", null));
+
+        // Simulate receiving an external TSE response
+        await grain.ReceiveExternalResponseAsync(
+            transactionNumber: startResult.TransactionNumber,
+            externalTransactionId: "ext-txn-12345",
+            externalSignature: "external-signature-base64",
+            externalCertificateSerial: "EXT-CERT-001",
+            externalSignatureCounter: 42,
+            externalTimestamp: DateTime.UtcNow,
+            rawResponse: "{\"status\":\"ok\"}");
+
+        // The method should complete without throwing
+        // In a real implementation, this would update the transaction state
+    }
+}
+
+// ============================================================================
+// Fiscal Transaction Grain with TSE Integration Tests
+// ============================================================================
+
+[Collection(ClusterCollection.Name)]
+[Trait("Category", "Integration")]
+public class FiscalTransactionWithTseTests
+{
+    private readonly TestClusterFixture _fixture;
+
+    public FiscalTransactionWithTseTests(TestClusterFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    private IFiscalTransactionGrain GetTransactionGrain(Guid orgId, Guid transactionId)
+    {
+        var key = $"{orgId}:fiscaltransaction:{transactionId}";
+        return _fixture.Cluster.GrainFactory.GetGrain<IFiscalTransactionGrain>(key);
+    }
+
+    private ITseGrain GetTseGrain(Guid orgId, Guid tseId)
+    {
+        var key = $"{orgId}:tse:{tseId}";
+        return _fixture.Cluster.GrainFactory.GetGrain<ITseGrain>(key);
+    }
+
+    private IFiscalDeviceGrain GetDeviceGrain(Guid orgId, Guid deviceId)
+    {
+        var key = $"{orgId}:fiscaldevice:{deviceId}";
+        return _fixture.Cluster.GrainFactory.GetGrain<IFiscalDeviceGrain>(key);
+    }
+
+    [Fact]
+    public async Task CreateAndSignWithTseAsync_CreatesAndSignsTransaction()
+    {
+        var orgId = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+
+        // Setup fiscal device
+        var deviceGrain = GetDeviceGrain(orgId, deviceId);
+        await deviceGrain.RegisterAsync(new RegisterFiscalDeviceCommand(
+            locationId, FiscalDeviceType.SwissbitCloud, "SB-TSE-001",
+            null, null, null, null, null));
+
+        // Initialize TSE
+        var tseGrain = GetTseGrain(orgId, tseId);
+        await tseGrain.InitializeAsync(locationId);
+
+        // Create and sign transaction with TSE
+        var transactionGrain = GetTransactionGrain(orgId, transactionId);
+        var command = new CreateAndSignWithTseCommand(
+            FiscalDeviceId: deviceId,
+            LocationId: locationId,
+            TseId: tseId,
+            TransactionType: FiscalTransactionType.Receipt,
+            ProcessType: FiscalProcessType.Kassenbeleg,
+            SourceType: "Order",
+            SourceId: orderId,
+            GrossAmount: 119.00m,
+            NetAmounts: new Dictionary<string, decimal> { ["NORMAL"] = 100.00m },
+            TaxAmounts: new Dictionary<string, decimal> { ["NORMAL"] = 19.00m },
+            PaymentTypes: new Dictionary<string, decimal> { ["CASH"] = 119.00m },
+            ClientId: "POS-001");
+
+        var snapshot = await transactionGrain.CreateAndSignWithTseAsync(command);
+
+        snapshot.FiscalTransactionId.Should().Be(transactionId);
+        snapshot.Status.Should().Be(FiscalTransactionStatus.Signed);
+        snapshot.TransactionNumber.Should().Be(1);
+        snapshot.SignatureCounter.Should().Be(1);
+        snapshot.Signature.Should().NotBeNullOrEmpty();
+        snapshot.CertificateSerial.Should().NotBeNullOrEmpty();
+        snapshot.QrCodeData.Should().NotBeNullOrEmpty();
+        snapshot.QrCodeData.Should().StartWith("V0;");
+        snapshot.StartTime.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        snapshot.EndTime.Should().NotBeNull();
+        snapshot.EndTime.Should().BeAfter(snapshot.StartTime);
+    }
+
+    [Fact]
+    public async Task CreateAndSignWithTseAsync_WithVoid_CreatesSignedVoidTransaction()
+    {
+        var orgId = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+
+        // Setup fiscal device
+        var deviceGrain = GetDeviceGrain(orgId, deviceId);
+        await deviceGrain.RegisterAsync(new RegisterFiscalDeviceCommand(
+            locationId, FiscalDeviceType.FiskalyCloud, "FISK-001",
+            null, null, null, null, null));
+
+        // Initialize TSE
+        var tseGrain = GetTseGrain(orgId, tseId);
+        await tseGrain.InitializeAsync(locationId);
+
+        // Create and sign void transaction
+        var transactionGrain = GetTransactionGrain(orgId, transactionId);
+        var command = new CreateAndSignWithTseCommand(
+            FiscalDeviceId: deviceId,
+            LocationId: locationId,
+            TseId: tseId,
+            TransactionType: FiscalTransactionType.Void,
+            ProcessType: FiscalProcessType.Kassenbeleg,
+            SourceType: "Void",
+            SourceId: Guid.NewGuid(),
+            GrossAmount: -50.00m,
+            NetAmounts: new Dictionary<string, decimal> { ["NORMAL"] = -42.02m },
+            TaxAmounts: new Dictionary<string, decimal> { ["NORMAL"] = -7.98m },
+            PaymentTypes: new Dictionary<string, decimal> { ["CASH"] = -50.00m },
+            ClientId: null);
+
+        var snapshot = await transactionGrain.CreateAndSignWithTseAsync(command);
+
+        snapshot.TransactionType.Should().Be(FiscalTransactionType.Void);
+        snapshot.GrossAmount.Should().Be(-50.00m);
+        snapshot.Status.Should().Be(FiscalTransactionStatus.Signed);
+        snapshot.Signature.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task CreateAndSignWithTseAsync_MultipleTransactions_IncrementCounters()
+    {
+        var orgId = Guid.NewGuid();
+        var locationId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var tseId = Guid.NewGuid();
+
+        // Setup
+        var deviceGrain = GetDeviceGrain(orgId, deviceId);
+        await deviceGrain.RegisterAsync(new RegisterFiscalDeviceCommand(
+            locationId, FiscalDeviceType.SwissbitUsb, "USB-001",
+            null, null, null, null, null));
+
+        var tseGrain = GetTseGrain(orgId, tseId);
+        await tseGrain.InitializeAsync(locationId);
+
+        // First transaction
+        var tx1 = GetTransactionGrain(orgId, Guid.NewGuid());
+        var snapshot1 = await tx1.CreateAndSignWithTseAsync(new CreateAndSignWithTseCommand(
+            deviceId, locationId, tseId,
+            FiscalTransactionType.Receipt, FiscalProcessType.Kassenbeleg,
+            "Order", Guid.NewGuid(), 10.00m,
+            new Dictionary<string, decimal>(), new Dictionary<string, decimal>(),
+            new Dictionary<string, decimal>(), null));
+
+        // Second transaction
+        var tx2 = GetTransactionGrain(orgId, Guid.NewGuid());
+        var snapshot2 = await tx2.CreateAndSignWithTseAsync(new CreateAndSignWithTseCommand(
+            deviceId, locationId, tseId,
+            FiscalTransactionType.Receipt, FiscalProcessType.Kassenbeleg,
+            "Order", Guid.NewGuid(), 20.00m,
+            new Dictionary<string, decimal>(), new Dictionary<string, decimal>(),
+            new Dictionary<string, decimal>(), null));
+
+        // Third transaction
+        var tx3 = GetTransactionGrain(orgId, Guid.NewGuid());
+        var snapshot3 = await tx3.CreateAndSignWithTseAsync(new CreateAndSignWithTseCommand(
+            deviceId, locationId, tseId,
+            FiscalTransactionType.Receipt, FiscalProcessType.Kassenbeleg,
+            "Order", Guid.NewGuid(), 30.00m,
+            new Dictionary<string, decimal>(), new Dictionary<string, decimal>(),
+            new Dictionary<string, decimal>(), null));
+
+        snapshot1.TransactionNumber.Should().Be(1);
+        snapshot1.SignatureCounter.Should().Be(1);
+        snapshot2.TransactionNumber.Should().Be(2);
+        snapshot2.SignatureCounter.Should().Be(2);
+        snapshot3.TransactionNumber.Should().Be(3);
+        snapshot3.SignatureCounter.Should().Be(3);
+
+        // Verify TSE counters
+        var tseSnapshot = await tseGrain.GetSnapshotAsync();
+        tseSnapshot.TransactionCounter.Should().Be(3);
+        tseSnapshot.SignatureCounter.Should().Be(3);
+    }
+}
+
+// ============================================================================
+// Internal TSE Provider Unit Tests
+// ============================================================================
+
+public class InternalTseProviderTests
+{
+    [Fact]
+    public async Task StartTransactionAsync_ReturnsIncrementingTransactionNumbers()
+    {
+        var provider = new InternalTseProvider();
+
+        var result1 = await provider.StartTransactionAsync("Kassenbeleg", "data1", "client1");
+        var result2 = await provider.StartTransactionAsync("Kassenbeleg", "data2", "client2");
+        var result3 = await provider.StartTransactionAsync("Kassenbeleg", "data3", "client3");
+
+        result1.TransactionNumber.Should().Be(1);
+        result2.TransactionNumber.Should().Be(2);
+        result3.TransactionNumber.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task FinishTransactionAsync_GeneratesValidSignature()
+    {
+        var provider = new InternalTseProvider();
+
+        var start = await provider.StartTransactionAsync("Kassenbeleg", "100.00", null);
+        var finish = await provider.FinishTransactionAsync(
+            start.TransactionNumber, "Kassenbeleg", "100.00");
+
+        finish.Success.Should().BeTrue();
+        finish.Signature.Should().NotBeNullOrEmpty();
+        finish.SignatureAlgorithm.Should().Be("HMAC-SHA256");
+        finish.SignatureCounter.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task FinishTransactionAsync_GeneratesKassenSichVQrCode()
+    {
+        var provider = new InternalTseProvider();
+
+        var start = await provider.StartTransactionAsync("Kassenbeleg", "50.00", null);
+        var finish = await provider.FinishTransactionAsync(
+            start.TransactionNumber, "Kassenbeleg", "50.00");
+
+        // QR code should follow KassenSichV format: V0;TseSerial;SignAlgo;TimeFormat;...
+        finish.QrCodeData.Should().StartWith("V0;");
+        finish.QrCodeData.Should().Contain("HMAC-SHA256");
+        finish.QrCodeData.Should().Contain("utcTime");
+        finish.QrCodeData.Should().Contain(finish.SignatureCounter.ToString());
+    }
+
+    [Fact]
+    public async Task FinishTransactionAsync_WithUnknownTransaction_ReturnsFailed()
+    {
+        var provider = new InternalTseProvider();
+
+        var result = await provider.FinishTransactionAsync(999, "Kassenbeleg", "data");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("not found");
+    }
+
+    [Fact]
+    public async Task UpdateTransactionAsync_UpdatesProcessData()
+    {
+        var provider = new InternalTseProvider();
+
+        var start = await provider.StartTransactionAsync("Kassenbeleg", "initial", null);
+        var updated = await provider.UpdateTransactionAsync(start.TransactionNumber, "updated");
+
+        updated.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SelfTestAsync_ReturnsPassingResult()
+    {
+        var provider = new InternalTseProvider();
+
+        var result = await provider.SelfTestAsync();
+
+        result.Passed.Should().BeTrue();
+        result.ErrorMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetCertificateSerialAsync_ReturnsCertificateSerial()
+    {
+        var provider = new InternalTseProvider();
+
+        var serial = await provider.GetCertificateSerialAsync();
+
+        serial.Should().NotBeNullOrEmpty();
+        serial.Should().StartWith("DVTSE");
+    }
+
+    [Fact]
+    public void IsInternal_ReturnsTrue()
+    {
+        var provider = new InternalTseProvider();
+
+        provider.IsInternal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ProviderType_ReturnsInternalTse()
+    {
+        var provider = new InternalTseProvider();
+
+        provider.ProviderType.Should().Be("InternalTse");
+    }
+
+    [Fact]
+    public async Task MultipleSignatures_HaveUniqueValues()
+    {
+        var provider = new InternalTseProvider();
+
+        var start1 = await provider.StartTransactionAsync("Kassenbeleg", "data1", null);
+        var finish1 = await provider.FinishTransactionAsync(start1.TransactionNumber, "Kassenbeleg", "data1");
+
+        var start2 = await provider.StartTransactionAsync("Kassenbeleg", "data2", null);
+        var finish2 = await provider.FinishTransactionAsync(start2.TransactionNumber, "Kassenbeleg", "data2");
+
+        // Different data should produce different signatures
+        finish1.Signature.Should().NotBe(finish2.Signature);
+        finish1.QrCodeData.Should().NotBe(finish2.QrCodeData);
+    }
+}

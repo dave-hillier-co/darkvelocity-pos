@@ -278,6 +278,84 @@ public class FiscalTransactionGrain : Grain, IFiscalTransactionGrain
         return Task.FromResult(_state.State.QrCodeData ?? string.Empty);
     }
 
+    public async Task<FiscalTransactionSnapshot> CreateAndSignWithTseAsync(CreateAndSignWithTseCommand command)
+    {
+        if (_state.State.FiscalTransactionId != Guid.Empty)
+            throw new InvalidOperationException("Fiscal transaction already exists");
+
+        var key = this.GetPrimaryKeyString();
+        var parts = key.Split(':');
+        var orgId = Guid.Parse(parts[0]);
+        var transactionId = Guid.Parse(parts[2]);
+
+        // Get the TSE grain
+        var tseKey = $"{orgId}:tse:{command.TseId}";
+        var tseGrain = _grainFactory.GetGrain<ITseGrain>(tseKey);
+
+        // Build process data for TSE (KassenSichV format)
+        var processType = command.ProcessType.ToString();
+        var processData = BuildProcessData(command);
+
+        // Start TSE transaction
+        var startResult = await tseGrain.StartTransactionAsync(new StartTseTransactionCommand(
+            LocationId: command.LocationId,
+            ProcessType: processType,
+            ProcessData: processData,
+            ClientId: command.ClientId));
+
+        if (!startResult.Success)
+            throw new InvalidOperationException($"Failed to start TSE transaction: {startResult.ErrorMessage}");
+
+        // Finish TSE transaction and get signature
+        var finishResult = await tseGrain.FinishTransactionAsync(new FinishTseTransactionCommand(
+            TransactionNumber: startResult.TransactionNumber,
+            ProcessType: processType,
+            ProcessData: processData));
+
+        if (!finishResult.Success)
+            throw new InvalidOperationException($"Failed to finish TSE transaction: {finishResult.ErrorMessage}");
+
+        // Create the fiscal transaction state with TSE signature
+        _state.State = new FiscalTransactionState
+        {
+            OrgId = orgId,
+            FiscalTransactionId = transactionId,
+            FiscalDeviceId = command.FiscalDeviceId,
+            LocationId = command.LocationId,
+            TransactionNumber = finishResult.TransactionNumber,
+            TransactionType = command.TransactionType,
+            ProcessType = command.ProcessType,
+            StartTime = finishResult.StartTime,
+            EndTime = finishResult.EndTime,
+            SourceType = command.SourceType,
+            SourceId = command.SourceId,
+            GrossAmount = command.GrossAmount,
+            NetAmounts = new Dictionary<string, decimal>(command.NetAmounts),
+            TaxAmounts = new Dictionary<string, decimal>(command.TaxAmounts),
+            PaymentTypes = new Dictionary<string, decimal>(command.PaymentTypes),
+            Signature = finishResult.Signature,
+            SignatureCounter = finishResult.SignatureCounter,
+            CertificateSerial = finishResult.CertificateSerial,
+            QrCodeData = finishResult.QrCodeData,
+            Status = FiscalTransactionStatus.Signed,
+            Version = 1
+        };
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    private static string BuildProcessData(CreateAndSignWithTseCommand command)
+    {
+        // Build KassenSichV-compliant process data
+        // Format: GrossAmount^NetAmounts^TaxAmounts^PaymentTypes
+        var netAmountsStr = string.Join(",", command.NetAmounts.Select(kv => $"{kv.Key}:{kv.Value:F2}"));
+        var taxAmountsStr = string.Join(",", command.TaxAmounts.Select(kv => $"{kv.Key}:{kv.Value:F2}"));
+        var paymentTypesStr = string.Join(",", command.PaymentTypes.Select(kv => $"{kv.Key}:{kv.Value:F2}"));
+
+        return $"{command.GrossAmount:F2}^{netAmountsStr}^{taxAmountsStr}^{paymentTypesStr}";
+    }
+
     private FiscalTransactionSnapshot CreateSnapshot()
     {
         return new FiscalTransactionSnapshot(
