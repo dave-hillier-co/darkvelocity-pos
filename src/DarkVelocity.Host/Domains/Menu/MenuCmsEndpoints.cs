@@ -1,4 +1,5 @@
 using DarkVelocity.Host.Contracts;
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using Microsoft.AspNetCore.Mvc;
