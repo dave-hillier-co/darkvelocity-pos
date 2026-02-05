@@ -91,7 +91,7 @@ public record InventorySnapshotCommand(
     [property: Id(2)] string SiteName);
 
 [GenerateSerializer]
-public record IngredientSnapshot(
+public record InventoryIngredientSnapshot(
     [property: Id(0)] Guid IngredientId,
     [property: Id(1)] string IngredientName,
     [property: Id(2)] string Sku,
@@ -119,7 +119,7 @@ public record DailyInventorySnapshot(
     [property: Id(6)] int OutOfStockCount,
     [property: Id(7)] int ExpiringSoonCount,
     [property: Id(8)] decimal ExpiringSoonValue,
-    [property: Id(9)] IReadOnlyList<IngredientSnapshot> Ingredients);
+    [property: Id(9)] IReadOnlyList<InventoryIngredientSnapshot> Ingredients);
 
 /// <summary>
 /// Grain for daily inventory snapshot at site level.
@@ -296,7 +296,7 @@ public record DashboardMetrics(
 
     // Top issues
     [property: Id(14)] IReadOnlyList<VarianceBreakdown> TopVariances,
-    [property: Id(15)] IReadOnlyList<IngredientSnapshot> LowStockItems);
+    [property: Id(15)] IReadOnlyList<InventoryIngredientSnapshot> LowStockItems);
 
 /// <summary>
 /// Grain for site dashboard (GM view).
@@ -669,7 +669,7 @@ public interface IProductMixGrain : IGrainWithStringKey
 // Payment Reconciliation Grain
 // ============================================================================
 
-public enum ReconciliationStatus
+public enum PaymentReconciliationStatus
 {
     Pending,
     Matched,
@@ -682,7 +682,7 @@ public enum ReconciliationStatus
 public record PaymentReconciliationSnapshot(
     [property: Id(0)] DateTime BusinessDate,
     [property: Id(1)] Guid SiteId,
-    [property: Id(2)] ReconciliationStatus Status,
+    [property: Id(2)] PaymentReconciliationStatus Status,
     [property: Id(3)] decimal PosTotalCash,
     [property: Id(4)] decimal PosTotalCard,
     [property: Id(5)] decimal PosTotalOther,
@@ -708,7 +708,7 @@ public record ProcessorSettlement(
     [property: Id(4)] decimal NetAmount,
     [property: Id(5)] int TransactionCount,
     [property: Id(6)] DateTime SettlementDate,
-    [property: Id(7)] ReconciliationStatus Status);
+    [property: Id(7)] PaymentReconciliationStatus Status);
 
 [GenerateSerializer]
 public record ReconciliationException(
@@ -717,7 +717,7 @@ public record ReconciliationException(
     [property: Id(2)] string Description,
     [property: Id(3)] decimal Amount,
     [property: Id(4)] string? TransactionReference,
-    [property: Id(5)] ReconciliationStatus Status,
+    [property: Id(5)] PaymentReconciliationStatus Status,
     [property: Id(6)] string? Resolution,
     [property: Id(7)] DateTime? ResolvedAt,
     [property: Id(8)] Guid? ResolvedBy);

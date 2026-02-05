@@ -492,7 +492,7 @@ public sealed class PaymentReconciliationState
     [Id(0)] public Guid OrgId { get; set; }
     [Id(1)] public Guid SiteId { get; set; }
     [Id(2)] public DateTime BusinessDate { get; set; }
-    [Id(3)] public Grains.ReconciliationStatus Status { get; set; }
+    [Id(3)] public Grains.PaymentReconciliationStatus Status { get; set; }
 
     // POS totals by payment method
     [Id(4)] public Dictionary<string, PosPaymentData> PosPayments { get; set; } = [];
@@ -534,7 +534,7 @@ public sealed class ProcessorSettlementData
     [Id(4)] public decimal NetAmount { get; set; }
     [Id(5)] public int TransactionCount { get; set; }
     [Id(6)] public DateTime SettlementDate { get; set; }
-    [Id(7)] public Grains.ReconciliationStatus Status { get; set; }
+    [Id(7)] public Grains.PaymentReconciliationStatus Status { get; set; }
 }
 
 [GenerateSerializer]
@@ -545,7 +545,7 @@ public sealed class ReconciliationExceptionData
     [Id(2)] public string Description { get; set; } = string.Empty;
     [Id(3)] public decimal Amount { get; set; }
     [Id(4)] public string? TransactionReference { get; set; }
-    [Id(5)] public Grains.ReconciliationStatus Status { get; set; }
+    [Id(5)] public Grains.PaymentReconciliationStatus Status { get; set; }
     [Id(6)] public string? Resolution { get; set; }
     [Id(7)] public DateTime? ResolvedAt { get; set; }
     [Id(8)] public Guid? ResolvedBy { get; set; }

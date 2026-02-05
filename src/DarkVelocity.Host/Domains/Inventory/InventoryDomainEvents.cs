@@ -68,9 +68,9 @@ public sealed record DeliveryLineItem
 }
 
 /// <summary>
-/// Stock received via inter-site transfer.
+/// Stock received via inter-site transfer (domain event for Kafka).
 /// </summary>
-public sealed record TransferReceived : DomainEvent
+public sealed record TransferStockReceived : DomainEvent
 {
     public override string EventType => "inventory.transfer.received";
     public override string AggregateType => "Inventory";
@@ -720,9 +720,9 @@ public sealed record TransferReceivedLine
 }
 
 /// <summary>
-/// Transfer cancelled.
+/// Transfer cancelled (domain event for Kafka).
 /// </summary>
-public sealed record TransferCancelled : DomainEvent
+public sealed record TransferCancelledDomainEvent : DomainEvent
 {
     public override string EventType => "inventory.transfer.cancelled";
     public override string AggregateType => "Transfer";

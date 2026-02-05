@@ -774,7 +774,7 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
             OrgId = orgId,
             SiteId = siteId,
             BusinessDate = businessDate,
-            Status = ReconciliationStatus.Pending,
+            Status = PaymentReconciliationStatus.Pending,
             Version = 1
         };
 
@@ -821,7 +821,7 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
             NetAmount = command.NetAmount,
             TransactionCount = command.TransactionCount,
             SettlementDate = command.SettlementDate,
-            Status = ReconciliationStatus.Pending
+            Status = PaymentReconciliationStatus.Pending
         });
 
         _state.State.Version++;
@@ -934,7 +934,7 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
                 ExceptionType = "CashVariance",
                 Description = cashVariance > 0 ? "Cash over" : "Cash short",
                 Amount = cashVariance,
-                Status = ReconciliationStatus.Exception
+                Status = PaymentReconciliationStatus.Exception
             });
         }
 
@@ -947,7 +947,7 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
                 ExceptionType = "CardVariance",
                 Description = $"Card payment variance: POS ${cardTotal:F2}, Processor ${processorTotal:F2}",
                 Amount = cardVariance,
-                Status = ReconciliationStatus.Exception
+                Status = PaymentReconciliationStatus.Exception
             });
         }
 
@@ -959,14 +959,14 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
                 .Sum(p => p.Amount);
 
             settlement.Status = Math.Abs(posForProcessor - settlement.GrossAmount) < 0.01m
-                ? ReconciliationStatus.Matched
-                : ReconciliationStatus.Discrepancy;
+                ? PaymentReconciliationStatus.Matched
+                : PaymentReconciliationStatus.Discrepancy;
         }
 
         // Determine overall status
-        _state.State.Status = _state.State.Exceptions.Any(e => e.Status == ReconciliationStatus.Exception)
-            ? ReconciliationStatus.Discrepancy
-            : ReconciliationStatus.Matched;
+        _state.State.Status = _state.State.Exceptions.Any(e => e.Status == PaymentReconciliationStatus.Exception)
+            ? PaymentReconciliationStatus.Discrepancy
+            : PaymentReconciliationStatus.Matched;
 
         _state.State.Version++;
         await _state.WriteStateAsync();
@@ -982,13 +982,13 @@ public class PaymentReconciliationGrain : Grain, IPaymentReconciliationGrain
             exception.Resolution = command.Resolution;
             exception.ResolvedAt = DateTime.UtcNow;
             exception.ResolvedBy = command.ResolvedBy;
-            exception.Status = ReconciliationStatus.Resolved;
+            exception.Status = PaymentReconciliationStatus.Resolved;
         }
 
         // Update overall status if all exceptions resolved
-        if (_state.State.Exceptions.All(e => e.Status == ReconciliationStatus.Resolved))
+        if (_state.State.Exceptions.All(e => e.Status == PaymentReconciliationStatus.Resolved))
         {
-            _state.State.Status = ReconciliationStatus.Matched;
+            _state.State.Status = PaymentReconciliationStatus.Matched;
         }
 
         _state.State.Version++;

@@ -378,10 +378,10 @@ public class CustomerAccountGrain : JournaledGrain<CustomerAccountState, ICustom
         return Task.FromResult(transactions);
     }
 
-    public Task<AccountSummary> GetSummaryAsync()
+    public Task<CustomerAccountSummary> GetSummaryAsync()
     {
         EnsureExists();
-        return Task.FromResult(new AccountSummary
+        return Task.FromResult(new CustomerAccountSummary
         {
             CustomerId = State.CustomerId,
             Status = State.Status,

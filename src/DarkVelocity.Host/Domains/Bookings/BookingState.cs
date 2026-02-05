@@ -26,7 +26,7 @@ public enum BookingSource
     Other
 }
 
-public enum VipStatus
+public enum BookingVipTier
 {
     None,
     Regular,
@@ -51,7 +51,7 @@ public record GuestInfo
     [Id(1)] public string? Phone { get; init; }
     [Id(2)] public string? Email { get; init; }
     [Id(3)] public string? Notes { get; init; }
-    [Id(4)] public VipStatus VipStatus { get; init; }
+    [Id(4)] public BookingVipTier VipTier { get; init; }
     [Id(5)] public int VisitCount { get; init; }
 }
 

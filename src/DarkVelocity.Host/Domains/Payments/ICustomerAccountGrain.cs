@@ -53,7 +53,7 @@ public record PaymentAppliedResult(
     [property: Id(2)] decimal PaymentAmount);
 
 [GenerateSerializer]
-public record AccountSummary
+public record CustomerAccountSummary
 {
     [Id(0)] public Guid CustomerId { get; init; }
     [Id(1)] public CustomerAccountStatus Status { get; init; }
@@ -128,7 +128,7 @@ public interface ICustomerAccountGrain : IGrainWithStringKey
     /// <summary>
     /// Gets account summary.
     /// </summary>
-    Task<AccountSummary> GetSummaryAsync();
+    Task<CustomerAccountSummary> GetSummaryAsync();
 
     /// <summary>
     /// Gets current balance.
