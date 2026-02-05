@@ -22,6 +22,9 @@ public class StripeProcessorGrainTests
     // Authorization Tests
     // =========================================================================
 
+    // Given: a valid Stripe payment authorization request with automatic capture
+    // When: the payment is authorized through the Stripe processor
+    // Then: the authorization succeeds and returns a Stripe payment intent ID
     [Fact]
     public async Task AuthorizeAsync_WithValidRequest_ShouldSucceed()
     {
@@ -48,6 +51,9 @@ public class StripeProcessorGrainTests
         result.TransactionId.Should().StartWith("pi_");
     }
 
+    // Given: a Stripe payment authorization request with manual capture disabled
+    // When: the payment is authorized through the Stripe processor
+    // Then: the payment status is set to authorized with the full amount held but not yet captured
     [Fact]
     public async Task AuthorizeAsync_WithManualCapture_ShouldSetStatusToAuthorized()
     {
@@ -77,6 +83,9 @@ public class StripeProcessorGrainTests
         state.CapturedAmount.Should().Be(0);
     }
 
+    // Given: a Stripe payment authorization request with automatic capture enabled
+    // When: the payment is authorized through the Stripe processor
+    // Then: the payment is immediately captured and the full amount is settled
     [Fact]
     public async Task AuthorizeAsync_WithAutomaticCapture_ShouldSetStatusToCaptured()
     {
@@ -109,6 +118,9 @@ public class StripeProcessorGrainTests
     // Capture Tests
     // =========================================================================
 
+    // Given: a Stripe payment that has been authorized but not yet captured
+    // When: the full authorized amount is captured
+    // Then: the capture succeeds and the payment status transitions to captured
     [Fact]
     public async Task CaptureAsync_WithAuthorizedPayment_ShouldSucceed()
     {
@@ -140,6 +152,9 @@ public class StripeProcessorGrainTests
         state.Status.Should().Be("captured");
     }
 
+    // Given: a Stripe payment authorized for a larger amount
+    // When: a partial capture is requested for less than the authorized amount
+    // Then: the partial capture succeeds with only the requested amount settled
     [Fact]
     public async Task CaptureAsync_WithPartialAmount_ShouldSucceed()
     {
@@ -165,6 +180,9 @@ public class StripeProcessorGrainTests
         captureResult.CapturedAmount.Should().Be(7500);
     }
 
+    // Given: a Stripe payment authorized for a specific amount
+    // When: a capture is attempted for more than the authorized amount
+    // Then: the capture fails with an amount_too_large error
     [Fact]
     public async Task CaptureAsync_ExceedsAuthorizedAmount_ShouldFail()
     {

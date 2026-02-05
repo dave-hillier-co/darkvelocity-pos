@@ -20,6 +20,9 @@ public class SupplierGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ISupplierGrain>(key);
     }
 
+    // Given: no supplier record exists
+    // When: a new supplier is registered with contact details, payment terms, and lead time
+    // Then: the supplier is created with all provided details and defaults to active with no purchases
     [Fact]
     public async Task CreateAsync_ShouldCreateSupplier()
     {
@@ -54,6 +57,9 @@ public class SupplierGrainTests
         result.OnTimeDeliveryPercent.Should().Be(100);
     }
 
+    // Given: an existing meat supplier with 14-day payment terms
+    // When: the supplier name, contact, and payment terms are updated
+    // Then: only the changed fields are updated while unchanged fields retain their original values
     [Fact]
     public async Task UpdateAsync_ShouldUpdateSupplier()
     {
@@ -91,6 +97,9 @@ public class SupplierGrainTests
         result.LeadTimeDays.Should().Be(1); // Unchanged
     }
 
+    // Given: a dairy farm supplier with no ingredients in their catalog
+    // When: whole milk is added to the supplier's ingredient catalog with pricing and SKU
+    // Then: the supplier catalog contains the milk entry with correct price and supplier SKU
     [Fact]
     public async Task AddIngredientAsync_ShouldAddIngredientToCatalog()
     {
@@ -129,6 +138,9 @@ public class SupplierGrainTests
         snapshot.Ingredients[0].SupplierSku.Should().Be("WM-GAL-01");
     }
 
+    // Given: a bakery supplies vendor with an empty catalog
+    // When: flour, sugar, and butter are each added to the catalog
+    // Then: the supplier catalog contains all three ingredients
     [Fact]
     public async Task AddIngredientAsync_MultipleIngredients_ShouldAddAll()
     {
@@ -160,6 +172,9 @@ public class SupplierGrainTests
         snapshot.Ingredients.Should().HaveCount(3);
     }
 
+    // Given: a seafood supplier with salmon fillet already in their catalog at $45/lb
+    // When: the same salmon fillet ingredient is re-added with a new price and SKU
+    // Then: the catalog still has one entry but reflects the updated price, SKU, and minimum order
     [Fact]
     public async Task AddIngredientAsync_ExistingIngredient_ShouldUpdateDetails()
     {
@@ -194,6 +209,9 @@ public class SupplierGrainTests
         snapshot.Ingredients[0].MinOrderQuantity.Should().Be(5);
     }
 
+    // Given: a beverage distributor with cola syrup and orange juice in their catalog
+    // When: cola syrup is removed from the supplier catalog
+    // Then: only orange juice remains in the catalog
     [Fact]
     public async Task RemoveIngredientAsync_ShouldRemoveFromCatalog()
     {

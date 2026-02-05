@@ -16,6 +16,9 @@ public class EmployeeGrainTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a new hire with employee number EMP-001 assigned to a site
+    // When: the employee record is created
+    // Then: the employee is active with correct name, number, and site access
     [Fact]
     public async Task CreateEmployee_SetsCorrectState()
     {
@@ -49,6 +52,9 @@ public class EmployeeGrainTests
         Assert.Contains(siteId, state.AllowedSiteIds);
     }
 
+    // Given: an existing employee named Jane Doe
+    // When: her name is changed to Janet and her email is updated
+    // Then: the employee record reflects the new name and email with an incremented version
     [Fact]
     public async Task UpdateEmployee_UpdatesNameAndEmail()
     {
@@ -74,6 +80,9 @@ public class EmployeeGrainTests
         Assert.Equal("janet@example.com", state.Email);
     }
 
+    // Given: an active employee assigned to a site
+    // When: the employee clocks in for their shift
+    // Then: a time entry is created and the employee is marked as clocked in
     [Fact]
     public async Task ClockIn_RecordsTimeEntry()
     {

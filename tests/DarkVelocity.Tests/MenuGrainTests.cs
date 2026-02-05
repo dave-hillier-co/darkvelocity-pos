@@ -20,6 +20,9 @@ public class MenuCategoryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IMenuCategoryGrain>(key);
     }
 
+    // Given: no existing menu category
+    // When: a new "Starters" category is created with a display order, color, and description
+    // Then: the category is active with the correct name, description, display order, color, and zero items
     [Fact]
     public async Task CreateAsync_ShouldCreateCategory()
     {
@@ -47,6 +50,9 @@ public class MenuCategoryGrainTests
         result.ItemCount.Should().Be(0);
     }
 
+    // Given: an existing "Starters" menu category
+    // When: the category name, description, display order, and color are updated
+    // Then: the category reflects the new name "Appetizers", updated description, reordered position, and new color
     [Fact]
     public async Task UpdateAsync_ShouldUpdateCategory()
     {
@@ -76,6 +82,9 @@ public class MenuCategoryGrainTests
         result.Color.Should().Be("#00FF00");
     }
 
+    // Given: an active "Seasonal" menu category
+    // When: the category is deactivated
+    // Then: the category is marked as inactive
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateCategory()
     {
@@ -98,6 +107,9 @@ public class MenuCategoryGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a "Mains" category with zero items
+    // When: three menu items are added to the category
+    // Then: the category item count is 3
     [Fact]
     public async Task IncrementItemCountAsync_ShouldIncreaseCount()
     {

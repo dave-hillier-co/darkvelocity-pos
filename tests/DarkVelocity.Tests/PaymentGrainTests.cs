@@ -24,6 +24,9 @@ public class PaymentGrainTests
         return grain;
     }
 
+    // Given: an order with a line item totaling $100
+    // When: a cash payment of $100 is initiated against the order
+    // Then: the payment is created with Initiated status and the correct amount
     [Fact]
     public async Task InitiateAsync_ShouldCreatePayment()
     {
@@ -51,6 +54,9 @@ public class PaymentGrainTests
         state.Amount.Should().Be(100m);
     }
 
+    // Given: an initiated cash payment of $100
+    // When: the cashier completes the payment with $120 tendered and a $5 tip
+    // Then: the payment is completed with a total of $105 and $15 change given
     [Fact]
     public async Task CompleteCashAsync_ShouldCompletePayment()
     {
@@ -76,6 +82,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Completed);
     }
 
+    // Given: an initiated credit card payment of $100
+    // When: the card payment is processed with a $10 tip via Stripe
+    // Then: the payment is completed with a total of $110 and card details are recorded
     [Fact]
     public async Task CompleteCardAsync_ShouldCompletePayment()
     {
@@ -109,6 +118,9 @@ public class PaymentGrainTests
         state.CardInfo!.MaskedNumber.Should().Be("****4242");
     }
 
+    // Given: a completed cash payment of $100
+    // When: a full refund of $100 is issued for customer dissatisfaction
+    // Then: the payment is fully refunded with a zero remaining balance
     [Fact]
     public async Task RefundAsync_ShouldRefundPayment()
     {
@@ -136,6 +148,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Refunded);
     }
 
+    // Given: a completed cash payment of $100
+    // When: a partial refund of $30 is issued
+    // Then: $30 is refunded and $70 remains, with the payment marked as partially refunded
     [Fact]
     public async Task PartialRefundAsync_ShouldPartiallyRefund()
     {
@@ -163,6 +178,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.PartiallyRefunded);
     }
 
+    // Given: an initiated cash payment of $100
+    // When: the payment is voided because the customer cancelled
+    // Then: the payment status is Voided and the void reason is recorded
     [Fact]
     public async Task VoidAsync_ShouldVoidPayment()
     {
@@ -186,6 +204,9 @@ public class PaymentGrainTests
         state.VoidReason.Should().Be("Customer cancelled");
     }
 
+    // Given: a completed cash payment of $100 with a $10 tip
+    // When: the tip is adjusted to $15
+    // Then: the tip amount is updated to $15 and the total becomes $115
     [Fact]
     public async Task AdjustTipAsync_ShouldAdjustTip()
     {
@@ -214,6 +235,9 @@ public class PaymentGrainTests
     // Card Authorization Flow Tests
     // =========================================================================
 
+    // Given: an initiated credit card payment of $150
+    // When: the card is authorized, the authorization is recorded, and the payment is captured
+    // Then: the payment progresses through Authorizing, Authorized, and Captured statuses
     [Fact]
     public async Task Payment_CardAuthorization_FullFlow_ShouldSucceed()
     {
