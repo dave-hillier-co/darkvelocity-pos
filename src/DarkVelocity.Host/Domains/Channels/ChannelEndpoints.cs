@@ -404,6 +404,112 @@ public static class ChannelEndpoints
         .WithName("TranslateStatus")
         .WithSummary("Translate an external status code to internal status");
 
+        // ============================================================================
+        // Menu Sync Endpoints
+        // ============================================================================
+
+        channelGroup.MapPost("/{channelId}/menu-sync", async (
+            Guid orgId,
+            Guid channelId,
+            [FromBody] TriggerMenuSyncRequest? request,
+            IGrainFactory grainFactory) =>
+        {
+            var channelGrain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
+            var channelSnapshot = await channelGrain.GetSnapshotAsync();
+
+            if (channelSnapshot.ChannelId == Guid.Empty)
+                return Results.NotFound(Hal.Error("not_found", "Channel not found"));
+
+            // Create a new menu sync
+            var syncId = Guid.NewGuid();
+            var syncGrain = grainFactory.GetGrain<IMenuSyncGrain>(GrainKeys.MenuSync(orgId, syncId));
+
+            var command = new StartMenuSyncCommand(channelId, request?.LocationId);
+            var snapshot = await syncGrain.StartAsync(command);
+
+            // Record sync on channel
+            await channelGrain.RecordSyncAsync();
+
+            return Results.Accepted($"/api/orgs/{orgId}/channels/{channelId}/menu-sync/{syncId}", Hal.Resource(snapshot, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}/menu-sync/{syncId}" },
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+            }));
+        })
+        .WithName("TriggerMenuSync")
+        .WithSummary("Trigger a menu sync to the channel");
+
+        channelGroup.MapGet("/{channelId}/menu-sync/{syncId}", async (
+            Guid orgId,
+            Guid channelId,
+            Guid syncId,
+            IGrainFactory grainFactory) =>
+        {
+            var syncGrain = grainFactory.GetGrain<IMenuSyncGrain>(GrainKeys.MenuSync(orgId, syncId));
+
+            try
+            {
+                var snapshot = await syncGrain.GetSnapshotAsync();
+
+                return Results.Ok(Hal.Resource(snapshot, new Dictionary<string, object>
+                {
+                    ["self"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}/menu-sync/{syncId}" },
+                    ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.NotFound(Hal.Error("not_found", "Menu sync not found"));
+            }
+        })
+        .WithName("GetMenuSyncStatus")
+        .WithSummary("Get the status of a menu sync operation");
+
+        // ============================================================================
+        // Store Status Endpoints
+        // ============================================================================
+
+        channelGroup.MapPost("/{channelId}/locations/{locationId}/busy", async (
+            Guid orgId,
+            Guid channelId,
+            Guid locationId,
+            [FromBody] SetBusyModeRequest request,
+            IGrainFactory grainFactory) =>
+        {
+            var channelGrain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
+            var channelSnapshot = await channelGrain.GetSnapshotAsync();
+
+            if (channelSnapshot.ChannelId == Guid.Empty)
+                return Results.NotFound(Hal.Error("not_found", "Channel not found"));
+
+            // Find the location mapping
+            var locationMapping = channelSnapshot.Locations.FirstOrDefault(l => l.LocationId == locationId);
+            if (locationMapping == null)
+                return Results.NotFound(Hal.Error("not_found", "Location not mapped to this channel"));
+
+            // Note: In a real implementation, this would call the platform adapter
+            // to update the store's busy mode
+
+            return Results.Ok(new
+            {
+                channelId,
+                locationId,
+                busyMode = request.IsBusy,
+                additionalPrepTime = request.AdditionalPrepMinutes,
+                effectiveUntil = request.Duration.HasValue ? DateTime.UtcNow.Add(request.Duration.Value) : (DateTime?)null
+            });
+        })
+        .WithName("SetChannelLocationBusyMode")
+        .WithSummary("Set busy mode for a location on this channel");
+
         return app;
     }
 }
+
+// ============================================================================
+// Request DTOs
+// ============================================================================
+
+public record TriggerMenuSyncRequest(Guid? LocationId);
+
+public record SetBusyModeRequest(bool IsBusy, int? AdditionalPrepMinutes, TimeSpan? Duration);

@@ -274,6 +274,159 @@ public class CustomerGrain : JournaledGrain<CustomerState, ICustomerEvent>, ICus
                 state.Contact = new ContactInfo();
                 state.DateOfBirth = null;
                 state.Status = CustomerStatus.Inactive;
+                state.IsAnonymized = true;
+                state.AnonymizedAt = e.OccurredAt;
+                state.AnonymizedHash = e.AnonymizedHash;
+                // Clear PII but retain aggregate stats if requested
+                if (!e.RetainAggregateStats)
+                {
+                    state.Notes.Clear();
+                    state.Preferences = new CustomerPreferences();
+                }
+                break;
+
+            // RFM Segmentation Events
+            case CustomerRfmScoreCalculated e:
+                state.RfmScore = new RfmScore
+                {
+                    RecencyScore = e.RecencyScore,
+                    FrequencyScore = e.FrequencyScore,
+                    MonetaryScore = e.MonetaryScore,
+                    CalculatedAt = e.OccurredAt,
+                    DaysSinceLastVisit = e.DaysSinceLastVisit,
+                    VisitCount = e.VisitCount,
+                    TotalSpend = e.TotalSpend
+                };
+                break;
+
+            case CustomerSegmentChanged e:
+                var previousSegment = state.Stats.Segment;
+                if (Enum.TryParse<CustomerSegment>(e.NewSegment, out var newSegment))
+                {
+                    state.Stats = state.Stats with { Segment = newSegment };
+                    state.SegmentHistory.Add(new SegmentChange
+                    {
+                        PreviousSegment = previousSegment,
+                        NewSegment = newSegment,
+                        RfmScore = state.RfmScore,
+                        ChangedAt = e.OccurredAt,
+                        Reason = e.Reason
+                    });
+                    // Keep only last 20 segment changes
+                    if (state.SegmentHistory.Count > 20)
+                        state.SegmentHistory.RemoveAt(0);
+                }
+                break;
+
+            // GDPR Consent Events
+            case CustomerConsentUpdated e:
+                var consent = state.Consent;
+                consent = e.ConsentType switch
+                {
+                    "MarketingEmail" => consent with { MarketingEmail = e.NewValue, MarketingEmailConsentedAt = e.NewValue ? e.OccurredAt : consent.MarketingEmailConsentedAt },
+                    "Sms" => consent with { Sms = e.NewValue, SmsConsentedAt = e.NewValue ? e.OccurredAt : consent.SmsConsentedAt },
+                    "DataRetention" => consent with { DataRetention = e.NewValue, DataRetentionConsentedAt = e.NewValue ? e.OccurredAt : consent.DataRetentionConsentedAt },
+                    "Profiling" => consent with { Profiling = e.NewValue, ProfilingConsentedAt = e.NewValue ? e.OccurredAt : consent.ProfilingConsentedAt },
+                    _ => consent
+                };
+                consent = consent with { ConsentVersion = e.ConsentVersion ?? consent.ConsentVersion, LastUpdated = e.OccurredAt };
+                state.Consent = consent;
+                state.ConsentHistory.Add(new ConsentChange
+                {
+                    ConsentType = e.ConsentType,
+                    PreviousValue = e.PreviousValue,
+                    NewValue = e.NewValue,
+                    ChangedAt = e.OccurredAt,
+                    IpAddress = e.IpAddress,
+                    UserAgent = e.UserAgent
+                });
+                // Keep only last 50 consent changes
+                if (state.ConsentHistory.Count > 50)
+                    state.ConsentHistory.RemoveAt(0);
+                break;
+
+            // VIP Events
+            case CustomerVipStatusGranted e:
+                state.VipStatus = new VipStatus
+                {
+                    IsVip = true,
+                    VipSince = e.OccurredAt,
+                    VipReason = e.Reason,
+                    SpendAtVipGrant = e.SpendAtGrant,
+                    VisitsAtVipGrant = e.VisitsAtGrant,
+                    ManuallyAssigned = e.ManuallyAssigned
+                };
+                state.Tags.TryAddTag("VIP");
+                break;
+
+            case CustomerVipStatusRevoked e:
+                state.VipStatus = new VipStatus
+                {
+                    IsVip = false,
+                    VipSince = state.VipStatus.VipSince,
+                    VipReason = e.Reason
+                };
+                state.Tags.Remove("VIP");
+                break;
+
+            // Birthday Events
+            case CustomerBirthdaySet e:
+                state.DateOfBirth = e.Birthday;
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case CustomerBirthdayRewardIssued e:
+                var birthdayReward = new BirthdayRewardStatus
+                {
+                    CurrentRewardId = e.RewardId,
+                    IssuedAt = e.OccurredAt,
+                    Year = e.Year
+                };
+                state.CurrentBirthdayReward = birthdayReward;
+                // Also issue as a regular reward
+                state.Rewards.Add(new CustomerReward
+                {
+                    Id = e.RewardId,
+                    Name = e.RewardName,
+                    Status = RewardStatus.Available,
+                    IssuedAt = e.OccurredAt,
+                    ExpiresAt = e.ExpiresAt?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MaxValue
+                });
+                break;
+
+            case CustomerBirthdayRewardRedeemed e:
+                if (state.CurrentBirthdayReward != null)
+                {
+                    state.CurrentBirthdayReward = state.CurrentBirthdayReward with { RedeemedAt = e.OccurredAt };
+                    state.BirthdayRewardHistory.Add(state.CurrentBirthdayReward);
+                }
+                // Mark the reward as redeemed
+                var birthdayRewardIdx = state.Rewards.FindIndex(r => r.Id == e.RewardId);
+                if (birthdayRewardIdx >= 0)
+                {
+                    state.Rewards[birthdayRewardIdx] = state.Rewards[birthdayRewardIdx] with
+                    {
+                        Status = RewardStatus.Redeemed,
+                        RedeemedAt = e.OccurredAt,
+                        RedemptionOrderId = e.OrderId
+                    };
+                }
+                break;
+
+            // Enhanced Referral Events
+            case CustomerReferralRewardAwarded e:
+                state.Referral = state.Referral with
+                {
+                    SuccessfulReferrals = e.TotalReferrals,
+                    TotalPointsEarnedFromReferrals = state.Referral.TotalPointsEarnedFromReferrals + e.PointsAwarded,
+                    ReferredCustomers = state.Referral.ReferredCustomers.Append(e.ReferredCustomerId).ToList()
+                };
+                // Also update legacy fields for compatibility
+                state.SuccessfulReferrals = e.TotalReferrals;
+                break;
+
+            case CustomerReferralCapReached e:
+                // Cap reached - no more referral rewards
                 break;
         }
     }
@@ -909,12 +1062,480 @@ public class CustomerGrain : JournaledGrain<CustomerState, ICustomerEvent>, ICus
     public async Task AnonymizeAsync()
     {
         EnsureExists();
+
+        // Generate a hash of the original email for reference (if needed for legal/audit purposes)
+        var anonymizedHash = State.Contact.Email != null
+            ? Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(State.Contact.Email + State.Id.ToString())))
+            : null;
+
         RaiseEvent(new CustomerAnonymized
         {
             CustomerId = State.Id,
+            OccurredAt = DateTime.UtcNow,
+            AnonymizedHash = anonymizedHash,
+            RetainAggregateStats = true // Keep aggregate stats for business reporting
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task<bool> RequestDataDeletionAsync(string? requestedBy = null, string? reason = null)
+    {
+        EnsureExists();
+
+        RaiseEvent(new CustomerDataDeletionRequested
+        {
+            CustomerId = State.Id,
+            RequestedBy = requestedBy,
+            Reason = reason,
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+
+        // Then anonymize the data
+        await AnonymizeAsync();
+        return true;
+    }
+
+    // ==================== GDPR Consent Management ====================
+
+    public async Task UpdateConsentAsync(UpdateConsentCommand command)
+    {
+        EnsureExists();
+
+        var now = DateTime.UtcNow;
+
+        if (command.MarketingEmail.HasValue && command.MarketingEmail != State.Consent.MarketingEmail)
+        {
+            RaiseEvent(new CustomerConsentUpdated
+            {
+                CustomerId = State.Id,
+                ConsentType = "MarketingEmail",
+                PreviousValue = State.Consent.MarketingEmail,
+                NewValue = command.MarketingEmail.Value,
+                ConsentVersion = command.ConsentVersion,
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                OccurredAt = now
+            });
+        }
+
+        if (command.Sms.HasValue && command.Sms != State.Consent.Sms)
+        {
+            RaiseEvent(new CustomerConsentUpdated
+            {
+                CustomerId = State.Id,
+                ConsentType = "Sms",
+                PreviousValue = State.Consent.Sms,
+                NewValue = command.Sms.Value,
+                ConsentVersion = command.ConsentVersion,
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                OccurredAt = now
+            });
+        }
+
+        if (command.DataRetention.HasValue && command.DataRetention != State.Consent.DataRetention)
+        {
+            RaiseEvent(new CustomerConsentUpdated
+            {
+                CustomerId = State.Id,
+                ConsentType = "DataRetention",
+                PreviousValue = State.Consent.DataRetention,
+                NewValue = command.DataRetention.Value,
+                ConsentVersion = command.ConsentVersion,
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                OccurredAt = now
+            });
+        }
+
+        if (command.Profiling.HasValue && command.Profiling != State.Consent.Profiling)
+        {
+            RaiseEvent(new CustomerConsentUpdated
+            {
+                CustomerId = State.Id,
+                ConsentType = "Profiling",
+                PreviousValue = State.Consent.Profiling,
+                NewValue = command.Profiling.Value,
+                ConsentVersion = command.ConsentVersion,
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                OccurredAt = now
+            });
+        }
+
+        await ConfirmEvents();
+    }
+
+    public Task<ConsentStatus> GetConsentStatusAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.Consent);
+    }
+
+    public Task<IReadOnlyList<ConsentChange>> GetConsentHistoryAsync()
+    {
+        EnsureExists();
+        return Task.FromResult<IReadOnlyList<ConsentChange>>(State.ConsentHistory);
+    }
+
+    // ==================== RFM Segmentation ====================
+
+    public async Task<RfmScore> CalculateRfmScoreAsync(SegmentationThresholds? thresholds = null)
+    {
+        EnsureExists();
+
+        thresholds ??= new SegmentationThresholds();
+
+        var daysSinceLastVisit = State.LastVisitAt.HasValue
+            ? (int)(DateTime.UtcNow - State.LastVisitAt.Value).TotalDays
+            : 365; // Default to 1 year if never visited
+
+        var visitCount = State.Stats.TotalVisits;
+        var totalSpend = State.Stats.TotalSpend;
+
+        // Calculate Recency Score (5 = best, 1 = worst)
+        var recencyScore = daysSinceLastVisit <= thresholds.RecencyDaysExcellent ? 5 :
+                          daysSinceLastVisit <= thresholds.RecencyDaysGood ? 4 :
+                          daysSinceLastVisit <= thresholds.RecencyDaysFair ? 3 :
+                          daysSinceLastVisit <= thresholds.RecencyDaysPoor ? 2 : 1;
+
+        // Calculate Frequency Score
+        var frequencyScore = visitCount >= thresholds.FrequencyCountExcellent ? 5 :
+                            visitCount >= thresholds.FrequencyCountGood ? 4 :
+                            visitCount >= thresholds.FrequencyCountFair ? 3 :
+                            visitCount >= thresholds.FrequencyCountPoor ? 2 : 1;
+
+        // Calculate Monetary Score
+        var monetaryScore = totalSpend >= thresholds.MonetaryValueExcellent ? 5 :
+                           totalSpend >= thresholds.MonetaryValueGood ? 4 :
+                           totalSpend >= thresholds.MonetaryValueFair ? 3 :
+                           totalSpend >= thresholds.MonetaryValuePoor ? 2 : 1;
+
+        RaiseEvent(new CustomerRfmScoreCalculated
+        {
+            CustomerId = State.Id,
+            RecencyScore = recencyScore,
+            FrequencyScore = frequencyScore,
+            MonetaryScore = monetaryScore,
+            DaysSinceLastVisit = daysSinceLastVisit,
+            VisitCount = visitCount,
+            TotalSpend = totalSpend,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
+        return State.RfmScore!;
+    }
+
+    public Task<CustomerSegment> GetSegmentAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.Stats.Segment);
+    }
+
+    public Task<IReadOnlyList<SegmentChange>> GetSegmentHistoryAsync()
+    {
+        EnsureExists();
+        return Task.FromResult<IReadOnlyList<SegmentChange>>(State.SegmentHistory);
+    }
+
+    public async Task RecalculateSegmentAsync(SegmentationThresholds? thresholds = null)
+    {
+        EnsureExists();
+
+        // First calculate RFM score
+        var rfmScore = await CalculateRfmScoreAsync(thresholds);
+
+        // Determine segment based on RFM scores
+        var newSegment = DetermineSegment(rfmScore);
+
+        if (newSegment != State.Stats.Segment)
+        {
+            RaiseEvent(new CustomerSegmentChanged
+            {
+                CustomerId = State.Id,
+                PreviousSegment = State.Stats.Segment.ToString(),
+                NewSegment = newSegment.ToString(),
+                RecencyScore = rfmScore.RecencyScore,
+                FrequencyScore = rfmScore.FrequencyScore,
+                MonetaryScore = rfmScore.MonetaryScore,
+                Reason = "RFM recalculation",
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
+        }
+    }
+
+    private CustomerSegment DetermineSegment(RfmScore rfm)
+    {
+        var r = rfm.RecencyScore;
+        var f = rfm.FrequencyScore;
+        var m = rfm.MonetaryScore;
+        var combined = rfm.CombinedScore;
+
+        // Champions: High R, F, M (all 4-5)
+        if (r >= 4 && f >= 4 && m >= 4)
+            return CustomerSegment.Champion;
+
+        // Loyal: Good frequency and monetary (F >= 4 or M >= 4), decent recency
+        if (r >= 3 && (f >= 4 || m >= 4))
+            return CustomerSegment.Loyal;
+
+        // Potential Loyal: Recent customers with good frequency or monetary
+        if (r >= 4 && (f >= 2 && f <= 3) && m >= 3)
+            return CustomerSegment.PotentialLoyal;
+
+        // New: Recent but low frequency (based on visit count)
+        if (r >= 4 && f <= 2 && rfm.VisitCount <= 2)
+            return CustomerSegment.New;
+
+        // At Risk: Were good customers but haven't visited recently
+        if (r <= 2 && (f >= 3 || m >= 3))
+            return CustomerSegment.AtRisk;
+
+        // Hibernating: Low recency, low frequency, but had some monetary value
+        if (r <= 2 && f <= 2 && m >= 2)
+            return CustomerSegment.Hibernating;
+
+        // Lost: Very low across the board
+        if (combined <= 5)
+            return CustomerSegment.Lost;
+
+        // Default to Regular for everyone else
+        return CustomerSegment.Regular;
+    }
+
+    // ==================== VIP Detection ====================
+
+    public Task<bool> IsVipAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.VipStatus.IsVip);
+    }
+
+    public async Task GrantVipStatusAsync(GrantVipStatusCommand command)
+    {
+        EnsureExists();
+
+        if (State.VipStatus.IsVip)
+            throw new InvalidOperationException("Customer is already VIP");
+
+        RaiseEvent(new CustomerVipStatusGranted
+        {
+            CustomerId = State.Id,
+            Reason = command.Reason,
+            SpendAtGrant = State.Stats.TotalSpend,
+            VisitsAtGrant = State.Stats.TotalVisits,
+            ManuallyAssigned = true,
+            GrantedBy = command.GrantedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task RevokeVipStatusAsync(RevokeVipStatusCommand command)
+    {
+        EnsureExists();
+
+        if (!State.VipStatus.IsVip)
+            throw new InvalidOperationException("Customer is not VIP");
+
+        RaiseEvent(new CustomerVipStatusRevoked
+        {
+            CustomerId = State.Id,
+            Reason = command.Reason,
+            RevokedBy = command.RevokedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task CheckAndUpdateVipStatusAsync(VipThresholds? thresholds = null)
+    {
+        EnsureExists();
+
+        if (State.VipStatus.IsVip && State.VipStatus.ManuallyAssigned)
+            return; // Don't auto-revoke manually assigned VIP
+
+        thresholds ??= new VipThresholds();
+
+        var meetsSpendThreshold = !thresholds.MinimumSpend.HasValue || State.Stats.TotalSpend >= thresholds.MinimumSpend.Value;
+        var meetsVisitThreshold = !thresholds.MinimumVisits.HasValue || State.Stats.TotalVisits >= thresholds.MinimumVisits.Value;
+
+        var shouldBeVip = thresholds.RequireBoth
+            ? meetsSpendThreshold && meetsVisitThreshold
+            : meetsSpendThreshold || meetsVisitThreshold;
+
+        if (shouldBeVip && !State.VipStatus.IsVip)
+        {
+            var reason = new List<string>();
+            if (meetsSpendThreshold && thresholds.MinimumSpend.HasValue)
+                reason.Add($"Spend >= {thresholds.MinimumSpend.Value:C}");
+            if (meetsVisitThreshold && thresholds.MinimumVisits.HasValue)
+                reason.Add($"Visits >= {thresholds.MinimumVisits.Value}");
+
+            RaiseEvent(new CustomerVipStatusGranted
+            {
+                CustomerId = State.Id,
+                Reason = string.Join(", ", reason),
+                SpendAtGrant = State.Stats.TotalSpend,
+                VisitsAtGrant = State.Stats.TotalVisits,
+                ManuallyAssigned = false,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
+        }
+    }
+
+    public Task<VipStatus> GetVipStatusAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.VipStatus);
+    }
+
+    // ==================== Birthday Rewards ====================
+
+    public async Task SetBirthdayAsync(SetBirthdayCommand command)
+    {
+        EnsureExists();
+
+        RaiseEvent(new CustomerBirthdaySet
+        {
+            CustomerId = State.Id,
+            Birthday = command.Birthday,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task<RewardResult> IssueBirthdayRewardAsync(IssueBirthdayRewardCommand command)
+    {
+        EnsureExists();
+
+        var currentYear = DateTime.UtcNow.Year;
+
+        // Check if already issued this year
+        if (State.CurrentBirthdayReward?.Year == currentYear)
+            throw new InvalidOperationException("Birthday reward already issued this year");
+
+        if (!State.DateOfBirth.HasValue)
+            throw new InvalidOperationException("Customer birthday not set");
+
+        var rewardId = Guid.NewGuid();
+        var expiresAt = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(command.ValidDays ?? 30));
+
+        RaiseEvent(new CustomerBirthdayRewardIssued
+        {
+            CustomerId = State.Id,
+            RewardId = rewardId,
+            RewardName = command.RewardName,
+            Year = currentYear,
+            ExpiresAt = expiresAt,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
+        return new RewardResult(rewardId, expiresAt.ToDateTime(TimeOnly.MinValue));
+    }
+
+    public Task<bool> HasBirthdayRewardThisYearAsync()
+    {
+        EnsureExists();
+        var currentYear = DateTime.UtcNow.Year;
+        return Task.FromResult(State.CurrentBirthdayReward?.Year == currentYear);
+    }
+
+    public Task<BirthdayRewardStatus?> GetCurrentBirthdayRewardAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.CurrentBirthdayReward);
+    }
+
+    // ==================== Enhanced Referral Tracking ====================
+
+    public async Task<string> GenerateReferralCodeAsync(GenerateReferralCodeCommand? command = null)
+    {
+        EnsureExists();
+
+        if (!string.IsNullOrEmpty(State.Referral.ReferralCode))
+            return State.Referral.ReferralCode;
+
+        var prefix = command?.Prefix ?? State.FirstName?.ToUpperInvariant().Replace(" ", "")[..Math.Min(4, State.FirstName.Length)] ?? "REF";
+        var code = $"{prefix}{Guid.NewGuid().ToString()[..8].ToUpperInvariant()}";
+
+        RaiseEvent(new CustomerReferralCodeGenerated
+        {
+            CustomerId = State.Id,
+            ReferralCode = code,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
+        // Update legacy field
+        State.ReferralCode = code;
+        State.Referral = State.Referral with { ReferralCode = code };
+
+        return code;
+    }
+
+    public async Task<ReferralResult> CompleteReferralAsync(CompleteReferralCommand command)
+    {
+        EnsureExists();
+
+        var totalReferrals = State.Referral.SuccessfulReferrals + 1;
+        var capReached = totalReferrals >= State.Referral.ReferralRewardsCap;
+
+        if (capReached && State.Referral.SuccessfulReferrals >= State.Referral.ReferralRewardsCap)
+        {
+            // Already at cap, no more rewards
+            return new ReferralResult(false, 0, State.Referral.SuccessfulReferrals, true);
+        }
+
+        var pointsToAward = capReached ? 0 : command.PointsToAward;
+
+        RaiseEvent(new CustomerReferralRewardAwarded
+        {
+            CustomerId = State.Id,
+            ReferredCustomerId = command.ReferredCustomerId,
+            PointsAwarded = pointsToAward,
+            TotalReferrals = totalReferrals,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        if (capReached)
+        {
+            RaiseEvent(new CustomerReferralCapReached
+            {
+                CustomerId = State.Id,
+                TotalReferrals = totalReferrals,
+                TotalPointsEarned = State.Referral.TotalPointsEarnedFromReferrals + pointsToAward,
+                OccurredAt = DateTime.UtcNow
+            });
+        }
+
+        await ConfirmEvents();
+
+        // Add points to loyalty if enrolled
+        if (pointsToAward > 0 && State.Loyalty != null)
+        {
+            await EarnPointsAsync(new EarnPointsCommand(pointsToAward, "Referral bonus"));
+        }
+
+        return new ReferralResult(true, pointsToAward, totalReferrals, capReached);
+    }
+
+    public Task<ReferralStatus> GetReferralStatusAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.Referral);
+    }
+
+    public Task<bool> HasReachedReferralCapAsync()
+    {
+        EnsureExists();
+        return Task.FromResult(State.Referral.SuccessfulReferrals >= State.Referral.ReferralRewardsCap);
     }
 
     public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);

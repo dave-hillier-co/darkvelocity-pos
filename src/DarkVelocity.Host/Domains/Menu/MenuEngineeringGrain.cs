@@ -1,5 +1,6 @@
 using DarkVelocity.Host.Costing;
 using DarkVelocity.Host.Grains;
+using DarkVelocity.Host.Projections;
 using DarkVelocity.Host.State;
 using Orleans.Runtime;
 
@@ -229,6 +230,120 @@ public class MenuEngineeringGrain : Grain, IMenuEngineeringGrain
         _state.State.CategoryTargetMargins[category] = targetMarginPercent;
         _state.State.Version++;
         await _state.WriteStateAsync();
+    }
+
+    public async Task<int> SyncFromReportingDataAsync(SyncFromReportingCommand command)
+    {
+        EnsureInitialized();
+
+        var orgId = _state.State.OrgId;
+        var siteId = _state.State.SiteId;
+        var recordCount = 0;
+
+        // Iterate through each day in the date range
+        for (var date = command.StartDate.Date; date <= command.EndDate.Date; date = date.AddDays(1))
+        {
+            var dateOnly = DateOnly.FromDateTime(date);
+            var dailySalesKey = GrainKeys.DailySales(orgId, siteId, dateOnly);
+            var dailySalesGrain = GrainFactory.GetGrain<IDailySalesGrain>(dailySalesKey);
+
+            try
+            {
+                var facts = await dailySalesGrain.GetFactsAsync();
+
+                foreach (var fact in facts)
+                {
+                    // Get recipe cost if available
+                    decimal theoreticalCost = fact.TheoreticalCOGS;
+
+                    if (command.IncludeRecipeCosts && fact.ProductId != Guid.Empty)
+                    {
+                        // Try to get recipe cost from RecipeGrain
+                        theoreticalCost = await GetRecipeCostAsync(orgId, fact.ProductId, theoreticalCost);
+                    }
+
+                    await RecordItemSalesAsync(new RecordItemSalesCommand(
+                        fact.ProductId,
+                        fact.ProductName,
+                        fact.Category,
+                        fact.NetSales / Math.Max(fact.Quantity, 1), // Per-unit selling price
+                        theoreticalCost / Math.Max(fact.Quantity, 1), // Per-unit cost
+                        fact.Quantity,
+                        fact.NetSales,
+                        null, // RecipeId would need to be looked up
+                        null));
+
+                    recordCount++;
+                }
+            }
+            catch (Exception)
+            {
+                // Daily sales grain may not exist for this date - continue
+            }
+        }
+
+        return recordCount;
+    }
+
+    public async Task RefreshAllDataAsync(DateRange dateRange)
+    {
+        EnsureInitialized();
+
+        // Clear existing data
+        _state.State.Items.Clear();
+        _state.State.CachedAnalysis.Clear();
+        _state.State.CachedCategoryAnalysis.Clear();
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+
+        // Sync fresh data
+        await SyncFromReportingDataAsync(new SyncFromReportingCommand(
+            dateRange.StartDate,
+            dateRange.EndDate,
+            IncludeRecipeCosts: true));
+
+        // Re-analyze
+        await AnalyzeAsync(new AnalyzeMenuCommand(
+            dateRange.StartDate,
+            dateRange.EndDate));
+    }
+
+    private async Task<decimal> GetRecipeCostAsync(Guid orgId, Guid productId, decimal fallbackCost)
+    {
+        try
+        {
+            // First, check if there's a recipe linked to this product
+            // We'll use the MenuRegistry to find the recipe for this menu item
+            var menuRegistryKey = GrainKeys.MenuRegistry(orgId);
+            var menuRegistry = GrainFactory.GetGrain<IMenuRegistryGrain>(menuRegistryKey);
+
+            // Try to get recipe ID from the menu item document
+            var menuItemDocKey = GrainKeys.MenuItemDocument(orgId, productId.ToString());
+            var menuItemDoc = GrainFactory.GetGrain<IMenuItemDocumentGrain>(menuItemDocKey);
+
+            var menuItem = await menuItemDoc.GetDraftAsync();
+            if (menuItem?.RecipeId != null)
+            {
+                var recipeKey = GrainKeys.Recipe(orgId, menuItem.RecipeId.Value);
+                var recipeGrain = GrainFactory.GetGrain<IRecipeGrain>(recipeKey);
+
+                if (await recipeGrain.ExistsAsync())
+                {
+                    var snapshot = await recipeGrain.GetSnapshotAsync();
+                    if (snapshot.CurrentCostPerPortion > 0)
+                    {
+                        return snapshot.CurrentCostPerPortion;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Recipe lookup failed - use fallback
+        }
+
+        return fallbackCost;
     }
 
     private void EnsureInitialized()

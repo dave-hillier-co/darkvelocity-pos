@@ -221,6 +221,29 @@ public interface IMenuEngineeringGrain : IGrainWithStringKey
     // Configuration
     Task SetTargetMarginAsync(decimal targetMarginPercent);
     Task SetCategoryTargetMarginAsync(string category, decimal targetMarginPercent);
+
+    // Data synchronization
+    /// <summary>
+    /// Syncs menu engineering data from reporting grains for a date range.
+    /// Pulls actual sales data from DailySalesGrain and recipe costs from RecipeGrain.
+    /// </summary>
+    Task<int> SyncFromReportingDataAsync(SyncFromReportingCommand command);
+
+    /// <summary>
+    /// Resets sales data and re-syncs from reporting grains.
+    /// </summary>
+    Task RefreshAllDataAsync(DateRange dateRange);
 }
 
+// ============================================================================
+// Sync Commands
+// ============================================================================
+
+[GenerateSerializer]
+public record SyncFromReportingCommand(
+    [property: Id(0)] DateTime StartDate,
+    [property: Id(1)] DateTime EndDate,
+    [property: Id(2)] bool IncludeRecipeCosts = true);
+
+// Note: DateRange is defined in IProfitabilityDashboardGrain.cs
 // Note: GrainKeys extensions are in the parent namespace's GrainKeys.cs file

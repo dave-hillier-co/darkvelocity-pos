@@ -47,7 +47,7 @@ public class DailyInventorySnapshotGrain : Grain, IDailyInventorySnapshotGrain
         await _state.WriteStateAsync();
     }
 
-    public async Task RecordIngredientSnapshotAsync(IngredientSnapshot snapshot)
+    public async Task RecordIngredientSnapshotAsync(InventoryIngredientSnapshot snapshot)
     {
         EnsureInitialized();
 
@@ -132,7 +132,7 @@ public class DailyInventorySnapshotGrain : Grain, IDailyInventorySnapshotGrain
         EnsureInitialized();
 
         var ingredients = _state.State.Ingredients
-            .Select(i => new IngredientSnapshot(
+            .Select(i => new InventoryIngredientSnapshot(
                 IngredientId: i.IngredientId,
                 IngredientName: i.IngredientName,
                 Sku: i.Sku,
@@ -783,7 +783,7 @@ public class SiteDashboardGrain : Grain, ISiteDashboardGrain
             .ToList();
 
         var lowStockItems = _state.State.LowStockItems
-            .Select(i => new IngredientSnapshot(
+            .Select(i => new InventoryIngredientSnapshot(
                 IngredientId: i.IngredientId,
                 IngredientName: i.IngredientName,
                 Sku: i.Sku,
@@ -900,6 +900,263 @@ public class SiteDashboardGrain : Grain, ISiteDashboardGrain
         catch
         {
             return [];
+        }
+    }
+
+    public async Task<ExtendedDashboardMetrics> GetExtendedMetricsAsync()
+    {
+        EnsureInitialized();
+
+        var today = DateTime.UtcNow.Date;
+        var yesterday = today.AddDays(-1);
+        var lastWeekSameDay = today.AddDays(-7);
+
+        // Get today's sales
+        var todaySalesKey = $"{_state.State.OrgId}:{_state.State.SiteId}:sales:{today:yyyy-MM-dd}";
+        var todaySalesGrain = _grainFactory.GetGrain<IDailySalesGrain>(todaySalesKey);
+        DailySalesSnapshot? todaySales = null;
+        try
+        {
+            todaySales = await todaySalesGrain.GetSnapshotAsync();
+        }
+        catch { }
+
+        // Get yesterday's sales
+        var yesterdaySalesKey = $"{_state.State.OrgId}:{_state.State.SiteId}:sales:{yesterday:yyyy-MM-dd}";
+        var yesterdaySalesGrain = _grainFactory.GetGrain<IDailySalesGrain>(yesterdaySalesKey);
+        DailySalesSnapshot? yesterdaySales = null;
+        try
+        {
+            yesterdaySales = await yesterdaySalesGrain.GetSnapshotAsync();
+        }
+        catch { }
+
+        // Get last week same day's sales
+        var lastWeekSalesKey = $"{_state.State.OrgId}:{_state.State.SiteId}:sales:{lastWeekSameDay:yyyy-MM-dd}";
+        var lastWeekSalesGrain = _grainFactory.GetGrain<IDailySalesGrain>(lastWeekSalesKey);
+        DailySalesSnapshot? lastWeekSales = null;
+        try
+        {
+            lastWeekSales = await lastWeekSalesGrain.GetSnapshotAsync();
+        }
+        catch { }
+
+        var todayNetSales = todaySales?.NetSales ?? 0;
+        var yesterdayNetSales = yesterdaySales?.NetSales ?? 0;
+        var lastWeekNetSales = lastWeekSales?.NetSales ?? 0;
+
+        var todayVsYesterdayPercent = yesterdayNetSales > 0
+            ? (todayNetSales - yesterdayNetSales) / yesterdayNetSales * 100
+            : 0;
+
+        var todayVsLastWeekPercent = lastWeekNetSales > 0
+            ? (todayNetSales - lastWeekNetSales) / lastWeekNetSales * 100
+            : 0;
+
+        var transactionCount = todaySales?.TransactionCount ?? 0;
+        var guestCount = todaySales?.GuestCount ?? 0;
+        var avgTicket = transactionCount > 0 ? todayNetSales / transactionCount : 0;
+        var revenuePerCover = guestCount > 0 ? todayNetSales / guestCount : 0;
+
+        var theoreticalCOGS = todaySales?.TheoreticalCOGS ?? 0;
+        var actualCOGS = todaySales?.ActualCOGS ?? 0;
+        var grossProfitPercent = todayNetSales > 0
+            ? (todayNetSales - actualCOGS) / todayNetSales * 100
+            : 0;
+
+        // Calculate WTD metrics
+        var wtdNetSales = 0m;
+        var wtdCOGS = 0m;
+        var wtdTransactionCount = 0;
+        var startOfWeek = today.AddDays(-(int)today.DayOfWeek);
+        for (var date = startOfWeek; date <= today; date = date.AddDays(1))
+        {
+            var dateKey = $"{_state.State.OrgId}:{_state.State.SiteId}:sales:{date:yyyy-MM-dd}";
+            var dateGrain = _grainFactory.GetGrain<IDailySalesGrain>(dateKey);
+            try
+            {
+                var dateSales = await dateGrain.GetSnapshotAsync();
+                wtdNetSales += dateSales.NetSales;
+                wtdCOGS += dateSales.ActualCOGS;
+                wtdTransactionCount += dateSales.TransactionCount;
+            }
+            catch { }
+        }
+
+        var wtdGrossProfitPercent = wtdNetSales > 0
+            ? (wtdNetSales - wtdCOGS) / wtdNetSales * 100
+            : 0;
+
+        // Calculate PTD metrics (current 4-week period)
+        var ptdNetSales = 0m;
+        var ptdCOGS = 0m;
+        var startOfPeriod = today.AddDays(-((today.Day - 1) % 28));
+        for (var date = startOfPeriod; date <= today; date = date.AddDays(1))
+        {
+            var dateKey = $"{_state.State.OrgId}:{_state.State.SiteId}:sales:{date:yyyy-MM-dd}";
+            var dateGrain = _grainFactory.GetGrain<IDailySalesGrain>(dateKey);
+            try
+            {
+                var dateSales = await dateGrain.GetSnapshotAsync();
+                ptdNetSales += dateSales.NetSales;
+                ptdCOGS += dateSales.ActualCOGS;
+            }
+            catch { }
+        }
+
+        var ptdGrossProfitPercent = ptdNetSales > 0
+            ? (ptdNetSales - ptdCOGS) / ptdNetSales * 100
+            : 0;
+
+        return new ExtendedDashboardMetrics(
+            TodayNetSales: todayNetSales,
+            YesterdayNetSales: yesterdayNetSales,
+            LastWeekSameDayNetSales: lastWeekNetSales,
+            TodayVsYesterdayPercent: todayVsYesterdayPercent,
+            TodayVsLastWeekPercent: todayVsLastWeekPercent,
+            AverageTicketSize: avgTicket,
+            GuestCount: guestCount,
+            TransactionCount: transactionCount,
+            RevenuePerCover: revenuePerCover,
+            TodayGrossProfitPercent: grossProfitPercent,
+            TheoreticalCOGS: theoreticalCOGS,
+            ActualCOGS: actualCOGS,
+            WtdNetSales: wtdNetSales,
+            WtdGrossProfitPercent: wtdGrossProfitPercent,
+            WtdTransactionCount: wtdTransactionCount,
+            PtdNetSales: ptdNetSales,
+            PtdGrossProfitPercent: ptdGrossProfitPercent,
+            LastRefreshed: DateTime.UtcNow,
+            CurrentBusinessDate: today);
+    }
+
+    public async Task<HourlySalesBreakdown> GetHourlySalesAsync()
+    {
+        EnsureInitialized();
+
+        var today = DateTime.UtcNow.Date;
+        var daypartKey = $"{_state.State.OrgId}:{_state.State.SiteId}:daypart:{today:yyyy-MM-dd}";
+        var daypartGrain = _grainFactory.GetGrain<IDaypartAnalysisGrain>(daypartKey);
+
+        try
+        {
+            var snapshot = await daypartGrain.GetSnapshotAsync();
+
+            var hourlySales = snapshot.HourlyPerformances
+                .Select(h => new HourlySalesEntry(
+                    Hour: h.Hour,
+                    NetSales: h.NetSales,
+                    TransactionCount: h.TransactionCount,
+                    GuestCount: h.GuestCount,
+                    AverageTicket: h.TransactionCount > 0 ? h.NetSales / h.TransactionCount : 0))
+                .ToList();
+
+            var totalSales = snapshot.DaypartPerformances.Sum(d => d.NetSales);
+            var daypartSales = snapshot.DaypartPerformances
+                .Select(d => new DaypartSalesEntry(
+                    Daypart: d.Daypart,
+                    NetSales: d.NetSales,
+                    PercentOfTotal: totalSales > 0 ? d.NetSales / totalSales * 100 : 0,
+                    TransactionCount: d.TransactionCount,
+                    GuestCount: d.GuestCount,
+                    AverageTicket: d.AverageTicket))
+                .ToList();
+
+            return new HourlySalesBreakdown(
+                Date: today,
+                HourlySales: hourlySales,
+                DaypartSales: daypartSales);
+        }
+        catch
+        {
+            return new HourlySalesBreakdown(
+                Date: today,
+                HourlySales: [],
+                DaypartSales: []);
+        }
+    }
+
+    public async Task<IReadOnlyList<TopSellingItem>> GetTopSellingItemsAsync(int count)
+    {
+        EnsureInitialized();
+
+        var today = DateTime.UtcNow.Date;
+        var productMixKey = $"{_state.State.OrgId}:{_state.State.SiteId}:productmix:{today:yyyy-MM-dd}";
+        var productMixGrain = _grainFactory.GetGrain<IProductMixGrain>(productMixKey);
+
+        try
+        {
+            var topProducts = await productMixGrain.GetTopProductsAsync(count, "revenue");
+            return topProducts
+                .Select(p => new TopSellingItem(
+                    ProductId: p.ProductId,
+                    ProductName: p.ProductName,
+                    Category: p.Category,
+                    QuantitySold: p.QuantitySold,
+                    NetSales: p.NetSales,
+                    GrossProfit: p.GrossProfit,
+                    GrossProfitPercent: p.GrossProfitPercent))
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public async Task<PaymentMethodBreakdown> GetPaymentBreakdownAsync()
+    {
+        EnsureInitialized();
+
+        var today = DateTime.UtcNow.Date;
+        var reconciliationKey = $"{_state.State.OrgId}:{_state.State.SiteId}:reconciliation:{today:yyyy-MM-dd}";
+        var reconciliationGrain = _grainFactory.GetGrain<IPaymentReconciliationGrain>(reconciliationKey);
+
+        try
+        {
+            var snapshot = await reconciliationGrain.GetSnapshotAsync();
+            var total = snapshot.PosGrandTotal;
+
+            var payments = new List<PaymentMethodEntry>();
+
+            if (snapshot.PosTotalCash > 0)
+            {
+                payments.Add(new PaymentMethodEntry(
+                    PaymentMethod: "Cash",
+                    Amount: snapshot.PosTotalCash,
+                    PercentOfTotal: total > 0 ? snapshot.PosTotalCash / total * 100 : 0,
+                    TransactionCount: 0)); // Transaction count per method not tracked in current state
+            }
+
+            if (snapshot.PosTotalCard > 0)
+            {
+                payments.Add(new PaymentMethodEntry(
+                    PaymentMethod: "Card",
+                    Amount: snapshot.PosTotalCard,
+                    PercentOfTotal: total > 0 ? snapshot.PosTotalCard / total * 100 : 0,
+                    TransactionCount: 0));
+            }
+
+            if (snapshot.PosTotalOther > 0)
+            {
+                payments.Add(new PaymentMethodEntry(
+                    PaymentMethod: "Other",
+                    Amount: snapshot.PosTotalOther,
+                    PercentOfTotal: total > 0 ? snapshot.PosTotalOther / total * 100 : 0,
+                    TransactionCount: 0));
+            }
+
+            return new PaymentMethodBreakdown(
+                Date: today,
+                Payments: payments,
+                TotalCollected: total);
+        }
+        catch
+        {
+            return new PaymentMethodBreakdown(
+                Date: today,
+                Payments: [],
+                TotalCollected: 0);
         }
     }
 

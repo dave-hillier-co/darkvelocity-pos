@@ -130,3 +130,34 @@ public sealed record PaymentBatchAssigned : IPaymentEvent
     [Id(1)] public Guid BatchId { get; init; }
     [Id(2)] public DateTime OccurredAt { get; init; }
 }
+
+[GenerateSerializer]
+public sealed record PaymentRetryScheduled : IPaymentEvent
+{
+    [Id(0)] public Guid PaymentId { get; init; }
+    [Id(1)] public int AttemptNumber { get; init; }
+    [Id(2)] public DateTime ScheduledFor { get; init; }
+    [Id(3)] public string FailureReason { get; init; } = "";
+    [Id(4)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record PaymentRetryAttempted : IPaymentEvent
+{
+    [Id(0)] public Guid PaymentId { get; init; }
+    [Id(1)] public int AttemptNumber { get; init; }
+    [Id(2)] public bool Success { get; init; }
+    [Id(3)] public string? ErrorCode { get; init; }
+    [Id(4)] public string? ErrorMessage { get; init; }
+    [Id(5)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record PaymentRetryExhausted : IPaymentEvent
+{
+    [Id(0)] public Guid PaymentId { get; init; }
+    [Id(1)] public int TotalAttempts { get; init; }
+    [Id(2)] public string FinalErrorCode { get; init; } = "";
+    [Id(3)] public string FinalErrorMessage { get; init; } = "";
+    [Id(4)] public DateTime OccurredAt { get; init; }
+}

@@ -75,9 +75,24 @@ public interface IPaymentGrain : IGrainWithStringKey
     // Batch management
     Task AssignToBatchAsync(Guid batchId);
 
+    // Retry management
+    Task ScheduleRetryAsync(string failureReason, int? maxRetries = null);
+    Task RecordRetryAttemptAsync(bool success, string? errorCode = null, string? errorMessage = null);
+    Task<bool> ShouldRetryAsync();
+    Task<RetryInfo> GetRetryInfoAsync();
+
     Task<bool> ExistsAsync();
     Task<PaymentStatus> GetStatusAsync();
 }
+
+[GenerateSerializer]
+public record RetryInfo(
+    [property: Id(0)] int RetryCount,
+    [property: Id(1)] int MaxRetries,
+    [property: Id(2)] DateTime? NextRetryAt,
+    [property: Id(3)] bool RetryExhausted,
+    [property: Id(4)] string? LastErrorCode,
+    [property: Id(5)] string? LastErrorMessage);
 
 [GenerateSerializer]
 public record OpenDrawerCommand(

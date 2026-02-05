@@ -24,6 +24,53 @@ public sealed class FiscalDeviceState
     [Id(12)] public long SignatureCounter { get; set; }
     [Id(13)] public string? ClientId { get; set; }
     [Id(14)] public int Version { get; set; }
+
+    // Lifecycle management fields
+    [Id(15)] public string? TaxAuthorityRegistrationId { get; set; }
+    [Id(16)] public DateTime? ActivatedAt { get; set; }
+    [Id(17)] public Guid? ActivatedBy { get; set; }
+    [Id(18)] public string? DeactivationReason { get; set; }
+    [Id(19)] public DateTime? DeactivatedAt { get; set; }
+    [Id(20)] public Guid? DeactivatedBy { get; set; }
+    [Id(21)] public DateTime? LastTransactionAt { get; set; }
+    [Id(22)] public string? LastError { get; set; }
+    [Id(23)] public DateTime? LastSelfTestAt { get; set; }
+    [Id(24)] public bool LastSelfTestPassed { get; set; }
+}
+
+// ============================================================================
+// Fiscal Device Registry State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class FiscalDeviceRegistryState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public Dictionary<Guid, string> Devices { get; set; } = [];
+    [Id(3)] public int Version { get; set; }
+}
+
+// ============================================================================
+// Fiscal Transaction Registry State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class FiscalTransactionRegistryState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public List<FiscalTransactionRegistryEntry> Transactions { get; set; } = [];
+    [Id(3)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class FiscalTransactionRegistryEntry
+{
+    [Id(0)] public Guid TransactionId { get; set; }
+    [Id(1)] public Guid DeviceId { get; set; }
+    [Id(2)] public DateOnly Date { get; set; }
+    [Id(3)] public DateTime CreatedAt { get; set; }
 }
 
 // ============================================================================

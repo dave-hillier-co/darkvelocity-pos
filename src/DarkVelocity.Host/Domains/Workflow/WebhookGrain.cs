@@ -1,17 +1,53 @@
+using DarkVelocity.Host.Services;
 using DarkVelocity.Host.State;
+using DarkVelocity.Host.Streams;
+using Microsoft.Extensions.Logging;
+using Orleans.Runtime;
+using Orleans.Streams;
+using System.Text.Json;
 
 namespace DarkVelocity.Host.Grains;
 
 public class WebhookSubscriptionGrain : Grain, IWebhookSubscriptionGrain
 {
     private readonly IPersistentState<WebhookSubscriptionState> _state;
+    private readonly IWebhookDeliveryService _deliveryService;
+    private readonly ILogger<WebhookSubscriptionGrain> _logger;
+    private IAsyncStream<IStreamEvent>? _webhookStream;
+
     private const int MaxRecentDeliveries = 100;
+    private const int MaxConsecutiveFailuresBeforeDisable = 10;
+
+    // Exponential backoff parameters
+    private static readonly TimeSpan[] RetryDelays =
+    [
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(30),
+        TimeSpan.FromMinutes(2),
+        TimeSpan.FromMinutes(10),
+        TimeSpan.FromMinutes(30)
+    ];
 
     public WebhookSubscriptionGrain(
         [PersistentState("webhook", "OrleansStorage")]
-        IPersistentState<WebhookSubscriptionState> state)
+        IPersistentState<WebhookSubscriptionState> state,
+        IWebhookDeliveryService deliveryService,
+        ILogger<WebhookSubscriptionGrain> logger)
     {
         _state = state;
+        _deliveryService = deliveryService;
+        _logger = logger;
+    }
+
+    private IAsyncStream<IStreamEvent> GetWebhookStream()
+    {
+        if (_webhookStream == null && _state.State.OrganizationId != Guid.Empty)
+        {
+            var streamProvider = this.GetStreamProvider(StreamConstants.DefaultStreamProvider);
+            var streamId = StreamId.Create(StreamConstants.WebhookStreamNamespace, _state.State.OrganizationId.ToString());
+            _webhookStream = streamProvider.GetStream<IStreamEvent>(streamId);
+        }
+        return _webhookStream!;
     }
 
     public async Task<WebhookCreatedResult> CreateAsync(CreateWebhookCommand command)
@@ -139,25 +175,159 @@ public class WebhookSubscriptionGrain : Grain, IWebhookSubscriptionGrain
     {
         EnsureExists();
 
-        if (_state.State.Status != WebhookStatus.Active)
-            throw new InvalidOperationException($"Webhook is not active: {_state.State.Status}");
+        if (_state.State.Status == WebhookStatus.Deleted)
+            throw new InvalidOperationException("Webhook subscription has been deleted");
+
+        if (_state.State.Status == WebhookStatus.Failed)
+            throw new InvalidOperationException("Webhook endpoint is disabled due to too many failures. Call ResumeAsync to re-enable.");
+
+        if (_state.State.Status == WebhookStatus.Paused)
+            throw new InvalidOperationException("Webhook is paused. Call ResumeAsync to re-enable.");
 
         if (!_state.State.Events.Any(e => e.EventType == eventType && e.IsEnabled))
             throw new InvalidOperationException($"Not subscribed to event: {eventType}");
 
         var deliveryId = Guid.NewGuid();
+        var attemptNumber = 1;
+
+        // Publish attempt event
+        await GetWebhookStream().OnNextAsync(new WebhookDeliveryAttemptedEvent(
+            _state.State.Id,
+            deliveryId,
+            eventType,
+            _state.State.Url,
+            attemptNumber)
+        {
+            OrganizationId = _state.State.OrganizationId
+        });
+
+        // Parse payload (it's a JSON string) and deliver
+        object payloadObject;
+        try
+        {
+            payloadObject = JsonSerializer.Deserialize<JsonElement>(payload);
+        }
+        catch
+        {
+            // If not valid JSON, wrap it
+            payloadObject = new { data = payload, eventType };
+        }
+
+        var result = await _deliveryService.DeliverAsync(
+            _state.State.Url,
+            new
+            {
+                id = deliveryId,
+                @event = eventType,
+                timestamp = DateTime.UtcNow,
+                data = payloadObject
+            },
+            _state.State.Secret,
+            _state.State.Headers);
+
         var delivery = new WebhookDelivery
         {
             Id = deliveryId,
             EventType = eventType,
             AttemptedAt = DateTime.UtcNow,
-            StatusCode = 200, // Simulated success - actual HTTP call would be done by a delivery service
-            Success = true,
+            StatusCode = result.StatusCode ?? 0,
+            Success = result.Success,
+            ErrorMessage = result.ErrorMessage,
             RetryCount = 0
         };
 
         await RecordDeliveryAsync(delivery);
-        return new DeliveryResult(deliveryId, true, 200);
+
+        if (result.Success)
+        {
+            // Publish success event
+            await GetWebhookStream().OnNextAsync(new WebhookDeliverySucceededEvent(
+                _state.State.Id,
+                deliveryId,
+                eventType,
+                result.StatusCode ?? 200,
+                result.ResponseTimeMs)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+
+            _logger.LogInformation(
+                "Webhook {WebhookId} delivered successfully to {Url} for event {EventType}",
+                _state.State.Id, _state.State.Url, eventType);
+        }
+        else
+        {
+            var willRetry = result.ShouldRetry && _state.State.ConsecutiveFailures < MaxConsecutiveFailuresBeforeDisable;
+
+            // Publish failure event
+            await GetWebhookStream().OnNextAsync(new WebhookDeliveryFailedEvent(
+                _state.State.Id,
+                deliveryId,
+                eventType,
+                result.StatusCode,
+                result.ErrorMessage ?? "Unknown error",
+                attemptNumber,
+                willRetry)
+            {
+                OrganizationId = _state.State.OrganizationId
+            });
+
+            _logger.LogWarning(
+                "Webhook {WebhookId} delivery failed to {Url} for event {EventType}. Error: {Error}. ConsecutiveFailures: {ConsecutiveFailures}",
+                _state.State.Id, _state.State.Url, eventType, result.ErrorMessage, _state.State.ConsecutiveFailures);
+
+            // Check if we need to disable the endpoint
+            if (_state.State.Status == WebhookStatus.Failed)
+            {
+                await GetWebhookStream().OnNextAsync(new WebhookEndpointDisabledEvent(
+                    _state.State.Id,
+                    _state.State.Url,
+                    _state.State.ConsecutiveFailures,
+                    $"Disabled after {_state.State.ConsecutiveFailures} consecutive failures")
+                {
+                    OrganizationId = _state.State.OrganizationId
+                });
+
+                _logger.LogError(
+                    "Webhook {WebhookId} endpoint {Url} has been disabled due to {ConsecutiveFailures} consecutive failures",
+                    _state.State.Id, _state.State.Url, _state.State.ConsecutiveFailures);
+            }
+        }
+
+        return new DeliveryResult(deliveryId, result.Success, result.StatusCode ?? 0);
+    }
+
+    /// <summary>
+    /// Delivers a webhook with retry support using exponential backoff.
+    /// </summary>
+    public async Task<DeliveryResult> DeliverWithRetryAsync(string eventType, string payload, int maxRetries = 3)
+    {
+        EnsureExists();
+
+        var lastResult = await DeliverAsync(eventType, payload);
+        var attemptNumber = 1;
+
+        while (!lastResult.Success && attemptNumber < maxRetries)
+        {
+            // Check if we should retry based on current status
+            if (_state.State.Status != WebhookStatus.Active)
+                break;
+
+            // Wait with exponential backoff
+            var delayIndex = Math.Min(attemptNumber - 1, RetryDelays.Length - 1);
+            var delay = RetryDelays[delayIndex];
+
+            _logger.LogInformation(
+                "Retrying webhook {WebhookId} delivery in {Delay}. Attempt {Attempt} of {MaxRetries}",
+                _state.State.Id, delay, attemptNumber + 1, maxRetries);
+
+            await Task.Delay(delay);
+
+            attemptNumber++;
+            lastResult = await DeliverAsync(eventType, payload);
+        }
+
+        return lastResult;
     }
 
     public async Task RecordDeliveryAsync(WebhookDelivery delivery)
@@ -329,6 +499,105 @@ public class BookingCalendarGrain : Grain, IBookingCalendarGrain
     }
 
     public Task<bool> ExistsAsync() => Task.FromResult(_state.State.SiteId != Guid.Empty);
+
+    public Task<CalendarDayView> GetDayViewAsync(TimeSpan? slotDuration = null)
+    {
+        EnsureExists();
+        var duration = slotDuration ?? TimeSpan.FromMinutes(30);
+        var slots = new List<CalendarBookingSlot>();
+
+        var currentTime = new TimeOnly(0, 0);
+        while (currentTime < new TimeOnly(23, 59))
+        {
+            var endTime = currentTime.Add(duration);
+            if (endTime < currentTime) endTime = new TimeOnly(23, 59);
+
+            var slotBookings = _state.State.Bookings
+                .Where(b => b.Time >= currentTime && b.Time < endTime)
+                .ToList();
+
+            slots.Add(new CalendarBookingSlot
+            {
+                StartTime = currentTime,
+                EndTime = endTime,
+                BookingCount = slotBookings.Count,
+                CoverCount = slotBookings.Sum(b => b.PartySize),
+                Bookings = slotBookings
+            });
+
+            currentTime = endTime;
+        }
+
+        return Task.FromResult(new CalendarDayView
+        {
+            Date = _state.State.Date,
+            Slots = slots,
+            TotalBookings = _state.State.Bookings.Count,
+            TotalCovers = _state.State.TotalCovers,
+            ConfirmedBookings = _state.State.Bookings.Count(b => b.Status == BookingStatus.Confirmed),
+            SeatedBookings = _state.State.Bookings.Count(b => b.Status == BookingStatus.Seated),
+            NoShowCount = _state.State.Bookings.Count(b => b.Status == BookingStatus.NoShow)
+        });
+    }
+
+    public Task<IReadOnlyList<AvailableTimeSlot>> GetAvailabilityAsync(GetCalendarAvailabilityQuery query)
+    {
+        EnsureExists();
+        // Simple availability - return slots that have capacity
+        var slots = new List<AvailableTimeSlot>();
+        var duration = query.RequestedDuration ?? TimeSpan.FromMinutes(90);
+
+        var startTime = query.PreferredTime ?? new TimeOnly(12, 0);
+        for (var i = 0; i < 10; i++)
+        {
+            var time = startTime.Add(TimeSpan.FromMinutes(30 * i));
+            slots.Add(new AvailableTimeSlot
+            {
+                Time = time,
+                IsAvailable = true,
+                AvailableCapacity = 20,
+                EstimatedDuration = duration,
+                SuggestedTables = []
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<AvailableTimeSlot>>(slots);
+    }
+
+    public Task<IReadOnlyList<TableAllocation>> GetTableAllocationsAsync()
+    {
+        EnsureExists();
+        var allocations = _state.State.Bookings
+            .Where(b => b.TableId.HasValue)
+            .GroupBy(b => b.TableId!.Value)
+            .Select(g => new TableAllocation
+            {
+                TableId = g.Key,
+                TableNumber = g.First().TableNumber ?? string.Empty,
+                Bookings = g.ToList()
+            })
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<TableAllocation>>(allocations);
+    }
+
+    public async Task SetTableAllocationAsync(Guid bookingId, Guid tableId, string tableNumber)
+    {
+        EnsureExists();
+        var index = _state.State.Bookings.FindIndex(b => b.BookingId == bookingId);
+        if (index < 0)
+            throw new InvalidOperationException("Booking not found in calendar");
+
+        var existing = _state.State.Bookings[index];
+        _state.State.Bookings[index] = existing with
+        {
+            TableId = tableId,
+            TableNumber = tableNumber
+        };
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
 
     private void EnsureExists()
     {

@@ -57,7 +57,7 @@ public record FiscalDeviceSnapshot(
 
 /// <summary>
 /// Grain for fiscal device management.
-/// Key: "{orgId}:fiscaldevice:{deviceId}"
+/// Key: "{orgId}:fiscaldevice:{deviceId}" or "{orgId}:{siteId}:fiscaldevice:{deviceId}"
 /// </summary>
 public interface IFiscalDeviceGrain : IGrainWithStringKey
 {
@@ -69,6 +69,125 @@ public interface IFiscalDeviceGrain : IGrainWithStringKey
     Task<long> GetNextSignatureCounterAsync();
     Task RecordSyncAsync();
     Task<bool> IsCertificateExpiringAsync(int daysThreshold = 30);
+
+    // ========================================================================
+    // Device Lifecycle Management
+    // ========================================================================
+
+    /// <summary>
+    /// Activate the device (register with tax authority).
+    /// </summary>
+    Task<FiscalDeviceSnapshot> ActivateAsync(string? taxAuthorityRegistrationId, Guid operatorId);
+
+    /// <summary>
+    /// Deactivate with a reason (for audit trail).
+    /// </summary>
+    Task DeactivateWithReasonAsync(string reason, Guid operatorId);
+
+    /// <summary>
+    /// Get health status of the device.
+    /// </summary>
+    Task<FiscalDeviceHealthStatus> GetHealthStatusAsync();
+
+    /// <summary>
+    /// Perform self-test on the device.
+    /// </summary>
+    Task<FiscalDeviceSelfTestResult> PerformSelfTestAsync();
+
+    /// <summary>
+    /// Refresh certificate from the device/TSE provider.
+    /// </summary>
+    Task<FiscalDeviceSnapshot> RefreshCertificateAsync();
+}
+
+/// <summary>
+/// Health status of a fiscal device.
+/// </summary>
+[GenerateSerializer]
+public record FiscalDeviceHealthStatus(
+    [property: Id(0)] Guid DeviceId,
+    [property: Id(1)] FiscalDeviceStatus Status,
+    [property: Id(2)] bool IsOnline,
+    [property: Id(3)] bool CertificateValid,
+    [property: Id(4)] int? DaysUntilCertificateExpiry,
+    [property: Id(5)] DateTime? LastSyncAt,
+    [property: Id(6)] DateTime? LastTransactionAt,
+    [property: Id(7)] long TotalTransactions,
+    [property: Id(8)] string? LastError);
+
+/// <summary>
+/// Result of device self-test.
+/// </summary>
+[GenerateSerializer]
+public record FiscalDeviceSelfTestResult(
+    [property: Id(0)] Guid DeviceId,
+    [property: Id(1)] bool Passed,
+    [property: Id(2)] string? ErrorMessage,
+    [property: Id(3)] DateTime PerformedAt);
+
+// ============================================================================
+// Fiscal Device Registry Grain
+// ============================================================================
+
+/// <summary>
+/// Registry for tracking fiscal devices per site.
+/// Key: "{orgId}:{siteId}:fiscaldeviceregistry"
+/// </summary>
+public interface IFiscalDeviceRegistryGrain : IGrainWithStringKey
+{
+    /// <summary>
+    /// Register a new device.
+    /// </summary>
+    Task RegisterDeviceAsync(Guid deviceId, string serialNumber);
+
+    /// <summary>
+    /// Unregister a device.
+    /// </summary>
+    Task UnregisterDeviceAsync(Guid deviceId);
+
+    /// <summary>
+    /// Get all device IDs.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetDeviceIdsAsync();
+
+    /// <summary>
+    /// Find device by serial number.
+    /// </summary>
+    Task<Guid?> FindBySerialNumberAsync(string serialNumber);
+
+    /// <summary>
+    /// Get count of devices.
+    /// </summary>
+    Task<int> GetDeviceCountAsync();
+}
+
+// ============================================================================
+// Fiscal Transaction Registry Grain
+// ============================================================================
+
+/// <summary>
+/// Registry for tracking fiscal transactions per site.
+/// Key: "{orgId}:{siteId}:fiscaltxregistry"
+/// </summary>
+public interface IFiscalTransactionRegistryGrain : IGrainWithStringKey
+{
+    /// <summary>
+    /// Register a new transaction.
+    /// </summary>
+    Task RegisterTransactionAsync(Guid transactionId, Guid deviceId, DateOnly date);
+
+    /// <summary>
+    /// Get transaction IDs with filters.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetTransactionIdsAsync(
+        DateOnly startDate,
+        DateOnly endDate,
+        Guid? deviceId = null);
+
+    /// <summary>
+    /// Get count of transactions.
+    /// </summary>
+    Task<int> GetTransactionCountAsync(DateOnly? date = null);
 }
 
 // ============================================================================
@@ -192,6 +311,8 @@ public interface IFiscalTransactionGrain : IGrainWithStringKey
 public enum FiscalEventType
 {
     TransactionSigned,
+    TransactionCreated,
+    TransactionVoided,
     DeviceRegistered,
     DeviceDecommissioned,
     ExportGenerated,

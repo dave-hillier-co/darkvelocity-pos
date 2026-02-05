@@ -25,7 +25,112 @@ public enum CustomerSegment
     Champion,
     AtRisk,
     Lapsed,
-    Lost
+    Lost,
+    PotentialLoyal,
+    Hibernating
+}
+
+/// <summary>
+/// RFM (Recency, Frequency, Monetary) scores for customer segmentation.
+/// Each score ranges from 1-5, with 5 being the best.
+/// </summary>
+[GenerateSerializer]
+public record RfmScore
+{
+    [Id(0)] public int RecencyScore { get; init; } = 1;
+    [Id(1)] public int FrequencyScore { get; init; } = 1;
+    [Id(2)] public int MonetaryScore { get; init; } = 1;
+    [Id(3)] public DateTime CalculatedAt { get; init; }
+    [Id(4)] public int DaysSinceLastVisit { get; init; }
+    [Id(5)] public int VisitCount { get; init; }
+    [Id(6)] public decimal TotalSpend { get; init; }
+
+    public int CombinedScore => RecencyScore + FrequencyScore + MonetaryScore;
+}
+
+/// <summary>
+/// Tracks a segment change for historical analysis.
+/// </summary>
+[GenerateSerializer]
+public record SegmentChange
+{
+    [Id(0)] public CustomerSegment PreviousSegment { get; init; }
+    [Id(1)] public CustomerSegment NewSegment { get; init; }
+    [Id(2)] public RfmScore? RfmScore { get; init; }
+    [Id(3)] public DateTime ChangedAt { get; init; }
+    [Id(4)] public string? Reason { get; init; }
+}
+
+/// <summary>
+/// GDPR consent tracking with timestamps and audit trail.
+/// </summary>
+[GenerateSerializer]
+public record ConsentStatus
+{
+    [Id(0)] public bool MarketingEmail { get; init; }
+    [Id(1)] public DateTime? MarketingEmailConsentedAt { get; init; }
+    [Id(2)] public bool Sms { get; init; }
+    [Id(3)] public DateTime? SmsConsentedAt { get; init; }
+    [Id(4)] public bool DataRetention { get; init; }
+    [Id(5)] public DateTime? DataRetentionConsentedAt { get; init; }
+    [Id(6)] public bool Profiling { get; init; }
+    [Id(7)] public DateTime? ProfilingConsentedAt { get; init; }
+    [Id(8)] public string? ConsentVersion { get; init; }
+    [Id(9)] public DateTime LastUpdated { get; init; }
+}
+
+/// <summary>
+/// Tracks a consent change for audit purposes.
+/// </summary>
+[GenerateSerializer]
+public record ConsentChange
+{
+    [Id(0)] public string ConsentType { get; init; } = "";
+    [Id(1)] public bool PreviousValue { get; init; }
+    [Id(2)] public bool NewValue { get; init; }
+    [Id(3)] public DateTime ChangedAt { get; init; }
+    [Id(4)] public string? IpAddress { get; init; }
+    [Id(5)] public string? UserAgent { get; init; }
+}
+
+/// <summary>
+/// VIP status and criteria tracking.
+/// </summary>
+[GenerateSerializer]
+public record VipStatus
+{
+    [Id(0)] public bool IsVip { get; init; }
+    [Id(1)] public DateTime? VipSince { get; init; }
+    [Id(2)] public string? VipReason { get; init; }
+    [Id(3)] public decimal? SpendAtVipGrant { get; init; }
+    [Id(4)] public int? VisitsAtVipGrant { get; init; }
+    [Id(5)] public bool ManuallyAssigned { get; init; }
+}
+
+/// <summary>
+/// Birthday reward tracking.
+/// </summary>
+[GenerateSerializer]
+public record BirthdayRewardStatus
+{
+    [Id(0)] public Guid? CurrentRewardId { get; init; }
+    [Id(1)] public DateTime? IssuedAt { get; init; }
+    [Id(2)] public DateTime? RedeemedAt { get; init; }
+    [Id(3)] public int Year { get; init; }
+}
+
+/// <summary>
+/// Referral program tracking with rewards.
+/// </summary>
+[GenerateSerializer]
+public record ReferralStatus
+{
+    [Id(0)] public string? ReferralCode { get; init; }
+    [Id(1)] public Guid? ReferredBy { get; init; }
+    [Id(2)] public int SuccessfulReferrals { get; init; }
+    [Id(3)] public int TotalPointsEarnedFromReferrals { get; init; }
+    [Id(4)] public int ReferralRewardsCap { get; init; } = 10;
+    [Id(5)] public List<Guid> ReferredCustomers { get; init; } = [];
 }
 
 [GenerateSerializer]
@@ -140,7 +245,7 @@ public sealed class CustomerState
     [Id(17)] public CustomerStats Stats { get; set; } = new();
     [Id(18)] public List<CustomerNote> Notes { get; set; } = [];
 
-    // Referral
+    // Referral (legacy fields - use Referral property for new code)
     [Id(19)] public string? ReferralCode { get; set; }
     [Id(20)] public Guid? ReferredBy { get; set; }
     [Id(21)] public int SuccessfulReferrals { get; set; }
@@ -153,6 +258,29 @@ public sealed class CustomerState
     [Id(23)] public DateTime? UpdatedAt { get; set; }
     [Id(24)] public DateTime? LastVisitAt { get; set; }
     [Id(25)] public List<Guid> MergedFrom { get; set; } = [];
+
+    // RFM Segmentation
+    [Id(28)] public RfmScore? RfmScore { get; set; }
+    [Id(29)] public List<SegmentChange> SegmentHistory { get; set; } = [];
+
+    // GDPR Consent Management
+    [Id(30)] public ConsentStatus Consent { get; set; } = new();
+    [Id(31)] public List<ConsentChange> ConsentHistory { get; set; } = [];
+
+    // VIP Status
+    [Id(32)] public VipStatus VipStatus { get; set; } = new();
+
+    // Birthday Rewards
+    [Id(33)] public BirthdayRewardStatus? CurrentBirthdayReward { get; set; }
+    [Id(34)] public List<BirthdayRewardStatus> BirthdayRewardHistory { get; set; } = [];
+
+    // Enhanced Referral
+    [Id(35)] public ReferralStatus Referral { get; set; } = new();
+
+    // Anonymization tracking
+    [Id(36)] public bool IsAnonymized { get; set; }
+    [Id(37)] public DateTime? AnonymizedAt { get; set; }
+    [Id(38)] public string? AnonymizedHash { get; set; }
 }
 
 [GenerateSerializer]

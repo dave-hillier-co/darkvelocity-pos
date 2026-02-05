@@ -1,5 +1,6 @@
 using DarkVelocity.Host.Auth;
 using DarkVelocity.Host.Payments;
+using DarkVelocity.Host.PaymentProcessors;
 using DarkVelocity.Host.Search;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -79,6 +80,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddPaymentGatewayServices(this IServiceCollection services)
     {
         services.AddSingleton<ICardValidationService, CardValidationService>();
+
+        // Payment processor SDK clients (stub implementations for development)
+        // TODO: Replace with actual SDK implementations in production
+        services.AddSingleton<IStripeClient, StubStripeClient>();
+        services.AddSingleton<IAdyenClient, StubAdyenClient>();
+
         return services;
     }
 

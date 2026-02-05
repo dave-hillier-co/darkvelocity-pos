@@ -1746,4 +1746,661 @@ public class OrderGrainTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Cannot void*");
     }
+
+    // ============================================================================
+    // Seat Assignment Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task AddLineAsync_WithSeat_ShouldStoreSeat()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+
+        // Act
+        var result = await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(), "Burger", 1, 12.99m, Seat: 2));
+
+        // Assert
+        var lines = await grain.GetLinesAsync();
+        lines[0].Seat.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task AssignSeatAsync_ShouldUpdateSeat()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 12.99m));
+
+        // Act
+        await grain.AssignSeatAsync(new AssignSeatCommand(line.LineId, 3, userId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].Seat.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task AssignSeatAsync_WithInvalidSeat_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 12.99m));
+
+        // Act
+        var act = () => grain.AssignSeatAsync(new AssignSeatCommand(line.LineId, 0, userId));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Seat number must be at least 1*");
+    }
+
+    [Fact]
+    public async Task AssignSeatAsync_ToVoidedItem_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 12.99m));
+        await grain.VoidLineAsync(new VoidLineCommand(line.LineId, userId, "Changed mind"));
+
+        // Act
+        var act = () => grain.AssignSeatAsync(new AssignSeatCommand(line.LineId, 1, userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*voided item*");
+    }
+
+    // ============================================================================
+    // Line-Level Discount Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task ApplyLineDiscountAsync_Percentage_ShouldCalculateCorrectAmount()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Steak", 1, 50.00m));
+
+        // Act - Apply 20% discount to the line
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line.LineId,
+            DiscountType.Percentage,
+            20m,
+            userId,
+            "Regular customer"));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].LineDiscountAmount.Should().Be(10.00m); // 50 * 0.20 = 10
+        state.Lines[0].LineDiscountType.Should().Be(DiscountType.Percentage);
+        state.Lines[0].LineDiscountReason.Should().Be("Regular customer");
+        state.DiscountTotal.Should().Be(10.00m);
+        state.GrandTotal.Should().Be(40.00m);
+    }
+
+    [Fact]
+    public async Task ApplyLineDiscountAsync_FixedAmount_ShouldApplyCorrectAmount()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Wine", 1, 30.00m));
+
+        // Act - Apply $5 fixed discount
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line.LineId,
+            DiscountType.FixedAmount,
+            5m,
+            userId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].LineDiscountAmount.Should().Be(5.00m);
+        state.DiscountTotal.Should().Be(5.00m);
+    }
+
+    [Fact]
+    public async Task ApplyLineDiscountAsync_WithApproval_ShouldTrackApprover()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Lobster", 1, 75.00m));
+
+        // Act
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line.LineId,
+            DiscountType.Percentage,
+            30m,
+            userId,
+            "VIP comp",
+            managerId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].LineDiscountApprovedBy.Should().Be(managerId);
+    }
+
+    [Fact]
+    public async Task ApplyLineDiscountAsync_ExceedingLineTotal_ShouldCapAtLineTotal()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Coffee", 1, 5.00m));
+
+        // Act - Try to apply $10 discount on $5 item
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line.LineId,
+            DiscountType.FixedAmount,
+            10m,
+            userId));
+
+        // Assert - Should be capped at line total
+        var state = await grain.GetStateAsync();
+        state.Lines[0].LineDiscountAmount.Should().Be(5.00m);
+    }
+
+    [Fact]
+    public async Task RemoveLineDiscountAsync_ShouldRemoveDiscount()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 20.00m));
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line.LineId,
+            DiscountType.FixedAmount,
+            5m,
+            userId));
+
+        // Act
+        await grain.RemoveLineDiscountAsync(line.LineId, userId);
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].LineDiscountAmount.Should().Be(0);
+        state.Lines[0].LineDiscountReason.Should().BeNull();
+        state.Lines[0].LineDiscountType.Should().BeNull();
+        state.DiscountTotal.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RemoveLineDiscountAsync_WithNoDiscount_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 20.00m));
+
+        // Act
+        var act = () => grain.RemoveLineDiscountAsync(line.LineId, userId);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*No line discount to remove*");
+    }
+
+    [Fact]
+    public async Task LineAndOrderDiscounts_ShouldBothApply()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line1 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 50.00m));
+        var line2 = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Fries", 1, 10.00m));
+
+        // Apply line discount to burger
+        await grain.ApplyLineDiscountAsync(new ApplyLineDiscountCommand(
+            line1.LineId,
+            DiscountType.FixedAmount,
+            5m,
+            userId));
+
+        // Apply order-level discount
+        await grain.ApplyDiscountAsync(new ApplyDiscountCommand(
+            "10% Off Order",
+            DiscountType.Percentage,
+            10m,
+            userId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        // Line discount: $5
+        // Order discount: 60 * 0.10 = $6
+        // Total discount: $11
+        state.DiscountTotal.Should().Be(11.00m);
+        state.GrandTotal.Should().Be(49.00m); // 60 - 11 = 49
+    }
+
+    // ============================================================================
+    // Price Override Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task OverridePriceAsync_ShouldUpdatePrice()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Special", 1, 100.00m));
+
+        // Act
+        await grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            75.00m,
+            "Manager special price",
+            userId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].UnitPrice.Should().Be(75.00m);
+        state.Lines[0].LineTotal.Should().Be(75.00m);
+        state.Lines[0].OriginalPrice.Should().Be(100.00m);
+        state.Lines[0].PriceOverrideReason.Should().Be("Manager special price");
+        state.Subtotal.Should().Be(75.00m);
+    }
+
+    [Fact]
+    public async Task OverridePriceAsync_WithTax_ShouldRecalculateTax()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(
+            Guid.NewGuid(), "Meal", 1, 100.00m, TaxRate: 10));
+
+        // Act
+        await grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            80.00m,
+            "Price adjustment",
+            userId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].UnitPrice.Should().Be(80.00m);
+        state.Lines[0].TaxAmount.Should().Be(8.00m); // 80 * 0.10
+        state.TaxTotal.Should().Be(8.00m);
+        state.GrandTotal.Should().Be(88.00m);
+    }
+
+    [Fact]
+    public async Task OverridePriceAsync_WithApproval_ShouldTrackApprover()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+
+        // Act
+        await grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            25.00m,
+            "50% off for VIP",
+            userId,
+            managerId));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.Lines[0].PriceOverrideApprovedBy.Should().Be(managerId);
+    }
+
+    [Fact]
+    public async Task OverridePriceAsync_WithoutReason_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+
+        // Act
+        var act = () => grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            25.00m,
+            "",
+            userId));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Reason is required*");
+    }
+
+    [Fact]
+    public async Task OverridePriceAsync_WithNegativePrice_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+
+        // Act
+        var act = () => grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            -10.00m,
+            "Invalid override",
+            userId));
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*cannot be negative*");
+    }
+
+    [Fact]
+    public async Task OverridePriceAsync_MultipleOverrides_ShouldTrackOriginalPrice()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var grain = GetOrderGrain(orgId, siteId, orderId);
+
+        await grain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        var line = await grain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 100.00m));
+
+        // Act - First override
+        await grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            80.00m,
+            "First adjustment",
+            userId));
+
+        // Second override
+        await grain.OverridePriceAsync(new OverridePriceCommand(
+            line.LineId,
+            60.00m,
+            "Second adjustment",
+            userId));
+
+        // Assert - Should still track the original price
+        var state = await grain.GetStateAsync();
+        state.Lines[0].UnitPrice.Should().Be(60.00m);
+        state.Lines[0].OriginalPrice.Should().Be(100.00m); // Original price preserved
+    }
+
+    // ============================================================================
+    // Order Merging Tests
+    // ============================================================================
+
+    [Fact]
+    public async Task MergeFromOrderAsync_ShouldTransferLines()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var sourceOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+        var sourceGrain = GetOrderGrain(orgId, siteId, sourceOrderId);
+
+        // Create target order with one item
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn, Guid.NewGuid(), "T1"));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 15.00m));
+
+        // Create source order with two items
+        await sourceGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn, Guid.NewGuid(), "T2"));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Fries", 1, 5.00m));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Soda", 1, 3.00m));
+
+        // Act
+        var result = await targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(sourceOrderId, userId));
+
+        // Assert
+        result.LinesMerged.Should().Be(2);
+
+        var targetState = await targetGrain.GetStateAsync();
+        targetState.Lines.Should().HaveCount(3);
+        targetState.Subtotal.Should().Be(23.00m); // 15 + 5 + 3
+
+        var sourceState = await sourceGrain.GetStateAsync();
+        sourceState.Status.Should().Be(OrderStatus.Closed);
+        sourceState.Notes.Should().Contain("Merged into order");
+    }
+
+    [Fact]
+    public async Task MergeFromOrderAsync_ShouldTransferPayments()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var sourceOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+        var sourceGrain = GetOrderGrain(orgId, siteId, sourceOrderId);
+
+        // Create target order
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Burger", 1, 50.00m));
+
+        // Create source order with partial payment
+        await sourceGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Pizza", 1, 30.00m));
+        await sourceGrain.RecordPaymentAsync(Guid.NewGuid(), 15.00m, 0m, "Cash");
+
+        // Act
+        var result = await targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(sourceOrderId, userId));
+
+        // Assert
+        result.PaymentsMerged.Should().Be(1);
+
+        var targetState = await targetGrain.GetStateAsync();
+        targetState.Payments.Should().HaveCount(1);
+        targetState.PaidAmount.Should().Be(15.00m);
+        targetState.GrandTotal.Should().Be(80.00m); // 50 + 30
+        targetState.BalanceDue.Should().Be(65.00m); // 80 - 15
+    }
+
+    [Fact]
+    public async Task MergeFromOrderAsync_ShouldTransferDiscounts()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var sourceOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+        var sourceGrain = GetOrderGrain(orgId, siteId, sourceOrderId);
+
+        // Create target order
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item1", 1, 100.00m));
+
+        // Create source order with discount
+        await sourceGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item2", 1, 50.00m));
+        await sourceGrain.ApplyDiscountAsync(new ApplyDiscountCommand("$5 Off", DiscountType.FixedAmount, 5m, userId));
+
+        // Act
+        var result = await targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(sourceOrderId, userId));
+
+        // Assert
+        result.DiscountsMerged.Should().Be(1);
+
+        var targetState = await targetGrain.GetStateAsync();
+        targetState.Discounts.Should().HaveCount(1);
+        targetState.DiscountTotal.Should().Be(5.00m);
+    }
+
+    [Fact]
+    public async Task MergeFromOrderAsync_FromClosedOrder_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var sourceOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+        var sourceGrain = GetOrderGrain(orgId, siteId, sourceOrderId);
+
+        // Create target order
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+
+        // Create and close source order
+        await sourceGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 30.00m));
+        var sourceTotals = await sourceGrain.GetTotalsAsync();
+        await sourceGrain.RecordPaymentAsync(Guid.NewGuid(), sourceTotals.GrandTotal, 0m, "Cash");
+        await sourceGrain.CloseAsync(userId);
+
+        // Act
+        var act = () => targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(sourceOrderId, userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*closed or voided*");
+    }
+
+    [Fact]
+    public async Task MergeFromOrderAsync_ToClosedOrder_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var sourceOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+        var sourceGrain = GetOrderGrain(orgId, siteId, sourceOrderId);
+
+        // Create and close target order
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+        var targetTotals = await targetGrain.GetTotalsAsync();
+        await targetGrain.RecordPaymentAsync(Guid.NewGuid(), targetTotals.GrandTotal, 0m, "Cash");
+        await targetGrain.CloseAsync(userId);
+
+        // Create source order
+        await sourceGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await sourceGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 30.00m));
+
+        // Act
+        var act = () => targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(sourceOrderId, userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*closed or voided*");
+    }
+
+    [Fact]
+    public async Task MergeFromOrderAsync_NonExistentSource_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var targetOrderId = Guid.NewGuid();
+        var nonExistentOrderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var targetGrain = GetOrderGrain(orgId, siteId, targetOrderId);
+
+        await targetGrain.CreateAsync(new CreateOrderCommand(orgId, siteId, userId, OrderType.DineIn));
+        await targetGrain.AddLineAsync(new AddLineCommand(Guid.NewGuid(), "Item", 1, 50.00m));
+
+        // Act
+        var act = () => targetGrain.MergeFromOrderAsync(new MergeFromOrderCommand(nonExistentOrderId, userId));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*does not exist*");
+    }
 }

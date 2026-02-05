@@ -77,7 +77,8 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
                     TaxRate = e.TaxRate,
                     TaxAmount = e.TaxAmount,
                     IsBundle = e.IsBundle,
-                    BundleComponents = e.BundleComponents
+                    BundleComponents = e.BundleComponents,
+                    Seat = e.Seat
                 });
                 state.RecalculateTotals();
                 state.UpdatedAt = e.OccurredAt;
@@ -425,6 +426,107 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
                 state.SentAt ??= e.OccurredAt;
                 state.UpdatedAt = e.OccurredAt;
                 break;
+
+            // Seat Assignment
+            case SeatAssigned e:
+                var lineForSeat = state.Lines.FirstOrDefault(l => l.Id == e.LineId);
+                if (lineForSeat != null)
+                {
+                    var index = state.Lines.FindIndex(l => l.Id == e.LineId);
+                    state.Lines[index] = lineForSeat with { Seat = e.SeatNumber };
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            // Line-Level Discounts
+            case LineDiscountApplied e:
+                var lineForDiscount = state.Lines.FirstOrDefault(l => l.Id == e.LineId);
+                if (lineForDiscount != null)
+                {
+                    var index = state.Lines.FindIndex(l => l.Id == e.LineId);
+                    state.Lines[index] = lineForDiscount with
+                    {
+                        LineDiscountAmount = e.Amount,
+                        LineDiscountReason = e.Reason,
+                        LineDiscountType = e.DiscountType,
+                        LineDiscountApprovedBy = e.ApprovedBy
+                    };
+                    state.RecalculateTotals();
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case LineDiscountRemoved e:
+                var lineForDiscountRemoval = state.Lines.FirstOrDefault(l => l.Id == e.LineId);
+                if (lineForDiscountRemoval != null)
+                {
+                    var index = state.Lines.FindIndex(l => l.Id == e.LineId);
+                    state.Lines[index] = lineForDiscountRemoval with
+                    {
+                        LineDiscountAmount = 0,
+                        LineDiscountReason = null,
+                        LineDiscountType = null,
+                        LineDiscountApprovedBy = null
+                    };
+                    state.RecalculateTotals();
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            // Price Override
+            case PriceOverridden e:
+                var lineForOverride = state.Lines.FirstOrDefault(l => l.Id == e.LineId);
+                if (lineForOverride != null)
+                {
+                    var index = state.Lines.FindIndex(l => l.Id == e.LineId);
+                    var newLineTotal = e.NewPrice * lineForOverride.Quantity +
+                                       lineForOverride.Modifiers.Sum(m => m.Price * m.Quantity);
+                    var newTaxAmount = newLineTotal * (lineForOverride.TaxRate / 100m);
+                    state.Lines[index] = lineForOverride with
+                    {
+                        UnitPrice = e.NewPrice,
+                        LineTotal = newLineTotal,
+                        TaxAmount = newTaxAmount,
+                        OriginalPrice = e.OriginalPrice,
+                        PriceOverrideReason = e.Reason,
+                        PriceOverrideApprovedBy = e.ApprovedBy
+                    };
+                    state.RecalculateTotals();
+                }
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            // Order Merge
+            case OrderMerged e:
+                // Add all merged lines
+                foreach (var line in e.MergedLines)
+                {
+                    state.Lines.Add(line);
+                }
+                // Add all merged discounts
+                foreach (var discount in e.MergedDiscounts)
+                {
+                    state.Discounts.Add(discount);
+                }
+                // Add all merged payments
+                foreach (var payment in e.MergedPayments)
+                {
+                    state.Payments.Add(payment);
+                    state.PaidAmount += payment.Amount;
+                    state.TipTotal += payment.TipAmount;
+                }
+                state.RecalculateTotals();
+                state.UpdatedAt = e.OccurredAt;
+                break;
+
+            case OrderMergedAway e:
+                state.Status = OrderStatus.Closed;
+                state.ClosedAt = e.OccurredAt;
+                state.Notes = string.IsNullOrEmpty(state.Notes)
+                    ? $"Merged into order {e.TargetOrderNumber}"
+                    : $"{state.Notes}\nMerged into order {e.TargetOrderNumber}";
+                state.UpdatedAt = e.OccurredAt;
+                break;
         }
     }
 
@@ -526,7 +628,8 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
             TaxRate = command.TaxRate,
             TaxAmount = taxAmount,
             IsBundle = command.IsBundle,
-            BundleComponents = command.BundleComponents ?? []
+            BundleComponents = command.BundleComponents ?? [],
+            Seat = command.Seat
         });
 
         await ConfirmEvents();
@@ -579,6 +682,12 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
         var line = State.Lines.FirstOrDefault(l => l.Id == command.LineId)
             ?? throw new InvalidOperationException("Line not found");
 
+        // Capture line details before voiding for kitchen notification
+        var lineMenuItemId = line.MenuItemId;
+        var lineName = line.Name;
+        var lineQuantity = line.Quantity;
+        var lineWasSent = line.Status == OrderLineStatus.Sent;
+
         RaiseEvent(new OrderLineVoided
         {
             OrderId = State.Id,
@@ -589,6 +698,24 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
         });
 
         await ConfirmEvents();
+
+        // Notify kitchen if item was sent to kitchen (for KDS void display)
+        if (lineWasSent && OrderStream != null)
+        {
+            await OrderStream.OnNextAsync(new KitchenItemVoidedEvent(
+                OrderId: State.Id,
+                SiteId: State.SiteId,
+                OrderNumber: State.OrderNumber,
+                LineId: command.LineId,
+                MenuItemId: lineMenuItemId,
+                ItemName: lineName,
+                Quantity: lineQuantity,
+                VoidReason: command.Reason,
+                VoidedBy: command.VoidedBy)
+            {
+                OrganizationId = State.OrganizationId
+            });
+        }
     }
 
     public async Task RemoveLineAsync(Guid lineId)
@@ -1455,6 +1582,230 @@ public class OrderGrain : JournaledGrain<OrderState, IOrderEvent>, IOrderGrain
         {
             OrganizationId = State.OrganizationId
         });
+    }
+
+    #endregion
+
+    #region Seat Assignment Implementation
+
+    public async Task AssignSeatAsync(AssignSeatCommand command)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        if (command.SeatNumber < 1)
+            throw new ArgumentException("Seat number must be at least 1", nameof(command));
+
+        var line = State.Lines.FirstOrDefault(l => l.Id == command.LineId)
+            ?? throw new InvalidOperationException("Line not found");
+
+        if (line.Status == OrderLineStatus.Voided)
+            throw new InvalidOperationException("Cannot assign seat to voided item");
+
+        RaiseEvent(new SeatAssigned
+        {
+            OrderId = State.Id,
+            LineId = command.LineId,
+            SeatNumber = command.SeatNumber,
+            AssignedBy = command.AssignedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await ConfirmEvents();
+    }
+
+    #endregion
+
+    #region Line Discount Implementation
+
+    public async Task ApplyLineDiscountAsync(ApplyLineDiscountCommand command)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        var line = State.Lines.FirstOrDefault(l => l.Id == command.LineId)
+            ?? throw new InvalidOperationException("Line not found");
+
+        if (line.Status == OrderLineStatus.Voided)
+            throw new InvalidOperationException("Cannot apply discount to voided item");
+
+        if (command.Value < 0)
+            throw new ArgumentException("Discount value cannot be negative", nameof(command));
+
+        // Calculate discount amount based on type
+        var discountAmount = command.DiscountType switch
+        {
+            DiscountType.Percentage => line.LineTotal * (command.Value / 100m),
+            DiscountType.FixedAmount => command.Value,
+            _ => command.Value
+        };
+
+        // Ensure discount doesn't exceed line total
+        discountAmount = Math.Min(discountAmount, line.LineTotal);
+
+        RaiseEvent(new LineDiscountApplied
+        {
+            OrderId = State.Id,
+            LineId = command.LineId,
+            DiscountType = command.DiscountType,
+            Value = command.Value,
+            Amount = discountAmount,
+            Reason = command.Reason,
+            AppliedBy = command.AppliedBy,
+            ApprovedBy = command.ApprovedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await ConfirmEvents();
+    }
+
+    public async Task RemoveLineDiscountAsync(Guid lineId, Guid removedBy)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        var line = State.Lines.FirstOrDefault(l => l.Id == lineId)
+            ?? throw new InvalidOperationException("Line not found");
+
+        if (line.LineDiscountAmount == 0)
+            throw new InvalidOperationException("No line discount to remove");
+
+        RaiseEvent(new LineDiscountRemoved
+        {
+            OrderId = State.Id,
+            LineId = lineId,
+            RemovedBy = removedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await ConfirmEvents();
+    }
+
+    #endregion
+
+    #region Price Override Implementation
+
+    public async Task OverridePriceAsync(OverridePriceCommand command)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        var line = State.Lines.FirstOrDefault(l => l.Id == command.LineId)
+            ?? throw new InvalidOperationException("Line not found");
+
+        if (line.Status == OrderLineStatus.Voided)
+            throw new InvalidOperationException("Cannot override price of voided item");
+
+        if (command.NewPrice < 0)
+            throw new ArgumentException("New price cannot be negative", nameof(command));
+
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            throw new ArgumentException("Reason is required for price override", nameof(command));
+
+        var originalPrice = line.OriginalPrice ?? line.UnitPrice;
+
+        RaiseEvent(new PriceOverridden
+        {
+            OrderId = State.Id,
+            LineId = command.LineId,
+            OriginalPrice = originalPrice,
+            NewPrice = command.NewPrice,
+            Reason = command.Reason,
+            OverriddenBy = command.OverriddenBy,
+            ApprovedBy = command.ApprovedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await ConfirmEvents();
+    }
+
+    #endregion
+
+    #region Order Merge Implementation
+
+    public async Task<MergeOrderResult> MergeFromOrderAsync(MergeFromOrderCommand command)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        // Get the source order
+        var sourceOrderGrain = GrainFactory.GetGrain<IOrderGrain>(
+            GrainKeys.Order(State.OrganizationId, State.SiteId, command.SourceOrderId));
+
+        var sourceState = await sourceOrderGrain.GetStateAsync();
+
+        if (sourceState.Id == Guid.Empty)
+            throw new InvalidOperationException("Source order does not exist");
+
+        if (sourceState.Status is OrderStatus.Closed or OrderStatus.Voided)
+            throw new InvalidOperationException("Cannot merge from closed or voided order");
+
+        if (sourceState.SiteId != State.SiteId)
+            throw new InvalidOperationException("Cannot merge orders from different sites");
+
+        // Get active lines, discounts, and payments from source
+        var activeLines = sourceState.Lines
+            .Where(l => l.Status != OrderLineStatus.Voided)
+            .ToList();
+
+        var now = DateTime.UtcNow;
+
+        // Raise merge event on this (target) order
+        RaiseEvent(new OrderMerged
+        {
+            OrderId = State.Id,
+            SourceOrderId = command.SourceOrderId,
+            SourceOrderNumber = sourceState.OrderNumber,
+            MergedLines = activeLines,
+            MergedDiscounts = sourceState.Discounts,
+            MergedPayments = sourceState.Payments,
+            MergedBy = command.MergedBy,
+            OccurredAt = now
+        });
+
+        await ConfirmEvents();
+
+        // Mark the source order as merged away
+        await sourceOrderGrain.MarkAsMergedAsync(State.Id, State.OrderNumber, command.MergedBy);
+
+        // Publish merge event for kitchen notification
+        if (OrderStream != null)
+        {
+            await OrderStream.OnNextAsync(new OrdersMergedEvent(
+                TargetOrderId: State.Id,
+                SourceOrderId: command.SourceOrderId,
+                SiteId: State.SiteId,
+                TargetOrderNumber: State.OrderNumber,
+                SourceOrderNumber: sourceState.OrderNumber,
+                LinesMerged: activeLines.Count,
+                MergedBy: command.MergedBy)
+            {
+                OrganizationId = State.OrganizationId
+            });
+        }
+
+        return new MergeOrderResult(
+            activeLines.Count,
+            sourceState.Payments.Count,
+            sourceState.Discounts.Count,
+            State.GrandTotal);
+    }
+
+    public async Task MarkAsMergedAsync(Guid targetOrderId, string targetOrderNumber, Guid mergedBy)
+    {
+        EnsureExists();
+        EnsureNotClosed();
+
+        RaiseEvent(new OrderMergedAway
+        {
+            OrderId = State.Id,
+            TargetOrderId = targetOrderId,
+            TargetOrderNumber = targetOrderNumber,
+            MergedBy = mergedBy,
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await ConfirmEvents();
     }
 
     #endregion

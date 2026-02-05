@@ -35,7 +35,11 @@ public record AddLineCommand(
     /// Selected components for bundle items (e.g., chosen side, drink).
     /// Required for bundle items; ignored for regular items.
     /// </summary>
-    [property: Id(8)] List<OrderLineBundleComponent>? BundleComponents = null);
+    [property: Id(8)] List<OrderLineBundleComponent>? BundleComponents = null,
+    /// <summary>
+    /// Optional seat number for seat-based ordering.
+    /// </summary>
+    [property: Id(9)] int? Seat = null);
 
 [GenerateSerializer]
 public record UpdateLineCommand(
@@ -195,6 +199,47 @@ public interface IOrderGrain : IGrainWithStringKey
     /// Get distinct course numbers for this order with item counts.
     /// </summary>
     Task<Dictionary<int, int>> GetCourseSummaryAsync();
+
+    // Seat Assignment
+
+    /// <summary>
+    /// Assign a seat number to a specific line item.
+    /// </summary>
+    Task AssignSeatAsync(AssignSeatCommand command);
+
+    // Line-Level Discounts
+
+    /// <summary>
+    /// Apply a discount to a specific line item.
+    /// </summary>
+    Task ApplyLineDiscountAsync(ApplyLineDiscountCommand command);
+
+    /// <summary>
+    /// Remove a line-level discount from a specific line item.
+    /// </summary>
+    Task RemoveLineDiscountAsync(Guid lineId, Guid removedBy);
+
+    // Price Overrides
+
+    /// <summary>
+    /// Override the price of a specific line item.
+    /// </summary>
+    Task OverridePriceAsync(OverridePriceCommand command);
+
+    // Order Merging
+
+    /// <summary>
+    /// Merge another order into this order.
+    /// Transfers all lines, payments, and discounts from the source order.
+    /// The source order will be closed as merged.
+    /// </summary>
+    Task<MergeOrderResult> MergeFromOrderAsync(MergeFromOrderCommand command);
+
+    /// <summary>
+    /// Mark this order as merged into another order.
+    /// Called on the source order when being merged.
+    /// </summary>
+    Task MarkAsMergedAsync(Guid targetOrderId, string targetOrderNumber, Guid mergedBy);
 }
 
 [GenerateSerializer]
@@ -309,5 +354,71 @@ public record HoldSummary(
     [property: Id(0)] int TotalHeldCount,
     [property: Id(1)] Dictionary<int, int> HeldByCourseCounts,
     [property: Id(2)] List<Guid> HeldLineIds);
+
+#endregion
+
+#region Seat Assignment Commands
+
+/// <summary>
+/// Command to assign a seat to a line item.
+/// </summary>
+[GenerateSerializer]
+public record AssignSeatCommand(
+    [property: Id(0)] Guid LineId,
+    [property: Id(1)] int SeatNumber,
+    [property: Id(2)] Guid AssignedBy);
+
+#endregion
+
+#region Line Discount Commands and Results
+
+/// <summary>
+/// Command to apply a discount to a specific line item.
+/// </summary>
+[GenerateSerializer]
+public record ApplyLineDiscountCommand(
+    [property: Id(0)] Guid LineId,
+    [property: Id(1)] DiscountType DiscountType,
+    [property: Id(2)] decimal Value,
+    [property: Id(3)] Guid AppliedBy,
+    [property: Id(4)] string? Reason = null,
+    [property: Id(5)] Guid? ApprovedBy = null);
+
+#endregion
+
+#region Price Override Commands
+
+/// <summary>
+/// Command to override the price of a line item.
+/// </summary>
+[GenerateSerializer]
+public record OverridePriceCommand(
+    [property: Id(0)] Guid LineId,
+    [property: Id(1)] decimal NewPrice,
+    [property: Id(2)] string Reason,
+    [property: Id(3)] Guid OverriddenBy,
+    [property: Id(4)] Guid? ApprovedBy = null);
+
+#endregion
+
+#region Order Merge Commands and Results
+
+/// <summary>
+/// Command to merge another order into this order.
+/// </summary>
+[GenerateSerializer]
+public record MergeFromOrderCommand(
+    [property: Id(0)] Guid SourceOrderId,
+    [property: Id(1)] Guid MergedBy);
+
+/// <summary>
+/// Result of merging orders.
+/// </summary>
+[GenerateSerializer]
+public record MergeOrderResult(
+    [property: Id(0)] int LinesMerged,
+    [property: Id(1)] int PaymentsMerged,
+    [property: Id(2)] int DiscountsMerged,
+    [property: Id(3)] decimal NewGrandTotal);
 
 #endregion

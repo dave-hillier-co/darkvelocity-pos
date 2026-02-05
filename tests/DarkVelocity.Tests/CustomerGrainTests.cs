@@ -1068,4 +1068,716 @@ public class CustomerGrainTests
         state.Contact.Phone.Should().Be("+9876543210");
         state.Contact.Email.Should().Be("john@example.com"); // Original email preserved
     }
+
+    // ==================== RFM Segmentation Tests ====================
+
+    [Fact]
+    public async Task CalculateRfmScoreAsync_NewCustomer_ShouldHaveLowScores()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        var rfmScore = await grain.CalculateRfmScoreAsync();
+
+        // Assert - new customer with no visits should have low scores
+        rfmScore.RecencyScore.Should().Be(1); // Never visited = poor recency
+        rfmScore.FrequencyScore.Should().Be(1); // No visits
+        rfmScore.MonetaryScore.Should().Be(1); // No spend
+        rfmScore.CombinedScore.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CalculateRfmScoreAsync_FrequentHighSpender_ShouldHaveHighScores()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Record many high-value visits (10+ visits, 100+ per visit = 1000+ total)
+        for (int i = 0; i < 12; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // Act
+        var rfmScore = await grain.CalculateRfmScoreAsync();
+
+        // Assert - frequent high spender should have excellent scores
+        rfmScore.RecencyScore.Should().BeGreaterThanOrEqualTo(4); // Recent visitor
+        rfmScore.FrequencyScore.Should().Be(5); // 12 visits >= 10 = excellent
+        rfmScore.MonetaryScore.Should().Be(5); // 1200 >= 1000 = excellent
+    }
+
+    [Fact]
+    public async Task CalculateRfmScoreAsync_WithCustomThresholds_ShouldUseThresholds()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Record 3 visits totaling $300
+        await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+
+        // With default thresholds, $300 would be "Fair" (200-500)
+        // With custom thresholds making $300 "Excellent", score should be higher
+        var customThresholds = new SegmentationThresholds(
+            MonetaryValueExcellent: 250m,
+            MonetaryValueGood: 150m,
+            MonetaryValueFair: 75m,
+            MonetaryValuePoor: 25m);
+
+        // Act
+        var rfmScore = await grain.CalculateRfmScoreAsync(customThresholds);
+
+        // Assert
+        rfmScore.MonetaryScore.Should().Be(5); // $300 >= $250 = excellent with custom thresholds
+    }
+
+    [Fact]
+    public async Task RecalculateSegmentAsync_ChampionCustomer_ShouldBeChampion()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Make them a champion: recent, frequent, high spender
+        for (int i = 0; i < 15; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // Act
+        await grain.RecalculateSegmentAsync();
+
+        // Assert
+        var segment = await grain.GetSegmentAsync();
+        segment.Should().Be(CustomerSegment.Champion);
+
+        var history = await grain.GetSegmentHistoryAsync();
+        history.Should().HaveCountGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task GetSegmentHistoryAsync_ShouldTrackChanges()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Initial segment is New
+        var initialSegment = await grain.GetSegmentAsync();
+        initialSegment.Should().Be(CustomerSegment.New);
+
+        // Make them a champion
+        for (int i = 0; i < 15; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // Act - recalculate to change segment
+        await grain.RecalculateSegmentAsync();
+
+        // Assert
+        var history = await grain.GetSegmentHistoryAsync();
+        history.Should().NotBeEmpty();
+        var lastChange = history.Last();
+        lastChange.NewSegment.Should().Be(CustomerSegment.Champion);
+        lastChange.RfmScore.Should().NotBeNull();
+    }
+
+    // ==================== GDPR Consent Tests ====================
+
+    [Fact]
+    public async Task UpdateConsentAsync_MarketingEmail_ShouldUpdateConsent()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(
+            MarketingEmail: true,
+            ConsentVersion: "v1.0",
+            IpAddress: "192.168.1.1",
+            UserAgent: "TestBrowser/1.0"));
+
+        // Assert
+        var consent = await grain.GetConsentStatusAsync();
+        consent.MarketingEmail.Should().BeTrue();
+        consent.MarketingEmailConsentedAt.Should().NotBeNull();
+        consent.ConsentVersion.Should().Be("v1.0");
+    }
+
+    [Fact]
+    public async Task UpdateConsentAsync_MultipleConsents_ShouldTrackAll()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(
+            MarketingEmail: true,
+            Sms: true,
+            DataRetention: true,
+            Profiling: false,
+            ConsentVersion: "v2.0"));
+
+        // Assert
+        var consent = await grain.GetConsentStatusAsync();
+        consent.MarketingEmail.Should().BeTrue();
+        consent.Sms.Should().BeTrue();
+        consent.DataRetention.Should().BeTrue();
+        consent.Profiling.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateConsentAsync_Revocation_ShouldTrackInHistory()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // First grant consent
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(MarketingEmail: true));
+
+        // Act - revoke consent
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(MarketingEmail: false));
+
+        // Assert
+        var consent = await grain.GetConsentStatusAsync();
+        consent.MarketingEmail.Should().BeFalse();
+
+        var history = await grain.GetConsentHistoryAsync();
+        history.Should().HaveCount(2);
+        history[0].ConsentType.Should().Be("MarketingEmail");
+        history[0].NewValue.Should().BeTrue();
+        history[1].ConsentType.Should().Be("MarketingEmail");
+        history[1].NewValue.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetConsentHistoryAsync_ShouldReturnAuditTrail()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Multiple consent changes
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(MarketingEmail: true, IpAddress: "1.1.1.1"));
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(Sms: true, IpAddress: "2.2.2.2"));
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(MarketingEmail: false, IpAddress: "3.3.3.3"));
+
+        // Act
+        var history = await grain.GetConsentHistoryAsync();
+
+        // Assert
+        history.Should().HaveCount(3);
+        history[0].IpAddress.Should().Be("1.1.1.1");
+        history[1].IpAddress.Should().Be("2.2.2.2");
+        history[2].IpAddress.Should().Be("3.3.3.3");
+    }
+
+    // ==================== Anonymization Tests ====================
+
+    [Fact]
+    public async Task AnonymizeAsync_ShouldRemovePII()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.UpdateAsync(new UpdateCustomerCommand(
+            FirstName: "John",
+            LastName: "Doe",
+            Email: "john@example.com"));
+
+        // Record some activity
+        await grain.RecordVisitAsync(new RecordVisitCommand(Guid.NewGuid(), Guid.NewGuid(), 100m));
+
+        // Act
+        await grain.AnonymizeAsync();
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.FirstName.Should().Be("REDACTED");
+        state.LastName.Should().Be("REDACTED");
+        state.DisplayName.Should().Be("REDACTED");
+        state.Contact.Email.Should().BeNull();
+        state.Contact.Phone.Should().BeNull();
+        state.DateOfBirth.Should().BeNull();
+        state.Status.Should().Be(CustomerStatus.Inactive);
+        state.IsAnonymized.Should().BeTrue();
+        state.AnonymizedAt.Should().NotBeNull();
+        state.AnonymizedHash.Should().NotBeNullOrEmpty(); // Hash preserved for reference
+
+        // Aggregate stats should be retained
+        state.Stats.TotalSpend.Should().Be(100m);
+        state.Stats.TotalVisits.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RequestDataDeletionAsync_ShouldAnonymizeAndRecord()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        var result = await grain.RequestDataDeletionAsync("user@example.com", "GDPR request");
+
+        // Assert
+        result.Should().BeTrue();
+        var state = await grain.GetStateAsync();
+        state.IsAnonymized.Should().BeTrue();
+        state.FirstName.Should().Be("REDACTED");
+    }
+
+    // ==================== VIP Detection Tests ====================
+
+    [Fact]
+    public async Task GrantVipStatusAsync_ShouldMakeCustomerVip()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var staffId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        await grain.GrantVipStatusAsync(new GrantVipStatusCommand("Loyal customer", staffId));
+
+        // Assert
+        var isVip = await grain.IsVipAsync();
+        isVip.Should().BeTrue();
+
+        var vipStatus = await grain.GetVipStatusAsync();
+        vipStatus.IsVip.Should().BeTrue();
+        vipStatus.VipReason.Should().Be("Loyal customer");
+        vipStatus.ManuallyAssigned.Should().BeTrue();
+        vipStatus.VipSince.Should().NotBeNull();
+
+        // Should also add VIP tag
+        var state = await grain.GetStateAsync();
+        state.Tags.Should().Contain("VIP");
+    }
+
+    [Fact]
+    public async Task RevokeVipStatusAsync_ShouldRemoveVip()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.GrantVipStatusAsync(new GrantVipStatusCommand("Initial grant"));
+
+        // Act
+        await grain.RevokeVipStatusAsync(new RevokeVipStatusCommand("No longer qualifies"));
+
+        // Assert
+        var isVip = await grain.IsVipAsync();
+        isVip.Should().BeFalse();
+
+        // VIP tag should be removed
+        var state = await grain.GetStateAsync();
+        state.Tags.Should().NotContain("VIP");
+    }
+
+    [Fact]
+    public async Task CheckAndUpdateVipStatusAsync_HighSpender_ShouldAutoGrantVip()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Spend over $1000 (default threshold)
+        for (int i = 0; i < 11; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // Act
+        await grain.CheckAndUpdateVipStatusAsync();
+
+        // Assert
+        var isVip = await grain.IsVipAsync();
+        isVip.Should().BeTrue();
+
+        var vipStatus = await grain.GetVipStatusAsync();
+        vipStatus.ManuallyAssigned.Should().BeFalse();
+        vipStatus.SpendAtVipGrant.Should().Be(1100m);
+    }
+
+    [Fact]
+    public async Task CheckAndUpdateVipStatusAsync_WithCustomThresholds_ShouldUseThresholds()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // 5 visits totaling $500
+        for (int i = 0; i < 5; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // With default thresholds ($1000), they wouldn't qualify
+        // With custom threshold ($400), they should
+
+        // Act
+        await grain.CheckAndUpdateVipStatusAsync(new VipThresholds(MinimumSpend: 400m));
+
+        // Assert
+        var isVip = await grain.IsVipAsync();
+        isVip.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CheckAndUpdateVipStatusAsync_RequireBoth_ShouldEnforceBothCriteria()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // High spend but few visits
+        await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 500m));
+        await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 600m));
+
+        // Act - require both spend AND visits
+        await grain.CheckAndUpdateVipStatusAsync(new VipThresholds(
+            MinimumSpend: 500m,
+            MinimumVisits: 5,
+            RequireBoth: true));
+
+        // Assert - should NOT be VIP because visits < 5
+        var isVip = await grain.IsVipAsync();
+        isVip.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GrantVipStatusAsync_AlreadyVip_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.GrantVipStatusAsync(new GrantVipStatusCommand("First grant"));
+
+        // Act
+        var act = () => grain.GrantVipStatusAsync(new GrantVipStatusCommand("Second grant"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already VIP*");
+    }
+
+    // ==================== Birthday Reward Tests ====================
+
+    [Fact]
+    public async Task SetBirthdayAsync_ShouldStoreBirthday()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        var birthday = new DateOnly(1990, 6, 15);
+
+        // Act
+        await grain.SetBirthdayAsync(new SetBirthdayCommand(birthday));
+
+        // Assert
+        var state = await grain.GetStateAsync();
+        state.DateOfBirth.Should().Be(birthday);
+    }
+
+    [Fact]
+    public async Task IssueBirthdayRewardAsync_ShouldIssueReward()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.SetBirthdayAsync(new SetBirthdayCommand(new DateOnly(1990, 6, 15)));
+
+        // Act
+        var result = await grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("Free Birthday Dessert", 30));
+
+        // Assert
+        result.RewardId.Should().NotBeEmpty();
+        result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+
+        var birthdayReward = await grain.GetCurrentBirthdayRewardAsync();
+        birthdayReward.Should().NotBeNull();
+        birthdayReward!.Year.Should().Be(DateTime.UtcNow.Year);
+        birthdayReward.CurrentRewardId.Should().Be(result.RewardId);
+
+        // Should also appear in regular rewards
+        var rewards = await grain.GetAvailableRewardsAsync();
+        rewards.Should().Contain(r => r.Name == "Free Birthday Dessert");
+    }
+
+    [Fact]
+    public async Task IssueBirthdayRewardAsync_AlreadyIssuedThisYear_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.SetBirthdayAsync(new SetBirthdayCommand(new DateOnly(1990, 6, 15)));
+        await grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("First Reward"));
+
+        // Act
+        var act = () => grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("Second Reward"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already issued this year*");
+    }
+
+    [Fact]
+    public async Task IssueBirthdayRewardAsync_NoBirthdaySet_ShouldThrow()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        // Note: birthday NOT set
+
+        // Act
+        var act = () => grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("Birthday Reward"));
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*birthday not set*");
+    }
+
+    [Fact]
+    public async Task HasBirthdayRewardThisYearAsync_ShouldCheckCorrectly()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.SetBirthdayAsync(new SetBirthdayCommand(new DateOnly(1990, 6, 15)));
+
+        // Before issuing
+        var beforeIssue = await grain.HasBirthdayRewardThisYearAsync();
+        beforeIssue.Should().BeFalse();
+
+        // Issue reward
+        await grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("Birthday Reward"));
+
+        // After issuing
+        var afterIssue = await grain.HasBirthdayRewardThisYearAsync();
+        afterIssue.Should().BeTrue();
+    }
+
+    // ==================== Referral Tracking Tests ====================
+
+    [Fact]
+    public async Task GenerateReferralCodeAsync_ShouldGenerateUniqueCode()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        var code = await grain.GenerateReferralCodeAsync();
+
+        // Assert
+        code.Should().NotBeNullOrEmpty();
+        code.Should().StartWith("JOHN"); // From FirstName "John"
+        code.Length.Should().BeGreaterThan(4);
+    }
+
+    [Fact]
+    public async Task GenerateReferralCodeAsync_WithPrefix_ShouldUsePrefix()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        var code = await grain.GenerateReferralCodeAsync(new GenerateReferralCodeCommand("VIP"));
+
+        // Assert
+        code.Should().StartWith("VIP");
+    }
+
+    [Fact]
+    public async Task GenerateReferralCodeAsync_CalledTwice_ShouldReturnSameCode()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Act
+        var code1 = await grain.GenerateReferralCodeAsync();
+        var code2 = await grain.GenerateReferralCodeAsync();
+
+        // Assert - should return same code
+        code2.Should().Be(code1);
+    }
+
+    [Fact]
+    public async Task CompleteReferralAsync_ShouldTrackReferralAndAwardPoints()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var referredCustomerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.GenerateReferralCodeAsync();
+
+        // Enroll in loyalty to receive points
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+
+        // Act
+        var result = await grain.CompleteReferralAsync(new CompleteReferralCommand(referredCustomerId, 100));
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.PointsAwarded.Should().Be(100);
+        result.TotalReferrals.Should().Be(1);
+        result.CapReached.Should().BeFalse();
+
+        var status = await grain.GetReferralStatusAsync();
+        status.SuccessfulReferrals.Should().Be(1);
+        status.TotalPointsEarnedFromReferrals.Should().Be(100);
+        status.ReferredCustomers.Should().Contain(referredCustomerId);
+
+        // Points should be added
+        var points = await grain.GetPointsBalanceAsync();
+        points.Should().Be(100);
+    }
+
+    [Fact]
+    public async Task CompleteReferralAsync_AtCap_ShouldStopAwarding()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        await grain.GenerateReferralCodeAsync();
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+
+        // Complete referrals up to cap (default is 10)
+        for (int i = 0; i < 10; i++)
+        {
+            await grain.CompleteReferralAsync(new CompleteReferralCommand(Guid.NewGuid(), 100));
+        }
+
+        var capReached = await grain.HasReachedReferralCapAsync();
+        capReached.Should().BeTrue();
+
+        // Act - try to complete one more
+        var result = await grain.CompleteReferralAsync(new CompleteReferralCommand(Guid.NewGuid(), 100));
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.PointsAwarded.Should().Be(0);
+        result.CapReached.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetReferralStatusAsync_ShouldReturnFullStatus()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+        var code = await grain.GenerateReferralCodeAsync();
+
+        // Act
+        var status = await grain.GetReferralStatusAsync();
+
+        // Assert
+        status.ReferralCode.Should().Be(code);
+        status.SuccessfulReferrals.Should().Be(0);
+        status.TotalPointsEarnedFromReferrals.Should().Be(0);
+        status.ReferralRewardsCap.Should().Be(10);
+    }
+
+    // ==================== Combined Behavior Tests ====================
+
+    [Fact]
+    public async Task FullCustomerLifecycle_ShouldTrackAllMetrics()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var siteId = Guid.NewGuid();
+        var grain = await CreateCustomerAsync(orgId, customerId);
+
+        // Set birthday
+        await grain.SetBirthdayAsync(new SetBirthdayCommand(new DateOnly(1985, 3, 20)));
+
+        // Update consent
+        await grain.UpdateConsentAsync(new UpdateConsentCommand(
+            MarketingEmail: true,
+            Sms: true,
+            DataRetention: true));
+
+        // Enroll in loyalty
+        await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(Guid.NewGuid(), "MEM001", Guid.NewGuid(), "Bronze"));
+
+        // Generate referral code
+        var referralCode = await grain.GenerateReferralCodeAsync();
+
+        // Make several visits (enough to become VIP and Champion)
+        for (int i = 0; i < 15; i++)
+        {
+            await grain.RecordVisitAsync(new RecordVisitCommand(siteId, Guid.NewGuid(), 100m));
+        }
+
+        // Check VIP and segment
+        await grain.CheckAndUpdateVipStatusAsync(new VipThresholds(MinimumSpend: 1000m));
+        await grain.RecalculateSegmentAsync();
+
+        // Issue birthday reward
+        var birthdayReward = await grain.IssueBirthdayRewardAsync(new IssueBirthdayRewardCommand("Birthday Treat"));
+
+        // Act - get full state
+        var state = await grain.GetStateAsync();
+
+        // Assert
+        state.DateOfBirth.Should().Be(new DateOnly(1985, 3, 20));
+        state.Consent.MarketingEmail.Should().BeTrue();
+        state.Consent.Sms.Should().BeTrue();
+        state.Loyalty.Should().NotBeNull();
+        state.Referral.ReferralCode.Should().Be(referralCode);
+        state.VipStatus.IsVip.Should().BeTrue();
+        state.Stats.Segment.Should().Be(CustomerSegment.Champion);
+        state.Stats.TotalVisits.Should().Be(15);
+        state.Stats.TotalSpend.Should().Be(1500m);
+        state.CurrentBirthdayReward.Should().NotBeNull();
+        state.Tags.Should().Contain("VIP");
+    }
 }

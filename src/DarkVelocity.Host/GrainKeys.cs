@@ -332,6 +332,18 @@ public static class GrainKeys
         => $"{orgId}:{siteId}:menu-engineering";
 
     /// <summary>
+    /// Creates a key for a profitability dashboard grain.
+    /// </summary>
+    public static string ProfitabilityDashboard(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:profitability";
+
+    /// <summary>
+    /// Creates a key for a cost alert index grain.
+    /// </summary>
+    public static string CostAlertIndex(Guid orgId)
+        => Index(orgId, "costalerts", "all");
+
+    /// <summary>
     /// Creates a key for a purchase order grain.
     /// </summary>
     public static string PurchaseOrder(Guid orgId, Guid orderId) => OrgEntity(orgId, "purchaseorder", orderId);
@@ -352,9 +364,58 @@ public static class GrainKeys
     public static string InventoryCount(Guid orgId, Guid countId) => OrgEntity(orgId, "inventorycount", countId);
 
     /// <summary>
+    /// Creates a key for a stock take grain.
+    /// </summary>
+    public static string StockTake(Guid orgId, Guid siteId, Guid stockTakeId) => SiteEntity(orgId, siteId, "stocktake", stockTakeId);
+
+    /// <summary>
+    /// Creates a key for an inventory transfer grain.
+    /// </summary>
+    public static string InventoryTransfer(Guid orgId, Guid transferId) => OrgEntity(orgId, "inventorytransfer", transferId);
+
+    /// <summary>
+    /// Creates a key for an expiry monitor grain (one per site).
+    /// </summary>
+    public static string ExpiryMonitor(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:expirymonitor";
+
+    /// <summary>
+    /// Creates a key for an ABC classification grain (one per site).
+    /// </summary>
+    public static string AbcClassification(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:abcclassification";
+
+    /// <summary>
+    /// Creates a key for a reorder suggestion grain (one per site).
+    /// </summary>
+    public static string ReorderSuggestion(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:reordersuggestion";
+
+    /// <summary>
     /// Creates a key for a device grain.
     /// </summary>
     public static string Device(Guid orgId, Guid deviceId) => OrgEntity(orgId, "device", deviceId);
+
+    /// <summary>
+    /// Creates a key for a print job grain.
+    /// </summary>
+    public static string PrintJob(Guid orgId, Guid deviceId, Guid jobId)
+        => $"{orgId}:device:{deviceId}:printjob:{jobId}";
+
+    /// <summary>
+    /// Creates a key for a device print queue grain.
+    /// </summary>
+    public static string DevicePrintQueue(Guid orgId, Guid deviceId)
+        => $"{orgId}:device:{deviceId}:printqueue";
+
+    /// <summary>
+    /// Creates a key for an offline sync queue grain.
+    /// </summary>
+    public static string OfflineSyncQueue(Guid orgId, Guid deviceId)
+        => $"{orgId}:device:{deviceId}:syncqueue";
+
+    /// <summary>
+    /// Creates a key for a device status (health) grain.
+    /// </summary>
+    public static string DeviceStatus(Guid orgId, Guid locationId)
+        => $"{orgId}:{locationId}:devicestatus";
 
     /// <summary>
     /// Creates a key for a daily sales report grain.
@@ -463,6 +524,26 @@ public static class GrainKeys
     /// </summary>
     public static string ChannelRegistry(Guid orgId) => $"{orgId}:channelregistry";
 
+    /// <summary>
+    /// Creates a key for an external order grain.
+    /// </summary>
+    public static string ExternalOrder(Guid orgId, Guid externalOrderId) => OrgEntity(orgId, "externalorder", externalOrderId);
+
+    /// <summary>
+    /// Creates a key for a menu sync grain.
+    /// </summary>
+    public static string MenuSync(Guid orgId, Guid syncId) => OrgEntity(orgId, "menusync", syncId);
+
+    /// <summary>
+    /// Creates a key for a delivery platform grain.
+    /// </summary>
+    public static string DeliveryPlatform(Guid orgId, Guid platformId) => OrgEntity(orgId, "deliveryplatform", platformId);
+
+    /// <summary>
+    /// Creates a key for a platform payout grain.
+    /// </summary>
+    public static string PlatformPayout(Guid orgId, Guid payoutId) => OrgEntity(orgId, "payout", payoutId);
+
     // ============================================================================
     // CMS Menu Grains
     // ============================================================================
@@ -520,6 +601,20 @@ public static class GrainKeys
     /// Creates a key for the recipe registry grain (one per org).
     /// </summary>
     public static string RecipeRegistry(Guid orgId) => $"{orgId}:reciperegistry";
+
+    // ============================================================================
+    // Ingredient Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for an ingredient grain.
+    /// </summary>
+    public static string Ingredient(Guid orgId, Guid ingredientId) => $"{orgId}:ingredient:{ingredientId}";
+
+    /// <summary>
+    /// Creates a key for the ingredient registry grain (one per org).
+    /// </summary>
+    public static string IngredientRegistry(Guid orgId) => $"{orgId}:ingredientregistry";
 
     /// <summary>
     /// Creates a key for a purchase document grain (invoice or receipt).
@@ -665,6 +760,21 @@ public static class GrainKeys
     public static string PaymentBatch(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:paymentbatch";
 
     /// <summary>
+    /// Creates a key for an offline payment queue grain (singleton per site).
+    /// </summary>
+    public static string OfflinePaymentQueue(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:offlinepaymentqueue";
+
+    /// <summary>
+    /// Creates a key for a chargeback grain.
+    /// </summary>
+    public static string Chargeback(Guid orgId, Guid chargebackId) => OrgEntity(orgId, "chargeback", chargebackId);
+
+    /// <summary>
+    /// Creates a key for a customer house account grain.
+    /// </summary>
+    public static string CustomerAccount(Guid orgId, Guid customerId) => OrgEntity(orgId, "customeraccount", customerId);
+
+    /// <summary>
     /// Generates a random user code for device authorization (8 alphanumeric chars).
     /// </summary>
     public static string GenerateUserCode()
@@ -705,4 +815,207 @@ public static class GrainKeys
     /// Maps refresh token hashes to (orgId, sessionId) for OAuth token refresh.
     /// </summary>
     public static string RefreshTokenLookup() => "global:refreshtokenlookup";
+
+    // ============================================================================
+    // Fiscal Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a fiscal device grain.
+    /// </summary>
+    public static string FiscalDevice(Guid orgId, Guid siteId, Guid deviceId)
+        => $"{orgId}:{siteId}:fiscaldevice:{deviceId}";
+
+    /// <summary>
+    /// Creates a key for a fiscal device registry grain (one per site).
+    /// </summary>
+    public static string FiscalDeviceRegistry(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscaldeviceregistry";
+
+    /// <summary>
+    /// Creates a key for a fiscal transaction grain.
+    /// </summary>
+    public static string FiscalTransaction(Guid orgId, Guid siteId, Guid transactionId)
+        => $"{orgId}:{siteId}:fiscaltransaction:{transactionId}";
+
+    /// <summary>
+    /// Creates a key for a fiscal transaction registry grain (one per site).
+    /// </summary>
+    public static string FiscalTransactionRegistry(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscaltxregistry";
+
+    /// <summary>
+    /// Creates a key for a fiscal journal grain (one per site per day).
+    /// </summary>
+    public static string FiscalJournal(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:fiscaljournal:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a DSFinV-K export grain.
+    /// </summary>
+    public static string DSFinVKExport(Guid orgId, Guid siteId, Guid exportId)
+        => $"{orgId}:{siteId}:dsfinvk:{exportId}";
+
+    /// <summary>
+    /// Creates a key for a DSFinV-K export registry grain (one per site).
+    /// </summary>
+    public static string DSFinVKExportRegistry(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:dsfinvkregistry";
+
+    // ============================================================================
+    // Advanced Reporting Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a daypart analysis grain (one per site per day).
+    /// </summary>
+    public static string DaypartAnalysis(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:daypart:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a labor report grain (one per site per period).
+    /// </summary>
+    public static string LaborReport(Guid orgId, Guid siteId, DateOnly periodStart)
+        => $"{orgId}:{siteId}:labor:{periodStart:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a product mix grain (one per site per day).
+    /// </summary>
+    public static string ProductMix(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:productmix:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a payment reconciliation grain (one per site per day).
+    /// </summary>
+    public static string PaymentReconciliation(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:reconciliation:{date:yyyy-MM-dd}";
+
+    // ============================================================================
+    // Finance Domain Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a chart of accounts grain (one per organization).
+    /// </summary>
+    public static string ChartOfAccounts(Guid orgId)
+        => $"{orgId}:chartofaccounts";
+
+    /// <summary>
+    /// Creates a key for a journal entry grain.
+    /// </summary>
+    public static string JournalEntry(Guid orgId, Guid journalEntryId)
+        => $"{orgId}:journalentry:{journalEntryId}";
+
+    /// <summary>
+    /// Creates a key for an accounting period grain (one per organization per year).
+    /// </summary>
+    public static string AccountingPeriod(Guid orgId, int year)
+        => $"{orgId}:accountingperiod:{year}";
+
+    /// <summary>
+    /// Creates a key for a financial reports grain (one per organization).
+    /// </summary>
+    public static string FinancialReports(Guid orgId)
+        => $"{orgId}:financialreports";
+
+    /// <summary>
+    /// Creates a key for a bank reconciliation grain.
+    /// </summary>
+    public static string BankReconciliation(Guid orgId, Guid reconciliationId)
+        => $"{orgId}:reconciliation:{reconciliationId}";
+
+    /// <summary>
+    /// Creates a key for a journal entry index grain (one per organization per month).
+    /// </summary>
+    public static string JournalEntryIndex(Guid orgId, int year, int month)
+        => $"{orgId}:journalentry-index:{year}-{month:D2}";
+
+    // ============================================================================
+    // Organization Domain Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a subscription grain (one per organization).
+    /// </summary>
+    public static string Subscription(Guid orgId) => $"{orgId}:subscription";
+
+    /// <summary>
+    /// Creates a key for the global slug lookup grain.
+    /// Single instance for cross-org slug uniqueness.
+    /// </summary>
+    public static string SlugLookup() => "global:sluglookup";
+
+    // ============================================================================
+    // Tables & Bookings Advanced Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a table assignment optimizer grain (one per site).
+    /// </summary>
+    public static string TableAssignmentOptimizer(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:tableoptimizer";
+
+    /// <summary>
+    /// Creates a key for a turn time analytics grain (one per site).
+    /// </summary>
+    public static string TurnTimeAnalytics(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:turntime";
+
+    /// <summary>
+    /// Creates a key for a booking notification scheduler grain (one per site).
+    /// </summary>
+    public static string BookingNotificationScheduler(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:bookingnotifications";
+
+    /// <summary>
+    /// Creates a key for a no-show detection grain (one per site).
+    /// </summary>
+    public static string NoShowDetection(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:noshowdetection";
+
+    /// <summary>
+    /// Creates a key for an enhanced waitlist grain (one per site per day).
+    /// </summary>
+    public static string EnhancedWaitlist(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:enhancedwaitlist:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a week calendar grain (for aggregate weekly views).
+    /// </summary>
+    public static string WeekCalendar(Guid orgId, Guid siteId, DateOnly startDate)
+        => $"{orgId}:{siteId}:weekcalendar:{startDate:yyyy-MM-dd}";
+
+    // ============================================================================
+    // Fiscal Grains (Additional)
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for the fiscal job scheduler grain.
+    /// </summary>
+    public static string FiscalJobScheduler(Guid orgId)
+        => $"{orgId}:fiscaljobs";
+
+    /// <summary>
+    /// Creates a key for the Z-report grain.
+    /// </summary>
+    public static string ZReport(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:zreport";
+
+    /// <summary>
+    /// Creates a key for the multi-country fiscal grain.
+    /// </summary>
+    public static string MultiCountryFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal";
+
+    /// <summary>
+    /// Creates a key for the French fiscal grain.
+    /// </summary>
+    public static string FrenchFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal:france";
+
+    /// <summary>
+    /// Creates a key for the Polish fiscal grain.
+    /// </summary>
+    public static string PolishFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal:poland";
 }

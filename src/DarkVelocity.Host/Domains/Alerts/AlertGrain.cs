@@ -237,11 +237,212 @@ public class AlertGrain : Grain, IAlertGrain
 
     public Task EvaluateRulesAsync()
     {
-        // Rule evaluation would be implemented here
-        // This would check various metrics against rule thresholds
-        // and create alerts as needed
+        // No-op when called without metrics - kept for backward compatibility
+        // Rule evaluation requires a MetricsSnapshot to evaluate against
         return Task.CompletedTask;
     }
+
+    public async Task<IReadOnlyList<Alert>> EvaluateRulesAsync(MetricsSnapshot metrics)
+    {
+        EnsureInitialized();
+
+        var triggeredAlerts = new List<Alert>();
+        var now = DateTime.UtcNow;
+
+        foreach (var rule in _state.State.Rules.Where(r => r.IsEnabled))
+        {
+            // Check if we're still in cooldown for this rule
+            if (rule.CooldownPeriod.HasValue &&
+                _state.State.RuleLastTriggered.TryGetValue(rule.RuleId, out var lastTriggered))
+            {
+                if (now - lastTriggered < rule.CooldownPeriod.Value)
+                    continue; // Still in cooldown
+            }
+
+            // Evaluate the rule against the metrics
+            var evaluationResult = EvaluateRule(rule, metrics);
+
+            if (evaluationResult.Triggered)
+            {
+                // Create the alert
+                var alertCommand = new CreateAlertCommand(
+                    Type: rule.Type,
+                    Severity: rule.DefaultSeverity,
+                    Title: GenerateAlertTitle(rule, metrics, evaluationResult),
+                    Message: GenerateAlertMessage(rule, metrics, evaluationResult),
+                    EntityId: metrics.EntityId,
+                    EntityType: metrics.EntityType,
+                    Metadata: BuildAlertMetadata(rule, metrics, evaluationResult));
+
+                var alert = await CreateAlertAsync(alertCommand);
+                triggeredAlerts.Add(alert);
+
+                // Record the last triggered time for cooldown
+                _state.State.RuleLastTriggered[rule.RuleId] = now;
+            }
+        }
+
+        if (triggeredAlerts.Count > 0)
+        {
+            await _state.WriteStateAsync();
+        }
+
+        return triggeredAlerts;
+    }
+
+    private static RuleEvaluationResult EvaluateRule(AlertRuleRecord rule, MetricsSnapshot metrics)
+    {
+        // Get the primary metric value
+        if (!metrics.Metrics.TryGetValue(rule.Metric, out var primaryValue))
+        {
+            return new RuleEvaluationResult
+            {
+                Rule = ToAlertRule(rule),
+                Triggered = false,
+                Message = $"Metric '{rule.Metric}' not found in snapshot"
+            };
+        }
+
+        // Get threshold - may be dynamic from secondary metric
+        var threshold = rule.Threshold;
+        if (rule.SecondaryMetric != null && metrics.Metrics.TryGetValue(rule.SecondaryMetric, out var secondaryValue))
+        {
+            // For some operators, the threshold comes from the secondary metric
+            if (rule.Operator == ComparisonOperator.ChangedBy)
+            {
+                // For ChangedBy, threshold is the change amount, compare against secondary
+                var change = primaryValue - secondaryValue;
+                return new RuleEvaluationResult
+                {
+                    Rule = ToAlertRule(rule),
+                    Triggered = rule.Threshold < 0 ? change <= rule.Threshold : change >= rule.Threshold,
+                    ActualValue = change,
+                    ThresholdValue = rule.Threshold,
+                    Message = $"Value changed from {secondaryValue:N2} to {primaryValue:N2} (change: {change:N2})"
+                };
+            }
+            else
+            {
+                // Secondary value is the dynamic threshold (e.g., ReorderPoint)
+                threshold = secondaryValue;
+            }
+        }
+
+        // Evaluate based on operator
+        var triggered = rule.Operator switch
+        {
+            ComparisonOperator.GreaterThan => primaryValue > threshold,
+            ComparisonOperator.GreaterThanOrEqual => primaryValue >= threshold,
+            ComparisonOperator.LessThan => primaryValue < threshold,
+            ComparisonOperator.LessThanOrEqual => primaryValue <= threshold,
+            ComparisonOperator.Equal => primaryValue == threshold,
+            ComparisonOperator.NotEqual => primaryValue != threshold,
+            _ => false
+        };
+
+        return new RuleEvaluationResult
+        {
+            Rule = ToAlertRule(rule),
+            Triggered = triggered,
+            ActualValue = primaryValue,
+            ThresholdValue = threshold,
+            Message = $"{rule.Metric}: {primaryValue:N2} {GetOperatorSymbol(rule.Operator)} {threshold:N2}"
+        };
+    }
+
+    private static string GetOperatorSymbol(ComparisonOperator op) => op switch
+    {
+        ComparisonOperator.GreaterThan => ">",
+        ComparisonOperator.GreaterThanOrEqual => ">=",
+        ComparisonOperator.LessThan => "<",
+        ComparisonOperator.LessThanOrEqual => "<=",
+        ComparisonOperator.Equal => "==",
+        ComparisonOperator.NotEqual => "!=",
+        ComparisonOperator.ChangedBy => "changed by",
+        _ => "?"
+    };
+
+    private static string GenerateAlertTitle(AlertRuleRecord rule, MetricsSnapshot metrics, RuleEvaluationResult result)
+    {
+        var entityName = metrics.EntityName ?? "Unknown";
+        return rule.Type switch
+        {
+            AlertType.LowStock => $"Low Stock: {entityName}",
+            AlertType.OutOfStock => $"Out of Stock: {entityName}",
+            AlertType.NegativeStock => $"Negative Stock: {entityName}",
+            AlertType.ExpiryRisk => $"Expiry Risk: {entityName}",
+            AlertType.GPDropped => $"GP% Dropped",
+            AlertType.HighVariance => $"High Cost Variance",
+            AlertType.SupplierPriceSpike => $"Price Spike: {entityName}",
+            AlertType.HighWaste => $"High Waste",
+            AlertType.HighVoidRate => $"High Void Rate",
+            _ => rule.Name
+        };
+    }
+
+    private static string GenerateAlertMessage(AlertRuleRecord rule, MetricsSnapshot metrics, RuleEvaluationResult result)
+    {
+        var entityName = metrics.EntityName ?? "Unknown";
+        return rule.Type switch
+        {
+            AlertType.LowStock => $"{entityName} is below reorder point. Current: {result.ActualValue:N2}, Reorder Point: {result.ThresholdValue:N2}",
+            AlertType.OutOfStock => $"{entityName} is out of stock.",
+            AlertType.NegativeStock => $"{entityName} has negative stock quantity: {result.ActualValue:N2}",
+            AlertType.ExpiryRisk => $"{entityName} expires in {result.ActualValue:N0} days",
+            AlertType.GPDropped => $"Gross profit dropped by {Math.Abs(result.ActualValue ?? 0):N1}% vs last week",
+            AlertType.HighVariance => $"Actual vs theoretical cost variance is {result.ActualValue:N1}%",
+            AlertType.SupplierPriceSpike => $"{entityName} price increased by {result.ActualValue:N1}%",
+            AlertType.HighWaste => $"Waste percentage is {result.ActualValue:N1}%",
+            AlertType.HighVoidRate => $"Void rate is {result.ActualValue:N1}%",
+            _ => result.Message ?? rule.Description
+        };
+    }
+
+    private static Dictionary<string, string> BuildAlertMetadata(AlertRuleRecord rule, MetricsSnapshot metrics, RuleEvaluationResult result)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["ruleId"] = rule.RuleId.ToString(),
+            ["ruleName"] = rule.Name,
+            ["metric"] = rule.Metric,
+            ["actualValue"] = result.ActualValue?.ToString("N2") ?? "N/A",
+            ["thresholdValue"] = result.ThresholdValue?.ToString("N2") ?? "N/A",
+            ["operator"] = rule.Operator.ToString()
+        };
+
+        if (metrics.EntityName != null)
+            metadata["entityName"] = metrics.EntityName;
+
+        if (metrics.Context != null)
+        {
+            foreach (var kv in metrics.Context)
+            {
+                metadata[kv.Key] = kv.Value;
+            }
+        }
+
+        return metadata;
+    }
+
+    private static AlertRule ToAlertRule(AlertRuleRecord r) => new()
+    {
+        RuleId = r.RuleId,
+        Type = r.Type,
+        Name = r.Name,
+        Description = r.Description,
+        IsEnabled = r.IsEnabled,
+        DefaultSeverity = r.DefaultSeverity,
+        Condition = new AlertRuleCondition
+        {
+            Metric = r.Metric,
+            Operator = r.Operator,
+            Threshold = r.Threshold,
+            SecondaryMetric = r.SecondaryMetric,
+            SecondaryThreshold = r.SecondaryThreshold
+        },
+        Actions = new List<AlertAction> { new AlertAction { ActionType = AlertActionType.CreateAlert } },
+        CooldownPeriod = r.CooldownPeriod
+    };
 
     public Task<IReadOnlyList<AlertRule>> GetRulesAsync()
     {
@@ -309,6 +510,11 @@ public class AlertGrain : Grain, IAlertGrain
 
         _state.State.Version++;
         await _state.WriteStateAsync();
+    }
+
+    public Task<bool> ExistsAsync()
+    {
+        return Task.FromResult(_state.State.SiteId != Guid.Empty);
     }
 
     private void EnsureInitialized()

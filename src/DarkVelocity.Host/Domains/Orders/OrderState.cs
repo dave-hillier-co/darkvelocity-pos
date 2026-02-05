@@ -95,6 +95,47 @@ public record OrderLine
     /// Who fired the item to the kitchen.
     /// </summary>
     [Id(27)] public Guid? FiredBy { get; init; }
+
+    /// <summary>
+    /// Seat number for seat-based ordering (e.g., seat 1, seat 2).
+    /// Null if not assigned to a specific seat.
+    /// </summary>
+    [Id(28)] public int? Seat { get; init; }
+
+    /// <summary>
+    /// Line-level discount amount (separate from order-level discounts).
+    /// </summary>
+    [Id(29)] public decimal LineDiscountAmount { get; init; }
+
+    /// <summary>
+    /// Reason for line-level discount.
+    /// </summary>
+    [Id(30)] public string? LineDiscountReason { get; init; }
+
+    /// <summary>
+    /// Type of line-level discount applied.
+    /// </summary>
+    [Id(31)] public DiscountType? LineDiscountType { get; init; }
+
+    /// <summary>
+    /// Who approved the line-level discount (manager approval).
+    /// </summary>
+    [Id(32)] public Guid? LineDiscountApprovedBy { get; init; }
+
+    /// <summary>
+    /// Original price before any override.
+    /// </summary>
+    [Id(33)] public decimal? OriginalPrice { get; init; }
+
+    /// <summary>
+    /// Reason for price override.
+    /// </summary>
+    [Id(34)] public string? PriceOverrideReason { get; init; }
+
+    /// <summary>
+    /// Who approved the price override (manager approval).
+    /// </summary>
+    [Id(35)] public Guid? PriceOverrideApprovedBy { get; init; }
 }
 
 public enum OrderLineStatus
@@ -273,12 +314,18 @@ public sealed class OrderState
     /// <summary>
     /// Recalculates all totals based on current lines, discounts, and service charges.
     /// Tax is calculated per line item based on each item's tax rate.
+    /// Line-level discounts are included in the discount total.
     /// </summary>
     public void RecalculateTotals()
     {
         var activeLines = Lines.Where(l => l.Status != OrderLineStatus.Voided).ToList();
         Subtotal = activeLines.Sum(l => l.LineTotal);
-        DiscountTotal = Discounts.Sum(d => d.Amount);
+
+        // Include both order-level and line-level discounts
+        var orderLevelDiscounts = Discounts.Sum(d => d.Amount);
+        var lineLevelDiscounts = activeLines.Sum(l => l.LineDiscountAmount);
+        DiscountTotal = orderLevelDiscounts + lineLevelDiscounts;
+
         ServiceChargeTotal = ServiceCharges.Sum(s => s.Amount);
 
         // Sum tax from each line item (each has its own rate)

@@ -129,6 +129,113 @@ public class FiscalDeviceGrain : Grain, IFiscalDeviceGrain
         return Task.FromResult(daysUntilExpiry <= daysThreshold);
     }
 
+    // ========================================================================
+    // Device Lifecycle Management
+    // ========================================================================
+
+    public async Task<FiscalDeviceSnapshot> ActivateAsync(string? taxAuthorityRegistrationId, Guid operatorId)
+    {
+        EnsureInitialized();
+
+        if (_state.State.Status == FiscalDeviceStatus.Active)
+            throw new InvalidOperationException("Device is already active");
+
+        _state.State.Status = FiscalDeviceStatus.Active;
+        _state.State.TaxAuthorityRegistrationId = taxAuthorityRegistrationId;
+        _state.State.ActivatedAt = DateTime.UtcNow;
+        _state.State.ActivatedBy = operatorId;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
+    public async Task DeactivateWithReasonAsync(string reason, Guid operatorId)
+    {
+        EnsureInitialized();
+
+        _state.State.Status = FiscalDeviceStatus.Inactive;
+        _state.State.DeactivationReason = reason;
+        _state.State.DeactivatedAt = DateTime.UtcNow;
+        _state.State.DeactivatedBy = operatorId;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+    }
+
+    public Task<FiscalDeviceHealthStatus> GetHealthStatusAsync()
+    {
+        EnsureInitialized();
+
+        int? daysUntilExpiry = null;
+        var certificateValid = true;
+
+        if (_state.State.CertificateExpiryDate.HasValue)
+        {
+            daysUntilExpiry = (int)(_state.State.CertificateExpiryDate.Value - DateTime.UtcNow).TotalDays;
+            certificateValid = daysUntilExpiry > 0;
+        }
+
+        return Task.FromResult(new FiscalDeviceHealthStatus(
+            DeviceId: _state.State.FiscalDeviceId,
+            Status: _state.State.Status,
+            IsOnline: _state.State.Status == FiscalDeviceStatus.Active,
+            CertificateValid: certificateValid,
+            DaysUntilCertificateExpiry: daysUntilExpiry,
+            LastSyncAt: _state.State.LastSyncAt,
+            LastTransactionAt: _state.State.LastTransactionAt,
+            TotalTransactions: _state.State.TransactionCounter,
+            LastError: _state.State.LastError));
+    }
+
+    public async Task<FiscalDeviceSelfTestResult> PerformSelfTestAsync()
+    {
+        EnsureInitialized();
+
+        var passed = true;
+        string? errorMessage = null;
+
+        // Check certificate expiry
+        if (_state.State.CertificateExpiryDate.HasValue &&
+            _state.State.CertificateExpiryDate.Value < DateTime.UtcNow)
+        {
+            passed = false;
+            errorMessage = "Certificate has expired";
+        }
+
+        // Check device is active
+        if (_state.State.Status != FiscalDeviceStatus.Active)
+        {
+            passed = false;
+            errorMessage = $"Device is not active (status: {_state.State.Status})";
+        }
+
+        _state.State.LastSelfTestAt = DateTime.UtcNow;
+        _state.State.LastSelfTestPassed = passed;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+
+        return new FiscalDeviceSelfTestResult(
+            DeviceId: _state.State.FiscalDeviceId,
+            Passed: passed,
+            ErrorMessage: errorMessage,
+            PerformedAt: DateTime.UtcNow);
+    }
+
+    public async Task<FiscalDeviceSnapshot> RefreshCertificateAsync()
+    {
+        EnsureInitialized();
+
+        // This would typically call out to the TSE provider to get updated certificate info
+        // For now, we just update the last sync time
+        _state.State.LastSyncAt = DateTime.UtcNow;
+        _state.State.Version++;
+
+        await _state.WriteStateAsync();
+        return CreateSnapshot();
+    }
+
     private FiscalDeviceSnapshot CreateSnapshot()
     {
         return new FiscalDeviceSnapshot(
@@ -585,5 +692,143 @@ public class TaxRateGrain : Grain, ITaxRateGrain
     {
         if (_state.State.TaxRateId == Guid.Empty)
             throw new InvalidOperationException("Tax rate grain not initialized");
+    }
+}
+
+// ============================================================================
+// Fiscal Device Registry Grain
+// ============================================================================
+
+/// <summary>
+/// Registry grain for tracking fiscal devices per site.
+/// </summary>
+public class FiscalDeviceRegistryGrain : Grain, IFiscalDeviceRegistryGrain
+{
+    private readonly IPersistentState<FiscalDeviceRegistryState> _state;
+
+    public FiscalDeviceRegistryGrain(
+        [PersistentState("fiscalDeviceRegistry", "OrleansStorage")]
+        IPersistentState<FiscalDeviceRegistryState> state)
+    {
+        _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        if (_state.State.OrgId == Guid.Empty)
+        {
+            var key = this.GetPrimaryKeyString();
+            var parts = key.Split(':');
+            _state.State.OrgId = Guid.Parse(parts[0]);
+            _state.State.SiteId = Guid.Parse(parts[1]);
+        }
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    public async Task RegisterDeviceAsync(Guid deviceId, string serialNumber)
+    {
+        _state.State.Devices[deviceId] = serialNumber;
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public async Task UnregisterDeviceAsync(Guid deviceId)
+    {
+        _state.State.Devices.Remove(deviceId);
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public Task<IReadOnlyList<Guid>> GetDeviceIdsAsync()
+    {
+        return Task.FromResult<IReadOnlyList<Guid>>(_state.State.Devices.Keys.ToList());
+    }
+
+    public Task<Guid?> FindBySerialNumberAsync(string serialNumber)
+    {
+        var match = _state.State.Devices.FirstOrDefault(
+            kv => kv.Value.Equals(serialNumber, StringComparison.OrdinalIgnoreCase));
+
+        return Task.FromResult(match.Key == Guid.Empty ? null : (Guid?)match.Key);
+    }
+
+    public Task<int> GetDeviceCountAsync()
+    {
+        return Task.FromResult(_state.State.Devices.Count);
+    }
+}
+
+// ============================================================================
+// Fiscal Transaction Registry Grain
+// ============================================================================
+
+/// <summary>
+/// Registry grain for tracking fiscal transactions per site.
+/// </summary>
+public class FiscalTransactionRegistryGrain : Grain, IFiscalTransactionRegistryGrain
+{
+    private readonly IPersistentState<FiscalTransactionRegistryState> _state;
+
+    public FiscalTransactionRegistryGrain(
+        [PersistentState("fiscalTransactionRegistry", "OrleansStorage")]
+        IPersistentState<FiscalTransactionRegistryState> state)
+    {
+        _state = state;
+    }
+
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        if (_state.State.OrgId == Guid.Empty)
+        {
+            var key = this.GetPrimaryKeyString();
+            var parts = key.Split(':');
+            _state.State.OrgId = Guid.Parse(parts[0]);
+            _state.State.SiteId = Guid.Parse(parts[1]);
+        }
+        return base.OnActivateAsync(cancellationToken);
+    }
+
+    public async Task RegisterTransactionAsync(Guid transactionId, Guid deviceId, DateOnly date)
+    {
+        _state.State.Transactions.Add(new FiscalTransactionRegistryEntry
+        {
+            TransactionId = transactionId,
+            DeviceId = deviceId,
+            Date = date,
+            CreatedAt = DateTime.UtcNow
+        });
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public Task<IReadOnlyList<Guid>> GetTransactionIdsAsync(
+        DateOnly startDate,
+        DateOnly endDate,
+        Guid? deviceId = null)
+    {
+        var query = _state.State.Transactions.AsEnumerable();
+
+        query = query.Where(t => t.Date >= startDate && t.Date <= endDate);
+
+        if (deviceId.HasValue)
+        {
+            query = query.Where(t => t.DeviceId == deviceId.Value);
+        }
+
+        var result = query
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => t.TransactionId)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<Guid>>(result);
+    }
+
+    public Task<int> GetTransactionCountAsync(DateOnly? date = null)
+    {
+        var count = date.HasValue
+            ? _state.State.Transactions.Count(t => t.Date == date.Value)
+            : _state.State.Transactions.Count;
+
+        return Task.FromResult(count);
     }
 }

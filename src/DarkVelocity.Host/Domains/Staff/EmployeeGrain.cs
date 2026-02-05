@@ -691,6 +691,346 @@ public class EmployeeGrain : JournaledGrain<EmployeeState, IEmployeeEvent>, IEmp
         return Task.FromResult(State.Id != Guid.Empty);
     }
 
+    // ============================================================================
+    // Break Tracking
+    // ============================================================================
+
+    public async Task<StartBreakResult> StartBreakAsync(StartBreakCommand command)
+    {
+        EnsureExists();
+
+        if (State.CurrentTimeEntry == null)
+            throw new InvalidOperationException("Employee is not clocked in");
+
+        if (State.CurrentTimeEntry.CurrentBreak != null)
+            throw new InvalidOperationException("Employee is already on break");
+
+        var breakId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        State.CurrentTimeEntry.CurrentBreak = new BreakEntry
+        {
+            Id = breakId,
+            BreakType = command.BreakType,
+            IsPaid = command.IsPaid,
+            StartTime = now
+        };
+
+        RaiseEvent(new Events.BreakStarted
+        {
+            EmployeeId = State.Id,
+            TimeEntryId = State.CurrentTimeEntry.Id,
+            BreakId = breakId,
+            BreakType = command.BreakType,
+            IsPaid = command.IsPaid,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
+
+        return new StartBreakResult(breakId, now, command.BreakType, command.IsPaid);
+    }
+
+    public async Task<EndBreakResult> EndBreakAsync()
+    {
+        EnsureExists();
+
+        if (State.CurrentTimeEntry == null)
+            throw new InvalidOperationException("Employee is not clocked in");
+
+        if (State.CurrentTimeEntry.CurrentBreak == null)
+            throw new InvalidOperationException("Employee is not on break");
+
+        var currentBreak = State.CurrentTimeEntry.CurrentBreak;
+        var now = DateTime.UtcNow;
+        var durationMinutes = (decimal)(now - currentBreak.StartTime).TotalMinutes;
+
+        currentBreak.EndTime = now;
+        currentBreak.DurationMinutes = durationMinutes;
+
+        // Update totals
+        if (currentBreak.IsPaid)
+        {
+            State.CurrentTimeEntry.TotalPaidBreakMinutes += durationMinutes;
+        }
+        else
+        {
+            State.CurrentTimeEntry.TotalUnpaidBreakMinutes += durationMinutes;
+        }
+
+        // Move to completed breaks
+        State.CurrentTimeEntry.Breaks.Add(currentBreak);
+        State.CurrentTimeEntry.CurrentBreak = null;
+
+        // Recalculate net worked hours
+        if (State.CurrentTimeEntry.ClockIn != default)
+        {
+            var totalMinutes = (decimal)(now - State.CurrentTimeEntry.ClockIn).TotalMinutes;
+            State.CurrentTimeEntry.NetWorkedHours = (totalMinutes - State.CurrentTimeEntry.TotalUnpaidBreakMinutes) / 60m;
+        }
+
+        RaiseEvent(new Events.BreakEnded
+        {
+            EmployeeId = State.Id,
+            TimeEntryId = State.CurrentTimeEntry.Id,
+            BreakId = currentBreak.Id,
+            DurationMinutes = durationMinutes,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
+
+        return new EndBreakResult(currentBreak.Id, now, durationMinutes);
+    }
+
+    public Task<bool> IsOnBreakAsync()
+    {
+        return Task.FromResult(State.CurrentTimeEntry?.CurrentBreak != null);
+    }
+
+    public Task<BreakSummary> GetBreakSummaryAsync()
+    {
+        if (State.CurrentTimeEntry == null)
+        {
+            return Task.FromResult(new BreakSummary(0, 0, 0, 0, false));
+        }
+
+        var entry = State.CurrentTimeEntry;
+        return Task.FromResult(new BreakSummary(
+            entry.TotalPaidBreakMinutes,
+            entry.TotalUnpaidBreakMinutes,
+            entry.NetWorkedHours,
+            entry.Breaks.Count,
+            entry.CurrentBreak != null));
+    }
+
+    // ============================================================================
+    // Certification Tracking
+    // ============================================================================
+
+    public async Task<CertificationSnapshot> AddCertificationAsync(AddCertificationCommand command)
+    {
+        EnsureExists();
+
+        var certId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+        var daysUntilExpiration = command.ExpirationDate.DayNumber - today.DayNumber;
+
+        var status = daysUntilExpiration <= 0 ? CertificationStatus.Expired
+            : daysUntilExpiration <= 7 ? CertificationStatus.ExpiringSoon
+            : CertificationStatus.Valid;
+
+        var cert = new EmployeeCertification
+        {
+            Id = certId,
+            CertificationType = command.CertificationType,
+            CertificationName = command.CertificationName,
+            CertificationNumber = command.CertificationNumber,
+            IssuedDate = command.IssuedDate,
+            ExpirationDate = command.ExpirationDate,
+            IssuingAuthority = command.IssuingAuthority,
+            Status = status,
+            CreatedAt = now
+        };
+
+        State.Certifications.Add(cert);
+
+        RaiseEvent(new Events.CertificationAdded
+        {
+            EmployeeId = State.Id,
+            CertificationId = certId,
+            CertificationType = command.CertificationType,
+            CertificationName = command.CertificationName,
+            CertificationNumber = command.CertificationNumber,
+            IssuedDate = command.IssuedDate,
+            ExpirationDate = command.ExpirationDate,
+            IssuingAuthority = command.IssuingAuthority,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
+
+        return CreateCertificationSnapshot(cert);
+    }
+
+    public async Task<CertificationSnapshot> UpdateCertificationAsync(UpdateCertificationCommand command)
+    {
+        EnsureExists();
+
+        var cert = State.Certifications.FirstOrDefault(c => c.Id == command.CertificationId)
+            ?? throw new InvalidOperationException("Certification not found");
+
+        var now = DateTime.UtcNow;
+
+        if (command.NewExpirationDate.HasValue)
+        {
+            cert.ExpirationDate = command.NewExpirationDate.Value;
+            var today = DateOnly.FromDateTime(now);
+            var daysUntilExpiration = cert.ExpirationDate.DayNumber - today.DayNumber;
+            cert.Status = daysUntilExpiration <= 0 ? CertificationStatus.Expired
+                : daysUntilExpiration <= 7 ? CertificationStatus.ExpiringSoon
+                : CertificationStatus.Valid;
+        }
+
+        if (command.NewCertificationNumber != null)
+        {
+            cert.CertificationNumber = command.NewCertificationNumber;
+        }
+
+        cert.UpdatedAt = now;
+
+        RaiseEvent(new Events.CertificationUpdated
+        {
+            EmployeeId = State.Id,
+            CertificationId = command.CertificationId,
+            NewExpirationDate = command.NewExpirationDate,
+            NewCertificationNumber = command.NewCertificationNumber,
+            OccurredAt = now
+        });
+        await ConfirmEvents();
+
+        return CreateCertificationSnapshot(cert);
+    }
+
+    public async Task RemoveCertificationAsync(Guid certificationId, string reason)
+    {
+        EnsureExists();
+
+        var cert = State.Certifications.FirstOrDefault(c => c.Id == certificationId)
+            ?? throw new InvalidOperationException("Certification not found");
+
+        State.Certifications.Remove(cert);
+
+        RaiseEvent(new Events.CertificationRemoved
+        {
+            EmployeeId = State.Id,
+            CertificationId = certificationId,
+            Reason = reason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public Task<IReadOnlyList<CertificationSnapshot>> GetCertificationsAsync()
+    {
+        var snapshots = State.Certifications
+            .Select(CreateCertificationSnapshot)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<CertificationSnapshot>>(snapshots);
+    }
+
+    public Task<CertificationComplianceResult> CheckCertificationComplianceAsync(IReadOnlyList<string> requiredCertifications)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var validCertTypes = State.Certifications
+            .Where(c => c.Status != CertificationStatus.Expired && c.ExpirationDate > today)
+            .Select(c => c.CertificationType)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missing = requiredCertifications
+            .Where(r => !validCertTypes.Contains(r))
+            .ToList();
+
+        var expired = State.Certifications
+            .Where(c => c.Status == CertificationStatus.Expired || c.ExpirationDate <= today)
+            .Where(c => requiredCertifications.Contains(c.CertificationType, StringComparer.OrdinalIgnoreCase))
+            .Select(CreateCertificationSnapshot)
+            .ToList();
+
+        var expiringSoon = State.Certifications
+            .Where(c => c.Status == CertificationStatus.ExpiringSoon)
+            .Where(c => requiredCertifications.Contains(c.CertificationType, StringComparer.OrdinalIgnoreCase))
+            .Select(CreateCertificationSnapshot)
+            .ToList();
+
+        return Task.FromResult(new CertificationComplianceResult(
+            missing.Count == 0 && expired.Count == 0,
+            missing,
+            expired,
+            expiringSoon));
+    }
+
+    public async Task<IReadOnlyList<CertificationSnapshot>> CheckCertificationExpirationsAsync(int warningDays = 30, int criticalDays = 7)
+    {
+        EnsureExists();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var alertCerts = new List<CertificationSnapshot>();
+
+        foreach (var cert in State.Certifications)
+        {
+            var daysUntilExpiration = cert.ExpirationDate.DayNumber - today.DayNumber;
+
+            string alertLevel;
+            if (daysUntilExpiration <= 0)
+            {
+                alertLevel = "expired";
+                cert.Status = CertificationStatus.Expired;
+            }
+            else if (daysUntilExpiration <= criticalDays)
+            {
+                alertLevel = "critical";
+                cert.Status = CertificationStatus.ExpiringSoon;
+            }
+            else if (daysUntilExpiration <= warningDays)
+            {
+                alertLevel = "warning";
+                cert.Status = CertificationStatus.ExpiringSoon;
+            }
+            else
+            {
+                cert.Status = CertificationStatus.Valid;
+                continue;
+            }
+
+            alertCerts.Add(CreateCertificationSnapshot(cert));
+
+            RaiseEvent(new Events.CertificationExpirationAlertRaised
+            {
+                EmployeeId = State.Id,
+                CertificationId = cert.Id,
+                CertificationType = cert.CertificationType,
+                CertificationName = cert.CertificationName,
+                ExpirationDate = cert.ExpirationDate,
+                DaysUntilExpiration = daysUntilExpiration,
+                AlertLevel = alertLevel,
+                OccurredAt = DateTime.UtcNow
+            });
+        }
+
+        if (alertCerts.Count > 0)
+        {
+            await ConfirmEvents();
+        }
+
+        return alertCerts;
+    }
+
+    public async Task SetJurisdictionAsync(string jurisdictionCode)
+    {
+        EnsureExists();
+
+        State.JurisdictionCode = jurisdictionCode;
+        State.UpdatedAt = DateTime.UtcNow;
+        await ConfirmEvents();
+    }
+
+    private CertificationSnapshot CreateCertificationSnapshot(EmployeeCertification cert)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var daysUntilExpiration = cert.ExpirationDate.DayNumber - today.DayNumber;
+
+        return new CertificationSnapshot(
+            cert.Id,
+            cert.CertificationType,
+            cert.CertificationName,
+            cert.CertificationNumber,
+            cert.IssuedDate,
+            cert.ExpirationDate,
+            cert.IssuingAuthority,
+            cert.Status.ToString(),
+            daysUntilExpiration);
+    }
+
     private void EnsureExists()
     {
         if (State.Id == Guid.Empty)

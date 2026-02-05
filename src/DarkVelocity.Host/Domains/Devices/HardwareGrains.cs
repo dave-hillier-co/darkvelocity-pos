@@ -542,6 +542,317 @@ public class DeviceStatusGrain : Grain, IDeviceStatusGrain
                 Timestamp: a.Timestamp)).ToList()));
     }
 
+    // Health monitoring implementation
+
+    public async Task RecordHeartbeatAsync(Guid deviceId, UpdateDeviceHealthCommand? healthUpdate = null)
+    {
+        EnsureInitialized();
+
+        var device = _state.State.Devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (device == null)
+            return;
+
+        var now = DateTime.UtcNow;
+        var wasOnline = device.IsOnline;
+
+        device.LastSeenAt = now;
+        device.IsOnline = true;
+
+        // Track uptime
+        if (!wasOnline && device.LastOnlineStatusChange.HasValue)
+        {
+            device.LastOnlineStatusChange = now;
+        }
+        else if (device.FirstSeenAt == null)
+        {
+            device.FirstSeenAt = now;
+            device.LastOnlineStatusChange = now;
+        }
+
+        // Update health metrics if provided
+        if (healthUpdate != null)
+        {
+            if (healthUpdate.SignalStrength.HasValue)
+                device.SignalStrength = healthUpdate.SignalStrength;
+            if (healthUpdate.LatencyMs.HasValue)
+                device.LatencyMs = healthUpdate.LatencyMs;
+            if (healthUpdate.PrinterStatus.HasValue)
+                device.PrinterStatus = healthUpdate.PrinterStatus;
+            if (healthUpdate.PaperLevel.HasValue)
+                device.PaperLevel = healthUpdate.PaperLevel;
+            if (healthUpdate.PendingPrintJobs.HasValue)
+                device.PendingPrintJobs = healthUpdate.PendingPrintJobs;
+        }
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    public Task<DeviceHealthMetrics?> GetDeviceHealthAsync(Guid deviceId)
+    {
+        EnsureInitialized();
+
+        var device = _state.State.Devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (device == null)
+            return Task.FromResult<DeviceHealthMetrics?>(null);
+
+        return Task.FromResult<DeviceHealthMetrics?>(CreateHealthMetrics(device));
+    }
+
+    public Task<DeviceHealthSummary> GetHealthSummaryAsync()
+    {
+        EnsureInitialized();
+
+        var devices = _state.State.Devices;
+        var onlineCount = devices.Count(d => d.IsOnline);
+        var offlineCount = devices.Count(d => !d.IsOnline);
+        var alertDeviceIds = _state.State.Alerts.Select(a => a.DeviceId).Distinct().ToHashSet();
+        var devicesWithAlerts = devices.Count(d => alertDeviceIds.Contains(d.DeviceId));
+
+        var overallQuality = CalculateOverallConnectionQuality(devices);
+
+        var metrics = devices.Select(CreateHealthMetrics).ToList();
+        var alerts = _state.State.Alerts.Select(a => new DeviceAlert(
+            DeviceId: a.DeviceId,
+            DeviceType: a.DeviceType,
+            DeviceName: a.DeviceName,
+            AlertType: a.AlertType,
+            Message: a.Message,
+            Timestamp: a.Timestamp)).ToList();
+
+        return Task.FromResult(new DeviceHealthSummary(
+            LocationId: _state.State.LocationId,
+            TotalDevices: devices.Count,
+            OnlineDevices: onlineCount,
+            OfflineDevices: offlineCount,
+            DevicesWithAlerts: devicesWithAlerts,
+            OverallConnectionQuality: overallQuality,
+            LastHealthCheck: DateTime.UtcNow,
+            DeviceMetrics: metrics,
+            ActiveAlerts: alerts));
+    }
+
+    public async Task<IReadOnlyList<DeviceHealthMetrics>> PerformHealthCheckAsync(TimeSpan offlineThreshold)
+    {
+        EnsureInitialized();
+
+        var now = DateTime.UtcNow;
+        var staleDevices = new List<DeviceHealthMetrics>();
+
+        foreach (var device in _state.State.Devices)
+        {
+            // Check if device hasn't been seen within threshold
+            if (device.IsOnline &&
+                device.LastSeenAt.HasValue &&
+                (now - device.LastSeenAt.Value) > offlineThreshold)
+            {
+                // Mark as offline
+                device.IsOnline = false;
+
+                // Track disconnect
+                device.DisconnectTimestamps.Add(now);
+
+                // Keep only last 24h of disconnects
+                var cutoff = now.AddHours(-24);
+                device.DisconnectTimestamps.RemoveAll(t => t < cutoff);
+
+                // Update uptime tracking
+                if (device.LastOnlineStatusChange.HasValue)
+                {
+                    device.TotalOnlineTime += (now - device.LastOnlineStatusChange.Value);
+                }
+                device.LastOnlineStatusChange = now;
+
+                // Create alert
+                _state.State.Alerts.Add(new DeviceAlertState
+                {
+                    DeviceId = device.DeviceId,
+                    DeviceType = device.DeviceType,
+                    DeviceName = device.DeviceName,
+                    AlertType = "Offline",
+                    Message = $"Device has not been seen for {offlineThreshold.TotalMinutes:F0} minutes",
+                    Timestamp = now
+                });
+
+                staleDevices.Add(CreateHealthMetrics(device));
+            }
+        }
+
+        if (staleDevices.Any())
+        {
+            _state.State.Version++;
+            await _state.WriteStateAsync();
+        }
+
+        return staleDevices;
+    }
+
+    public async Task UpdatePrinterHealthAsync(Guid printerId, PrinterHealthStatus status, int? paperLevel = null)
+    {
+        EnsureInitialized();
+
+        var device = _state.State.Devices.FirstOrDefault(d => d.DeviceId == printerId);
+        if (device == null || device.DeviceType != "Printer")
+            return;
+
+        device.PrinterStatus = status;
+        if (paperLevel.HasValue)
+            device.PaperLevel = paperLevel;
+
+        // Create alerts for problematic statuses
+        if (status == PrinterHealthStatus.PaperOut)
+        {
+            // Remove existing paper alerts
+            _state.State.Alerts.RemoveAll(a => a.DeviceId == printerId && a.AlertType.StartsWith("Paper"));
+
+            _state.State.Alerts.Add(new DeviceAlertState
+            {
+                DeviceId = printerId,
+                DeviceType = "Printer",
+                DeviceName = device.DeviceName,
+                AlertType = "PaperOut",
+                Message = "Printer is out of paper",
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        else if (status == PrinterHealthStatus.PaperLow)
+        {
+            // Remove existing paper alerts
+            _state.State.Alerts.RemoveAll(a => a.DeviceId == printerId && a.AlertType.StartsWith("Paper"));
+
+            _state.State.Alerts.Add(new DeviceAlertState
+            {
+                DeviceId = printerId,
+                DeviceType = "Printer",
+                DeviceName = device.DeviceName,
+                AlertType = "PaperLow",
+                Message = $"Printer paper is low ({paperLevel}%)",
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        else if (status == PrinterHealthStatus.Error)
+        {
+            _state.State.Alerts.Add(new DeviceAlertState
+            {
+                DeviceId = printerId,
+                DeviceType = "Printer",
+                DeviceName = device.DeviceName,
+                AlertType = "PrinterError",
+                Message = "Printer has encountered an error",
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        else if (status == PrinterHealthStatus.Ready)
+        {
+            // Clear paper and error alerts when ready
+            _state.State.Alerts.RemoveAll(a => a.DeviceId == printerId &&
+                (a.AlertType.StartsWith("Paper") || a.AlertType == "PrinterError"));
+        }
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
+    private DeviceHealthMetrics CreateHealthMetrics(RegisteredDeviceState device)
+    {
+        var now = DateTime.UtcNow;
+
+        // Calculate disconnect count in last 24h
+        var cutoff = now.AddHours(-24);
+        var disconnectCount24h = device.DisconnectTimestamps.Count(t => t >= cutoff);
+
+        // Calculate uptime percentage
+        double? uptimePercentage = null;
+        if (device.FirstSeenAt.HasValue)
+        {
+            var totalTime = now - device.FirstSeenAt.Value;
+            if (totalTime.TotalSeconds > 0)
+            {
+                var onlineTime = device.TotalOnlineTime;
+                if (device.IsOnline && device.LastOnlineStatusChange.HasValue)
+                {
+                    onlineTime += (now - device.LastOnlineStatusChange.Value);
+                }
+                uptimePercentage = (onlineTime.TotalSeconds / totalTime.TotalSeconds) * 100;
+            }
+        }
+
+        // Determine connection quality based on metrics
+        var connectionQuality = CalculateConnectionQuality(device, disconnectCount24h);
+
+        return new DeviceHealthMetrics(
+            DeviceId: device.DeviceId,
+            DeviceType: device.DeviceType,
+            DeviceName: device.DeviceName,
+            IsOnline: device.IsOnline,
+            LastSeenAt: device.LastSeenAt,
+            ConnectionQuality: connectionQuality,
+            SignalStrength: device.SignalStrength,
+            LatencyMs: device.LatencyMs,
+            UptimePercentage: uptimePercentage,
+            DisconnectCount24h: disconnectCount24h,
+            PrinterStatus: device.PrinterStatus,
+            PaperLevel: device.PaperLevel,
+            PendingPrintJobs: device.PendingPrintJobs,
+            FailedPrintJobs24h: device.FailedPrintJobs24h);
+    }
+
+    private static ConnectionQuality CalculateConnectionQuality(RegisteredDeviceState device, int disconnectCount24h)
+    {
+        if (!device.IsOnline)
+            return ConnectionQuality.Disconnected;
+
+        // Score based on multiple factors
+        var score = 100;
+
+        // Signal strength impact
+        if (device.SignalStrength.HasValue)
+        {
+            if (device.SignalStrength < -70) score -= 30;
+            else if (device.SignalStrength < -60) score -= 15;
+            else if (device.SignalStrength < -50) score -= 5;
+        }
+
+        // Latency impact
+        if (device.LatencyMs.HasValue)
+        {
+            if (device.LatencyMs > 500) score -= 30;
+            else if (device.LatencyMs > 200) score -= 15;
+            else if (device.LatencyMs > 100) score -= 5;
+        }
+
+        // Disconnect frequency impact
+        if (disconnectCount24h > 10) score -= 30;
+        else if (disconnectCount24h > 5) score -= 15;
+        else if (disconnectCount24h > 2) score -= 5;
+
+        return score switch
+        {
+            >= 85 => ConnectionQuality.Excellent,
+            >= 70 => ConnectionQuality.Good,
+            >= 50 => ConnectionQuality.Fair,
+            _ => ConnectionQuality.Poor
+        };
+    }
+
+    private static ConnectionQuality CalculateOverallConnectionQuality(List<RegisteredDeviceState> devices)
+    {
+        if (!devices.Any())
+            return ConnectionQuality.Excellent;
+
+        var onlineCount = devices.Count(d => d.IsOnline);
+        var onlinePercentage = (double)onlineCount / devices.Count * 100;
+
+        return onlinePercentage switch
+        {
+            >= 95 => ConnectionQuality.Excellent,
+            >= 80 => ConnectionQuality.Good,
+            >= 60 => ConnectionQuality.Fair,
+            >= 30 => ConnectionQuality.Poor,
+            _ => ConnectionQuality.Disconnected
+        };
+    }
+
     private void EnsureInitialized()
     {
         if (_state.State.LocationId == Guid.Empty)

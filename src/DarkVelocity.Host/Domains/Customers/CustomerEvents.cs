@@ -285,4 +285,133 @@ public sealed record CustomerAnonymized : ICustomerEvent
 {
     [Id(0)] public Guid CustomerId { get; init; }
     [Id(1)] public DateTime OccurredAt { get; init; }
+    [Id(2)] public string? AnonymizedHash { get; init; }
+    [Id(3)] public bool RetainAggregateStats { get; init; }
+}
+
+// ==================== RFM Segmentation Events ====================
+
+[GenerateSerializer]
+public sealed record CustomerRfmScoreCalculated : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public int RecencyScore { get; init; }
+    [Id(2)] public int FrequencyScore { get; init; }
+    [Id(3)] public int MonetaryScore { get; init; }
+    [Id(4)] public int DaysSinceLastVisit { get; init; }
+    [Id(5)] public int VisitCount { get; init; }
+    [Id(6)] public decimal TotalSpend { get; init; }
+    [Id(7)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerSegmentChanged : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public string PreviousSegment { get; init; } = "";
+    [Id(2)] public string NewSegment { get; init; } = "";
+    [Id(3)] public int? RecencyScore { get; init; }
+    [Id(4)] public int? FrequencyScore { get; init; }
+    [Id(5)] public int? MonetaryScore { get; init; }
+    [Id(6)] public string? Reason { get; init; }
+    [Id(7)] public DateTime OccurredAt { get; init; }
+}
+
+// ==================== GDPR Consent Events ====================
+
+[GenerateSerializer]
+public sealed record CustomerConsentUpdated : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public string ConsentType { get; init; } = "";
+    [Id(2)] public bool PreviousValue { get; init; }
+    [Id(3)] public bool NewValue { get; init; }
+    [Id(4)] public string? ConsentVersion { get; init; }
+    [Id(5)] public string? IpAddress { get; init; }
+    [Id(6)] public string? UserAgent { get; init; }
+    [Id(7)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerDataDeletionRequested : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public string? RequestedBy { get; init; }
+    [Id(2)] public string? Reason { get; init; }
+    [Id(3)] public DateTime OccurredAt { get; init; }
+}
+
+// ==================== VIP Events ====================
+
+[GenerateSerializer]
+public sealed record CustomerVipStatusGranted : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public string Reason { get; init; } = "";
+    [Id(2)] public decimal? SpendAtGrant { get; init; }
+    [Id(3)] public int? VisitsAtGrant { get; init; }
+    [Id(4)] public bool ManuallyAssigned { get; init; }
+    [Id(5)] public Guid? GrantedBy { get; init; }
+    [Id(6)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerVipStatusRevoked : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public string? Reason { get; init; }
+    [Id(2)] public Guid? RevokedBy { get; init; }
+    [Id(3)] public DateTime OccurredAt { get; init; }
+}
+
+// ==================== Birthday Reward Events ====================
+
+[GenerateSerializer]
+public sealed record CustomerBirthdaySet : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public DateOnly Birthday { get; init; }
+    [Id(2)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerBirthdayRewardIssued : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public Guid RewardId { get; init; }
+    [Id(2)] public string RewardName { get; init; } = "";
+    [Id(3)] public int Year { get; init; }
+    [Id(4)] public DateOnly? ExpiresAt { get; init; }
+    [Id(5)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerBirthdayRewardRedeemed : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public Guid RewardId { get; init; }
+    [Id(2)] public Guid OrderId { get; init; }
+    [Id(3)] public int Year { get; init; }
+    [Id(4)] public DateTime OccurredAt { get; init; }
+}
+
+// ==================== Enhanced Referral Events ====================
+
+[GenerateSerializer]
+public sealed record CustomerReferralRewardAwarded : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public Guid ReferredCustomerId { get; init; }
+    [Id(2)] public int PointsAwarded { get; init; }
+    [Id(3)] public int TotalReferrals { get; init; }
+    [Id(4)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
+public sealed record CustomerReferralCapReached : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public int TotalReferrals { get; init; }
+    [Id(2)] public int TotalPointsEarned { get; init; }
+    [Id(3)] public DateTime OccurredAt { get; init; }
 }

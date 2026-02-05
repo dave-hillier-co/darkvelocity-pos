@@ -80,12 +80,89 @@ public record UpdatePreferencesCommand(
     [property: Id(2)] string? SeatingPreference = null,
     [property: Id(3)] string? Notes = null);
 
+// ==================== Consent Commands ====================
+
+[GenerateSerializer]
+public record UpdateConsentCommand(
+    [property: Id(0)] bool? MarketingEmail = null,
+    [property: Id(1)] bool? Sms = null,
+    [property: Id(2)] bool? DataRetention = null,
+    [property: Id(3)] bool? Profiling = null,
+    [property: Id(4)] string? ConsentVersion = null,
+    [property: Id(5)] string? IpAddress = null,
+    [property: Id(6)] string? UserAgent = null);
+
+// ==================== VIP Commands ====================
+
+[GenerateSerializer]
+public record GrantVipStatusCommand(
+    [property: Id(0)] string Reason,
+    [property: Id(1)] Guid? GrantedBy = null);
+
+[GenerateSerializer]
+public record RevokeVipStatusCommand(
+    [property: Id(0)] string? Reason = null,
+    [property: Id(1)] Guid? RevokedBy = null);
+
+// ==================== Birthday Commands ====================
+
+[GenerateSerializer]
+public record SetBirthdayCommand(
+    [property: Id(0)] DateOnly Birthday);
+
+[GenerateSerializer]
+public record IssueBirthdayRewardCommand(
+    [property: Id(0)] string RewardName,
+    [property: Id(1)] int? ValidDays = 30);
+
+// ==================== Enhanced Referral Commands ====================
+
+[GenerateSerializer]
+public record GenerateReferralCodeCommand(
+    [property: Id(0)] string? Prefix = null);
+
+[GenerateSerializer]
+public record CompleteReferralCommand(
+    [property: Id(0)] Guid ReferredCustomerId,
+    [property: Id(1)] int PointsToAward);
+
+// ==================== Segmentation Thresholds ====================
+
+[GenerateSerializer]
+public record SegmentationThresholds(
+    [property: Id(0)] int RecencyDaysExcellent = 7,
+    [property: Id(1)] int RecencyDaysGood = 30,
+    [property: Id(2)] int RecencyDaysFair = 60,
+    [property: Id(3)] int RecencyDaysPoor = 90,
+    [property: Id(4)] int FrequencyCountExcellent = 10,
+    [property: Id(5)] int FrequencyCountGood = 5,
+    [property: Id(6)] int FrequencyCountFair = 3,
+    [property: Id(7)] int FrequencyCountPoor = 1,
+    [property: Id(8)] decimal MonetaryValueExcellent = 1000m,
+    [property: Id(9)] decimal MonetaryValueGood = 500m,
+    [property: Id(10)] decimal MonetaryValueFair = 200m,
+    [property: Id(11)] decimal MonetaryValuePoor = 50m);
+
+// ==================== VIP Thresholds ====================
+
+[GenerateSerializer]
+public record VipThresholds(
+    [property: Id(0)] decimal? MinimumSpend = 1000m,
+    [property: Id(1)] int? MinimumVisits = 10,
+    [property: Id(2)] bool RequireBoth = false);
+
 [GenerateSerializer]
 public record CustomerCreatedResult([property: Id(0)] Guid Id, [property: Id(1)] string DisplayName, [property: Id(2)] DateTime CreatedAt);
 [GenerateSerializer]
 public record PointsResult([property: Id(0)] int NewBalance, [property: Id(1)] int LifetimePoints);
 [GenerateSerializer]
 public record RewardResult([property: Id(0)] Guid RewardId, [property: Id(1)] DateTime? ExpiresAt = null);
+[GenerateSerializer]
+public record ReferralResult(
+    [property: Id(0)] bool Success,
+    [property: Id(1)] int PointsAwarded,
+    [property: Id(2)] int TotalReferrals,
+    [property: Id(3)] bool CapReached = false);
 
 public interface ICustomerGrain : IGrainWithStringKey
 {
@@ -123,9 +200,40 @@ public interface ICustomerGrain : IGrainWithStringKey
     // Customer merge
     Task MergeFromAsync(Guid sourceCustomerId);
 
-    // GDPR
+    // GDPR & Privacy
     Task DeleteAsync();
     Task AnonymizeAsync();
+    Task<bool> RequestDataDeletionAsync(string? requestedBy = null, string? reason = null);
+
+    // GDPR Consent Management
+    Task UpdateConsentAsync(UpdateConsentCommand command);
+    Task<ConsentStatus> GetConsentStatusAsync();
+    Task<IReadOnlyList<ConsentChange>> GetConsentHistoryAsync();
+
+    // RFM Segmentation
+    Task<RfmScore> CalculateRfmScoreAsync(SegmentationThresholds? thresholds = null);
+    Task<CustomerSegment> GetSegmentAsync();
+    Task<IReadOnlyList<SegmentChange>> GetSegmentHistoryAsync();
+    Task RecalculateSegmentAsync(SegmentationThresholds? thresholds = null);
+
+    // VIP Detection
+    Task<bool> IsVipAsync();
+    Task GrantVipStatusAsync(GrantVipStatusCommand command);
+    Task RevokeVipStatusAsync(RevokeVipStatusCommand command);
+    Task CheckAndUpdateVipStatusAsync(VipThresholds? thresholds = null);
+    Task<VipStatus> GetVipStatusAsync();
+
+    // Birthday Rewards
+    Task SetBirthdayAsync(SetBirthdayCommand command);
+    Task<RewardResult> IssueBirthdayRewardAsync(IssueBirthdayRewardCommand command);
+    Task<bool> HasBirthdayRewardThisYearAsync();
+    Task<BirthdayRewardStatus?> GetCurrentBirthdayRewardAsync();
+
+    // Enhanced Referral Tracking
+    Task<string> GenerateReferralCodeAsync(GenerateReferralCodeCommand? command = null);
+    Task<ReferralResult> CompleteReferralAsync(CompleteReferralCommand command);
+    Task<ReferralStatus> GetReferralStatusAsync();
+    Task<bool> HasReachedReferralCapAsync();
 
     // Visit History
     Task<IReadOnlyList<CustomerVisitRecord>> GetVisitHistoryAsync(int limit = 50);

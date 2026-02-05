@@ -658,7 +658,7 @@ public class WaitlistGrain : Grain, IWaitlistGrain
         if (index < 0)
             throw new InvalidOperationException("Entry not found");
 
-        _state.State.Entries[index] = _state.State.Entries[index] with { Position = newPosition };
+        _state.State.Entries[index].Position = newPosition;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
@@ -676,11 +676,8 @@ public class WaitlistGrain : Grain, IWaitlistGrain
         if (entry.Status != WaitlistStatus.Waiting)
             throw new InvalidOperationException($"Entry cannot be notified: {entry.Status}");
 
-        _state.State.Entries[index] = entry with
-        {
-            Status = WaitlistStatus.Notified,
-            NotifiedAt = DateTime.UtcNow
-        };
+        entry.Status = WaitlistStatus.Notified;
+        entry.NotifiedAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
@@ -698,11 +695,8 @@ public class WaitlistGrain : Grain, IWaitlistGrain
         if (entry.Status is not (WaitlistStatus.Waiting or WaitlistStatus.Notified))
             throw new InvalidOperationException($"Entry cannot be seated: {entry.Status}");
 
-        _state.State.Entries[index] = entry with
-        {
-            Status = WaitlistStatus.Seated,
-            SeatedAt = DateTime.UtcNow
-        };
+        entry.Status = WaitlistStatus.Seated;
+        entry.SeatedAt = DateTime.UtcNow;
 
         // Update average wait time
         var seatedEntries = _state.State.Entries.Where(e => e.Status == WaitlistStatus.Seated && e.SeatedAt != null).ToList();
@@ -724,11 +718,8 @@ public class WaitlistGrain : Grain, IWaitlistGrain
         if (index < 0)
             throw new InvalidOperationException("Entry not found");
 
-        _state.State.Entries[index] = _state.State.Entries[index] with
-        {
-            Status = WaitlistStatus.Left,
-            LeftAt = DateTime.UtcNow
-        };
+        _state.State.Entries[index].Status = WaitlistStatus.Left;
+        _state.State.Entries[index].LeftAt = DateTime.UtcNow;
         _state.State.Version++;
 
         await _state.WriteStateAsync();
@@ -745,12 +736,9 @@ public class WaitlistGrain : Grain, IWaitlistGrain
         var entry = _state.State.Entries[index];
         var bookingId = Guid.NewGuid();
 
-        _state.State.Entries[index] = entry with
-        {
-            Status = WaitlistStatus.Seated,
-            SeatedAt = DateTime.UtcNow,
-            ConvertedToBookingId = bookingId
-        };
+        entry.Status = WaitlistStatus.Seated;
+        entry.SeatedAt = DateTime.UtcNow;
+        entry.ConvertedToBookingId = bookingId;
         _state.State.Version++;
 
         await _state.WriteStateAsync();

@@ -104,6 +104,25 @@ public sealed class PaymentState
     [Id(31)] public DateTime? VoidedAt { get; set; }
     [Id(32)] public Guid? VoidedBy { get; set; }
     [Id(33)] public string? VoidReason { get; set; }
+
+    // Retry tracking
+    [Id(34)] public int RetryCount { get; set; }
+    [Id(35)] public int MaxRetries { get; set; } = 3;
+    [Id(36)] public DateTime? NextRetryAt { get; set; }
+    [Id(37)] public string? LastErrorCode { get; set; }
+    [Id(38)] public string? LastErrorMessage { get; set; }
+    [Id(39)] public bool RetryExhausted { get; set; }
+    [Id(40)] public List<PaymentRetryAttempt> RetryHistory { get; set; } = [];
+}
+
+[GenerateSerializer]
+public record PaymentRetryAttempt
+{
+    [Id(0)] public int AttemptNumber { get; init; }
+    [Id(1)] public bool Success { get; init; }
+    [Id(2)] public string? ErrorCode { get; init; }
+    [Id(3)] public string? ErrorMessage { get; init; }
+    [Id(4)] public DateTime AttemptedAt { get; init; }
 }
 
 public enum DrawerStatus

@@ -59,6 +59,11 @@ public sealed record OrderLineAdded : IOrderEvent
     /// Selected components for bundle items.
     /// </summary>
     [Id(13)] public List<OrderLineBundleComponent> BundleComponents { get; init; } = [];
+
+    /// <summary>
+    /// Optional seat number for seat-based ordering.
+    /// </summary>
+    [Id(14)] public int? Seat { get; init; }
 }
 
 [GenerateSerializer]
@@ -322,6 +327,111 @@ public sealed record OrderAllItemsFired : IOrderEvent
     [Id(1)] public List<Guid> FiredLineIds { get; init; } = [];
     [Id(2)] public Guid FiredBy { get; init; }
     [Id(3)] public DateTime OccurredAt { get; init; }
+}
+
+#endregion
+
+#region Seat Assignment Events
+
+/// <summary>
+/// Event when a seat is assigned to a line item.
+/// </summary>
+[GenerateSerializer]
+public sealed record SeatAssigned : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid LineId { get; init; }
+    [Id(2)] public int SeatNumber { get; init; }
+    [Id(3)] public Guid AssignedBy { get; init; }
+    [Id(4)] public DateTime OccurredAt { get; init; }
+}
+
+#endregion
+
+#region Line-Level Discount Events
+
+/// <summary>
+/// Event when a discount is applied to a specific line item.
+/// </summary>
+[GenerateSerializer]
+public sealed record LineDiscountApplied : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid LineId { get; init; }
+    [Id(2)] public DiscountType DiscountType { get; init; }
+    [Id(3)] public decimal Value { get; init; }
+    [Id(4)] public decimal Amount { get; init; }
+    [Id(5)] public string? Reason { get; init; }
+    [Id(6)] public Guid AppliedBy { get; init; }
+    [Id(7)] public Guid? ApprovedBy { get; init; }
+    [Id(8)] public DateTime OccurredAt { get; init; }
+}
+
+/// <summary>
+/// Event when a line-level discount is removed.
+/// </summary>
+[GenerateSerializer]
+public sealed record LineDiscountRemoved : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid LineId { get; init; }
+    [Id(2)] public Guid RemovedBy { get; init; }
+    [Id(3)] public DateTime OccurredAt { get; init; }
+}
+
+#endregion
+
+#region Price Override Events
+
+/// <summary>
+/// Event when a price is overridden on a line item.
+/// </summary>
+[GenerateSerializer]
+public sealed record PriceOverridden : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid LineId { get; init; }
+    [Id(2)] public decimal OriginalPrice { get; init; }
+    [Id(3)] public decimal NewPrice { get; init; }
+    [Id(4)] public string Reason { get; init; } = "";
+    [Id(5)] public Guid OverriddenBy { get; init; }
+    [Id(6)] public Guid? ApprovedBy { get; init; }
+    [Id(7)] public DateTime OccurredAt { get; init; }
+}
+
+#endregion
+
+#region Order Merge Events
+
+/// <summary>
+/// Event when another order is merged into this order.
+/// Recorded on the target (surviving) order.
+/// </summary>
+[GenerateSerializer]
+public sealed record OrderMerged : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid SourceOrderId { get; init; }
+    [Id(2)] public string SourceOrderNumber { get; init; } = "";
+    [Id(3)] public List<OrderLine> MergedLines { get; init; } = [];
+    [Id(4)] public List<OrderDiscount> MergedDiscounts { get; init; } = [];
+    [Id(5)] public List<OrderPaymentSummary> MergedPayments { get; init; } = [];
+    [Id(6)] public Guid MergedBy { get; init; }
+    [Id(7)] public DateTime OccurredAt { get; init; }
+}
+
+/// <summary>
+/// Event when an order is closed because it was merged into another order.
+/// Recorded on the source (merged-away) order.
+/// </summary>
+[GenerateSerializer]
+public sealed record OrderMergedAway : IOrderEvent
+{
+    [Id(0)] public Guid OrderId { get; init; }
+    [Id(1)] public Guid TargetOrderId { get; init; }
+    [Id(2)] public string TargetOrderNumber { get; init; } = "";
+    [Id(3)] public Guid MergedBy { get; init; }
+    [Id(4)] public DateTime OccurredAt { get; init; }
 }
 
 #endregion

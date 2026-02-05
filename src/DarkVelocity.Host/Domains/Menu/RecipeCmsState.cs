@@ -41,6 +41,17 @@ public sealed class RecipeIngredientState
     [Id(9)] public List<Guid> SubstitutionIds { get; set; } = [];
 
     /// <summary>
+    /// If this ingredient is produced by a sub-recipe, the document ID of that recipe.
+    /// Used for cost rollup and allergen cascade.
+    /// </summary>
+    [Id(10)] public string? SubRecipeDocumentId { get; set; }
+
+    /// <summary>
+    /// Whether this ingredient is output from a sub-recipe.
+    /// </summary>
+    [Id(11)] public bool IsSubRecipeOutput { get; set; }
+
+    /// <summary>
     /// Effective quantity after waste adjustment: Quantity / (1 - WastePercentage/100)
     /// </summary>
     public decimal EffectiveQuantity => WastePercentage > 0
@@ -51,6 +62,36 @@ public sealed class RecipeIngredientState
     /// Line cost: EffectiveQuantity * UnitCost
     /// </summary>
     public decimal LineCost => EffectiveQuantity * UnitCost;
+}
+
+/// <summary>
+/// Enhanced allergen declaration with "contains" vs "may contain" distinction.
+/// </summary>
+[GenerateSerializer]
+public sealed class RecipeAllergenDeclaration
+{
+    [Id(0)] public string Allergen { get; set; } = string.Empty;
+    [Id(1)] public AllergenDeclarationType DeclarationType { get; set; } = AllergenDeclarationType.Contains;
+    [Id(2)] public string? Source { get; set; }
+    [Id(3)] public Guid? SourceIngredientId { get; set; }
+}
+
+/// <summary>
+/// Nutritional information override for a recipe.
+/// When set, these values override calculated values.
+/// </summary>
+[GenerateSerializer]
+public sealed class RecipeNutritionOverride
+{
+    [Id(0)] public decimal? CaloriesPerServing { get; set; }
+    [Id(1)] public decimal? ProteinPerServing { get; set; }
+    [Id(2)] public decimal? CarbohydratesPerServing { get; set; }
+    [Id(3)] public decimal? FatPerServing { get; set; }
+    [Id(4)] public decimal? SaturatedFatPerServing { get; set; }
+    [Id(5)] public decimal? FiberPerServing { get; set; }
+    [Id(6)] public decimal? SugarPerServing { get; set; }
+    [Id(7)] public decimal? SodiumPerServing { get; set; }
+    [Id(8)] public string? ServingSize { get; set; }
 }
 
 /// <summary>
@@ -124,6 +165,27 @@ public sealed class RecipeVersionState
     [Id(22)] public decimal? OutputQuantityPerYield { get; set; }
 
     /// <summary>
+    /// Enhanced allergen declarations with "contains" vs "may contain" distinction.
+    /// This replaces the simple AllergenTags list for more precise allergen tracking.
+    /// </summary>
+    [Id(23)] public List<RecipeAllergenDeclaration> AllergenDeclarations { get; set; } = [];
+
+    /// <summary>
+    /// Nutritional information override. When set, these values override calculated values.
+    /// </summary>
+    [Id(24)] public RecipeNutritionOverride? NutritionOverride { get; set; }
+
+    /// <summary>
+    /// Whether this recipe is used as a sub-recipe/component in other recipes.
+    /// </summary>
+    [Id(25)] public bool IsSubRecipe { get; set; }
+
+    /// <summary>
+    /// Parent recipes that use this as a sub-recipe.
+    /// </summary>
+    [Id(26)] public List<string> UsedByRecipeIds { get; set; } = [];
+
+    /// <summary>
     /// Theoretical cost: sum of all ingredient line costs.
     /// </summary>
     public decimal TheoreticalCost => Ingredients.Sum(i => i.LineCost);
@@ -139,6 +201,35 @@ public sealed class RecipeVersionState
     public decimal? CostPerOutputUnit => OutputQuantityPerYield.HasValue && OutputQuantityPerYield > 0
         ? TheoreticalCost / OutputQuantityPerYield.Value
         : null;
+
+    /// <summary>
+    /// Gets all "contains" allergens from declarations plus legacy allergen tags.
+    /// </summary>
+    public IReadOnlyList<string> GetContainsAllergens()
+    {
+        var contains = AllergenDeclarations
+            .Where(a => a.DeclarationType == AllergenDeclarationType.Contains)
+            .Select(a => a.Allergen)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Include legacy allergen tags
+        foreach (var tag in AllergenTags)
+            contains.Add(tag);
+
+        return contains.ToList();
+    }
+
+    /// <summary>
+    /// Gets all "may contain" allergens from declarations.
+    /// </summary>
+    public IReadOnlyList<string> GetMayContainAllergens()
+    {
+        return AllergenDeclarations
+            .Where(a => a.DeclarationType == AllergenDeclarationType.MayContain)
+            .Select(a => a.Allergen)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 }
 
 /// <summary>

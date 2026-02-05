@@ -85,4 +85,19 @@ public static class StreamConstants
     /// Stream namespace for workflow status transition events.
     /// </summary>
     public const string WorkflowStreamNamespace = "workflow-events";
+
+    /// <summary>
+    /// Stream namespace for notification events.
+    /// </summary>
+    public const string NotificationStreamNamespace = "notification-events";
+
+    /// <summary>
+    /// Stream namespace for webhook delivery events.
+    /// </summary>
+    public const string WebhookStreamNamespace = "webhook-events";
+
+    /// <summary>
+    /// Stream namespace for scheduled job events.
+    /// </summary>
+    public const string ScheduledJobStreamNamespace = "scheduled-job-events";
 }

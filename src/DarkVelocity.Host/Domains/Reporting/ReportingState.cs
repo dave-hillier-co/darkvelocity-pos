@@ -258,6 +258,300 @@ public sealed class VarianceBreakdownState
 }
 
 // ============================================================================
+// Extended Dashboard State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class ExtendedDashboardState
+{
+    // Hourly sales tracking
+    [Id(0)] public Dictionary<int, HourlySalesData> HourlySales { get; set; } = [];
+
+    // Top selling items
+    [Id(1)] public Dictionary<Guid, TopItemData> TopItems { get; set; } = [];
+
+    // Payment method breakdown
+    [Id(2)] public Dictionary<string, PaymentMethodData> PaymentMethods { get; set; } = [];
+}
+
+[GenerateSerializer]
+public sealed class HourlySalesData
+{
+    [Id(0)] public int Hour { get; set; }
+    [Id(1)] public decimal NetSales { get; set; }
+    [Id(2)] public int TransactionCount { get; set; }
+    [Id(3)] public int GuestCount { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class TopItemData
+{
+    [Id(0)] public Guid ProductId { get; set; }
+    [Id(1)] public string ProductName { get; set; } = string.Empty;
+    [Id(2)] public string Category { get; set; } = string.Empty;
+    [Id(3)] public int QuantitySold { get; set; }
+    [Id(4)] public decimal NetSales { get; set; }
+    [Id(5)] public decimal COGS { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class PaymentMethodData
+{
+    [Id(0)] public string PaymentMethod { get; set; } = string.Empty;
+    [Id(1)] public decimal Amount { get; set; }
+    [Id(2)] public int TransactionCount { get; set; }
+}
+
+// ============================================================================
+// Daypart Analysis State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class DaypartAnalysisState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public DateTime BusinessDate { get; set; }
+    [Id(3)] public bool IsFinalized { get; set; }
+
+    // Hourly data
+    [Id(4)] public Dictionary<int, HourlyData> HourlyData { get; set; } = [];
+
+    // Daypart definitions (customizable)
+    [Id(5)] public List<DaypartDefinitionState> DaypartDefinitions { get; set; } = GetDefaultDaypartDefinitions();
+
+    [Id(6)] public int Version { get; set; }
+
+    private static List<DaypartDefinitionState> GetDefaultDaypartDefinitions() =>
+    [
+        new() { Daypart = Events.DayPart.Breakfast, StartTime = TimeSpan.FromHours(6), EndTime = TimeSpan.FromHours(11), DisplayName = "Breakfast" },
+        new() { Daypart = Events.DayPart.Lunch, StartTime = TimeSpan.FromHours(11), EndTime = TimeSpan.FromHours(15), DisplayName = "Lunch" },
+        new() { Daypart = Events.DayPart.Afternoon, StartTime = TimeSpan.FromHours(15), EndTime = TimeSpan.FromHours(17), DisplayName = "Afternoon" },
+        new() { Daypart = Events.DayPart.Dinner, StartTime = TimeSpan.FromHours(17), EndTime = TimeSpan.FromHours(22), DisplayName = "Dinner" },
+        new() { Daypart = Events.DayPart.LateNight, StartTime = TimeSpan.FromHours(22), EndTime = TimeSpan.FromHours(6), DisplayName = "Late Night" }
+    ];
+}
+
+[GenerateSerializer]
+public sealed class HourlyData
+{
+    [Id(0)] public int Hour { get; set; }
+    [Id(1)] public decimal NetSales { get; set; }
+    [Id(2)] public int TransactionCount { get; set; }
+    [Id(3)] public int GuestCount { get; set; }
+    [Id(4)] public decimal TheoreticalCOGS { get; set; }
+    [Id(5)] public decimal LaborHours { get; set; }
+    [Id(6)] public decimal LaborCost { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class DaypartDefinitionState
+{
+    [Id(0)] public Events.DayPart Daypart { get; set; }
+    [Id(1)] public TimeSpan StartTime { get; set; }
+    [Id(2)] public TimeSpan EndTime { get; set; }
+    [Id(3)] public string DisplayName { get; set; } = string.Empty;
+}
+
+// ============================================================================
+// Labor Report State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class LaborReportState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public DateTime PeriodStart { get; set; }
+    [Id(3)] public DateTime PeriodEnd { get; set; }
+    [Id(4)] public bool IsFinalized { get; set; }
+
+    // Scheduled vs Actual
+    [Id(5)] public decimal ScheduledHours { get; set; }
+    [Id(6)] public decimal ScheduledCost { get; set; }
+
+    // Sales data
+    [Id(7)] public decimal TotalSales { get; set; }
+
+    // Labor entries by employee
+    [Id(8)] public Dictionary<Guid, LaborEntryData> LaborEntries { get; set; } = [];
+
+    // Department aggregations
+    [Id(9)] public Dictionary<Grains.Department, DepartmentLaborData> ByDepartment { get; set; } = [];
+
+    // Daypart aggregations
+    [Id(10)] public Dictionary<Events.DayPart, DaypartLaborData> ByDaypart { get; set; } = [];
+
+    [Id(11)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class LaborEntryData
+{
+    [Id(0)] public Guid EmployeeId { get; set; }
+    [Id(1)] public string EmployeeName { get; set; } = string.Empty;
+    [Id(2)] public Grains.Department Department { get; set; }
+    [Id(3)] public decimal RegularHours { get; set; }
+    [Id(4)] public decimal OvertimeHours { get; set; }
+    [Id(5)] public decimal RegularCost { get; set; }
+    [Id(6)] public decimal OvertimeCost { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class DepartmentLaborData
+{
+    [Id(0)] public Grains.Department Department { get; set; }
+    [Id(1)] public decimal LaborCost { get; set; }
+    [Id(2)] public decimal LaborHours { get; set; }
+    [Id(3)] public decimal OvertimeHours { get; set; }
+    [Id(4)] public HashSet<Guid> Employees { get; set; } = [];
+}
+
+[GenerateSerializer]
+public sealed class DaypartLaborData
+{
+    [Id(0)] public Events.DayPart Daypart { get; set; }
+    [Id(1)] public decimal LaborCost { get; set; }
+    [Id(2)] public decimal LaborHours { get; set; }
+    [Id(3)] public decimal Sales { get; set; }
+}
+
+// ============================================================================
+// Product Mix State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class ProductMixState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public DateTime BusinessDate { get; set; }
+    [Id(3)] public bool IsFinalized { get; set; }
+
+    // Operating hours for velocity calculation
+    [Id(4)] public decimal OperatingHours { get; set; }
+    [Id(5)] public decimal TotalSales { get; set; }
+
+    // Product data
+    [Id(6)] public Dictionary<Guid, ProductSalesData> Products { get; set; } = [];
+
+    // Modifier data
+    [Id(7)] public Dictionary<Guid, ModifierSalesData> Modifiers { get; set; } = [];
+
+    // Void/Comp tracking
+    [Id(8)] public List<VoidEntry> Voids { get; set; } = [];
+    [Id(9)] public List<CompEntry> Comps { get; set; } = [];
+
+    [Id(10)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class ProductSalesData
+{
+    [Id(0)] public Guid ProductId { get; set; }
+    [Id(1)] public string ProductName { get; set; } = string.Empty;
+    [Id(2)] public string Category { get; set; } = string.Empty;
+    [Id(3)] public int QuantitySold { get; set; }
+    [Id(4)] public decimal NetSales { get; set; }
+    [Id(5)] public decimal COGS { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class ModifierSalesData
+{
+    [Id(0)] public Guid ModifierId { get; set; }
+    [Id(1)] public string ModifierName { get; set; } = string.Empty;
+    [Id(2)] public int TimesApplied { get; set; }
+    [Id(3)] public decimal TotalRevenue { get; set; }
+    [Id(4)] public int ApplicableItemCount { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class VoidEntry
+{
+    [Id(0)] public Guid ProductId { get; set; }
+    [Id(1)] public string Reason { get; set; } = string.Empty;
+    [Id(2)] public decimal Amount { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class CompEntry
+{
+    [Id(0)] public Guid ProductId { get; set; }
+    [Id(1)] public string Reason { get; set; } = string.Empty;
+    [Id(2)] public decimal Amount { get; set; }
+}
+
+// ============================================================================
+// Payment Reconciliation State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class PaymentReconciliationState
+{
+    [Id(0)] public Guid OrgId { get; set; }
+    [Id(1)] public Guid SiteId { get; set; }
+    [Id(2)] public DateTime BusinessDate { get; set; }
+    [Id(3)] public Grains.PaymentReconciliationStatus Status { get; set; }
+
+    // POS totals by payment method
+    [Id(4)] public Dictionary<string, PosPaymentData> PosPayments { get; set; } = [];
+
+    // Processor settlements
+    [Id(5)] public List<ProcessorSettlementData> ProcessorSettlements { get; set; } = [];
+
+    // Cash management
+    [Id(6)] public decimal CashExpected { get; set; }
+    [Id(7)] public decimal CashActual { get; set; }
+    [Id(8)] public Guid? CashCountedBy { get; set; }
+
+    // Exceptions
+    [Id(9)] public List<ReconciliationExceptionData> Exceptions { get; set; } = [];
+
+    // Finalization
+    [Id(10)] public DateTime? ReconciledAt { get; set; }
+    [Id(11)] public Guid? ReconciledBy { get; set; }
+
+    [Id(12)] public int Version { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class PosPaymentData
+{
+    [Id(0)] public string PaymentMethod { get; set; } = string.Empty;
+    [Id(1)] public decimal Amount { get; set; }
+    [Id(2)] public int TransactionCount { get; set; }
+    [Id(3)] public string? ProcessorName { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class ProcessorSettlementData
+{
+    [Id(0)] public string ProcessorName { get; set; } = string.Empty;
+    [Id(1)] public string BatchId { get; set; } = string.Empty;
+    [Id(2)] public decimal GrossAmount { get; set; }
+    [Id(3)] public decimal Fees { get; set; }
+    [Id(4)] public decimal NetAmount { get; set; }
+    [Id(5)] public int TransactionCount { get; set; }
+    [Id(6)] public DateTime SettlementDate { get; set; }
+    [Id(7)] public Grains.PaymentReconciliationStatus Status { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class ReconciliationExceptionData
+{
+    [Id(0)] public Guid ExceptionId { get; set; }
+    [Id(1)] public string ExceptionType { get; set; } = string.Empty;
+    [Id(2)] public string Description { get; set; } = string.Empty;
+    [Id(3)] public decimal Amount { get; set; }
+    [Id(4)] public string? TransactionReference { get; set; }
+    [Id(5)] public Grains.PaymentReconciliationStatus Status { get; set; }
+    [Id(6)] public string? Resolution { get; set; }
+    [Id(7)] public DateTime? ResolvedAt { get; set; }
+    [Id(8)] public Guid? ResolvedBy { get; set; }
+}
+
+// ============================================================================
 // Enums
 // ============================================================================
 

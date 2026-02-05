@@ -132,6 +132,41 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentEvent>, IPaymen
             case PaymentBatchAssigned e:
                 state.BatchId = e.BatchId;
                 break;
+
+            case PaymentRetryScheduled e:
+                state.RetryCount = e.AttemptNumber;
+                state.NextRetryAt = e.ScheduledFor;
+                state.LastErrorMessage = e.FailureReason;
+                break;
+
+            case PaymentRetryAttempted e:
+                state.RetryHistory.Add(new PaymentRetryAttempt
+                {
+                    AttemptNumber = e.AttemptNumber,
+                    Success = e.Success,
+                    ErrorCode = e.ErrorCode,
+                    ErrorMessage = e.ErrorMessage,
+                    AttemptedAt = e.OccurredAt
+                });
+                if (e.Success)
+                {
+                    state.NextRetryAt = null;
+                    state.LastErrorCode = null;
+                    state.LastErrorMessage = null;
+                }
+                else
+                {
+                    state.LastErrorCode = e.ErrorCode;
+                    state.LastErrorMessage = e.ErrorMessage;
+                }
+                break;
+
+            case PaymentRetryExhausted e:
+                state.RetryExhausted = true;
+                state.NextRetryAt = null;
+                state.LastErrorCode = e.FinalErrorCode;
+                state.LastErrorMessage = e.FinalErrorMessage;
+                break;
         }
     }
 
@@ -436,6 +471,119 @@ public class PaymentGrain : JournaledGrain<PaymentState, IPaymentEvent>, IPaymen
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+    }
+
+    public async Task ScheduleRetryAsync(string failureReason, int? maxRetries = null)
+    {
+        EnsureExists();
+
+        if (State.RetryExhausted)
+            throw new InvalidOperationException("Retry attempts already exhausted");
+
+        if (maxRetries.HasValue)
+            State.MaxRetries = maxRetries.Value;
+
+        var nextAttempt = State.RetryCount + 1;
+
+        if (nextAttempt > State.MaxRetries)
+        {
+            // Max retries reached
+            RaiseEvent(new PaymentRetryExhausted
+            {
+                PaymentId = State.Id,
+                TotalAttempts = State.RetryCount,
+                FinalErrorCode = State.LastErrorCode ?? "MAX_RETRIES",
+                FinalErrorMessage = failureReason,
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
+
+            // Notify about final failure
+            await PaymentStream!.OnNextAsync(new PaymentRetryExhaustedEvent(
+                State.Id,
+                State.SiteId,
+                State.OrderId,
+                State.Amount,
+                State.RetryCount,
+                State.LastErrorCode,
+                failureReason)
+            {
+                OrganizationId = State.OrganizationId
+            });
+            return;
+        }
+
+        // Calculate exponential backoff: 30s, 60s, 120s, etc.
+        var delaySeconds = 30 * Math.Pow(2, nextAttempt - 1);
+        var nextRetryAt = DateTime.UtcNow.AddSeconds(delaySeconds);
+
+        RaiseEvent(new PaymentRetryScheduled
+        {
+            PaymentId = State.Id,
+            AttemptNumber = nextAttempt,
+            ScheduledFor = nextRetryAt,
+            FailureReason = failureReason,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+    }
+
+    public async Task RecordRetryAttemptAsync(bool success, string? errorCode = null, string? errorMessage = null)
+    {
+        EnsureExists();
+
+        RaiseEvent(new PaymentRetryAttempted
+        {
+            PaymentId = State.Id,
+            AttemptNumber = State.RetryCount,
+            Success = success,
+            ErrorCode = errorCode,
+            ErrorMessage = errorMessage,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
+
+        if (!success && State.RetryCount >= State.MaxRetries)
+        {
+            // Mark as exhausted
+            RaiseEvent(new PaymentRetryExhausted
+            {
+                PaymentId = State.Id,
+                TotalAttempts = State.RetryCount,
+                FinalErrorCode = errorCode ?? "UNKNOWN",
+                FinalErrorMessage = errorMessage ?? "Payment processing failed after all retries",
+                OccurredAt = DateTime.UtcNow
+            });
+            await ConfirmEvents();
+        }
+    }
+
+    public Task<bool> ShouldRetryAsync()
+    {
+        if (State.Id == Guid.Empty)
+            return Task.FromResult(false);
+
+        if (State.RetryExhausted)
+            return Task.FromResult(false);
+
+        if (State.Status == PaymentStatus.Completed)
+            return Task.FromResult(false);
+
+        if (!State.NextRetryAt.HasValue)
+            return Task.FromResult(false);
+
+        return Task.FromResult(State.NextRetryAt <= DateTime.UtcNow);
+    }
+
+    public Task<RetryInfo> GetRetryInfoAsync()
+    {
+        return Task.FromResult(new RetryInfo(
+            State.RetryCount,
+            State.MaxRetries,
+            State.NextRetryAt,
+            State.RetryExhausted,
+            State.LastErrorCode,
+            State.LastErrorMessage));
     }
 
     public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);
@@ -743,4 +891,22 @@ public class CashDrawerGrain : Grain, ICashDrawerGrain
         if (_state.State.Status != DrawerStatus.Open)
             throw new InvalidOperationException("Drawer is not open");
     }
+}
+
+/// <summary>
+/// Stream event for payment retry exhausted notifications.
+/// </summary>
+[GenerateSerializer]
+public record PaymentRetryExhaustedEvent(
+    [property: Id(0)] Guid PaymentId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] Guid OrderId,
+    [property: Id(3)] decimal Amount,
+    [property: Id(4)] int TotalAttempts,
+    [property: Id(5)] string? LastErrorCode,
+    [property: Id(6)] string? LastErrorMessage) : IStreamEvent
+{
+    [Id(7)] public Guid OrganizationId { get; init; }
+    [Id(8)] public Guid EventId { get; init; } = Guid.NewGuid();
+    [Id(9)] public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
 }

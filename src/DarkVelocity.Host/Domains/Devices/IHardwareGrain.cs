@@ -230,6 +230,68 @@ public record DeviceAlert(
     [property: Id(4)] string Message,
     [property: Id(5)] DateTime Timestamp);
 
+// ============================================================================
+// Device Health Monitoring Types
+// ============================================================================
+
+public enum ConnectionQuality
+{
+    Excellent,
+    Good,
+    Fair,
+    Poor,
+    Disconnected
+}
+
+public enum PrinterHealthStatus
+{
+    Ready,
+    Printing,
+    PaperLow,
+    PaperOut,
+    CoverOpen,
+    Error,
+    Offline
+}
+
+[GenerateSerializer]
+public record DeviceHealthMetrics(
+    [property: Id(0)] Guid DeviceId,
+    [property: Id(1)] string DeviceType,
+    [property: Id(2)] string DeviceName,
+    [property: Id(3)] bool IsOnline,
+    [property: Id(4)] DateTime? LastSeenAt,
+    [property: Id(5)] ConnectionQuality ConnectionQuality,
+    [property: Id(6)] int? SignalStrength,
+    [property: Id(7)] int? LatencyMs,
+    [property: Id(8)] double? UptimePercentage,
+    [property: Id(9)] int DisconnectCount24h,
+    [property: Id(10)] PrinterHealthStatus? PrinterStatus,
+    [property: Id(11)] int? PaperLevel,
+    [property: Id(12)] int? PendingPrintJobs,
+    [property: Id(13)] int? FailedPrintJobs24h);
+
+[GenerateSerializer]
+public record DeviceHealthSummary(
+    [property: Id(0)] Guid LocationId,
+    [property: Id(1)] int TotalDevices,
+    [property: Id(2)] int OnlineDevices,
+    [property: Id(3)] int OfflineDevices,
+    [property: Id(4)] int DevicesWithAlerts,
+    [property: Id(5)] ConnectionQuality OverallConnectionQuality,
+    [property: Id(6)] DateTime? LastHealthCheck,
+    [property: Id(7)] IReadOnlyList<DeviceHealthMetrics> DeviceMetrics,
+    [property: Id(8)] IReadOnlyList<DeviceAlert> ActiveAlerts);
+
+[GenerateSerializer]
+public record UpdateDeviceHealthCommand(
+    [property: Id(0)] Guid DeviceId,
+    [property: Id(1)] int? SignalStrength = null,
+    [property: Id(2)] int? LatencyMs = null,
+    [property: Id(3)] PrinterHealthStatus? PrinterStatus = null,
+    [property: Id(4)] int? PaperLevel = null,
+    [property: Id(5)] int? PendingPrintJobs = null);
+
 /// <summary>
 /// Grain for device status aggregation at location level.
 /// Key: "{orgId}:{locationId}:devicestatus"
@@ -243,4 +305,32 @@ public interface IDeviceStatusGrain : IGrainWithStringKey
     Task AddAlertAsync(DeviceAlert alert);
     Task ClearAlertAsync(Guid deviceId);
     Task<DeviceStatusSummary> GetSummaryAsync();
+
+    // Health monitoring methods
+
+    /// <summary>
+    /// Records a device heartbeat with optional health metrics.
+    /// </summary>
+    Task RecordHeartbeatAsync(Guid deviceId, UpdateDeviceHealthCommand? healthUpdate = null);
+
+    /// <summary>
+    /// Gets health metrics for a specific device.
+    /// </summary>
+    Task<DeviceHealthMetrics?> GetDeviceHealthAsync(Guid deviceId);
+
+    /// <summary>
+    /// Gets comprehensive health summary for all devices at this location.
+    /// </summary>
+    Task<DeviceHealthSummary> GetHealthSummaryAsync();
+
+    /// <summary>
+    /// Performs a health check on all devices.
+    /// Returns devices that appear offline (no heartbeat in threshold).
+    /// </summary>
+    Task<IReadOnlyList<DeviceHealthMetrics>> PerformHealthCheckAsync(TimeSpan offlineThreshold);
+
+    /// <summary>
+    /// Updates printer-specific health status.
+    /// </summary>
+    Task UpdatePrinterHealthAsync(Guid printerId, PrinterHealthStatus status, int? paperLevel = null);
 }

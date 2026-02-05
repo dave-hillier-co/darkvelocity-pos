@@ -102,6 +102,19 @@ public sealed class RegisteredDeviceState
     [Id(1)] public Guid DeviceId { get; set; }
     [Id(2)] public string DeviceName { get; set; } = string.Empty;
     [Id(3)] public bool IsOnline { get; set; }
+
+    // Health monitoring fields
+    [Id(4)] public DateTime? LastSeenAt { get; set; }
+    [Id(5)] public int? SignalStrength { get; set; }
+    [Id(6)] public int? LatencyMs { get; set; }
+    [Id(7)] public PrinterHealthStatus? PrinterStatus { get; set; }
+    [Id(8)] public int? PaperLevel { get; set; }
+    [Id(9)] public int? PendingPrintJobs { get; set; }
+    [Id(10)] public int? FailedPrintJobs24h { get; set; }
+    [Id(11)] public List<DateTime> DisconnectTimestamps { get; set; } = [];
+    [Id(12)] public DateTime? FirstSeenAt { get; set; }
+    [Id(13)] public TimeSpan TotalOnlineTime { get; set; } = TimeSpan.Zero;
+    [Id(14)] public DateTime? LastOnlineStatusChange { get; set; }
 }
 
 [GenerateSerializer]

@@ -326,6 +326,38 @@ public sealed record OrderLineSnapshot(
     [property: Id(6)] Guid? RecipeId
 );
 
+/// <summary>
+/// Published when a line item is voided on an order.
+/// Subscriber: Kitchen (ticket item void notification).
+/// </summary>
+[GenerateSerializer]
+public sealed record KitchenItemVoidedEvent(
+    [property: Id(0)] Guid OrderId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string OrderNumber,
+    [property: Id(3)] Guid LineId,
+    [property: Id(4)] Guid MenuItemId,
+    [property: Id(5)] string ItemName,
+    [property: Id(6)] int Quantity,
+    [property: Id(7)] string VoidReason,
+    [property: Id(8)] Guid VoidedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when orders are merged.
+/// Subscriber: Kitchen (ticket consolidation notification).
+/// </summary>
+[GenerateSerializer]
+public sealed record OrdersMergedEvent(
+    [property: Id(0)] Guid TargetOrderId,
+    [property: Id(1)] Guid SourceOrderId,
+    [property: Id(2)] Guid SiteId,
+    [property: Id(3)] string TargetOrderNumber,
+    [property: Id(4)] string SourceOrderNumber,
+    [property: Id(5)] int LinesMerged,
+    [property: Id(6)] Guid MergedBy
+) : StreamEvent;
+
 #endregion
 
 #region Inventory Stream Events
@@ -434,6 +466,59 @@ public sealed record StockWrittenOffEvent(
     [property: Id(5)] string WriteOffCategory,
     [property: Id(6)] string Reason,
     [property: Id(7)] Guid RecordedBy
+) : StreamEvent;
+
+/// <summary>
+/// Published when a stock take is finalized.
+/// </summary>
+[GenerateSerializer]
+public sealed record StockTakeFinalizedEvent(
+    [property: Id(0)] Guid StockTakeId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string StockTakeName,
+    [property: Id(3)] decimal TotalVarianceValue,
+    [property: Id(4)] int ItemsAdjusted,
+    [property: Id(5)] bool AdjustmentsApplied
+) : StreamEvent;
+
+/// <summary>
+/// Published when an inventory transfer status changes.
+/// </summary>
+[GenerateSerializer]
+public sealed record InventoryTransferStatusChangedEvent(
+    [property: Id(0)] Guid TransferId,
+    [property: Id(1)] Guid SourceSiteId,
+    [property: Id(2)] Guid DestinationSiteId,
+    [property: Id(3)] string Status,
+    [property: Id(4)] string? Notes
+) : StreamEvent;
+
+/// <summary>
+/// Published when inventory items are expiring soon.
+/// </summary>
+[GenerateSerializer]
+public sealed record ExpiryAlertEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string IngredientName,
+    [property: Id(3)] DateTime ExpiryDate,
+    [property: Id(4)] int DaysUntilExpiry,
+    [property: Id(5)] decimal QuantityAtRisk,
+    [property: Id(6)] decimal ValueAtRisk
+) : StreamEvent;
+
+/// <summary>
+/// Published when a reorder suggestion is generated.
+/// </summary>
+[GenerateSerializer]
+public sealed record ReorderSuggestionGeneratedEvent(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] Guid SiteId,
+    [property: Id(2)] string IngredientName,
+    [property: Id(3)] decimal CurrentQuantity,
+    [property: Id(4)] decimal SuggestedQuantity,
+    [property: Id(5)] decimal EstimatedCost,
+    [property: Id(6)] Guid? PreferredSupplierId
 ) : StreamEvent;
 
 #endregion
@@ -1050,6 +1135,158 @@ public sealed record DeviceSessionEndedEvent(
     [property: Id(0)] Guid DeviceId,
     [property: Id(1)] Guid SiteId,
     [property: Id(2)] Guid UserId,
+    [property: Id(3)] string? Reason
+) : StreamEvent;
+
+#endregion
+
+#region Notification Stream Events
+
+/// <summary>
+/// Published when a notification is queued for sending.
+/// </summary>
+[GenerateSerializer]
+public sealed record NotificationQueuedEvent(
+    [property: Id(0)] Guid NotificationId,
+    [property: Id(1)] string NotificationType,
+    [property: Id(2)] string Recipient,
+    [property: Id(3)] string Subject,
+    [property: Id(4)] Guid? TriggeredByAlertId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a notification was sent successfully.
+/// </summary>
+[GenerateSerializer]
+public sealed record NotificationSentEvent(
+    [property: Id(0)] Guid NotificationId,
+    [property: Id(1)] string NotificationType,
+    [property: Id(2)] string Recipient,
+    [property: Id(3)] string? ExternalMessageId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a notification failed to send.
+/// </summary>
+[GenerateSerializer]
+public sealed record NotificationFailedEvent(
+    [property: Id(0)] Guid NotificationId,
+    [property: Id(1)] string NotificationType,
+    [property: Id(2)] string Recipient,
+    [property: Id(3)] string ErrorMessage,
+    [property: Id(4)] string? ErrorCode
+) : StreamEvent;
+
+/// <summary>
+/// Published when a failed notification is being retried.
+/// </summary>
+[GenerateSerializer]
+public sealed record NotificationRetriedEvent(
+    [property: Id(0)] Guid NotificationId,
+    [property: Id(1)] string NotificationType,
+    [property: Id(2)] string Recipient,
+    [property: Id(3)] int RetryAttempt
+) : StreamEvent;
+
+#endregion
+
+#region Webhook Stream Events
+
+/// <summary>
+/// Published when a webhook delivery is attempted.
+/// </summary>
+[GenerateSerializer]
+public sealed record WebhookDeliveryAttemptedEvent(
+    [property: Id(0)] Guid WebhookId,
+    [property: Id(1)] Guid DeliveryId,
+    [property: Id(2)] string EventType,
+    [property: Id(3)] string Url,
+    [property: Id(4)] int AttemptNumber
+) : StreamEvent;
+
+/// <summary>
+/// Published when a webhook delivery succeeded.
+/// </summary>
+[GenerateSerializer]
+public sealed record WebhookDeliverySucceededEvent(
+    [property: Id(0)] Guid WebhookId,
+    [property: Id(1)] Guid DeliveryId,
+    [property: Id(2)] string EventType,
+    [property: Id(3)] int StatusCode,
+    [property: Id(4)] int ResponseTimeMs
+) : StreamEvent;
+
+/// <summary>
+/// Published when a webhook delivery failed.
+/// </summary>
+[GenerateSerializer]
+public sealed record WebhookDeliveryFailedEvent(
+    [property: Id(0)] Guid WebhookId,
+    [property: Id(1)] Guid DeliveryId,
+    [property: Id(2)] string EventType,
+    [property: Id(3)] int? StatusCode,
+    [property: Id(4)] string ErrorMessage,
+    [property: Id(5)] int AttemptNumber,
+    [property: Id(6)] bool WillRetry
+) : StreamEvent;
+
+/// <summary>
+/// Published when a webhook endpoint is disabled due to too many failures.
+/// </summary>
+[GenerateSerializer]
+public sealed record WebhookEndpointDisabledEvent(
+    [property: Id(0)] Guid WebhookId,
+    [property: Id(1)] string Url,
+    [property: Id(2)] int ConsecutiveFailures,
+    [property: Id(3)] string Reason
+) : StreamEvent;
+
+#endregion
+
+#region Scheduled Job Stream Events
+
+/// <summary>
+/// Published when a scheduled job is scheduled.
+/// </summary>
+[GenerateSerializer]
+public sealed record JobScheduledEvent(
+    [property: Id(0)] Guid JobId,
+    [property: Id(1)] string JobName,
+    [property: Id(2)] string Schedule,
+    [property: Id(3)] DateTime NextRunAt
+) : StreamEvent;
+
+/// <summary>
+/// Published when a scheduled job starts execution.
+/// </summary>
+[GenerateSerializer]
+public sealed record JobStartedEvent(
+    [property: Id(0)] Guid JobId,
+    [property: Id(1)] string JobName,
+    [property: Id(2)] Guid ExecutionId
+) : StreamEvent;
+
+/// <summary>
+/// Published when a scheduled job completes execution.
+/// </summary>
+[GenerateSerializer]
+public sealed record JobCompletedEvent(
+    [property: Id(0)] Guid JobId,
+    [property: Id(1)] string JobName,
+    [property: Id(2)] Guid ExecutionId,
+    [property: Id(3)] bool Success,
+    [property: Id(4)] string? ErrorMessage,
+    [property: Id(5)] int DurationMs
+) : StreamEvent;
+
+/// <summary>
+/// Published when a scheduled job is cancelled.
+/// </summary>
+[GenerateSerializer]
+public sealed record JobCancelledEvent(
+    [property: Id(0)] Guid JobId,
+    [property: Id(1)] string JobName,
+    [property: Id(2)] Guid? CancelledBy,
     [property: Id(3)] string? Reason
 ) : StreamEvent;
 

@@ -1,4 +1,5 @@
 using DarkVelocity.Host.Payments;
+using DarkVelocity.Host.PaymentProcessors;
 using DarkVelocity.Host.Services;
 using DarkVelocity.Host.Streams;
 using Microsoft.Extensions.Configuration;
@@ -46,10 +47,23 @@ public class TestSiloConfigurator : ISiloConfigurator
         // Add payment gateway services
         siloBuilder.Services.AddSingleton<ICardValidationService, CardValidationService>();
 
+        // Add payment processor SDK clients (stub implementations for testing)
+        siloBuilder.Services.AddSingleton<IStripeClient, StubStripeClient>();
+        siloBuilder.Services.AddSingleton<IAdyenClient, StubAdyenClient>();
+
         // Add other required services
         siloBuilder.Services.AddSingleton<IFuzzyMatchingService, FuzzyMatchingService>();
         siloBuilder.Services.AddSingleton<IDocumentIntelligenceService, StubDocumentIntelligenceService>();
         siloBuilder.Services.AddSingleton<IEmailIngestionService, StubEmailIngestionService>();
+
+        // Add notification services
+        siloBuilder.Services.AddSingleton<IEmailService, StubEmailService>();
+        siloBuilder.Services.AddSingleton<ISmsService, StubSmsService>();
+        siloBuilder.Services.AddSingleton<IPushService, StubPushService>();
+        siloBuilder.Services.AddSingleton<ISlackService, StubSlackService>();
+
+        // Add webhook delivery service
+        siloBuilder.Services.AddSingleton<IWebhookDeliveryService, StubWebhookDeliveryService>();
 
         siloBuilder.Services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning));
     }

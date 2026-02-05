@@ -38,6 +38,49 @@ public sealed class TimeEntry
     [Id(4)] public DateTime? ClockOut { get; set; }
     [Id(5)] public decimal? TotalHours { get; set; }
     [Id(6)] public string? Notes { get; set; }
+    [Id(7)] public List<BreakEntry> Breaks { get; set; } = [];
+    [Id(8)] public BreakEntry? CurrentBreak { get; set; }
+    [Id(9)] public decimal TotalPaidBreakMinutes { get; set; }
+    [Id(10)] public decimal TotalUnpaidBreakMinutes { get; set; }
+    [Id(11)] public decimal NetWorkedHours { get; set; }
+}
+
+[GenerateSerializer]
+public sealed class BreakEntry
+{
+    [Id(0)] public Guid Id { get; set; }
+    [Id(1)] public string BreakType { get; set; } = ""; // meal, rest
+    [Id(2)] public bool IsPaid { get; set; }
+    [Id(3)] public DateTime StartTime { get; set; }
+    [Id(4)] public DateTime? EndTime { get; set; }
+    [Id(5)] public decimal? DurationMinutes { get; set; }
+}
+
+// ============================================================================
+// Certification State
+// ============================================================================
+
+[GenerateSerializer]
+public sealed class EmployeeCertification
+{
+    [Id(0)] public Guid Id { get; set; }
+    [Id(1)] public string CertificationType { get; set; } = ""; // food_handler, alcohol_service, servsafe, tips
+    [Id(2)] public string CertificationName { get; set; } = "";
+    [Id(3)] public string? CertificationNumber { get; set; }
+    [Id(4)] public DateOnly IssuedDate { get; set; }
+    [Id(5)] public DateOnly ExpirationDate { get; set; }
+    [Id(6)] public string? IssuingAuthority { get; set; }
+    [Id(7)] public CertificationStatus Status { get; set; } = CertificationStatus.Valid;
+    [Id(8)] public DateTime CreatedAt { get; set; }
+    [Id(9)] public DateTime? UpdatedAt { get; set; }
+}
+
+public enum CertificationStatus
+{
+    Valid,
+    ExpiringSoon,
+    Expired,
+    Revoked
 }
 
 [GenerateSerializer]
@@ -65,6 +108,8 @@ public sealed class EmployeeState
     [Id(19)] public List<TimeEntry> RecentTimeEntries { get; set; } = [];
     [Id(20)] public DateTime CreatedAt { get; set; }
     [Id(21)] public DateTime? UpdatedAt { get; set; }
+    [Id(22)] public List<EmployeeCertification> Certifications { get; set; } = [];
+    [Id(23)] public string? JurisdictionCode { get; set; }
 
     public string FullName => $"{FirstName} {LastName}".Trim();
 
