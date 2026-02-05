@@ -889,4 +889,99 @@ public static class GrainKeys
     /// </summary>
     public static string PaymentReconciliation(Guid orgId, Guid siteId, DateOnly date)
         => $"{orgId}:{siteId}:reconciliation:{date:yyyy-MM-dd}";
+
+    // ============================================================================
+    // Finance Domain Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a chart of accounts grain (one per organization).
+    /// </summary>
+    public static string ChartOfAccounts(Guid orgId)
+        => $"{orgId}:chartofaccounts";
+
+    /// <summary>
+    /// Creates a key for a journal entry grain.
+    /// </summary>
+    public static string JournalEntry(Guid orgId, Guid journalEntryId)
+        => $"{orgId}:journalentry:{journalEntryId}";
+
+    /// <summary>
+    /// Creates a key for an accounting period grain (one per organization per year).
+    /// </summary>
+    public static string AccountingPeriod(Guid orgId, int year)
+        => $"{orgId}:accountingperiod:{year}";
+
+    /// <summary>
+    /// Creates a key for a financial reports grain (one per organization).
+    /// </summary>
+    public static string FinancialReports(Guid orgId)
+        => $"{orgId}:financialreports";
+
+    /// <summary>
+    /// Creates a key for a bank reconciliation grain.
+    /// </summary>
+    public static string BankReconciliation(Guid orgId, Guid reconciliationId)
+        => $"{orgId}:reconciliation:{reconciliationId}";
+
+    /// <summary>
+    /// Creates a key for a journal entry index grain (one per organization per month).
+    /// </summary>
+    public static string JournalEntryIndex(Guid orgId, int year, int month)
+        => $"{orgId}:journalentry-index:{year}-{month:D2}";
+
+    // ============================================================================
+    // Organization Domain Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a subscription grain (one per organization).
+    /// </summary>
+    public static string Subscription(Guid orgId) => $"{orgId}:subscription";
+
+    /// <summary>
+    /// Creates a key for the global slug lookup grain.
+    /// Single instance for cross-org slug uniqueness.
+    /// </summary>
+    public static string SlugLookup() => "global:sluglookup";
+
+    // ============================================================================
+    // Tables & Bookings Advanced Grains
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for a table assignment optimizer grain (one per site).
+    /// </summary>
+    public static string TableAssignmentOptimizer(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:tableoptimizer";
+
+    /// <summary>
+    /// Creates a key for a turn time analytics grain (one per site).
+    /// </summary>
+    public static string TurnTimeAnalytics(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:turntime";
+
+    /// <summary>
+    /// Creates a key for a booking notification scheduler grain (one per site).
+    /// </summary>
+    public static string BookingNotificationScheduler(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:bookingnotifications";
+
+    /// <summary>
+    /// Creates a key for a no-show detection grain (one per site).
+    /// </summary>
+    public static string NoShowDetection(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:noshowdetection";
+
+    /// <summary>
+    /// Creates a key for an enhanced waitlist grain (one per site per day).
+    /// </summary>
+    public static string EnhancedWaitlist(Guid orgId, Guid siteId, DateOnly date)
+        => $"{orgId}:{siteId}:enhancedwaitlist:{date:yyyy-MM-dd}";
+
+    /// <summary>
+    /// Creates a key for a week calendar grain (for aggregate weekly views).
+    /// </summary>
+    public static string WeekCalendar(Guid orgId, Guid siteId, DateOnly startDate)
+        => $"{orgId}:{siteId}:weekcalendar:{startDate:yyyy-MM-dd}";
 }

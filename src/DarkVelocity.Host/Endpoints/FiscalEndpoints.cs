@@ -564,6 +564,449 @@ public static class FiscalEndpoints
         }).WithName("ListDSFinVKExports")
           .WithDescription("List all DSFinV-K exports for a site");
 
+        // ========================================================================
+        // Multi-Country Fiscal Configuration
+        // ========================================================================
+
+        group.MapGet("/fiscal/configuration", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var snapshot = await fiscalGrain.GetSnapshotAsync();
+            return Results.Ok(snapshot);
+        }).WithName("GetFiscalConfiguration")
+          .WithDescription("Get multi-country fiscal configuration for a site");
+
+        group.MapPut("/fiscal/configuration", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] ConfigureSiteFiscalRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            if (!Enum.TryParse<FiscalCountry>(request.Country, true, out var country))
+                return Results.BadRequest(new { error = "invalid_country", error_description = "Invalid fiscal country" });
+
+            ExternalTseType? tseType = null;
+            if (request.TseType != null && Enum.TryParse<ExternalTseType>(request.TseType, true, out var parsedTseType))
+                tseType = parsedTseType;
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var command = new ConfigureSiteFiscalCommand(
+                Country: country,
+                Enabled: request.Enabled,
+                TseDeviceId: request.TseDeviceId,
+                TseType: tseType,
+                CountrySpecificConfig: request.CountrySpecificConfig);
+
+            var snapshot = await fiscalGrain.ConfigureAsync(command);
+            return Results.Ok(snapshot);
+        }).WithName("ConfigureFiscal")
+          .WithDescription("Configure multi-country fiscal settings for a site");
+
+        group.MapGet("/fiscal/configuration/validate", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var result = await fiscalGrain.ValidateConfigurationAsync();
+            return Results.Ok(result);
+        }).WithName("ValidateFiscalConfiguration")
+          .WithDescription("Validate fiscal configuration for a site");
+
+        group.MapGet("/fiscal/health", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var health = await fiscalGrain.GetHealthStatusAsync();
+            return Results.Ok(health);
+        }).WithName("GetFiscalHealth")
+          .WithDescription("Get fiscal service health status");
+
+        group.MapGet("/fiscal/features", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var features = await fiscalGrain.GetSupportedFeaturesAsync();
+            return Results.Ok(new { features = features.Select(f => f.ToString()).ToList() });
+        }).WithName("GetFiscalFeatures")
+          .WithDescription("Get supported fiscal features for configured country");
+
+        // ========================================================================
+        // Country-Specific Export Endpoints
+        // ========================================================================
+
+        group.MapPost("/fiscal/export", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] GenerateFiscalExportRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            try
+            {
+                var range = new FiscalDateRange(request.StartDate, request.EndDate);
+                var exportData = await fiscalGrain.GenerateAuditExportAsync(range);
+
+                var contentType = request.Format?.ToLowerInvariant() switch
+                {
+                    "xml" => "application/xml",
+                    "json" => "application/json",
+                    _ => "application/octet-stream"
+                };
+
+                var fileName = $"fiscal-export-{siteId:N}-{request.StartDate:yyyyMMdd}-{request.EndDate:yyyyMMdd}.{request.Format ?? "dat"}";
+                return Results.File(exportData, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = "export_failed", error_description = ex.Message });
+            }
+        }).WithName("GenerateFiscalExport")
+          .WithDescription("Generate country-specific fiscal export");
+
+        // ========================================================================
+        // Z-Reports
+        // ========================================================================
+
+        group.MapPost("/fiscal/z-report", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] GenerateZReportRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var zReportGrain = grainFactory.GetGrain<IZReportGrain>(
+                GrainKeys.ZReport(orgId, siteId));
+
+            try
+            {
+                var report = await zReportGrain.GenerateReportAsync(request.BusinessDate);
+                return Results.Created(
+                    $"/api/orgs/{orgId}/sites/{siteId}/fiscal/z-report/{report.ReportNumber}",
+                    report);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = "z_report_failed", error_description = ex.Message });
+            }
+        }).WithName("GenerateZReport")
+          .WithDescription("Generate Z-report for a business date");
+
+        group.MapGet("/fiscal/z-report/{reportNumber:long}", async (
+            Guid orgId,
+            Guid siteId,
+            long reportNumber,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var zReportGrain = grainFactory.GetGrain<IZReportGrain>(
+                GrainKeys.ZReport(orgId, siteId));
+
+            var report = await zReportGrain.GetReportAsync(reportNumber);
+
+            if (report == null)
+                return Results.NotFound(new { error = "not_found", error_description = "Z-report not found" });
+
+            return Results.Ok(report);
+        }).WithName("GetZReport")
+          .WithDescription("Get a specific Z-report");
+
+        group.MapGet("/fiscal/z-reports", async (
+            Guid orgId,
+            Guid siteId,
+            [FromQuery] DateOnly? startDate,
+            [FromQuery] DateOnly? endDate,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var zReportGrain = grainFactory.GetGrain<IZReportGrain>(
+                GrainKeys.ZReport(orgId, siteId));
+
+            var reports = await zReportGrain.GetReportsAsync(
+                startDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-1)),
+                endDate ?? DateOnly.FromDateTime(DateTime.UtcNow));
+
+            return Results.Ok(new { reports, total = reports.Count });
+        }).WithName("ListZReports")
+          .WithDescription("List Z-reports for a date range");
+
+        group.MapGet("/fiscal/z-report/latest", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var zReportGrain = grainFactory.GetGrain<IZReportGrain>(
+                GrainKeys.ZReport(orgId, siteId));
+
+            var report = await zReportGrain.GetLatestReportAsync();
+
+            if (report == null)
+                return Results.NotFound(new { error = "not_found", error_description = "No Z-reports found" });
+
+            return Results.Ok(report);
+        }).WithName("GetLatestZReport")
+          .WithDescription("Get the latest Z-report");
+
+        // ========================================================================
+        // Daily Close Operations
+        // ========================================================================
+
+        group.MapPost("/fiscal/daily-close", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] TriggerDailyCloseRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var result = await fiscalGrain.PerformDailyCloseAsync(request.BusinessDate);
+
+            if (result.Success)
+                return Results.Ok(result);
+
+            return Results.BadRequest(new { error = result.ErrorCode, error_description = result.ErrorMessage });
+        }).WithName("TriggerDailyClose")
+          .WithDescription("Trigger daily fiscal close for a business date");
+
+        // ========================================================================
+        // Scheduled Jobs Management
+        // ========================================================================
+
+        group.MapGet("/fiscal/jobs", async (
+            Guid orgId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var jobSchedulerGrain = grainFactory.GetGrain<IFiscalJobSchedulerGrain>(
+                GrainKeys.FiscalJobScheduler(orgId));
+
+            var configs = await jobSchedulerGrain.GetSiteConfigsAsync();
+            return Results.Ok(new { siteConfigs = configs, total = configs.Count });
+        }).WithName("ListFiscalJobConfigs")
+          .WithDescription("List fiscal job configurations for all sites");
+
+        group.MapPut("/fiscal/jobs/{siteId}", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] ConfigureFiscalJobsRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var jobSchedulerGrain = grainFactory.GetGrain<IFiscalJobSchedulerGrain>(
+                GrainKeys.FiscalJobScheduler(orgId));
+
+            var config = new SiteFiscalJobConfig(
+                SiteId: siteId,
+                DailyCloseEnabled: request.DailyCloseEnabled,
+                DailyCloseTime: request.DailyCloseTime,
+                ArchiveEnabled: request.ArchiveEnabled,
+                ArchiveTime: request.ArchiveTime,
+                CertificateMonitoringEnabled: request.CertificateMonitoringEnabled,
+                CertificateExpiryWarningDays: request.CertificateExpiryWarningDays,
+                TimeZoneId: request.TimeZoneId);
+
+            await jobSchedulerGrain.ConfigureSiteJobsAsync(config);
+            return Results.Ok(config);
+        }).WithName("ConfigureFiscalJobs")
+          .WithDescription("Configure fiscal scheduled jobs for a site");
+
+        group.MapGet("/fiscal/jobs/history", async (
+            Guid orgId,
+            [FromQuery] int limit,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            limit = limit < 1 ? 50 : limit > 500 ? 500 : limit;
+
+            var jobSchedulerGrain = grainFactory.GetGrain<IFiscalJobSchedulerGrain>(
+                GrainKeys.FiscalJobScheduler(orgId));
+
+            var history = await jobSchedulerGrain.GetJobHistoryAsync(limit);
+            return Results.Ok(new { history, total = history.Count });
+        }).WithName("GetFiscalJobHistory")
+          .WithDescription("Get fiscal job execution history");
+
+        group.MapGet("/fiscal/certificates/expiry", async (
+            Guid orgId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var jobSchedulerGrain = grainFactory.GetGrain<IFiscalJobSchedulerGrain>(
+                GrainKeys.FiscalJobScheduler(orgId));
+
+            var warnings = await jobSchedulerGrain.CheckCertificateExpiryAsync();
+            return Results.Ok(new { warnings, total = warnings.Count });
+        }).WithName("CheckCertificateExpiry")
+          .WithDescription("Check certificate expiry for all sites");
+
+        // ========================================================================
+        // France NF 525 Specific Endpoints
+        // ========================================================================
+
+        group.MapPost("/fiscal/france/jet-export", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] GenerateFiscalExportRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            try
+            {
+                var range = new FiscalDateRange(request.StartDate, request.EndDate);
+                var exportData = await fiscalGrain.GenerateAuditExportAsync(range);
+
+                var fileName = $"jet-export-{siteId:N}-{request.StartDate:yyyyMMdd}-{request.EndDate:yyyyMMdd}.json";
+                return Results.File(exportData, "application/json", fileName);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = "jet_export_failed", error_description = ex.Message });
+            }
+        }).WithName("GenerateJetExport")
+          .WithDescription("Generate French JET (Journal Electronique Technique) export");
+
+        // ========================================================================
+        // Poland JPK/KSeF Specific Endpoints
+        // ========================================================================
+
+        group.MapPost("/fiscal/poland/jpk-export", async (
+            Guid orgId,
+            Guid siteId,
+            [FromBody] GenerateJpkExportRequest request,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            try
+            {
+                var range = new FiscalDateRange(request.StartDate, request.EndDate);
+                var exportData = await fiscalGrain.GenerateAuditExportAsync(range);
+
+                var documentType = request.DocumentType ?? "JPK_VAT";
+                var fileName = $"{documentType}-{siteId:N}-{request.StartDate:yyyyMMdd}-{request.EndDate:yyyyMMdd}.xml";
+                return Results.File(exportData, "application/xml", fileName);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = "jpk_export_failed", error_description = ex.Message });
+            }
+        }).WithName("GenerateJpkExport")
+          .WithDescription("Generate Polish JPK export");
+
+        // ========================================================================
+        // TSE Management Endpoints
+        // ========================================================================
+
+        group.MapGet("/fiscal/tse/status", async (
+            Guid orgId,
+            Guid siteId,
+            ClaimsPrincipal user,
+            IGrainFactory grainFactory) =>
+        {
+            if (!ValidateOrgAccess(user, orgId))
+                return Results.Forbid();
+
+            var fiscalGrain = grainFactory.GetGrain<IMultiCountryFiscalGrain>(
+                GrainKeys.MultiCountryFiscal(orgId, siteId));
+
+            var health = await fiscalGrain.GetHealthStatusAsync();
+            return Results.Ok(new
+            {
+                status = health.Status.ToString(),
+                isOnline = health.IsOnline,
+                certificateValid = health.CertificateValid,
+                daysUntilCertificateExpiry = health.DaysUntilCertificateExpiry,
+                lastTransactionAt = health.LastTransactionAt,
+                totalTransactions = health.TotalTransactions,
+                lastError = health.LastError
+            });
+        }).WithName("GetTseStatus")
+          .WithDescription("Get TSE device status");
+
         return app;
     }
 

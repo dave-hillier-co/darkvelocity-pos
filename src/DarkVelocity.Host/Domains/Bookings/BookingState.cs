@@ -22,6 +22,7 @@ public enum BookingSource
     Resy,
     GoogleMaps,
     Facebook,
+    Waitlist,
     Other
 }
 
@@ -133,25 +134,29 @@ public enum NotificationMethod
 {
     Sms,
     PagerBuzzer,
-    Display
+    Display,
+    Email,
+    Push
 }
 
 [GenerateSerializer]
-public record WaitlistEntry
+public class WaitlistEntry
 {
-    [Id(0)] public Guid Id { get; init; }
-    [Id(1)] public int Position { get; init; }
-    [Id(2)] public GuestInfo Guest { get; init; } = new();
-    [Id(3)] public int PartySize { get; init; }
-    [Id(4)] public DateTime CheckedInAt { get; init; }
-    [Id(5)] public TimeSpan QuotedWait { get; init; }
-    [Id(6)] public WaitlistStatus Status { get; init; }
-    [Id(7)] public string? TablePreferences { get; init; }
-    [Id(8)] public NotificationMethod NotificationMethod { get; init; }
-    [Id(9)] public DateTime? NotifiedAt { get; init; }
-    [Id(10)] public DateTime? SeatedAt { get; init; }
-    [Id(11)] public DateTime? LeftAt { get; init; }
-    [Id(12)] public Guid? ConvertedToBookingId { get; init; }
+    [Id(0)] public Guid Id { get; set; }
+    [Id(1)] public int Position { get; set; }
+    [Id(2)] public GuestInfo Guest { get; set; } = new();
+    [Id(3)] public int PartySize { get; set; }
+    [Id(4)] public DateTime AddedAt { get; set; }
+    [Id(5)] public TimeSpan QuotedWait { get; set; }
+    [Id(6)] public WaitlistStatus Status { get; set; }
+    [Id(7)] public string? TablePreferences { get; set; }
+    [Id(8)] public NotificationMethod NotificationMethod { get; set; }
+    [Id(9)] public DateTime? NotifiedAt { get; set; }
+    [Id(10)] public DateTime? SeatedAt { get; set; }
+    [Id(11)] public DateTime? LeftAt { get; set; }
+    [Id(12)] public Guid? ConvertedToBookingId { get; set; }
+    [Id(13)] public Guid? CustomerId { get; set; }
+    [Id(14)] public Guid? AssignedTableId { get; set; }
 }
 
 [GenerateSerializer]
