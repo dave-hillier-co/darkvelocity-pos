@@ -1,6 +1,5 @@
 using DarkVelocity.Host.Contracts;
 using DarkVelocity.Host.Grains;
-using DarkVelocity.Host.State;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DarkVelocity.Host.Endpoints;
@@ -559,7 +558,7 @@ public static class ChannelEndpoints
     private static Dictionary<string, object> BuildChannelLinks(
         Guid orgId,
         Guid channelId,
-        ChannelState state)
+        ChannelSnapshot snapshot)
     {
         var basePath = $"/api/orgs/{orgId}/channels/{channelId}";
 
@@ -569,7 +568,7 @@ public static class ChannelEndpoints
             ["organization"] = new { href = $"/api/orgs/{orgId}" },
             ["external-orders"] = new { href = $"{basePath}/external-orders" },
             ["locations"] = new { href = $"{basePath}/locations" },
-            ["status-mappings"] = new { href = $"/api/orgs/{orgId}/status-mappings/{state.PlatformType}" },
+            ["status-mappings"] = new { href = $"/api/orgs/{orgId}/status-mappings/{snapshot.PlatformType}" },
             ["pause"] = new { href = $"{basePath}/pause" },
             ["resume"] = new { href = $"{basePath}/resume" },
             ["menu-sync"] = new { href = $"{basePath}/menu-sync" }
@@ -584,12 +583,12 @@ public static class ChannelEndpoints
     private static object BuildChannelResponse(
         Guid orgId,
         Guid channelId,
-        ChannelState state)
+        ChannelSnapshot snapshot)
     {
-        var links = BuildChannelLinks(orgId, channelId, state);
+        var links = BuildChannelLinks(orgId, channelId, snapshot);
 
         // Build embedded locations with their own links
-        var embeddedLocations = state.Locations.Select(loc => new Dictionary<string, object>
+        var embeddedLocations = snapshot.Locations.Select(loc => new Dictionary<string, object>
         {
             ["_links"] = new Dictionary<string, object>
             {
@@ -607,24 +606,19 @@ public static class ChannelEndpoints
         {
             ["_links"] = links,
             ["_embedded"] = new { locations = embeddedLocations },
-            ["orgId"] = state.OrgId,
-            ["channelId"] = state.ChannelId,
-            ["platformType"] = state.PlatformType.ToString(),
-            ["integrationType"] = state.IntegrationType.ToString(),
-            ["name"] = state.Name,
-            ["status"] = state.Status.ToString(),
-            ["externalChannelId"] = state.ExternalChannelId,
-            ["settings"] = state.Settings,
-            ["connectedAt"] = state.ConnectedAt,
-            ["lastSyncAt"] = state.LastSyncAt,
-            ["lastOrderAt"] = state.LastOrderAt,
-            ["lastHeartbeatAt"] = state.LastHeartbeatAt,
-            ["totalOrdersToday"] = state.TotalOrdersToday,
-            ["totalRevenueToday"] = state.TotalRevenueToday,
-            ["todayDate"] = state.TodayDate,
-            ["lastErrorMessage"] = state.LastErrorMessage,
-            ["pauseReason"] = state.PauseReason,
-            ["version"] = state.Version
+            ["channelId"] = snapshot.ChannelId,
+            ["platformType"] = snapshot.PlatformType.ToString(),
+            ["integrationType"] = snapshot.IntegrationType.ToString(),
+            ["name"] = snapshot.Name,
+            ["status"] = snapshot.Status.ToString(),
+            ["externalChannelId"] = snapshot.ExternalChannelId,
+            ["connectedAt"] = snapshot.ConnectedAt,
+            ["lastSyncAt"] = snapshot.LastSyncAt,
+            ["lastOrderAt"] = snapshot.LastOrderAt,
+            ["lastHeartbeatAt"] = snapshot.LastHeartbeatAt,
+            ["totalOrdersToday"] = snapshot.TotalOrdersToday,
+            ["totalRevenueToday"] = snapshot.TotalRevenueToday,
+            ["lastErrorMessage"] = snapshot.LastErrorMessage
         };
     }
 }
