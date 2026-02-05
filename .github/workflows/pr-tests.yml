@@ -28,8 +28,27 @@ jobs:
       - name: Build solution
         run: dotnet build --configuration Release
 
-      - name: Run tests
-        run: dotnet test --configuration Release --no-build --verbosity normal
+      - name: Run tests with coverage
+        run: >
+          dotnet test --configuration Release --no-build --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: coverage/**/coverage.cobertura.xml
+          targetdir: coverage/report
+          reporttypes: HtmlInline_AzurePipelines;Cobertura;TextSummary
+
+      - name: Publish coverage summary
+        run: cat coverage/report/Summary.txt
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/report
 
       - name: Stop infrastructure services
         if: always()
