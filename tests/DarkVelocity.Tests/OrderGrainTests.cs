@@ -19,6 +19,9 @@ public class OrderGrainTests
     private IOrderGrain GetOrderGrain(Guid orgId, Guid siteId, Guid orderId)
         => _fixture.Cluster.GrainFactory.GetGrain<IOrderGrain>(GrainKeys.Order(orgId, siteId, orderId));
 
+    // Given: no existing order
+    // When: a new dine-in order is created
+    // Then: the order is assigned a unique number and creation timestamp
     [Fact]
     public async Task CreateAsync_ShouldCreateOrder()
     {
@@ -40,6 +43,9 @@ public class OrderGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an open dine-in order for table T5 with 4 guests
+    // When: the order state is retrieved
+    // Then: all order details including type, table, and guest count are returned
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -67,6 +73,9 @@ public class OrderGrainTests
         state.Status.Should().Be(OrderStatus.Open);
     }
 
+    // Given: an open dine-in order
+    // When: 2 Burgers at $12.99 each are added
+    // Then: the line total reflects the quantity and the order has one line item
     [Fact]
     public async Task AddLineAsync_ShouldAddLine()
     {
@@ -90,6 +99,9 @@ public class OrderGrainTests
         lines[0].Quantity.Should().Be(2);
     }
 
+    // Given: an open dine-in order
+    // When: a Burger with Extra Cheese and Bacon modifiers is added
+    // Then: the line total includes the base price plus all modifier costs
     [Fact]
     public async Task AddLineAsync_WithModifiers_ShouldIncludeModifierCosts()
     {
@@ -115,6 +127,9 @@ public class OrderGrainTests
         result.LineTotal.Should().Be(16.49m); // 12.99 + 1.50 + 2.00
     }
 
+    // Given: an order with a single Burger line item
+    // When: the quantity is updated to 3
+    // Then: the line total recalculates to reflect the new quantity
     [Fact]
     public async Task UpdateLineAsync_ShouldUpdateQuantity()
     {
@@ -137,6 +152,9 @@ public class OrderGrainTests
         lines[0].LineTotal.Should().Be(38.97m);
     }
 
+    // Given: an order with a Burger line item
+    // When: the line is voided with reason "Customer changed mind"
+    // Then: the line is marked as voided and excluded from the subtotal
     [Fact]
     public async Task VoidLineAsync_ShouldVoidLine()
     {
@@ -162,6 +180,9 @@ public class OrderGrainTests
         totals.Subtotal.Should().Be(0);
     }
 
+    // Given: an order with a Burger line item
+    // When: the line is removed
+    // Then: the order has no remaining line items
     [Fact]
     public async Task RemoveLineAsync_ShouldRemoveLine()
     {
@@ -183,6 +204,9 @@ public class OrderGrainTests
         lines.Should().BeEmpty();
     }
 
+    // Given: an order with a Burger line item
+    // When: the order is sent to the kitchen
+    // Then: the order status changes to Sent and all lines are marked as sent
     [Fact]
     public async Task SendAsync_ShouldMarkLinesAsSent()
     {
@@ -206,6 +230,9 @@ public class OrderGrainTests
         state.Lines[0].Status.Should().Be(OrderLineStatus.Sent);
     }
 
+    // Given: an order with a $100 item
+    // When: a 10% percentage discount is applied
+    // Then: the discount total is $10
     [Fact]
     public async Task ApplyDiscountAsync_WithPercentage_ShouldCalculateDiscount()
     {
@@ -227,6 +254,9 @@ public class OrderGrainTests
         totals.DiscountTotal.Should().Be(10m);
     }
 
+    // Given: an order with a $100 item
+    // When: a $5 fixed amount discount is applied
+    // Then: the discount total is $5
     [Fact]
     public async Task ApplyDiscountAsync_WithFixedAmount_ShouldApplyDiscount()
     {
@@ -248,6 +278,9 @@ public class OrderGrainTests
         totals.DiscountTotal.Should().Be(5m);
     }
 
+    // Given: an order with a $100 item
+    // When: full payment with a $10 tip is recorded
+    // Then: the order is marked as paid with zero balance due
     [Fact]
     public async Task RecordPaymentAsync_ShouldUpdatePaidAmount()
     {
@@ -275,6 +308,9 @@ public class OrderGrainTests
         state.BalanceDue.Should().Be(0);
     }
 
+    // Given: an order with a $100 item
+    // When: a $50 partial cash payment is recorded
+    // Then: the order is marked as partially paid with remaining balance
     [Fact]
     public async Task RecordPaymentAsync_PartialPayment_ShouldSetPartiallyPaidStatus()
     {
@@ -298,6 +334,9 @@ public class OrderGrainTests
         state.BalanceDue.Should().BeGreaterThan(0);
     }
 
+    // Given: a fully paid dine-in order
+    // When: the order is closed
+    // Then: the order status changes to Closed with a closing timestamp
     [Fact]
     public async Task CloseAsync_WithBalancePaid_ShouldCloseOrder()
     {
@@ -322,6 +361,9 @@ public class OrderGrainTests
         state.ClosedAt.Should().NotBeNull();
     }
 
+    // Given: an unpaid dine-in order with an outstanding balance
+    // When: closing the order is attempted
+    // Then: an error is raised because the balance has not been settled
     [Fact]
     public async Task CloseAsync_WithOutstandingBalance_ShouldThrow()
     {
@@ -343,6 +385,9 @@ public class OrderGrainTests
             .WithMessage("Cannot close order with outstanding balance");
     }
 
+    // Given: an open dine-in order with line items
+    // When: the order is voided because the customer left
+    // Then: the order status changes to Voided with the void reason recorded
     [Fact]
     public async Task VoidAsync_ShouldVoidOrder()
     {

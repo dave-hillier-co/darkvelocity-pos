@@ -20,6 +20,9 @@ public class PosDeviceGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IPosDeviceGrain>(key);
     }
 
+    // Given: a new POS tablet device with full hardware details
+    // When: the device is registered at a venue location
+    // Then: the device is active, online, and all hardware details are captured
     [Fact]
     public async Task RegisterAsync_ShouldRegisterPosDevice()
     {
@@ -53,6 +56,9 @@ public class PosDeviceGrainTests
         result.RegisteredAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a new fixed POS terminal device
+    // When: the terminal is registered at a venue
+    // Then: the device type is recorded as Terminal
     [Fact]
     public async Task RegisterAsync_Terminal_ShouldRegisterTerminalDevice()
     {
@@ -75,6 +81,9 @@ public class PosDeviceGrainTests
         result.DeviceType.Should().Be(PosDeviceType.Terminal);
     }
 
+    // Given: a new handheld mobile POS device for tableside ordering
+    // When: the mobile device is registered at a venue
+    // Then: the device type is recorded as Mobile
     [Fact]
     public async Task RegisterAsync_Mobile_ShouldRegisterMobileDevice()
     {
@@ -97,6 +106,9 @@ public class PosDeviceGrainTests
         result.DeviceType.Should().Be(PosDeviceType.Mobile);
     }
 
+    // Given: a registered POS tablet at a venue
+    // When: the device configuration is updated with a new name, printer, cash drawer, and settings
+    // Then: all updated properties are persisted on the device
     [Fact]
     public async Task UpdateAsync_ShouldUpdateDeviceProperties()
     {
@@ -133,6 +145,9 @@ public class PosDeviceGrainTests
         result.OpenDrawerOnCash.Should().BeTrue();
     }
 
+    // Given: a registered POS device that is no longer needed
+    // When: the device is deactivated
+    // Then: the device is marked inactive and goes offline
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateDevice()
     {
@@ -153,6 +168,9 @@ public class PosDeviceGrainTests
         snapshot.IsOnline.Should().BeFalse();
     }
 
+    // Given: a registered POS tablet running an older app version
+    // When: the device sends a heartbeat with updated app and OS versions
+    // Then: the device versions and last-seen timestamp are updated and the device stays online
     [Fact]
     public async Task RecordHeartbeatAsync_ShouldUpdateLastSeenAndVersions()
     {
@@ -175,6 +193,9 @@ public class PosDeviceGrainTests
         snapshot.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a registered POS tablet with known app and OS versions
+    // When: the device sends a heartbeat without version information
+    // Then: the existing versions are preserved and only the last-seen timestamp is updated
     [Fact]
     public async Task RecordHeartbeatAsync_WithNullVersions_ShouldOnlyUpdateLastSeen()
     {
@@ -196,6 +217,9 @@ public class PosDeviceGrainTests
         snapshot.IsOnline.Should().BeTrue();
     }
 
+    // Given: a registered and online POS tablet
+    // When: the device loses network connectivity and is marked offline
+    // Then: the device status shows as offline
     [Fact]
     public async Task SetOfflineAsync_ShouldMarkDeviceOffline()
     {
@@ -215,6 +239,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: a freshly registered POS tablet
+    // When: the device online status is checked immediately after registration
+    // Then: the device reports as online
     [Fact]
     public async Task IsOnlineAsync_WhenOnline_ShouldReturnTrue()
     {
@@ -233,6 +260,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeTrue();
     }
 
+    // Given: a registered POS tablet without a default printer
+    // When: a receipt printer is assigned as the default with auto-print enabled
+    // Then: the device is linked to the printer and auto-print receipts is turned on
     [Fact]
     public async Task UpdateAsync_SetDefaultPrinter_ShouldLinkPrinter()
     {
@@ -277,6 +307,9 @@ public class PrinterGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IPrinterGrain>(key);
     }
 
+    // Given: a new network-connected receipt printer at a venue
+    // When: the printer is registered with its IP address, port, and paper width
+    // Then: the printer is active, starts offline, and all network details are stored
     [Fact]
     public async Task RegisterAsync_NetworkPrinter_ShouldRegisterPrinter()
     {
@@ -313,6 +346,9 @@ public class PrinterGrainTests
         result.IsOnline.Should().BeFalse();
     }
 
+    // Given: a new USB-connected receipt printer with vendor and product identifiers
+    // When: the printer is registered via USB connection
+    // Then: the USB details are stored and no network details are present
     [Fact]
     public async Task RegisterAsync_UsbPrinter_ShouldRegisterWithUsbDetails()
     {
@@ -341,6 +377,9 @@ public class PrinterGrainTests
         result.UsbProductId.Should().Be("0202");
     }
 
+    // Given: a new network printer designated for the kitchen hot line
+    // When: the printer is registered as a kitchen printer
+    // Then: the printer type is recorded as Kitchen
     [Fact]
     public async Task RegisterAsync_KitchenPrinter_ShouldRegisterKitchenType()
     {
@@ -367,6 +406,9 @@ public class PrinterGrainTests
         result.PrinterType.Should().Be(PrinterType.Kitchen);
     }
 
+    // Given: a new USB label printer for item tagging
+    // When: the printer is registered as a label printer
+    // Then: the printer type is recorded as Label
     [Fact]
     public async Task RegisterAsync_LabelPrinter_ShouldRegisterLabelType()
     {
@@ -393,6 +435,9 @@ public class PrinterGrainTests
         result.PrinterType.Should().Be(PrinterType.Label);
     }
 
+    // Given: a new Bluetooth mobile receipt printer with a MAC address
+    // When: the printer is registered via Bluetooth
+    // Then: the Bluetooth connection type and MAC address are stored
     [Fact]
     public async Task RegisterAsync_BluetoothPrinter_ShouldRegisterWithMacAddress()
     {
@@ -420,6 +465,9 @@ public class PrinterGrainTests
         result.MacAddress.Should().Be("AA:BB:CC:DD:EE:FF");
     }
 
+    // Given: a registered network receipt printer with an old name and IP
+    // When: the printer configuration is updated with a new name, IP, port, and hardware capabilities
+    // Then: all updated properties including character set and cash drawer support are persisted
     [Fact]
     public async Task UpdateAsync_ShouldUpdatePrinterProperties()
     {
@@ -455,6 +503,9 @@ public class PrinterGrainTests
         result.SupportsCashDrawer.Should().BeTrue();
     }
 
+    // Given: a registered network receipt printer that is being retired
+    // When: the printer is deactivated
+    // Then: the printer is marked inactive and goes offline
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivatePrinter()
     {
@@ -476,6 +527,9 @@ public class PrinterGrainTests
         snapshot.IsOnline.Should().BeFalse();
     }
 
+    // Given: a registered receipt printer that has not yet printed
+    // When: a print job completes successfully on the printer
+    // Then: the printer is marked online and the last print timestamp is recorded
     [Fact]
     public async Task RecordPrintAsync_ShouldUpdateLastPrintAndSetOnline()
     {
@@ -497,6 +551,9 @@ public class PrinterGrainTests
         snapshot.LastPrintAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a registered receipt printer that is currently offline
+    // When: the printer connectivity status is set to online
+    // Then: the printer reports as online
     [Fact]
     public async Task SetOnlineAsync_True_ShouldSetOnline()
     {
@@ -517,6 +574,9 @@ public class PrinterGrainTests
         isOnline.Should().BeTrue();
     }
 
+    // Given: a registered receipt printer that is currently online
+    // When: the printer connectivity status is set to offline
+    // Then: the printer reports as offline
     [Fact]
     public async Task SetOnlineAsync_False_ShouldSetOffline()
     {
@@ -538,6 +598,9 @@ public class PrinterGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: a freshly registered receipt printer that has never been pinged or printed
+    // When: the printer online status is checked
+    // Then: the printer reports as offline since it starts in offline state
     [Fact]
     public async Task IsOnlineAsync_WhenOffline_ShouldReturnFalse()
     {
@@ -575,6 +638,9 @@ public class CashDrawerHardwareGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ICashDrawerHardwareGrain>(key);
     }
 
+    // Given: a new cash drawer connected via a receipt printer's kick port
+    // When: the cash drawer is registered with its linked printer
+    // Then: the drawer is active and associated with the printer
     [Fact]
     public async Task RegisterAsync_PrinterConnected_ShouldRegisterDrawer()
     {
@@ -603,6 +669,9 @@ public class CashDrawerHardwareGrainTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: a new network-connected cash drawer with a dedicated IP address
+    // When: the cash drawer is registered with network connection details
+    // Then: the network IP and port are stored and no printer is linked
     [Fact]
     public async Task RegisterAsync_NetworkConnected_ShouldRegisterWithIpAddress()
     {
@@ -627,6 +696,9 @@ public class CashDrawerHardwareGrainTests
         result.PrinterId.Should().BeNull();
     }
 
+    // Given: a new cash drawer connected directly via USB
+    // When: the cash drawer is registered with USB connection type
+    // Then: the drawer is registered as USB with no network or printer details
     [Fact]
     public async Task RegisterAsync_UsbConnected_ShouldRegisterUsbDrawer()
     {
@@ -648,6 +720,9 @@ public class CashDrawerHardwareGrainTests
         result.ConnectionType.Should().Be(CashDrawerConnectionType.Usb);
     }
 
+    // Given: a registered cash drawer linked to an old printer
+    // When: the drawer configuration is updated with a new printer, pulse pin, and timing settings
+    // Then: the new printer link and pulse settings are persisted
     [Fact]
     public async Task UpdateAsync_ShouldUpdateDrawerProperties()
     {
@@ -679,6 +754,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(200);
     }
 
+    // Given: a registered USB cash drawer that is being retired
+    // When: the cash drawer is deactivated
+    // Then: the drawer is marked as inactive
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateDrawer()
     {
@@ -698,6 +776,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a registered printer-connected cash drawer
+    // When: the drawer is physically opened during a cash transaction
+    // Then: the last-opened timestamp is recorded
     [Fact]
     public async Task RecordOpenAsync_ShouldUpdateLastOpenedAt()
     {
@@ -717,6 +798,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.LastOpenedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a registered printer-connected cash drawer with default pulse settings
+    // When: the ESC/POS kick command is requested
+    // Then: the command starts with the standard ESC/POS drawer kick sequence
     [Fact]
     public async Task GetKickCommandAsync_ShouldReturnEscPosCommand()
     {
@@ -735,6 +819,9 @@ public class CashDrawerHardwareGrainTests
         kickCommand.Should().StartWith("\\x1B\\x70"); // ESC p command
     }
 
+    // Given: a registered printer-connected cash drawer
+    // When: the pulse settings are updated to use pin 1 with custom timing
+    // Then: the updated pulse pin and timing values are stored
     [Fact]
     public async Task UpdateAsync_CustomPulseSettings_ShouldUpdateTimings()
     {
@@ -779,6 +866,9 @@ public class DeviceStatusGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeviceStatusGrain>(key);
     }
 
+    // Given: a new venue location with no devices
+    // When: the device status tracker is initialized for the location
+    // Then: all device counts are zero and there are no alerts
     [Fact]
     public async Task InitializeAsync_ShouldInitializeDeviceStatus()
     {
@@ -798,6 +888,9 @@ public class DeviceStatusGrainTests
         summary.Alerts.Should().BeEmpty();
     }
 
+    // Given: an initialized venue location
+    // When: a POS register is added to the location's device roster
+    // Then: the POS device count increases and it starts as offline
     [Fact]
     public async Task RegisterDeviceAsync_PosDevice_ShouldRegister()
     {
@@ -817,6 +910,9 @@ public class DeviceStatusGrainTests
         summary.OnlinePosDevices.Should().Be(0);
     }
 
+    // Given: an initialized venue location
+    // When: a receipt printer is added to the location's device roster
+    // Then: the printer count increases and it starts as offline
     [Fact]
     public async Task RegisterDeviceAsync_Printer_ShouldRegister()
     {
@@ -836,6 +932,9 @@ public class DeviceStatusGrainTests
         summary.OnlinePrinters.Should().Be(0);
     }
 
+    // Given: an initialized venue location
+    // When: a cash drawer is added to the location's device roster
+    // Then: the cash drawer count increases
     [Fact]
     public async Task RegisterDeviceAsync_CashDrawer_ShouldRegister()
     {
@@ -854,6 +953,9 @@ public class DeviceStatusGrainTests
         summary.TotalCashDrawers.Should().Be(1);
     }
 
+    // Given: an initialized venue location
+    // When: multiple POS devices, printers, and a cash drawer are registered
+    // Then: the summary accurately counts each device type
     [Fact]
     public async Task RegisterDeviceAsync_MultipleDevices_ShouldTrackAll()
     {
@@ -877,6 +979,9 @@ public class DeviceStatusGrainTests
         summary.TotalCashDrawers.Should().Be(1);
     }
 
+    // Given: a venue location with a registered POS device
+    // When: the POS device is removed from the location's roster
+    // Then: the POS device count decreases to zero
     [Fact]
     public async Task UnregisterDeviceAsync_ShouldRemoveDevice()
     {
@@ -896,6 +1001,9 @@ public class DeviceStatusGrainTests
         summary.TotalPosDevices.Should().Be(0);
     }
 
+    // Given: a venue location with a registered but offline POS device
+    // When: the POS device comes online
+    // Then: the online POS device count increases
     [Fact]
     public async Task UpdateDeviceStatusAsync_Online_ShouldUpdateCount()
     {
@@ -915,6 +1023,9 @@ public class DeviceStatusGrainTests
         summary.OnlinePosDevices.Should().Be(1);
     }
 
+    // Given: a venue location with an online POS device
+    // When: the POS device goes offline
+    // Then: the online POS device count decreases to zero
     [Fact]
     public async Task UpdateDeviceStatusAsync_Offline_ShouldUpdateCount()
     {
@@ -935,6 +1046,9 @@ public class DeviceStatusGrainTests
         summary.OnlinePosDevices.Should().Be(0);
     }
 
+    // Given: a venue location with a registered kitchen printer
+    // When: an offline alert is raised for the kitchen printer
+    // Then: the alert is tracked in the location's device summary
     [Fact]
     public async Task AddAlertAsync_ShouldAddAlert()
     {
@@ -962,6 +1076,9 @@ public class DeviceStatusGrainTests
         summary.Alerts[0].DeviceName.Should().Be("Kitchen Printer");
     }
 
+    // Given: a venue location with a printer and a POS device, both having issues
+    // When: alerts are raised for both the printer (paper low) and POS (battery low)
+    // Then: both alerts are tracked in the location summary
     [Fact]
     public async Task AddAlertAsync_MultipleAlerts_ShouldTrackAll()
     {
@@ -988,6 +1105,9 @@ public class DeviceStatusGrainTests
         summary.Alerts.Should().HaveCount(2);
     }
 
+    // Given: a venue location with a printer that has an active offline alert
+    // When: the alert is cleared for that printer
+    // Then: the location has no remaining alerts
     [Fact]
     public async Task ClearAlertAsync_ShouldRemoveAlertsForDevice()
     {
@@ -1010,6 +1130,9 @@ public class DeviceStatusGrainTests
         summary.Alerts.Should().BeEmpty();
     }
 
+    // Given: a venue location with a POS device that has an active offline alert
+    // When: the POS device is unregistered from the location
+    // Then: the device is removed and its associated alerts are also cleared
     [Fact]
     public async Task UnregisterDeviceAsync_ShouldAlsoClearAlerts()
     {
@@ -1032,6 +1155,9 @@ public class DeviceStatusGrainTests
         summary.Alerts.Should().BeEmpty();
     }
 
+    // Given: a venue location with two POS registers and a printer, some online and some offline
+    // When: the device summary is requested
+    // Then: the summary accurately reports total and online counts for each device type
     [Fact]
     public async Task GetSummaryAsync_ShouldReturnCompleteSummary()
     {

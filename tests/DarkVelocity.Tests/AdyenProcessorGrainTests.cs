@@ -22,6 +22,9 @@ public class AdyenProcessorGrainTests
     // Authorization Tests
     // =========================================================================
 
+    // Given: a valid Adyen payment authorization request with automatic capture
+    // When: the payment is authorized through the Adyen processor
+    // Then: the authorization succeeds and returns a transaction ID and authorization code
     [Fact]
     public async Task AuthorizeAsync_WithValidRequest_ShouldSucceed()
     {
@@ -48,6 +51,9 @@ public class AdyenProcessorGrainTests
         result.AuthorizationCode.Should().NotBeNullOrEmpty();
     }
 
+    // Given: an Adyen payment authorization request with delayed capture
+    // When: the payment is authorized through the Adyen processor
+    // Then: the payment status is set to authorized with the full amount held but not yet captured
     [Fact]
     public async Task AuthorizeAsync_WithDelayedCapture_ShouldSetStatusToAuthorized()
     {
@@ -77,6 +83,9 @@ public class AdyenProcessorGrainTests
         state.CapturedAmount.Should().Be(0);
     }
 
+    // Given: an Adyen payment authorization request with immediate capture enabled
+    // When: the payment is authorized through the Adyen processor
+    // Then: the payment is immediately captured and the full amount is settled
     [Fact]
     public async Task AuthorizeAsync_WithImmediateCapture_ShouldSetStatusToCaptured()
     {
@@ -109,6 +118,9 @@ public class AdyenProcessorGrainTests
     // Capture Tests
     // =========================================================================
 
+    // Given: an Adyen payment that has been authorized but not yet captured
+    // When: the full authorized amount is captured
+    // Then: the capture succeeds and the payment status transitions to captured
     [Fact]
     public async Task CaptureAsync_WithAuthorizedPayment_ShouldSucceed()
     {
@@ -139,6 +151,9 @@ public class AdyenProcessorGrainTests
         state.Status.Should().Be("captured");
     }
 
+    // Given: an Adyen payment authorized for a larger amount
+    // When: a partial capture is requested for less than the authorized amount
+    // Then: the partial capture succeeds with only the requested amount settled
     [Fact]
     public async Task CaptureAsync_WithPartialAmount_ShouldSucceed()
     {
@@ -164,6 +179,9 @@ public class AdyenProcessorGrainTests
         captureResult.CapturedAmount.Should().Be(7500);
     }
 
+    // Given: an Adyen payment authorized for a specific amount
+    // When: a capture is attempted for more than the authorized amount
+    // Then: the capture fails with an amount_too_large error
     [Fact]
     public async Task CaptureAsync_ExceedsAuthorizedAmount_ShouldFail()
     {
@@ -189,6 +207,9 @@ public class AdyenProcessorGrainTests
         captureResult.ErrorCode.Should().Be("amount_too_large");
     }
 
+    // Given: an Adyen processor grain with no prior authorization
+    // When: a capture is attempted with an invalid PSP reference
+    // Then: the capture fails with an invalid_transaction error
     [Fact]
     public async Task CaptureAsync_WithInvalidPspReference_ShouldFail()
     {
@@ -209,6 +230,9 @@ public class AdyenProcessorGrainTests
     // Refund Tests
     // =========================================================================
 
+    // Given: an Adyen payment that has been captured
+    // When: a partial refund is issued to the customer
+    // Then: the refund succeeds and the refunded amount is recorded on the payment
     [Fact]
     public async Task RefundAsync_WithCapturedPayment_ShouldSucceed()
     {
@@ -238,6 +262,9 @@ public class AdyenProcessorGrainTests
         state.RefundedAmount.Should().Be(2000);
     }
 
+    // Given: an Adyen payment that has been captured for the full amount
+    // When: a full refund is issued for the entire captured amount
+    // Then: the payment status transitions to refunded
     [Fact]
     public async Task RefundAsync_FullAmount_ShouldChangeStatusToRefunded()
     {
@@ -264,6 +291,9 @@ public class AdyenProcessorGrainTests
         state.RefundedAmount.Should().Be(3000);
     }
 
+    // Given: an Adyen payment that has been captured for a specific amount
+    // When: a refund is attempted for more than the captured amount
+    // Then: the refund fails with an amount_too_large error
     [Fact]
     public async Task RefundAsync_ExceedsAvailableBalance_ShouldFail()
     {
@@ -293,6 +323,9 @@ public class AdyenProcessorGrainTests
     // Void (Cancel) Tests
     // =========================================================================
 
+    // Given: an Adyen payment that is authorized but not yet captured
+    // When: the authorization is voided due to customer cancellation
+    // Then: the void succeeds and the payment status transitions to voided
     [Fact]
     public async Task VoidAsync_OnAuthorizedPayment_ShouldSucceed()
     {
@@ -321,6 +354,9 @@ public class AdyenProcessorGrainTests
         state.Status.Should().Be("voided");
     }
 
+    // Given: an Adyen payment that has already been captured
+    // When: a void is attempted on the captured payment
+    // Then: the void fails because captured payments cannot be voided, only refunded
     [Fact]
     public async Task VoidAsync_OnCapturedPayment_ShouldFail()
     {
@@ -350,6 +386,9 @@ public class AdyenProcessorGrainTests
     // Split Payment Tests (Adyen-Specific)
     // =========================================================================
 
+    // Given: an Adyen payment request with split payment configuration for platform and merchant shares
+    // When: the split payment is authorized through the Adyen processor
+    // Then: the authorization succeeds with funds distributed between platform and connected merchant
     [Fact]
     public async Task AuthorizeWithSplitAsync_ShouldProcessSplitPayment()
     {

@@ -15,6 +15,9 @@ public class SlugLookupGrainTests
         _fixture = fixture;
     }
 
+    // Given: a slug that has not been reserved by any organization
+    // When: checking slug availability
+    // Then: it should be available
     [Fact]
     public async Task IsSlugAvailableAsync_WhenNotReserved_ShouldReturnTrue()
     {
@@ -29,6 +32,9 @@ public class SlugLookupGrainTests
         isAvailable.Should().BeTrue();
     }
 
+    // Given: a system-reserved slug such as "admin"
+    // When: checking slug availability
+    // Then: it should be unavailable
     [Fact]
     public async Task IsSlugAvailableAsync_WhenSystemSlug_ShouldReturnFalse()
     {
@@ -42,6 +48,9 @@ public class SlugLookupGrainTests
         isAvailable.Should().BeFalse();
     }
 
+    // Given: an available slug and an organization
+    // When: the slug is reserved for the organization
+    // Then: the reservation should succeed and the slug should no longer be available
     [Fact]
     public async Task ReserveSlugAsync_ShouldReserveSlug()
     {
@@ -60,6 +69,9 @@ public class SlugLookupGrainTests
         isAvailable.Should().BeFalse();
     }
 
+    // Given: a slug already reserved by one organization
+    // When: a different organization tries to reserve the same slug
+    // Then: the reservation should fail
     [Fact]
     public async Task ReserveSlugAsync_WhenAlreadyReserved_ShouldReturnFalse()
     {
@@ -78,6 +90,9 @@ public class SlugLookupGrainTests
         reserved.Should().BeFalse();
     }
 
+    // Given: a system-reserved slug such as "api"
+    // When: an organization tries to reserve it
+    // Then: the reservation should fail
     [Fact]
     public async Task ReserveSlugAsync_SystemSlug_ShouldReturnFalse()
     {
@@ -92,6 +107,9 @@ public class SlugLookupGrainTests
         reserved.Should().BeFalse();
     }
 
+    // Given: a slug reserved by an organization
+    // When: looking up the organization by slug
+    // Then: it should return the correct organization ID
     [Fact]
     public async Task GetOrganizationBySlugAsync_WhenReserved_ShouldReturnOrganizationId()
     {
@@ -110,6 +128,9 @@ public class SlugLookupGrainTests
         result!.OrganizationId.Should().Be(orgId);
     }
 
+    // Given: a slug that has never been reserved
+    // When: looking up the organization by slug
+    // Then: it should return null
     [Fact]
     public async Task GetOrganizationBySlugAsync_WhenNotReserved_ShouldReturnNull()
     {
@@ -124,6 +145,9 @@ public class SlugLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: a slug reserved by an organization
+    // When: the owning organization releases the slug
+    // Then: the slug should become available again
     [Fact]
     public async Task ReleaseSlugAsync_ShouldReleaseSlug()
     {
@@ -142,6 +166,9 @@ public class SlugLookupGrainTests
         isAvailable.Should().BeTrue();
     }
 
+    // Given: a slug reserved by one organization
+    // When: a different organization attempts to release it
+    // Then: the slug should remain reserved by the original owner
     [Fact]
     public async Task ReleaseSlugAsync_WhenWrongOrgId_ShouldNotRelease()
     {
@@ -161,6 +188,9 @@ public class SlugLookupGrainTests
         isAvailable.Should().BeFalse(); // Should still be reserved
     }
 
+    // Given: an organization with a reserved slug
+    // When: the slug is changed to a new value
+    // Then: the old slug should be released and the new slug should be reserved
     [Fact]
     public async Task ChangeSlugAsync_ShouldChangeSlugAndRecordHistory()
     {
@@ -191,6 +221,9 @@ public class SlugLookupGrainTests
         result!.OrganizationId.Should().Be(orgId);
     }
 
+    // Given: two organizations each with their own slug
+    // When: one organization tries to change its slug to the other's slug
+    // Then: the change should fail because the target slug is already taken
     [Fact]
     public async Task ChangeSlugAsync_WhenNewSlugTaken_ShouldReturnFalse()
     {
@@ -211,6 +244,9 @@ public class SlugLookupGrainTests
         changed.Should().BeFalse();
     }
 
+    // Given: a slug reserved by one organization
+    // When: a different organization tries to change it
+    // Then: the change should fail because the requesting organization does not own the slug
     [Fact]
     public async Task ChangeSlugAsync_WhenOldSlugNotOwned_ShouldReturnFalse()
     {
@@ -230,6 +266,9 @@ public class SlugLookupGrainTests
         changed.Should().BeFalse();
     }
 
+    // Given: known system-reserved slugs
+    // When: checking if various slugs are system slugs
+    // Then: reserved slugs should return true and custom slugs should return false
     [Fact]
     public async Task IsSystemSlugAsync_ShouldIdentifySystemSlugs()
     {
@@ -244,6 +283,9 @@ public class SlugLookupGrainTests
         (await grain.IsSystemSlugAsync("my-company")).Should().BeFalse();
     }
 
+    // Given: a slug reserved with mixed-case characters
+    // When: availability is checked with different casings
+    // Then: slug lookups should be case-insensitive
     [Fact]
     public async Task SlugNormalization_ShouldBeCaseInsensitive()
     {

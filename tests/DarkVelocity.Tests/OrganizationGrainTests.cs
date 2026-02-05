@@ -16,6 +16,9 @@ public class OrganizationGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new organization with a name and slug
+    // When: the organization is created
+    // Then: it should return the organization ID, slug, and creation timestamp
     [Fact]
     public async Task CreateAsync_ShouldCreateOrganization()
     {
@@ -34,6 +37,9 @@ public class OrganizationGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an organization that already exists
+    // When: a second creation is attempted
+    // Then: it should reject the duplicate with an error
     [Fact]
     public async Task CreateAsync_WhenAlreadyExists_ShouldThrow()
     {
@@ -51,6 +57,9 @@ public class OrganizationGrainTests
             .WithMessage("Organization already exists");
     }
 
+    // Given: an organization created with GBP currency and London timezone
+    // When: the organization state is retrieved
+    // Then: it should reflect the name, slug, active status, and configured settings
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -77,6 +86,9 @@ public class OrganizationGrainTests
         state.Settings.DefaultTimezone.Should().Be("Europe/London");
     }
 
+    // Given: an existing organization
+    // When: the organization name is updated
+    // Then: the version should increment and the name should reflect the change
     [Fact]
     public async Task UpdateAsync_ShouldUpdateOrganization()
     {
@@ -95,6 +107,9 @@ public class OrganizationGrainTests
         state.Name.Should().Be("Updated Org");
     }
 
+    // Given: an active organization
+    // When: the organization is suspended for non-payment
+    // Then: its status should change to Suspended
     [Fact]
     public async Task SuspendAsync_ShouldSetStatusToSuspended()
     {
@@ -112,6 +127,9 @@ public class OrganizationGrainTests
         state.Status.Should().Be(OrganizationStatus.Suspended);
     }
 
+    // Given: a suspended organization
+    // When: the organization is reactivated
+    // Then: its status should return to Active
     [Fact]
     public async Task ReactivateAsync_ShouldSetStatusToActive()
     {
@@ -130,6 +148,9 @@ public class OrganizationGrainTests
         state.Status.Should().Be(OrganizationStatus.Active);
     }
 
+    // Given: an active organization that is not suspended
+    // When: reactivation is attempted
+    // Then: it should reject the action since the organization is not suspended
     [Fact]
     public async Task ReactivateAsync_WhenNotSuspended_ShouldThrow()
     {
@@ -147,6 +168,9 @@ public class OrganizationGrainTests
             .WithMessage("Organization is not suspended");
     }
 
+    // Given: an existing organization
+    // When: a new site is added to the organization
+    // Then: the site should appear in the organization's site list
     [Fact]
     public async Task AddSiteAsync_ShouldAddSiteId()
     {
@@ -165,6 +189,9 @@ public class OrganizationGrainTests
         siteIds.Should().Contain(siteId);
     }
 
+    // Given: an organization with a site already added
+    // When: the same site is added again
+    // Then: the site should only appear once in the list
     [Fact]
     public async Task AddSiteAsync_ShouldBeIdempotent()
     {
@@ -184,6 +211,9 @@ public class OrganizationGrainTests
         siteIds.Count(id => id == siteId).Should().Be(1);
     }
 
+    // Given: an organization with a registered site
+    // When: the site is removed from the organization
+    // Then: the site should no longer appear in the organization's site list
     [Fact]
     public async Task RemoveSiteAsync_ShouldRemoveSiteId()
     {
@@ -203,6 +233,9 @@ public class OrganizationGrainTests
         siteIds.Should().NotContain(siteId);
     }
 
+    // Given: an organization that has been created
+    // When: checking if the organization exists
+    // Then: it should return true
     [Fact]
     public async Task ExistsAsync_WhenCreated_ShouldReturnTrue()
     {
@@ -219,6 +252,9 @@ public class OrganizationGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: an organization that has never been created
+    // When: checking if the organization exists
+    // Then: it should return false
     [Fact]
     public async Task ExistsAsync_WhenNotCreated_ShouldReturnFalse()
     {
@@ -235,6 +271,9 @@ public class OrganizationGrainTests
 
     #region Extended Organization Domain Tests
 
+    // Given: an existing organization
+    // When: branding is updated with a logo, primary, and secondary color
+    // Then: the organization state should reflect the new branding
     [Fact]
     public async Task UpdateBrandingAsync_ShouldUpdateBranding()
     {
@@ -256,6 +295,9 @@ public class OrganizationGrainTests
         state.Branding.SecondaryColor.Should().Be("#00ff00");
     }
 
+    // Given: an existing organization
+    // When: a feature flag is enabled
+    // Then: the feature flag should be retrievable as enabled
     [Fact]
     public async Task SetFeatureFlagAsync_ShouldSetFeatureFlag()
     {
@@ -272,6 +314,9 @@ public class OrganizationGrainTests
         isEnabled.Should().BeTrue();
     }
 
+    // Given: an organization with no feature flags configured
+    // When: checking a feature flag that was never set
+    // Then: it should default to false
     [Fact]
     public async Task GetFeatureFlagAsync_WhenNotSet_ShouldReturnFalse()
     {
@@ -287,6 +332,9 @@ public class OrganizationGrainTests
         isEnabled.Should().BeFalse();
     }
 
+    // Given: an existing organization
+    // When: a custom domain is configured
+    // Then: the domain should be stored as unverified with a verification token
     [Fact]
     public async Task ConfigureCustomDomainAsync_ShouldSetupDomainWithVerificationToken()
     {
@@ -306,6 +354,9 @@ public class OrganizationGrainTests
         state.CustomDomain.VerificationToken.Should().NotBeNullOrEmpty();
     }
 
+    // Given: an active organization
+    // When: immediate cancellation is initiated
+    // Then: the organization should be cancelled immediately with the provided reason
     [Fact]
     public async Task InitiateCancellationAsync_Immediate_ShouldCancelImmediately()
     {
@@ -327,6 +378,9 @@ public class OrganizationGrainTests
         result.EffectiveDate.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an active organization
+    // When: end-of-period cancellation is initiated
+    // Then: the organization should enter a pending cancellation state with a future effective date
     [Fact]
     public async Task InitiateCancellationAsync_EndOfPeriod_ShouldSetPendingCancellation()
     {
@@ -347,6 +401,9 @@ public class OrganizationGrainTests
         result.EffectiveDate.Should().BeAfter(DateTime.UtcNow);
     }
 
+    // Given: an organization with a pending cancellation
+    // When: the cancellation is reversed
+    // Then: the organization should return to active status with cancellation cleared
     [Fact]
     public async Task ReactivateFromCancellationAsync_ShouldReactivateOrganization()
     {
@@ -365,6 +422,9 @@ public class OrganizationGrainTests
         state.Cancellation.Should().BeNull();
     }
 
+    // Given: an organization with a slug
+    // When: the slug is changed to a new value
+    // Then: the new slug should be active and the old slug should be recorded in history
     [Fact]
     public async Task ChangeSlugAsync_ShouldChangeSlugAndRecordHistory()
     {
@@ -382,6 +442,9 @@ public class OrganizationGrainTests
         state.SlugHistory.Should().Contain("old-slug");
     }
 
+    // Given: an organization that has been created, updated, and had a feature flag set
+    // When: the version is retrieved
+    // Then: it should reflect the total number of events applied
     [Fact]
     public async Task GetVersionAsync_ShouldReturnCorrectVersion()
     {

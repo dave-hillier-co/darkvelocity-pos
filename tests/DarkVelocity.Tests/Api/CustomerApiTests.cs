@@ -25,6 +25,9 @@ public class CustomerApiTests
         return json.RootElement.GetProperty("id").GetGuid();
     }
 
+    // Given: an organization that manages customer profiles
+    // When: a new customer is registered with contact details
+    // Then: the customer profile is created with a display name and HAL links to loyalty
     [Fact]
     public async Task CreateCustomer_ReturnsCreatedWithHalResponse()
     {
@@ -57,6 +60,9 @@ public class CustomerApiTests
             .Should().EndWith("/loyalty");
     }
 
+    // Given: a customer who has been registered in the organization
+    // When: the customer profile is retrieved by identifier
+    // Then: the customer details are returned with HAL links to loyalty and rewards
     [Fact]
     public async Task GetCustomer_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -84,6 +90,9 @@ public class CustomerApiTests
             .Should().Contain("/rewards");
     }
 
+    // Given: an organization with no matching customer
+    // When: a non-existent customer identifier is looked up
+    // Then: a not-found error is returned
     [Fact]
     public async Task GetCustomer_WhenNotExists_ReturnsNotFound()
     {
@@ -102,6 +111,9 @@ public class CustomerApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: an existing customer profile
+    // When: the customer's name and phone number are updated
+    // Then: the updated profile is returned with a self HAL link
     [Fact]
     public async Task UpdateCustomer_ReturnsOkWithUpdatedData()
     {
@@ -128,6 +140,9 @@ public class CustomerApiTests
             .Should().Contain($"/customers/{customerId}");
     }
 
+    // Given: a registered customer who is not yet in a loyalty program
+    // When: the customer is enrolled in a loyalty program with a member number and tier
+    // Then: the enrollment is confirmed
     [Fact]
     public async Task EnrollInLoyalty_ReturnsOk()
     {
@@ -158,6 +173,9 @@ public class CustomerApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Enrolled in loyalty program");
     }
 
+    // Given: a customer enrolled in a loyalty program
+    // When: the customer earns loyalty points from a purchase
+    // Then: the points are awarded and a HAL link back to the customer is returned
     [Fact]
     public async Task EarnPoints_ReturnsOkWithHalResponse()
     {
@@ -188,6 +206,9 @@ public class CustomerApiTests
             .Should().Contain($"/customers/{customerId}");
     }
 
+    // Given: a loyalty member with a sufficient points balance
+    // When: the customer redeems points against an order
+    // Then: the points are deducted and a HAL link back to the customer is returned
     [Fact]
     public async Task RedeemPoints_ReturnsOkWithHalResponse()
     {
@@ -221,6 +242,9 @@ public class CustomerApiTests
             .Should().Contain($"/customers/{customerId}");
     }
 
+    // Given: a registered customer
+    // When: the customer's rewards are retrieved
+    // Then: a HAL collection of rewards is returned with a count
     [Fact]
     public async Task GetRewards_ReturnsHalCollection()
     {

@@ -21,6 +21,9 @@ public class LaborGrainTests
     // RoleGrain Tests
     // ============================================================================
 
+    // Given: a new Front of House role definition for "Server" at $15/hr requiring Food Handler certification
+    // When: the role is created
+    // Then: the role is active with the correct department, rate, color, and required certifications
     [Fact]
     public async Task RoleGrain_Create_CreatesRoleSuccessfully()
     {
@@ -52,6 +55,9 @@ public class LaborGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: a Bartender role that already exists
+    // When: an attempt is made to create the same role again
+    // Then: the system rejects the duplicate with an error
     [Fact]
     public async Task RoleGrain_Create_ThrowsIfAlreadyExists()
     {
@@ -77,6 +83,9 @@ public class LaborGrainTests
             .WithMessage("Role already exists");
     }
 
+    // Given: an existing Host role at $11/hr
+    // When: the role is renamed to "Host/Hostess" with an updated rate and color
+    // Then: the modified properties are updated while unchanged properties remain the same
     [Fact]
     public async Task RoleGrain_Update_UpdatesRoleProperties()
     {
@@ -112,6 +121,9 @@ public class LaborGrainTests
         snapshot.IsActive.Should().BeTrue(); // Unchanged
     }
 
+    // Given: an active Busser role
+    // When: the role is deactivated
+    // Then: the role is marked as inactive and can no longer be assigned
     [Fact]
     public async Task RoleGrain_Update_CanDeactivateRole()
     {
@@ -142,6 +154,9 @@ public class LaborGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a Line Cook role in Back of House requiring Food Handler and Safety certifications
+    // When: the role snapshot is retrieved
+    // Then: all role details including department and certifications are returned
     [Fact]
     public async Task RoleGrain_GetSnapshot_ReturnsRoleState()
     {
@@ -169,6 +184,9 @@ public class LaborGrainTests
         snapshot.RequiredCertifications.Should().HaveCount(2);
     }
 
+    // Given: a role that has never been created
+    // When: an attempt is made to retrieve the role snapshot
+    // Then: the system rejects the request because the role does not exist
     [Fact]
     public async Task RoleGrain_GetSnapshot_ThrowsIfNotInitialized()
     {
@@ -188,6 +206,9 @@ public class LaborGrainTests
     // ScheduleGrain Tests
     // ============================================================================
 
+    // Given: a site that needs a weekly staff schedule
+    // When: a new schedule is created for the current week
+    // Then: the schedule is in Draft status with no shifts, zero hours, and zero labor cost
     [Fact]
     public async Task ScheduleGrain_Create_CreatesScheduleForWeek()
     {
@@ -217,6 +238,9 @@ public class LaborGrainTests
         snapshot.Notes.Should().Be("Regular week schedule");
     }
 
+    // Given: a draft schedule for next week
+    // When: a manager publishes the schedule
+    // Then: the schedule status changes to Published with the publisher and timestamp recorded
     [Fact]
     public async Task ScheduleGrain_Publish_PublishesSchedule()
     {
@@ -244,6 +268,9 @@ public class LaborGrainTests
         snapshot.PublishedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a schedule for a past week
+    // When: the schedule is locked for payroll processing
+    // Then: the schedule status changes to Locked
     [Fact]
     public async Task ScheduleGrain_Lock_LocksSchedule()
     {
@@ -267,6 +294,9 @@ public class LaborGrainTests
         snapshot.Status.Should().Be(ScheduleStatus.Locked);
     }
 
+    // Given: a draft schedule for an upcoming week
+    // When: a 9 AM to 5 PM opening shift with a 30-minute break is added for an employee
+    // Then: the shift appears on the schedule with correct times, role, and notes
     [Fact]
     public async Task ScheduleGrain_AddShift_AddsShiftToSchedule()
     {
@@ -313,6 +343,9 @@ public class LaborGrainTests
         shift.Notes.Should().Be("Opening shift");
     }
 
+    // Given: a draft schedule for an upcoming week
+    // When: an 8-hour shift with a 30-minute break at $20/hr is added
+    // Then: scheduled hours are 7.5 and labor cost is $150
     [Fact]
     public async Task ScheduleGrain_AddShift_CalculatesScheduledHoursAndLaborCost()
     {
@@ -350,6 +383,9 @@ public class LaborGrainTests
         snapshot.TotalLaborCost.Should().Be(150.00m);
     }
 
+    // Given: a schedule with a morning shift (9 AM - 5 PM)
+    // When: the shift is changed to an evening shift (4 PM - 11 PM) with a shorter break
+    // Then: the shift times and break are updated on the schedule
     [Fact]
     public async Task ScheduleGrain_UpdateShift_UpdatesShiftDetails()
     {
@@ -397,6 +433,9 @@ public class LaborGrainTests
         shift.Notes.Should().Be("Changed to evening");
     }
 
+    // Given: a schedule with one shift assigned
+    // When: the shift is removed from the schedule
+    // Then: the schedule has no shifts and labor cost resets to zero
     [Fact]
     public async Task ScheduleGrain_RemoveShift_RemovesShiftFromSchedule()
     {
@@ -434,6 +473,9 @@ public class LaborGrainTests
         snapshot.TotalLaborCost.Should().Be(0);
     }
 
+    // Given: a schedule that has been locked for payroll
+    // When: a manager attempts to add a new shift
+    // Then: the system rejects the change because locked schedules cannot be modified
     [Fact]
     public async Task ScheduleGrain_LockedSchedule_ThrowsOnAddShift()
     {
@@ -467,6 +509,9 @@ public class LaborGrainTests
             .WithMessage("Cannot modify a locked schedule");
     }
 
+    // Given: a locked schedule containing an existing shift
+    // When: a manager attempts to update the shift times
+    // Then: the system rejects the change because locked schedules cannot be modified
     [Fact]
     public async Task ScheduleGrain_LockedSchedule_ThrowsOnUpdateShift()
     {
@@ -510,6 +555,9 @@ public class LaborGrainTests
             .WithMessage("Cannot modify a locked schedule");
     }
 
+    // Given: a locked schedule containing an existing shift
+    // When: a manager attempts to remove the shift
+    // Then: the system rejects the change because locked schedules cannot be modified
     [Fact]
     public async Task ScheduleGrain_LockedSchedule_ThrowsOnRemoveShift()
     {
@@ -546,6 +594,9 @@ public class LaborGrainTests
             .WithMessage("Cannot modify a locked schedule");
     }
 
+    // Given: a schedule with 3 shifts for one employee and 2 shifts for another
+    // When: shifts are queried by employee
+    // Then: each employee sees only their own assigned shifts
     [Fact]
     public async Task ScheduleGrain_GetShiftsForEmployee_FiltersCorrectly()
     {
@@ -583,6 +634,9 @@ public class LaborGrainTests
         employee2Shifts.Should().OnlyContain(s => s.EmployeeId == employee2);
     }
 
+    // Given: a schedule with shifts spread across multiple days of the week
+    // When: shifts are queried for a specific date
+    // Then: only the shifts scheduled on that date are returned
     [Fact]
     public async Task ScheduleGrain_GetShiftsForDate_FiltersCorrectly()
     {
@@ -617,6 +671,9 @@ public class LaborGrainTests
         shiftsOnTargetDate.Should().OnlyContain(s => s.Date.Date == targetDate.Date);
     }
 
+    // Given: a schedule with two shifts -- one at $20/hr and one at $15/hr
+    // When: the total weekly labor cost is calculated
+    // Then: the cost equals $240 ($150 + $90) accounting for breaks
     [Fact]
     public async Task ScheduleGrain_GetTotalLaborCost_ReturnsCorrectTotal()
     {

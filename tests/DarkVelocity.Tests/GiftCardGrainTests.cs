@@ -37,6 +37,9 @@ public class GiftCardGrainTests
         return grain;
     }
 
+    // Given: a new gift card grain with no prior state
+    // When: a digital gift card is created with a $50 value and 6-month expiry
+    // Then: the card is created in inactive status with the correct initial balance
     [Fact]
     public async Task CreateAsync_ShouldCreateGiftCard()
     {
@@ -65,6 +68,9 @@ public class GiftCardGrainTests
         state.CurrentBalance.Should().Be(50m);
     }
 
+    // Given: an inactive gift card with a $100 balance
+    // When: the card is activated at a site with purchaser details
+    // Then: the card becomes active with an activation transaction recorded
     [Fact]
     public async Task ActivateAsync_ShouldActivateCard()
     {
@@ -96,6 +102,9 @@ public class GiftCardGrainTests
         state.Transactions[0].Type.Should().Be(GiftCardTransactionType.Activation);
     }
 
+    // Given: an inactive gift card that has been created
+    // When: recipient details including name, email, phone, and a personal message are set
+    // Then: the gift card stores the recipient information and message
     [Fact]
     public async Task SetRecipientAsync_ShouldSetRecipient()
     {
@@ -121,6 +130,9 @@ public class GiftCardGrainTests
         state.PersonalMessage.Should().Be("Happy Birthday!");
     }
 
+    // Given: an active gift card with a $100 balance
+    // When: $30 is redeemed against an order
+    // Then: the balance decreases to $70 and the redemption count increments
     [Fact]
     public async Task RedeemAsync_ShouldDeductBalance()
     {
@@ -147,6 +159,9 @@ public class GiftCardGrainTests
         state.RedemptionCount.Should().Be(1);
     }
 
+    // Given: an active gift card with a $50 balance
+    // When: a $100 redemption is attempted, exceeding the available balance
+    // Then: the redemption is rejected with an insufficient balance error
     [Fact]
     public async Task RedeemAsync_InsufficientBalance_ShouldThrow()
     {
@@ -168,6 +183,9 @@ public class GiftCardGrainTests
             .WithMessage("*Insufficient balance*");
     }
 
+    // Given: an active gift card with a $50 balance
+    // When: the full $50 balance is redeemed
+    // Then: the card balance reaches zero and the status changes to depleted
     [Fact]
     public async Task RedeemAsync_FullBalance_ShouldDepleteCard()
     {
@@ -190,6 +208,9 @@ public class GiftCardGrainTests
         state.Status.Should().Be(GiftCardStatus.Depleted);
     }
 
+    // Given: an active gift card with a $50 balance
+    // When: $25 is reloaded onto the card with a birthday note
+    // Then: the balance increases to $75 and the reload amount is tracked
     [Fact]
     public async Task ReloadAsync_ShouldIncreaseBalance()
     {
@@ -214,6 +235,9 @@ public class GiftCardGrainTests
         state.TotalReloaded.Should().Be(25m);
     }
 
+    // Given: a depleted gift card with a zero balance after full redemption
+    // When: $30 is reloaded onto the card
+    // Then: the card reactivates with a $30 balance and returns to active status
     [Fact]
     public async Task ReloadAsync_DepletedCard_ShouldReactivate()
     {
@@ -235,6 +259,9 @@ public class GiftCardGrainTests
         state.CurrentBalance.Should().Be(30m);
     }
 
+    // Given: an active gift card with $70 remaining after a $30 redemption
+    // When: $15 is refunded back to the card from a previous order
+    // Then: the balance increases to $85
     [Fact]
     public async Task RefundToCardAsync_ShouldIncreaseBalance()
     {
@@ -256,6 +283,9 @@ public class GiftCardGrainTests
         newBalance.Should().Be(85m); // 100 - 30 + 15
     }
 
+    // Given: an active gift card with a $100 balance
+    // When: a -$20 balance adjustment is applied with a correction reason
+    // Then: the balance decreases to $80 and an adjustment transaction is recorded
     [Fact]
     public async Task AdjustBalanceAsync_ShouldAdjustBalance()
     {
@@ -278,6 +308,9 @@ public class GiftCardGrainTests
         state.Transactions.Last().Notes.Should().Be("Correction");
     }
 
+    // Given: an active gift card with a $50 balance
+    // When: a -$100 adjustment is attempted that would result in a negative balance
+    // Then: the adjustment is rejected with a negative balance error
     [Fact]
     public async Task AdjustBalanceAsync_NegativeResult_ShouldThrow()
     {
@@ -294,6 +327,9 @@ public class GiftCardGrainTests
             .WithMessage("*negative balance*");
     }
 
+    // Given: a gift card created with PIN "1234"
+    // When: the PIN "1234" is validated
+    // Then: validation succeeds
     [Fact]
     public async Task ValidatePinAsync_WithCorrectPin_ShouldReturnTrue()
     {
@@ -309,6 +345,9 @@ public class GiftCardGrainTests
         isValid.Should().BeTrue();
     }
 
+    // Given: a gift card created with PIN "1234"
+    // When: an incorrect PIN "5678" is validated
+    // Then: validation fails
     [Fact]
     public async Task ValidatePinAsync_WithIncorrectPin_ShouldReturnFalse()
     {
@@ -324,6 +363,9 @@ public class GiftCardGrainTests
         isValid.Should().BeFalse();
     }
 
+    // Given: a gift card created without a PIN
+    // When: any PIN is submitted for validation
+    // Then: validation succeeds because no PIN is required
     [Fact]
     public async Task ValidatePinAsync_WithNoPin_ShouldReturnTrue()
     {
@@ -339,6 +381,9 @@ public class GiftCardGrainTests
         isValid.Should().BeTrue();
     }
 
+    // Given: an active gift card with a $50 balance
+    // When: the card is expired
+    // Then: the status changes to expired, the balance is zeroed out, and an expiration transaction is logged
     [Fact]
     public async Task ExpireAsync_ShouldExpireCard()
     {
@@ -357,6 +402,9 @@ public class GiftCardGrainTests
         state.Transactions.Last().Type.Should().Be(GiftCardTransactionType.Expiration);
     }
 
+    // Given: an active gift card with a $75 balance
+    // When: the card is cancelled due to a lost card report
+    // Then: the status changes to cancelled, the balance is zeroed, and a void transaction is recorded
     [Fact]
     public async Task CancelAsync_ShouldCancelCard()
     {
@@ -377,6 +425,9 @@ public class GiftCardGrainTests
         state.Transactions.Last().Notes.Should().Contain("Lost card reported");
     }
 
+    // Given: an active gift card that has had a $30 redemption applied
+    // When: the redemption transaction is voided due to a customer dispute
+    // Then: the balance is restored to $100 and a void transaction is recorded
     [Fact]
     public async Task VoidTransactionAsync_ShouldReverseTransaction()
     {
@@ -399,6 +450,9 @@ public class GiftCardGrainTests
         state.Transactions.Last().Type.Should().Be(GiftCardTransactionType.Void);
     }
 
+    // Given: an active gift card with a $75 balance
+    // When: the balance information is queried
+    // Then: the response includes the current balance, active status, and expiry date
     [Fact]
     public async Task GetBalanceInfoAsync_ShouldReturnInfo()
     {
@@ -416,6 +470,9 @@ public class GiftCardGrainTests
         info.ExpiresAt.Should().NotBeNull();
     }
 
+    // Given: an active gift card with a $100 balance
+    // When: a $50 sufficiency check is performed
+    // Then: the card confirms it has sufficient funds
     [Fact]
     public async Task HasSufficientBalanceAsync_WithSufficientBalance_ShouldReturnTrue()
     {
@@ -431,6 +488,9 @@ public class GiftCardGrainTests
         hasSufficient.Should().BeTrue();
     }
 
+    // Given: an active gift card with a $30 balance
+    // When: a $50 sufficiency check is performed
+    // Then: the card reports insufficient funds
     [Fact]
     public async Task HasSufficientBalanceAsync_WithInsufficientBalance_ShouldReturnFalse()
     {
@@ -446,6 +506,9 @@ public class GiftCardGrainTests
         hasSufficient.Should().BeFalse();
     }
 
+    // Given: an inactive (not yet activated) gift card with a $100 value
+    // When: a $50 sufficiency check is performed
+    // Then: the card reports insufficient funds because it is not yet active
     [Fact]
     public async Task HasSufficientBalanceAsync_WhenInactive_ShouldReturnFalse()
     {
@@ -461,6 +524,9 @@ public class GiftCardGrainTests
         hasSufficient.Should().BeFalse();
     }
 
+    // Given: an active gift card that has been activated, had a $20 redemption, and a $10 reload
+    // When: the transaction history is queried
+    // Then: all three transactions are returned in chronological order
     [Fact]
     public async Task GetTransactionsAsync_ShouldReturnAllTransactions()
     {

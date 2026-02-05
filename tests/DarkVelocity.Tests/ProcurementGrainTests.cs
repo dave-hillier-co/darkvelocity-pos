@@ -246,6 +246,9 @@ public class SupplierGrainTests
         snapshot.Ingredients[0].IngredientName.Should().Be("Orange Juice");
     }
 
+    // Given: a coffee roaster with espresso beans listed at $65/bag
+    // When: the espresso bean price is updated to $72.50/bag
+    // Then: the catalog reflects the new price
     [Fact]
     public async Task UpdateIngredientPriceAsync_ShouldUpdatePrice()
     {
@@ -276,6 +279,9 @@ public class SupplierGrainTests
         snapshot.Ingredients[0].UnitPrice.Should().Be(72.50m);
     }
 
+    // Given: a spice trader with saffron listed at $125/oz
+    // When: the price for saffron is queried
+    // Then: the returned price is $125.00
     [Fact]
     public async Task GetIngredientPriceAsync_ShouldReturnPrice()
     {
@@ -305,6 +311,9 @@ public class SupplierGrainTests
         price.Should().Be(125.00m);
     }
 
+    // Given: a supplier with no purchase history
+    // When: three purchases are recorded -- two on-time and one late
+    // Then: year-to-date spend totals $4,500 and on-time delivery rate is 66%
     [Fact]
     public async Task RecordPurchaseAsync_ShouldUpdateMetrics()
     {
@@ -334,6 +343,9 @@ public class SupplierGrainTests
         snapshot.OnTimeDeliveryPercent.Should().Be(66); // 2 out of 3
     }
 
+    // Given: an active supplier
+    // When: the supplier is updated with IsActive set to false and a note that they are no longer in business
+    // Then: the supplier is marked as inactive with the closing note recorded
     [Fact]
     public async Task UpdateAsync_Deactivate_ShouldDeactivateSupplier()
     {
@@ -364,6 +376,9 @@ public class SupplierGrainTests
         result.Notes.Should().Be("No longer in business");
     }
 
+    // Given: a supplier with no ingredients in their catalog
+    // When: a price update is attempted for a non-existent ingredient
+    // Then: the operation fails because the ingredient is not found
     [Fact]
     public async Task UpdateIngredientPriceAsync_NonExistent_ShouldThrow()
     {
@@ -391,6 +406,9 @@ public class SupplierGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: a supplier with one ingredient in their catalog
+    // When: the price is queried for a different ingredient not in the catalog
+    // Then: the operation fails because the ingredient is not found
     [Fact]
     public async Task GetIngredientPriceAsync_NonExistent_ShouldThrow()
     {
@@ -421,6 +439,9 @@ public class SupplierGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: a supplier that has never been registered (no CreateAsync called)
+    // When: any operation (snapshot, update, add ingredient, record purchase) is attempted
+    // Then: each operation fails because the supplier is not initialized
     [Fact]
     public async Task Operations_OnUninitialized_ShouldThrow()
     {
@@ -452,6 +473,9 @@ public class SupplierGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: a supplier that has already been registered
+    // When: a second registration is attempted for the same supplier
+    // Then: the operation fails because the supplier already exists
     [Fact]
     public async Task CreateAsync_AlreadyCreated_ShouldThrow()
     {
@@ -487,6 +511,9 @@ public class SupplierGrainTests
             .WithMessage("*already exists*");
     }
 
+    // Given: a supplier with no delivery history
+    // When: four purchases are recorded and all deliveries arrive late
+    // Then: year-to-date spend totals $2,550 and on-time delivery rate is 0%
     [Fact]
     public async Task RecordPurchaseAsync_AllLate_ShouldCalculateZeroPercent()
     {
@@ -517,6 +544,9 @@ public class SupplierGrainTests
         snapshot.OnTimeDeliveryPercent.Should().Be(0);
     }
 
+    // Given: a supplier with no delivery history
+    // When: five purchases are recorded and all deliveries arrive on time
+    // Then: year-to-date spend totals $2,000 and on-time delivery rate is 100%
     [Fact]
     public async Task RecordPurchaseAsync_AllOnTime_ShouldCalculate100Percent()
     {
@@ -566,6 +596,9 @@ public class PurchaseOrderGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IPurchaseOrderGrain>(key);
     }
 
+    // Given: no purchase order exists
+    // When: a new purchase order is created for a supplier with an expected delivery date
+    // Then: the order is in draft status with a generated PO number, no lines, and zero total
     [Fact]
     public async Task CreateAsync_ShouldCreateDraftPurchaseOrder()
     {
@@ -594,6 +627,9 @@ public class PurchaseOrderGrainTests
         result.OrderTotal.Should().Be(0);
     }
 
+    // Given: a draft purchase order with no line items
+    // When: 50 units of tomatoes at $2.50 each are added as a line item
+    // Then: the order has one line totaling $125 and the order total reflects this
     [Fact]
     public async Task AddLineAsync_ShouldAddLineToDraft()
     {
@@ -624,6 +660,9 @@ public class PurchaseOrderGrainTests
         snapshot.OrderTotal.Should().Be(125.00m);
     }
 
+    // Given: a draft purchase order with no line items
+    // When: chicken breast, ground beef, and pork chops are added as separate lines
+    // Then: the order has three lines and the total reflects the sum of all line totals
     [Fact]
     public async Task AddLineAsync_MultipleLines_ShouldCalculateTotal()
     {
@@ -649,6 +688,9 @@ public class PurchaseOrderGrainTests
         snapshot.OrderTotal.Should().Be(450.00m + 375.00m + 187.50m);
     }
 
+    // Given: a draft purchase order with 30 units of lettuce at $1.50 each
+    // When: the lettuce line is updated to 50 units at $1.75 each
+    // Then: the line reflects the new quantity, price, and recalculated total of $87.50
     [Fact]
     public async Task UpdateLineAsync_ShouldUpdateLine()
     {
@@ -678,6 +720,9 @@ public class PurchaseOrderGrainTests
         snapshot.OrderTotal.Should().Be(87.50m);
     }
 
+    // Given: a draft purchase order with onions and garlic as line items
+    // When: the onions line is removed
+    // Then: only garlic remains and the order total reflects only the garlic line
     [Fact]
     public async Task RemoveLineAsync_ShouldRemoveLine()
     {
@@ -705,6 +750,9 @@ public class PurchaseOrderGrainTests
         snapshot.OrderTotal.Should().Be(30.00m);
     }
 
+    // Given: a draft purchase order with a line item for carrots
+    // When: the purchase order is submitted to the supplier
+    // Then: the order status changes to submitted with a recorded submission timestamp
     [Fact]
     public async Task SubmitAsync_ShouldChangeStatusToSubmitted()
     {
@@ -727,6 +775,9 @@ public class PurchaseOrderGrainTests
         result.SubmittedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a submitted purchase order with lines for 100 potatoes and 20 celery
+    // When: all 100 potatoes are received but no celery has arrived yet
+    // Then: the order is partially received with potatoes fully received and celery at zero
     [Fact]
     public async Task ReceiveLineAsync_PartialReceive_ShouldUpdateStatus()
     {
@@ -755,6 +806,9 @@ public class PurchaseOrderGrainTests
         snapshot.Lines.First(l => l.LineId == lineId2).QuantityReceived.Should().Be(0);
     }
 
+    // Given: a submitted purchase order with lines for 50 apples and 50 oranges
+    // When: both lines are received in full
+    // Then: the order status changes to received with a timestamp and is marked fully received
     [Fact]
     public async Task ReceiveLineAsync_FullReceive_ShouldMarkAsReceived()
     {
@@ -785,6 +839,9 @@ public class PurchaseOrderGrainTests
         isFullyReceived.Should().BeTrue();
     }
 
+    // Given: a submitted purchase order for 100 units of rice
+    // When: rice is received in three separate deliveries of 40, 35, and 25 units
+    // Then: the total received accumulates to 100 and the order is marked as received
     [Fact]
     public async Task ReceiveLineAsync_IncrementalReceive_ShouldAccumulate()
     {
@@ -811,6 +868,9 @@ public class PurchaseOrderGrainTests
         snapshot.Status.Should().Be(PurchaseOrderStatus.Received);
     }
 
+    // Given: a submitted purchase order for mushrooms
+    // When: the order is cancelled because the supplier is out of stock
+    // Then: the order status is cancelled with a timestamp and the cancellation reason recorded
     [Fact]
     public async Task CancelAsync_ShouldCancelOrder()
     {
@@ -836,6 +896,9 @@ public class PurchaseOrderGrainTests
         result.CancellationReason.Should().Be("Supplier out of stock");
     }
 
+    // Given: a draft purchase order with two line items totaling $100
+    // When: the order total is queried
+    // Then: the returned total is $100.00
     [Fact]
     public async Task GetTotalAsync_ShouldReturnOrderTotal()
     {
@@ -858,6 +921,9 @@ public class PurchaseOrderGrainTests
         total.Should().Be(100.00m); // 50 + 50
     }
 
+    // Given: a draft purchase order with no line items
+    // When: the empty order is submitted
+    // Then: the operation fails because a purchase order cannot be submitted without lines
     [Fact]
     public async Task SubmitAsync_EmptyPO_ShouldThrow()
     {
@@ -877,6 +943,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*empty*");
     }
 
+    // Given: a purchase order that has already been submitted to the supplier
+    // When: a second submission is attempted
+    // Then: the operation fails because the order is not in draft status
     [Fact]
     public async Task SubmitAsync_AlreadySubmitted_ShouldThrow()
     {
@@ -899,6 +968,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*not in draft*");
     }
 
+    // Given: a purchase order that has been submitted to the supplier
+    // When: a new line item is added to the submitted order
+    // Then: the operation fails because lines cannot be added after submission
     [Fact]
     public async Task AddLineAsync_SubmittedPO_ShouldThrow()
     {
@@ -922,6 +994,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*submitted*");
     }
 
+    // Given: a purchase order that has been submitted to the supplier
+    // When: an existing line item quantity is updated on the submitted order
+    // Then: the operation fails because lines cannot be modified after submission
     [Fact]
     public async Task UpdateLineAsync_SubmittedPO_ShouldThrow()
     {
@@ -946,6 +1021,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*submitted*");
     }
 
+    // Given: a purchase order that has been submitted to the supplier
+    // When: a line item is removed from the submitted order
+    // Then: the operation fails because lines cannot be removed after submission
     [Fact]
     public async Task RemoveLineAsync_SubmittedPO_ShouldThrow()
     {

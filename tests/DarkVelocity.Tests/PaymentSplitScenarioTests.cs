@@ -365,6 +365,9 @@ public class PaymentSplitScenarioTests
     // Tips with Split Payments
     // ============================================================================
 
+    // Given: a $120 order to be split three ways
+    // When: each guest pays $40 with varying tip percentages (20%, 15%, 25%)
+    // Then: all individual tips accumulate to a $24 total on the fully paid order
     [Fact]
     public async Task Order_SplitPayment_TipsShouldAccumulate()
     {
@@ -387,6 +390,9 @@ public class PaymentSplitScenarioTests
     // Edge Cases
     // ============================================================================
 
+    // Given: an order with a 100% discount voucher applied, reducing the total to zero
+    // When: a zero-amount voucher payment is recorded to complete the order
+    // Then: the order is marked as paid with zero balance due
     [Fact]
     public async Task Order_ZeroAmountPayment_ShouldBeRecorded()
     {
@@ -410,6 +416,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: an open order with a $100 total
+    // When: ten separate $10 cash payments are recorded, each with a $1 tip
+    // Then: all ten payments are tracked with the correct totals and accumulated tips
     [Fact]
     public async Task Order_ManySmallPayments_ShouldAllBeTracked()
     {
@@ -430,6 +439,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: a fully paid order with one cash payment
+    // When: a removal is attempted for a payment ID that does not exist on the order
+    // Then: the operation is a no-op and the existing payment remains intact
     [Fact]
     public async Task Order_RemoveNonExistentPayment_ShouldNotFail()
     {
@@ -450,6 +462,9 @@ public class PaymentSplitScenarioTests
     // Payment Method Tracking
     // ============================================================================
 
+    // Given: an open order with a $100 total
+    // When: three payments are recorded using cash, credit card, and gift card
+    // Then: each payment's method is correctly tracked on the order
     [Fact]
     public async Task Order_Payments_ShouldTrackMethod()
     {

@@ -24,6 +24,9 @@ public class RefundErrorScenarioTests
     // Refund Amount Validation
     // ============================================================================
 
+    // Given: a completed $100 cash payment
+    // When: a $150 refund is attempted, exceeding the original payment amount
+    // Then: the refund is rejected because it exceeds the available balance
     [Fact]
     public async Task Payment_Refund_ExceedsTotalAmount_ShouldThrow()
     {
@@ -38,6 +41,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*exceeds available balance*");
     }
 
+    // Given: a completed $100 payment that has already been partially refunded $60
+    // When: a $50 refund is attempted against the remaining $40 balance
+    // Then: the refund is rejected because it exceeds the remaining refundable amount
     [Fact]
     public async Task Payment_Refund_ExceedsRemainingAfterPartialRefund_ShouldThrow()
     {
@@ -55,6 +61,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*exceeds available balance*");
     }
 
+    // Given: a completed $100 payment
+    // When: a zero-amount refund is attempted
+    // Then: the refund is rejected as invalid
     [Fact]
     public async Task Payment_Refund_ZeroAmount_ShouldThrow()
     {
@@ -68,6 +77,9 @@ public class RefundErrorScenarioTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    // Given: a completed $100 payment
+    // When: a negative-amount refund is attempted
+    // Then: the refund is rejected as invalid
     [Fact]
     public async Task Payment_Refund_NegativeAmount_ShouldThrow()
     {

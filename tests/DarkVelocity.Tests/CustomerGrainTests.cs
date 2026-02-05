@@ -23,6 +23,9 @@ public class CustomerGrainTests
         return grain;
     }
 
+    // Given: no existing customer profile
+    // When: a new customer is registered with name and email
+    // Then: the customer profile is created with the correct display name and contact info
     [Fact]
     public async Task CreateAsync_ShouldCreateCustomer()
     {
@@ -41,6 +44,9 @@ public class CustomerGrainTests
         state.Contact.Email.Should().Be("jane@example.com");
     }
 
+    // Given: an existing customer profile
+    // When: the customer's first and last name are updated
+    // Then: the profile reflects the new name and display name
     [Fact]
     public async Task UpdateAsync_ShouldUpdateCustomer()
     {
@@ -58,6 +64,9 @@ public class CustomerGrainTests
         state.DisplayName.Should().Be("Johnny Updated");
     }
 
+    // Given: a customer who is not enrolled in the loyalty program
+    // When: the customer is enrolled with a member number and tier
+    // Then: the customer becomes a loyalty member with the assigned member number and tier
     [Fact]
     public async Task EnrollInLoyaltyAsync_ShouldEnrollCustomer()
     {
@@ -80,6 +89,9 @@ public class CustomerGrainTests
         state.Loyalty.TierName.Should().Be("Bronze");
     }
 
+    // Given: a loyalty member with zero points
+    // When: 100 points are earned from a purchase
+    // Then: the points balance and lifetime points both reflect 100
     [Fact]
     public async Task EarnPointsAsync_ShouldAddPoints()
     {
@@ -97,6 +109,9 @@ public class CustomerGrainTests
         result.LifetimePoints.Should().Be(100);
     }
 
+    // Given: a loyalty member with 100 points
+    // When: 30 points are redeemed for a reward
+    // Then: the balance drops to 70 but lifetime points remain at 100
     [Fact]
     public async Task RedeemPointsAsync_ShouldDeductPoints()
     {
@@ -115,6 +130,9 @@ public class CustomerGrainTests
         result.LifetimePoints.Should().Be(100); // Lifetime unchanged
     }
 
+    // Given: a loyalty member with 50 points
+    // When: attempting to redeem 100 points
+    // Then: the redemption is rejected due to insufficient points
     [Fact]
     public async Task RedeemPointsAsync_InsufficientPoints_ShouldThrow()
     {
@@ -133,6 +151,9 @@ public class CustomerGrainTests
             .WithMessage("Insufficient points");
     }
 
+    // Given: a loyalty member with 100 points
+    // When: a "Free Coffee" reward costing 50 points is issued
+    // Then: the reward appears in available rewards and the points balance drops to 50
     [Fact]
     public async Task IssueRewardAsync_ShouldIssueReward()
     {
@@ -156,6 +177,9 @@ public class CustomerGrainTests
         balance.Should().Be(50); // 100 - 50
     }
 
+    // Given: a loyalty member with an available "Free Coffee" reward
+    // When: the reward is redeemed against an order
+    // Then: the reward is no longer available
     [Fact]
     public async Task RedeemRewardAsync_ShouldRedeemReward()
     {
@@ -175,6 +199,9 @@ public class CustomerGrainTests
         rewards.Should().BeEmpty();
     }
 
+    // Given: a customer with no prior visits
+    // When: two visits are recorded totaling $100
+    // Then: visit count is 2, total spend is $100, and average check is $50
     [Fact]
     public async Task RecordVisitAsync_ShouldUpdateStats()
     {
@@ -196,6 +223,9 @@ public class CustomerGrainTests
         state.Stats.LastVisitSiteId.Should().Be(siteId);
     }
 
+    // Given: a customer with no tags
+    // When: "VIP" and "Regular" tags are added
+    // Then: both tags appear on the customer profile
     [Fact]
     public async Task AddTagAsync_ShouldAddTag()
     {
@@ -214,6 +244,9 @@ public class CustomerGrainTests
         state.Tags.Should().Contain("Regular");
     }
 
+    // Given: a customer with no notes
+    // When: a staff member adds a seating preference note
+    // Then: the note is recorded on the customer profile
     [Fact]
     public async Task AddNoteAsync_ShouldAddNote()
     {
@@ -232,6 +265,9 @@ public class CustomerGrainTests
         state.Notes[0].Content.Should().Be("Prefers window seating");
     }
 
+    // Given: a loyalty member at the Bronze tier
+    // When: the member is promoted to Silver
+    // Then: the tier ID and name reflect the Silver tier
     [Fact]
     public async Task PromoteTierAsync_ShouldUpdateTier()
     {
@@ -251,6 +287,9 @@ public class CustomerGrainTests
         state.Loyalty.TierName.Should().Be("Silver");
     }
 
+    // Given: an active customer with personal data
+    // When: the customer profile is anonymized
+    // Then: all personal fields are redacted and the status is set to inactive
     [Fact]
     public async Task AnonymizeAsync_ShouldAnonymizeData()
     {
@@ -272,6 +311,9 @@ public class CustomerGrainTests
 
     // ==================== Visit History Tests ====================
 
+    // Given: a customer with no visit history
+    // When: a visit is recorded with site, order, spend, party size, and notes
+    // Then: the visit details are captured in the customer's visit history
     [Fact]
     public async Task RecordVisitAsync_ShouldAddToVisitHistory()
     {
@@ -307,6 +349,9 @@ public class CustomerGrainTests
         history[0].Notes.Should().Be("Birthday dinner");
     }
 
+    // Given: a customer with five recorded visits
+    // When: the visit history is retrieved
+    // Then: visits are returned most recent first
     [Fact]
     public async Task GetVisitHistoryAsync_ShouldReturnVisitsInReverseChronologicalOrder()
     {
@@ -334,6 +379,9 @@ public class CustomerGrainTests
         history[4].SiteName.Should().Be("Visit 1");
     }
 
+    // Given: a customer with 10 recorded visits
+    // When: the visit history is retrieved with a limit of 5
+    // Then: only 5 visits are returned
     [Fact]
     public async Task GetVisitHistoryAsync_ShouldRespectLimit()
     {
@@ -358,6 +406,9 @@ public class CustomerGrainTests
         history.Should().HaveCount(5);
     }
 
+    // Given: a customer with 60 recorded visits
+    // When: the full visit history is retrieved
+    // Then: the result is capped at 50 visits
     [Fact]
     public async Task GetVisitHistoryAsync_ShouldLimitTo50Visits()
     {
@@ -382,6 +433,9 @@ public class CustomerGrainTests
         history.Should().HaveCount(50);
     }
 
+    // Given: a customer with visits at two different sites (3 at Site A, 2 at Site B)
+    // When: visit history is filtered by each site
+    // Then: only the visits for the requested site are returned
     [Fact]
     public async Task GetVisitsBySiteAsync_ShouldFilterBySite()
     {
@@ -411,6 +465,9 @@ public class CustomerGrainTests
         siteBVisits.Should().OnlyContain(v => v.SiteId == siteB);
     }
 
+    // Given: a customer with three recorded visits
+    // When: the last visit is requested
+    // Then: the most recent visit is returned
     [Fact]
     public async Task GetLastVisitAsync_ShouldReturnMostRecentVisit()
     {
@@ -444,6 +501,9 @@ public class CustomerGrainTests
         lastVisit.SpendAmount.Should().Be(40m);
     }
 
+    // Given: a customer with no visit history
+    // When: the last visit is requested
+    // Then: null is returned
     [Fact]
     public async Task GetLastVisitAsync_WhenNoVisits_ShouldReturnNull()
     {
@@ -461,6 +521,9 @@ public class CustomerGrainTests
 
     // ==================== Preferences Tests ====================
 
+    // Given: a customer with no dining preferences
+    // When: dietary restrictions, allergens, seating preference, and notes are set
+    // Then: all preferences are stored on the customer profile
     [Fact]
     public async Task UpdatePreferencesAsync_ShouldUpdateAllPreferences()
     {
@@ -484,6 +547,9 @@ public class CustomerGrainTests
         state.Preferences.Notes.Should().Be("Always prefers sparkling water");
     }
 
+    // Given: a customer with a vegetarian dietary restriction and patio seating preference
+    // When: only the seating preference is updated to indoor
+    // Then: the dietary restriction is preserved and the seating preference is updated
     [Fact]
     public async Task UpdatePreferencesAsync_ShouldPartiallyUpdate()
     {
@@ -507,6 +573,9 @@ public class CustomerGrainTests
         state.Preferences.SeatingPreference.Should().Be("Indoor"); // Updated
     }
 
+    // Given: a customer with no dietary restrictions
+    // When: "Vegan" and "Halal" restrictions are added
+    // Then: both restrictions appear in the customer preferences
     [Fact]
     public async Task AddDietaryRestrictionAsync_ShouldAddRestriction()
     {
@@ -525,6 +594,9 @@ public class CustomerGrainTests
         state.Preferences.DietaryRestrictions.Should().Contain("Halal");
     }
 
+    // Given: a customer with a "Vegan" dietary restriction
+    // When: "Vegan" is added again
+    // Then: only one "Vegan" entry exists in the restrictions list
     [Fact]
     public async Task AddDietaryRestrictionAsync_ShouldNotDuplicate()
     {
@@ -542,6 +614,9 @@ public class CustomerGrainTests
         state.Preferences.DietaryRestrictions.Count(r => r == "Vegan").Should().Be(1);
     }
 
+    // Given: a customer with "Vegan" and "Kosher" dietary restrictions
+    // When: the "Vegan" restriction is removed
+    // Then: only "Kosher" remains in the restrictions list
     [Fact]
     public async Task RemoveDietaryRestrictionAsync_ShouldRemoveRestriction()
     {
@@ -562,6 +637,9 @@ public class CustomerGrainTests
         state.Preferences.DietaryRestrictions.Should().Contain("Kosher");
     }
 
+    // Given: a customer with no recorded allergens
+    // When: "Peanuts", "Tree Nuts", and "Dairy" allergens are added
+    // Then: all three allergens are recorded in the customer preferences
     [Fact]
     public async Task AddAllergenAsync_ShouldAddAllergen()
     {
@@ -583,6 +661,9 @@ public class CustomerGrainTests
         state.Preferences.Allergens.Should().Contain("Dairy");
     }
 
+    // Given: a customer with a "Peanuts" allergen recorded
+    // When: "Peanuts" is added again
+    // Then: only one "Peanuts" entry exists in the allergen list
     [Fact]
     public async Task AddAllergenAsync_ShouldNotDuplicate()
     {
@@ -600,6 +681,9 @@ public class CustomerGrainTests
         state.Preferences.Allergens.Count(a => a == "Peanuts").Should().Be(1);
     }
 
+    // Given: a customer with "Peanuts" and "Shellfish" allergens
+    // When: the "Peanuts" allergen is removed
+    // Then: only "Shellfish" remains in the allergen list
     [Fact]
     public async Task RemoveAllergenAsync_ShouldRemoveAllergen()
     {
@@ -620,6 +704,9 @@ public class CustomerGrainTests
         state.Preferences.Allergens.Should().Contain("Shellfish");
     }
 
+    // Given: a customer with no seating preference
+    // When: the seating preference is set to "Quiet corner booth"
+    // Then: the preference is stored on the customer profile
     [Fact]
     public async Task SetSeatingPreferenceAsync_ShouldSetPreference()
     {

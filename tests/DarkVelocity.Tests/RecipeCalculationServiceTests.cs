@@ -10,6 +10,9 @@ namespace DarkVelocity.Tests;
 /// </summary>
 public class RecipeScalingTests
 {
+    // Given: a recipe with flour, sugar, and eggs yielding 12 portions
+    // When: scaling the recipe to 24 portions
+    // Then: all ingredient quantities are doubled
     [Fact]
     public void ScaleRecipe_DoublesIngredientQuantities()
     {
@@ -38,6 +41,9 @@ public class RecipeScalingTests
         Assert.Equal(6m, eggs.ScaledQuantity);
     }
 
+    // Given: a recipe with water and salt yielding 4 portions
+    // When: scaling the recipe down to 2 portions
+    // Then: all ingredient quantities are halved
     [Fact]
     public void ScaleRecipe_HalvesIngredientQuantities()
     {
@@ -64,6 +70,9 @@ public class RecipeScalingTests
         Assert.Equal(10m, salt.ScaledQuantity);
     }
 
+    // Given: a recipe with eggs, milk, and flour yielding 6 portions
+    // When: scaling to 9 portions with practical rounding enabled
+    // Then: quantities are rounded to kitchen-friendly amounts (whole eggs, nearest 5ml/g)
     [Fact]
     public void ScaleRecipe_WithPracticalRounding_RoundsToUsefulQuantities()
     {
@@ -92,6 +101,9 @@ public class RecipeScalingTests
         Assert.Equal(225m, flour.RoundedQuantity); // 225g rounds to nearest 5
     }
 
+    // Given: a recipe calling for 2 lemons yielding 4 portions
+    // When: scaling to 6 portions with round-up strategy
+    // Then: the lemon count is rounded up to 3 whole lemons
     [Fact]
     public void ScaleRecipe_WithRoundUp_AlwaysRoundsUp()
     {
@@ -112,6 +124,9 @@ public class RecipeScalingTests
         Assert.Equal(3m, lemons.RoundedQuantity); // 3 rounded up
     }
 
+    // Given: a recipe with 500g chicken breast (5% waste) and 30ml olive oil
+    // When: doubling the recipe from 4 to 8 portions
+    // Then: scaled costs reflect the waste-adjusted effective quantities
     [Fact]
     public void ScaleRecipe_CalculatesScaledCosts()
     {
@@ -136,6 +151,9 @@ public class RecipeScalingTests
         Assert.True(chicken.ScaledCost > 12m && chicken.ScaledCost < 13m);
     }
 
+    // Given: an empty recipe with no ingredients
+    // When: attempting to scale from zero current yield
+    // Then: an argument exception is thrown because division by zero is invalid
     [Fact]
     public void ScaleRecipe_ThrowsOnZeroCurrentYield()
     {
@@ -149,6 +167,9 @@ public class RecipeScalingTests
             service.ScaleRecipe(ingredients, 0m, 10m));
     }
 
+    // Given: an empty recipe with no ingredients
+    // When: attempting to scale to zero target yield
+    // Then: an argument exception is thrown because zero output is meaningless
     [Fact]
     public void ScaleRecipe_ThrowsOnZeroTargetYield()
     {
@@ -176,6 +197,9 @@ public class AllergenInheritanceTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a recipe with flour (gluten), eggs (eggs allergen), and milk (dairy, may contain soy)
+    // When: calculating inherited allergens for the recipe
+    // Then: gluten, eggs, and dairy appear as "contains" and soy appears as "may contain"
     [Fact]
     public async Task CalculateAllergens_InheritsFromIngredients()
     {
@@ -236,6 +260,9 @@ public class AllergenInheritanceTests
         Assert.DoesNotContain(StandardAllergens.Soy, result.ContainsAllergens); // Should be in MayContain only
     }
 
+    // Given: a recipe with flour (gluten) and optional walnuts (tree nuts)
+    // When: calculating inherited allergens
+    // Then: gluten is listed but tree nuts from the optional walnut garnish are excluded
     [Fact]
     public async Task CalculateAllergens_ExcludesOptionalIngredients()
     {
@@ -278,6 +305,9 @@ public class AllergenInheritanceTests
         Assert.DoesNotContain(StandardAllergens.TreeNuts, result.ContainsAllergens);
     }
 
+    // Given: a recipe with oats ("may contain" gluten) and wheat flour ("contains" gluten)
+    // When: calculating inherited allergens
+    // Then: gluten is upgraded to "contains" since at least one ingredient definitively contains it
     [Fact]
     public async Task CalculateAllergens_UpgradesMayContainToContains()
     {
@@ -336,6 +366,9 @@ public class NutritionalCalculationTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a recipe with 200g flour (364 cal/100g) and 100g sugar (387 cal/100g) yielding 4 servings
+    // When: calculating nutritional information
+    // Then: calories per serving reflect the combined values divided by portion count
     [Fact]
     public async Task CalculateNutrition_SumsIngredientNutrition()
     {
@@ -390,6 +423,9 @@ public class NutritionalCalculationTests
         Assert.True(result.IsComplete);
     }
 
+    // Given: a recipe containing an ingredient with no nutritional data on file
+    // When: calculating nutritional information
+    // Then: the result is flagged as incomplete and the ingredient is listed as missing nutrition
     [Fact]
     public async Task CalculateNutrition_ReportsIncompleteWhenMissingData()
     {
@@ -421,6 +457,9 @@ public class NutritionalCalculationTests
         Assert.Contains(ingredientId, result.MissingNutritionIngredients);
     }
 
+    // Given: a recipe with a 100g base ingredient (100 cal/100g) and an optional 50g topping (500 cal/100g)
+    // When: calculating nutritional information
+    // Then: only the base ingredient's 100 calories are counted, ignoring the optional topping
     [Fact]
     public async Task CalculateNutrition_ExcludesOptionalIngredients()
     {
@@ -477,6 +516,9 @@ public class RecipeValidationTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a recipe with a valid name, 4-portion yield, and a registered ingredient
+    // When: validating the recipe
+    // Then: validation passes with no errors
     [Fact]
     public async Task ValidateRecipe_PassesValidRecipe()
     {
@@ -509,6 +551,9 @@ public class RecipeValidationTests
         Assert.Empty(result.Errors);
     }
 
+    // Given: a recipe with an empty name
+    // When: validating the recipe
+    // Then: validation fails with a RECIPE_NAME_REQUIRED error
     [Fact]
     public async Task ValidateRecipe_FailsOnMissingName()
     {
@@ -531,6 +576,9 @@ public class RecipeValidationTests
         Assert.Contains(result.Errors, e => e.Code == "RECIPE_NAME_REQUIRED");
     }
 
+    // Given: a recipe with zero portion yield
+    // When: validating the recipe
+    // Then: validation fails with a RECIPE_YIELD_REQUIRED error
     [Fact]
     public async Task ValidateRecipe_FailsOnZeroYield()
     {
@@ -553,6 +601,9 @@ public class RecipeValidationTests
         Assert.Contains(result.Errors, e => e.Code == "RECIPE_YIELD_REQUIRED");
     }
 
+    // Given: a recipe with an empty ingredient list
+    // When: validating the recipe
+    // Then: validation fails with a RECIPE_INGREDIENTS_REQUIRED error
     [Fact]
     public async Task ValidateRecipe_FailsOnNoIngredients()
     {
@@ -575,6 +626,9 @@ public class RecipeValidationTests
         Assert.Contains(result.Errors, e => e.Code == "RECIPE_INGREDIENTS_REQUIRED");
     }
 
+    // Given: a recipe referencing an ingredient that does not exist in the system
+    // When: validating the recipe
+    // Then: validation fails with a RECIPE_INGREDIENTS_NOT_FOUND error
     [Fact]
     public async Task ValidateRecipe_FailsOnNonExistentIngredient()
     {
@@ -598,6 +652,9 @@ public class RecipeValidationTests
         Assert.Contains(result.Errors, e => e.Code == "RECIPE_INGREDIENTS_NOT_FOUND");
     }
 
+    // Given: a recipe with an ingredient that has a zero unit cost
+    // When: validating the recipe
+    // Then: validation passes but produces a RECIPE_INGREDIENT_ZERO_COST warning
     [Fact]
     public async Task ValidateRecipe_WarnsOnZeroCostIngredients()
     {
@@ -630,6 +687,9 @@ public class RecipeValidationTests
         Assert.Contains(result.Warnings, w => w.Code == "RECIPE_INGREDIENT_ZERO_COST");
     }
 
+    // Given: a recipe with a 4-portion yield but no yield unit specified
+    // When: validating the recipe
+    // Then: validation passes but produces a RECIPE_YIELD_UNIT_MISSING warning
     [Fact]
     public async Task ValidateRecipe_WarnsOnMissingYieldUnit()
     {
@@ -676,6 +736,9 @@ public class SubRecipeCostingTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a pasta recipe using house marinara sauce (produced by a sub-recipe) and dry spaghetti
+    // When: calculating the total recipe cost
+    // Then: both the sub-recipe sauce cost and the direct pasta ingredient cost are included
     [Fact]
     public async Task CalculateCost_IncludesSubRecipeCosts()
     {
@@ -731,6 +794,9 @@ public class SubRecipeCostingTests
         Assert.Equal(2, result.CostBreakdown.Count);
     }
 
+    // Given: a recipe with an expensive ingredient ($10.00) and a cheap ingredient ($1.00)
+    // When: calculating the cost breakdown
+    // Then: the expensive ingredient shows ~91% of total cost and the cheap one shows ~9%
     [Fact]
     public async Task CalculateCost_CalculatesCostPercentages()
     {
@@ -777,6 +843,9 @@ public class SubRecipeCostingTests
         Assert.True(cheap.CostPercentage > 8m && cheap.CostPercentage < 10m);
     }
 
+    // Given: a recipe requiring 500g of trimmed meat with 10% waste from trimming
+    // When: calculating the recipe cost
+    // Then: the effective quantity is adjusted to ~555g to account for trim loss
     [Fact]
     public async Task CalculateCost_AppliesWastePercentage()
     {

@@ -40,6 +40,9 @@ public class EmployeeApiTests
         return (orgId, siteId);
     }
 
+    // Given: an organization with a site
+    // When: a new employee is hired with an employee number and assigned to the site
+    // Then: the employee record is created with a HAL link to clock in
     [Fact]
     public async Task CreateEmployee_ReturnsCreatedWithHalResponse()
     {
@@ -75,6 +78,9 @@ public class EmployeeApiTests
             .Should().EndWith("/clock-in");
     }
 
+    // Given: an employee who has been added to the organization
+    // When: the employee record is retrieved by identifier
+    // Then: the employee details are returned with HAL links for clock-in and clock-out
     [Fact]
     public async Task GetEmployee_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -110,6 +116,9 @@ public class EmployeeApiTests
             .Should().EndWith("/clock-out");
     }
 
+    // Given: an organization with no matching employee
+    // When: a non-existent employee identifier is looked up
+    // Then: a not-found error is returned
     [Fact]
     public async Task GetEmployee_WhenNotExists_ReturnsNotFound()
     {
@@ -128,6 +137,9 @@ public class EmployeeApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: an existing employee record
+    // When: the employee's name and hourly rate are updated
+    // Then: the updated record is returned with a self HAL link
     [Fact]
     public async Task UpdateEmployee_ReturnsOkWithUpdatedData()
     {
@@ -162,6 +174,9 @@ public class EmployeeApiTests
             .Should().Contain($"/employees/{employeeId}");
     }
 
+    // Given: an employee who is not currently clocked in
+    // When: the employee clocks in at their assigned site
+    // Then: the time entry begins and a HAL link to clock out is provided
     [Fact]
     public async Task ClockIn_ReturnsOkWithHalResponse()
     {
@@ -198,6 +213,9 @@ public class EmployeeApiTests
             .Should().EndWith("/clock-out");
     }
 
+    // Given: an employee who is currently clocked in
+    // When: the employee clocks out at end of shift
+    // Then: the time entry is completed and a HAL link to the employee is returned
     [Fact]
     public async Task ClockOut_ReturnsOkWithHalResponse()
     {
@@ -235,6 +253,9 @@ public class EmployeeApiTests
             .Should().Contain($"/employees/{employeeId}");
     }
 
+    // Given: an employee without a specific role assignment
+    // When: the employee is assigned a role with department and hourly rate override
+    // Then: the role assignment is confirmed
     [Fact]
     public async Task AssignRole_ReturnsOk()
     {
@@ -274,6 +295,9 @@ public class EmployeeApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Role assigned");
     }
 
+    // Given: an employee who has been assigned a role
+    // When: the role is removed from the employee
+    // Then: the role is unassigned successfully
     [Fact]
     public async Task RemoveRole_ReturnsNoContent()
     {

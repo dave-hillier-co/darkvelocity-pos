@@ -17,6 +17,9 @@ public class PaymentIntentGrainTests
     private IPaymentIntentGrain GetPaymentIntentGrain(Guid accountId, Guid paymentIntentId)
         => _fixture.Cluster.GrainFactory.GetGrain<IPaymentIntentGrain>($"{accountId}:pi:{paymentIntentId}");
 
+    // Given: a merchant account
+    // When: a payment intent for $10.00 USD is created without a payment method
+    // Then: the intent is created with RequiresPaymentMethod status and a client secret
     [Fact]
     public async Task CreateAsync_ShouldCreatePaymentIntent()
     {
@@ -41,6 +44,9 @@ public class PaymentIntentGrainTests
         result.ClientSecret.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a merchant account
+    // When: a payment intent for $20.00 USD is created with a card payment method attached
+    // Then: the intent status is set to RequiresConfirmation
     [Fact]
     public async Task CreateAsync_WithPaymentMethod_ShouldSetStatusToRequiresConfirmation()
     {
@@ -61,6 +67,9 @@ public class PaymentIntentGrainTests
         result.PaymentMethodId.Should().Be("pm_card_4242");
     }
 
+    // Given: a payment intent for $30.00 with a valid card attached
+    // When: the payment intent is confirmed
+    // Then: the payment succeeds and the full amount is received
     [Fact]
     public async Task ConfirmAsync_WithSuccessfulCard_ShouldSucceed()
     {
@@ -83,6 +92,9 @@ public class PaymentIntentGrainTests
         result.AmountReceived.Should().Be(3000);
     }
 
+    // Given: a payment intent with a declined card attached
+    // When: the payment intent is confirmed
+    // Then: the payment fails, reverts to RequiresPaymentMethod, and records the decline error
     [Fact]
     public async Task ConfirmAsync_WithDeclinedCard_ShouldFail()
     {
@@ -105,6 +117,9 @@ public class PaymentIntentGrainTests
         result.LastPaymentError.Should().Contain("declined");
     }
 
+    // Given: a payment intent for $50.00 configured for manual capture with a valid card
+    // When: the payment intent is confirmed
+    // Then: the payment is authorized but not captured, with the full amount held as capturable
     [Fact]
     public async Task ConfirmAsync_WithManualCapture_ShouldSetStatusToRequiresCapture()
     {
@@ -128,6 +143,9 @@ public class PaymentIntentGrainTests
         result.AmountCapturable.Should().Be(5000);
     }
 
+    // Given: a confirmed payment intent for $50.00 awaiting manual capture
+    // When: the full authorized amount is captured
+    // Then: the payment succeeds with the full amount received and nothing left capturable
     [Fact]
     public async Task CaptureAsync_ShouldCaptureFullAmount()
     {
@@ -154,6 +172,9 @@ public class PaymentIntentGrainTests
         result.AmountCapturable.Should().Be(0);
     }
 
+    // Given: a confirmed payment intent for $50.00 awaiting manual capture
+    // When: only $30.00 of the authorized amount is captured
+    // Then: the payment succeeds with $30.00 received
     [Fact]
     public async Task CaptureAsync_WithPartialAmount_ShouldCapturePartialAmount()
     {

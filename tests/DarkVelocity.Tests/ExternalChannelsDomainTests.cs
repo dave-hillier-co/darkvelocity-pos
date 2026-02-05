@@ -24,6 +24,9 @@ public class DeliveryPlatformGrainTests
     private IDeliveryPlatformGrain GetDeliveryPlatformGrain(Guid orgId, Guid platformId)
         => _fixture.Cluster.GrainFactory.GetGrain<IDeliveryPlatformGrain>(GrainKeys.DeliveryPlatform(orgId, platformId));
 
+    // Given: UberEats platform credentials and configuration
+    // When: the delivery platform connection is established
+    // Then: the platform is created with active status, merchant details, and zero daily counters
     [Fact]
     public async Task ConnectAsync_ShouldCreateDeliveryPlatform()
     {
@@ -56,6 +59,9 @@ public class DeliveryPlatformGrainTests
         result.TotalRevenueToday.Should().Be(0);
     }
 
+    // Given: an already connected DoorDash delivery platform
+    // When: a duplicate connection attempt is made
+    // Then: the operation is rejected to prevent duplicate platform integrations
     [Fact]
     public async Task ConnectAsync_ShouldThrowIfAlreadyConnected()
     {
@@ -78,6 +84,9 @@ public class DeliveryPlatformGrainTests
             .WithMessage("Delivery platform already exists");
     }
 
+    // Given: a connected Deliveroo delivery platform
+    // When: the platform name and API credentials are updated
+    // Then: the platform details are modified to reflect the new configuration
     [Fact]
     public async Task UpdateAsync_ShouldUpdatePlatformDetails()
     {
@@ -104,6 +113,9 @@ public class DeliveryPlatformGrainTests
         result.Name.Should().Be("Deliveroo Production");
     }
 
+    // Given: an active JustEat delivery platform
+    // When: the platform status is changed to paused
+    // Then: the platform stops accepting orders while preserving other configuration
     [Fact]
     public async Task UpdateAsync_WithStatusChange_ShouldUpdateStatus()
     {
@@ -130,6 +142,9 @@ public class DeliveryPlatformGrainTests
         result.Status.Should().Be(DeliveryPlatformStatus.Paused);
     }
 
+    // Given: an active Wolt delivery platform
+    // When: the platform is disconnected
+    // Then: the platform status transitions to disconnected, ending the integration
     [Fact]
     public async Task DisconnectAsync_ShouldSetStatusToDisconnected()
     {
@@ -152,6 +167,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Status.Should().Be(DeliveryPlatformStatus.Disconnected);
     }
 
+    // Given: an active GrubHub delivery platform
+    // When: the platform is paused and then resumed
+    // Then: the status toggles between paused and active accordingly
     [Fact]
     public async Task PauseAndResume_ShouldToggleStatus()
     {
@@ -177,6 +195,9 @@ public class DeliveryPlatformGrainTests
         resumedSnapshot.Status.Should().Be(DeliveryPlatformStatus.Active);
     }
 
+    // Given: a connected Deliverect aggregator platform
+    // When: a venue is mapped to a platform store ID
+    // Then: the location mapping is stored linking the internal site to the external store
     [Fact]
     public async Task AddLocationMappingAsync_ShouldAddLocation()
     {

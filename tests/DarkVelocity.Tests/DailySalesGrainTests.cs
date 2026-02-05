@@ -19,6 +19,9 @@ public class DailySalesGrainTests
     private string GetGrainKey(Guid orgId, Guid siteId, DateTime date)
         => $"{orgId}:{siteId}:sales:{date:yyyy-MM-dd}";
 
+    // Given: a venue with no daily sales record for today
+    // When: the daily sales aggregation is initialized
+    // Then: a new sales record is created for the venue and date
     [Fact]
     public async Task InitializeAsync_ShouldInitializeGrain()
     {
@@ -39,6 +42,9 @@ public class DailySalesGrainTests
         snapshot.Date.Should().Be(date);
     }
 
+    // Given: an initialized daily sales record
+    // When: two dine-in sales (burger and fries) are recorded
+    // Then: gross sales, net sales, COGS, transaction count, and guest count are correctly aggregated
     [Fact]
     public async Task RecordSaleAsync_ShouldAggregateSales()
     {
@@ -95,6 +101,9 @@ public class DailySalesGrainTests
         snapshot.GuestCount.Should().Be(2);
     }
 
+    // Given: an initialized daily sales record
+    // When: one dine-in sale and one takeout sale of the same item are recorded
+    // Then: net sales are tracked separately by channel (DineIn and TakeOut)
     [Fact]
     public async Task RecordSaleAsync_ShouldTrackSalesByChannel()
     {
@@ -149,6 +158,9 @@ public class DailySalesGrainTests
         snapshot.SalesByChannel[SaleChannel.TakeOut].Should().Be(13.80m);
     }
 
+    // Given: a daily sales record with one sale including discounts and comps
+    // When: the sales metrics are retrieved
+    // Then: gross sales, discounts, comps, net sales, transaction count, and covers are correct
     [Fact]
     public async Task GetMetricsAsync_ShouldReturnSalesMetrics()
     {
@@ -189,6 +201,9 @@ public class DailySalesGrainTests
         metrics.CoversServed.Should().Be(4);
     }
 
+    // Given: a daily sales record with $100 net sales, $30 theoretical COGS, and $32 actual COGS
+    // When: gross profit metrics are calculated using FIFO costing
+    // Then: actual GP is $68 (68%), theoretical GP is $70 (70%), and variance is $2
     [Fact]
     public async Task GetGrossProfitMetricsAsync_ShouldCalculateGP()
     {
@@ -231,6 +246,9 @@ public class DailySalesGrainTests
         gpMetrics.Variance.Should().Be(2.00m);
     }
 
+    // Given: a daily sales record with two different products sold
+    // When: the individual sale facts are retrieved
+    // Then: both product sale records are returned with their respective product IDs
     [Fact]
     public async Task GetFactsAsync_ShouldReturnAllFacts()
     {
@@ -288,6 +306,9 @@ public class DailySalesGrainTests
         facts.Should().Contain(f => f.ProductId == productId2);
     }
 
+    // Given: an initialized daily sales record
+    // When: the sales period is finalized at end of day
+    // Then: the record is marked as finalized and remains accessible
     [Fact]
     public async Task FinalizeAsync_ShouldMarkAsFinalized()
     {
@@ -307,6 +328,9 @@ public class DailySalesGrainTests
         snapshot.Should().NotBeNull();
     }
 
+    // Given: an initialized daily sales record
+    // When: two orders arrive via the event stream (one dine-in, one takeout)
+    // Then: sales from both orders are aggregated with correct totals by channel
     [Fact]
     public async Task RecordSaleAsync_FromStream_ShouldAggregate()
     {
@@ -350,6 +374,9 @@ public class DailySalesGrainTests
         snapshot.SalesByChannel.Should().ContainKey(SaleChannel.TakeOut);
     }
 
+    // Given: a daily sales record with one recorded sale
+    // When: a $10 void is recorded because the customer changed their mind
+    // Then: the void amount is tracked in the daily metrics
     [Fact]
     public async Task RecordVoidAsync_ShouldTrackVoids()
     {
@@ -387,6 +414,9 @@ public class DailySalesGrainTests
         metrics.Voids.Should().Be(10.00m);
     }
 
+    // Given: an initialized daily sales record
+    // When: sales are recorded across Mains, Beverages, and Desserts categories
+    // Then: net sales are tracked separately by category with correct totals
     [Fact]
     public async Task RecordSaleAsync_ByCategory_ShouldAggregate()
     {
@@ -460,6 +490,9 @@ public class DailySalesGrainTests
         snapshot.SalesByCategory["Desserts"].Should().Be(7.36m);
     }
 
+    // Given: an initialized daily sales record
+    // When: two delivery orders are recorded on the same channel
+    // Then: the delivery channel total accumulates both sales ($18.40 + $11.04 = $29.44)
     [Fact]
     public async Task RecordSaleAsync_SameChannel_ShouldAccumulate()
     {
@@ -511,6 +544,9 @@ public class DailySalesGrainTests
         snapshot.SalesByChannel[SaleChannel.Delivery].Should().Be(29.44m); // 18.40 + 11.04
     }
 
+    // Given: an initialized daily sales record with no transactions
+    // When: the snapshot is retrieved
+    // Then: average ticket and gross profit percentage are both zero
     [Fact]
     public async Task GetSnapshotAsync_ZeroTransactions_AverageTicketShouldBeZero()
     {
@@ -531,6 +567,9 @@ public class DailySalesGrainTests
         snapshot.GrossProfitPercent.Should().Be(0);
     }
 
+    // Given: an already initialized daily sales record
+    // When: initialization is attempted a second time with a different name
+    // Then: the original initialization is preserved (idempotent behavior)
     [Fact]
     public async Task InitializeAsync_Twice_ShouldBeIdempotent()
     {
@@ -550,6 +589,9 @@ public class DailySalesGrainTests
         snapshot.SiteName.Should().Be("Original Name");
     }
 
+    // Given: a daily sales record that has not been initialized
+    // When: the snapshot is requested
+    // Then: an error is raised indicating the sales record is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {

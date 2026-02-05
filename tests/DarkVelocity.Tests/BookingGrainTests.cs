@@ -36,6 +36,9 @@ public class BookingGrainTests
         return grain;
     }
 
+    // Given: a guest requesting a reservation for 6 with special requests and occasion
+    // When: the booking is submitted via the website
+    // Then: a new reservation is created with a 6-character confirmation code and all details persisted
     [Fact]
     public async Task RequestAsync_ShouldCreateBooking()
     {
@@ -72,6 +75,9 @@ public class BookingGrainTests
         state.Source.Should().Be(BookingSource.Website);
     }
 
+    // Given: a reservation in Requested status
+    // When: the host confirms the reservation
+    // Then: the reservation status changes to Confirmed with a confirmation timestamp
     [Fact]
     public async Task ConfirmAsync_ShouldConfirmBooking()
     {
@@ -91,6 +97,9 @@ public class BookingGrainTests
         state.ConfirmedAt.Should().NotBeNull();
     }
 
+    // Given: an existing reservation for 4 guests
+    // When: the guest calls to change the party size to 8 and update the date
+    // Then: the reservation reflects the new party size, time, and special requests
     [Fact]
     public async Task ModifyAsync_ShouldUpdateBooking()
     {
@@ -111,6 +120,9 @@ public class BookingGrainTests
         state.SpecialRequests.Should().Be("Updated requests");
     }
 
+    // Given: an existing reservation
+    // When: the guest cancels the reservation with a reason
+    // Then: the reservation status changes to Cancelled with the cancellation reason recorded
     [Fact]
     public async Task CancelAsync_ShouldCancelBooking()
     {
@@ -131,6 +143,9 @@ public class BookingGrainTests
         state.CancelledBy.Should().Be(cancelledBy);
     }
 
+    // Given: an existing reservation without a table assignment
+    // When: the host assigns table T5 (capacity 6) to the reservation
+    // Then: the table assignment is recorded with the correct table number and capacity
     [Fact]
     public async Task AssignTableAsync_ShouldAddTableAssignment()
     {
@@ -152,6 +167,9 @@ public class BookingGrainTests
         state.TableAssignments[0].Capacity.Should().Be(6);
     }
 
+    // Given: a confirmed reservation
+    // When: the guest arrives at the restaurant
+    // Then: the reservation status changes to Arrived with the arrival time and check-in staff recorded
     [Fact]
     public async Task RecordArrivalAsync_ShouldMarkArrived()
     {
@@ -173,6 +191,9 @@ public class BookingGrainTests
         state.CheckedInBy.Should().Be(checkedInBy);
     }
 
+    // Given: a guest who has arrived for their reservation
+    // When: the host seats the guest at table T10
+    // Then: the reservation status changes to Seated with the seating time and table assignment recorded
     [Fact]
     public async Task SeatGuestAsync_ShouldSeatGuest()
     {
@@ -197,6 +218,9 @@ public class BookingGrainTests
         state.TableAssignments.Should().Contain(t => t.TableId == tableId);
     }
 
+    // Given: a seated guest with an active order
+    // When: the guest finishes dining and departs
+    // Then: the reservation is marked Completed with departure time and linked order
     [Fact]
     public async Task RecordDepartureAsync_ShouldCompleteBooking()
     {
@@ -220,6 +244,9 @@ public class BookingGrainTests
         state.LinkedOrderId.Should().Be(orderId);
     }
 
+    // Given: a confirmed reservation where the guest has not arrived
+    // When: staff marks the reservation as a no-show
+    // Then: the reservation status changes to NoShow
     [Fact]
     public async Task MarkNoShowAsync_ShouldMarkNoShow()
     {
@@ -238,6 +265,9 @@ public class BookingGrainTests
         state.Status.Should().Be(BookingStatus.NoShow);
     }
 
+    // Given: an existing reservation
+    // When: a deposit of $50 is required for the reservation
+    // Then: the reservation status changes to PendingDeposit with the deposit amount recorded
     [Fact]
     public async Task RequireDepositAsync_ShouldSetDepositRequired()
     {
@@ -258,6 +288,9 @@ public class BookingGrainTests
         state.Deposit.Status.Should().Be(DepositStatus.Required);
     }
 
+    // Given: a reservation with a $50 deposit required
+    // When: the guest pays the deposit by credit card
+    // Then: the deposit is marked as Paid with the payment method and reference recorded
     [Fact]
     public async Task RecordDepositPaymentAsync_ShouldMarkDepositPaid()
     {
@@ -278,6 +311,9 @@ public class BookingGrainTests
         state.Deposit.PaymentReference.Should().Be("ref123");
     }
 
+    // Given: a reservation with a required but unpaid deposit
+    // When: the host attempts to confirm the reservation
+    // Then: confirmation is rejected because the deposit has not been paid
     [Fact]
     public async Task ConfirmAsync_WithUnpaidDeposit_ShouldThrow()
     {
@@ -296,6 +332,9 @@ public class BookingGrainTests
             .WithMessage("*Deposit required but not paid*");
     }
 
+    // Given: an existing reservation
+    // When: VIP and Anniversary tags are added to the reservation
+    // Then: both tags are associated with the reservation
     [Fact]
     public async Task AddTagAsync_ShouldAddTag()
     {
@@ -317,6 +356,9 @@ public class BookingGrainTests
 
     // State Transition Tests
 
+    // Given: a cancelled reservation
+    // When: the host attempts to modify the reservation
+    // Then: modification is rejected because cancelled reservations cannot be changed
     [Fact]
     public async Task ModifyAsync_CancelledBooking_ShouldThrow()
     {
@@ -335,6 +377,9 @@ public class BookingGrainTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: a reservation that has been completed (guest departed)
+    // When: the host attempts to modify the reservation
+    // Then: modification is rejected because completed reservations cannot be changed
     [Fact]
     public async Task ModifyAsync_CompletedBooking_ShouldThrow()
     {
@@ -356,6 +401,9 @@ public class BookingGrainTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: a reservation still in Requested status (not yet confirmed)
+    // When: staff attempts to mark it as a no-show
+    // Then: the no-show is rejected because only confirmed reservations can be marked as no-shows
     [Fact]
     public async Task MarkNoShowAsync_NonConfirmedBooking_ShouldThrow()
     {
@@ -374,6 +422,9 @@ public class BookingGrainTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: a reservation in Requested status (guest has not arrived)
+    // When: the host attempts to seat the guest
+    // Then: seating is rejected because the guest must arrive before being seated
     [Fact]
     public async Task SeatAsync_WithoutArrival_ShouldThrow()
     {
@@ -392,6 +443,9 @@ public class BookingGrainTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: a guest who has arrived but has not been seated
+    // When: the host attempts to record their departure
+    // Then: departure is rejected because the guest must be seated before departing
     [Fact]
     public async Task RecordDepartureAsync_WithoutSeating_ShouldThrow()
     {
@@ -414,6 +468,9 @@ public class BookingGrainTests
 
     // Deposit Edge Cases
 
+    // Given: a reservation with a $50 deposit required
+    // When: a manager waives the deposit requirement
+    // Then: the deposit status changes to Waived
     [Fact]
     public async Task WaiveDepositAsync_ShouldWaiveDeposit()
     {
@@ -434,6 +491,9 @@ public class BookingGrainTests
         state.Deposit!.Status.Should().Be(DepositStatus.Waived);
     }
 
+    // Given: a reservation with a deposit required but not yet paid
+    // When: staff attempts to forfeit the deposit
+    // Then: forfeiture is rejected because there is no paid deposit to forfeit
     [Fact]
     public async Task ForfeitDepositAsync_WithoutPaidDeposit_ShouldThrow()
     {
@@ -453,6 +513,9 @@ public class BookingGrainTests
             .WithMessage("*No paid deposit to forfeit*");
     }
 
+    // Given: a reservation with a deposit required but not yet paid
+    // When: staff attempts to refund the deposit
+    // Then: refund is rejected because there is no paid deposit to refund
     [Fact]
     public async Task RefundDepositAsync_WithoutPaidDeposit_ShouldThrow()
     {
@@ -472,6 +535,9 @@ public class BookingGrainTests
             .WithMessage("*No paid deposit to refund*");
     }
 
+    // Given: a cancelled reservation with a previously paid deposit
+    // When: staff processes a deposit refund after cancellation
+    // Then: the deposit status changes to Refunded with a refund timestamp while the reservation remains Cancelled
     [Fact]
     public async Task DepositTransitions_AfterCancellation_ShouldHandle()
     {
@@ -497,6 +563,9 @@ public class BookingGrainTests
 
     // Table Assignment Tests
 
+    // Given: a reservation with table T5 assigned
+    // When: the host clears the table assignment
+    // Then: the reservation has no table assignments
     [Fact]
     public async Task ClearTableAssignmentAsync_ShouldClearTable()
     {
@@ -520,6 +589,9 @@ public class BookingGrainTests
         stateAfter.TableAssignments.Should().BeEmpty();
     }
 
+    // Given: a reservation for a large party
+    // When: three tables (T1, T2, T3) are assigned to accommodate the group
+    // Then: all three table assignments are tracked on the reservation
     [Fact]
     public async Task AssignTableAsync_MultipleTables_ShouldTrackAll()
     {
@@ -545,6 +617,9 @@ public class BookingGrainTests
         state.TableAssignments.Should().Contain(t => t.TableId == tableId3 && t.TableNumber == "T3");
     }
 
+    // Given: a reservation with table T5 already assigned
+    // When: the same table T5 is assigned again
+    // Then: the duplicate assignment is handled without error
     [Fact]
     public async Task AssignTableAsync_SameTableTwice_ShouldBeIdempotent()
     {
@@ -590,6 +665,9 @@ public class WaitlistGrainTests
         return grain;
     }
 
+    // Given: a venue on a specific date with no waitlist
+    // When: the waitlist is initialized for that date
+    // Then: the waitlist is created and ready to accept walk-in entries
     [Fact]
     public async Task InitializeAsync_ShouldCreateWaitlist()
     {
@@ -611,6 +689,9 @@ public class WaitlistGrainTests
         state.SiteId.Should().Be(siteId);
     }
 
+    // Given: an active waitlist for a venue
+    // When: a walk-in party of 4 is added with a 30-minute quoted wait
+    // Then: the entry is created at position 1 with the quoted wait time
     [Fact]
     public async Task AddEntryAsync_ShouldAddToWaitlist()
     {
@@ -636,6 +717,9 @@ public class WaitlistGrainTests
         result.QuotedWait.Should().Be(TimeSpan.FromMinutes(30));
     }
 
+    // Given: a waitlist with no entries
+    // When: three walk-in parties are added sequentially
+    // Then: each party receives an incrementing position (1, 2, 3)
     [Fact]
     public async Task AddEntryAsync_ShouldIncrementPosition()
     {
@@ -656,6 +740,9 @@ public class WaitlistGrainTests
         result3.Position.Should().Be(3);
     }
 
+    // Given: a party of 4 waiting on the waitlist
+    // When: their table becomes ready and they are notified
+    // Then: the entry status changes to Notified with a notification timestamp
     [Fact]
     public async Task NotifyEntryAsync_ShouldMarkNotified()
     {
@@ -676,6 +763,9 @@ public class WaitlistGrainTests
         entries[0].NotifiedAt.Should().NotBeNull();
     }
 
+    // Given: a party of 4 waiting on the waitlist
+    // When: a table opens up and the party is seated
+    // Then: the entry status changes to Seated with a seating timestamp
     [Fact]
     public async Task SeatEntryAsync_ShouldMarkSeated()
     {
@@ -697,6 +787,9 @@ public class WaitlistGrainTests
         entry.SeatedAt.Should().NotBeNull();
     }
 
+    // Given: a party of 4 waiting on the waitlist
+    // When: the guest decides to leave without being seated
+    // Then: the entry status changes to Left
     [Fact]
     public async Task RemoveEntryAsync_ShouldMarkLeft()
     {
@@ -716,6 +809,9 @@ public class WaitlistGrainTests
         entry.Status.Should().Be(WaitlistStatus.Left);
     }
 
+    // Given: a waitlist with two parties currently waiting
+    // When: the waiting count is requested
+    // Then: the count reflects exactly 2 waiting parties
     [Fact]
     public async Task GetWaitingCountAsync_ShouldReturnCount()
     {
@@ -734,6 +830,9 @@ public class WaitlistGrainTests
         count.Should().Be(2);
     }
 
+    // Given: a walk-in party of 4 on the waitlist
+    // When: the party is converted to a formal reservation
+    // Then: a booking is created and linked to the waitlist entry
     [Fact]
     public async Task ConvertToBookingAsync_ShouldConvertEntry()
     {
@@ -755,6 +854,9 @@ public class WaitlistGrainTests
         entry.ConvertedToBookingId.Should().Be(bookingId);
     }
 
+    // Given: three waitlist entries where one is seated and one is notified
+    // When: the active entries are requested
+    // Then: only the notified and waiting entries are returned (seated entries are excluded)
     [Fact]
     public async Task GetEntriesAsync_ShouldReturnOnlyActiveEntries()
     {
@@ -781,6 +883,9 @@ public class WaitlistGrainTests
 
     // Position and Estimated Wait Tests
 
+    // Given: three parties on the waitlist in order
+    // When: the third party is moved to position 1
+    // Then: the party's position is updated to 1
     [Fact]
     public async Task UpdatePositionAsync_ShouldReorderPositions()
     {
@@ -802,6 +907,9 @@ public class WaitlistGrainTests
         entry.Position.Should().Be(1);
     }
 
+    // Given: an empty waitlist with no seating history
+    // When: the estimated wait is requested for a party of 4
+    // Then: the default estimate of 15 minutes is returned
     [Fact]
     public async Task GetEstimatedWaitAsync_ShouldCalculate()
     {
@@ -818,6 +926,9 @@ public class WaitlistGrainTests
         estimate.Should().Be(TimeSpan.FromMinutes(15)); // Default when no history
     }
 
+    // Given: a waitlist with one seated entry and two parties still waiting
+    // When: the estimated wait is requested for a party of 4
+    // Then: the estimate is calculated based on seating history and waiting parties ahead
     [Fact]
     public async Task GetEstimatedWaitAsync_WithHistory_ShouldCalculate()
     {
@@ -844,6 +955,9 @@ public class WaitlistGrainTests
 
     // Notify Tests
 
+    // Given: a waitlist entry that has already been seated
+    // When: staff attempts to notify the already-seated guest
+    // Then: notification is rejected because seated entries cannot be notified
     [Fact]
     public async Task NotifyAsync_FromNonWaiting_ShouldThrow()
     {
@@ -867,6 +981,9 @@ public class WaitlistGrainTests
 
     // Seat Tests
 
+    // Given: a walk-in party currently waiting on the waitlist
+    // When: a table opens and the party is seated directly from waiting status
+    // Then: the entry status changes to Seated with a seating timestamp
     [Fact]
     public async Task SeatAsync_FromWaiting_ShouldWork()
     {
@@ -890,6 +1007,9 @@ public class WaitlistGrainTests
         seatedEntry.SeatedAt.Should().NotBeNull();
     }
 
+    // Given: a walk-in party that has been notified their table is ready
+    // When: the party responds and is seated
+    // Then: the entry status changes from Notified to Seated
     [Fact]
     public async Task SeatAsync_FromNotified_ShouldWork()
     {
@@ -918,6 +1038,9 @@ public class WaitlistGrainTests
         seatedEntry.SeatedAt.Should().NotBeNull();
     }
 
+    // Given: a walk-in party that has left the waitlist
+    // When: staff attempts to seat the departed party
+    // Then: seating is rejected because departed guests cannot be seated
     [Fact]
     public async Task SeatAsync_FromLeft_ShouldThrow()
     {

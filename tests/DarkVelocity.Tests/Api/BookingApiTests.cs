@@ -40,6 +40,9 @@ public class BookingApiTests
         return (orgId, siteId);
     }
 
+    // Given: a site that accepts reservations
+    // When: a guest requests a booking for a future date with party size and special requests
+    // Then: the booking is created with a confirmation code and HAL links to confirm or cancel
     [Fact]
     public async Task RequestBooking_ReturnsCreatedWithHalResponse()
     {
@@ -81,6 +84,9 @@ public class BookingApiTests
             .Should().EndWith("/cancel");
     }
 
+    // Given: a booking that has been requested for a site
+    // When: the booking is retrieved by its identifier
+    // Then: the booking details are returned with HAL links for confirm and check-in actions
     [Fact]
     public async Task GetBooking_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -113,6 +119,9 @@ public class BookingApiTests
             .Should().EndWith("/checkin");
     }
 
+    // Given: a site with no matching booking
+    // When: a non-existent booking identifier is looked up
+    // Then: a not-found error is returned
     [Fact]
     public async Task GetBooking_WhenNotExists_ReturnsNotFound()
     {
@@ -131,6 +140,9 @@ public class BookingApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: a pending booking that has been requested by a guest
+    // When: staff confirms the booking with a confirmed time
+    // Then: the booking is confirmed and a HAL link back to the booking is returned
     [Fact]
     public async Task ConfirmBooking_ReturnsOkWithHalResponse()
     {
@@ -162,6 +174,9 @@ public class BookingApiTests
             .Should().Contain($"/bookings/{bookingId}");
     }
 
+    // Given: an existing booking for a guest
+    // When: the booking is cancelled with a reason
+    // Then: the cancellation is confirmed
     [Fact]
     public async Task CancelBooking_ReturnsOk()
     {
@@ -191,6 +206,9 @@ public class BookingApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Booking cancelled");
     }
 
+    // Given: a confirmed booking for a guest who has arrived
+    // When: staff checks in the guest
+    // Then: the check-in is recorded and a HAL link to seat the guest is provided
     [Fact]
     public async Task CheckInGuest_ReturnsOkWithHalResponse()
     {
@@ -227,6 +245,9 @@ public class BookingApiTests
             .Should().EndWith("/seat");
     }
 
+    // Given: a checked-in guest with a confirmed booking
+    // When: staff assigns the guest to a specific table
+    // Then: the guest is seated and the seating is confirmed
     [Fact]
     public async Task SeatGuest_ReturnsOk()
     {
