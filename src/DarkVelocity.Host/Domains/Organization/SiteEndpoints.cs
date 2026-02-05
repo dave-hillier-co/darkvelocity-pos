@@ -51,7 +51,7 @@ public static class SiteEndpoints
                 }
             }
 
-            return Results.Ok(Hal.Collection("/api/orgs/{orgId}/sites", sites, sites.Count));
+            return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/sites", sites, sites.Count));
         });
 
         group.MapGet("/{siteId}", async (Guid orgId, Guid siteId, IGrainFactory grainFactory) =>
@@ -87,7 +87,8 @@ public static class SiteEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Site not found"));
 
             await grain.OpenAsync();
-            return Results.Ok(new { message = "Site opened" });
+            var state = await grain.GetStateAsync();
+            return Results.Ok(Hal.Resource(new { status = "Open" }, BuildSiteLinks(orgId, siteId)));
         });
 
         group.MapPost("/{siteId}/close", async (Guid orgId, Guid siteId, IGrainFactory grainFactory) =>
@@ -97,7 +98,8 @@ public static class SiteEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Site not found"));
 
             await grain.CloseAsync();
-            return Results.Ok(new { message = "Site closed" });
+            var state = await grain.GetStateAsync();
+            return Results.Ok(Hal.Resource(new { status = "Closed" }, BuildSiteLinks(orgId, siteId)));
         });
 
         return app;
@@ -120,7 +122,11 @@ public static class SiteEndpoints
             ["expenses"] = new { href = $"{basePath}/expenses" },
             ["purchases"] = new { href = $"{basePath}/purchases" },
             ["menu:effective"] = new { href = $"{basePath}/menu/effective" },
-            ["customers"] = new { href = $"/api/orgs/{orgId}/customers" }
+            ["customers"] = new { href = $"/api/orgs/{orgId}/customers" },
+            ["payments"] = new { href = $"{basePath}/payments" },
+            ["employees"] = new { href = $"/api/orgs/{orgId}/employees" },
+            ["devices"] = new { href = $"/api/orgs/{orgId}/devices" },
+            ["reporting"] = new { href = $"{basePath}/reporting/dashboard" }
         };
     }
 }

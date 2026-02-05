@@ -26,13 +26,13 @@ public static class AuthEndpoints
             var lookupResult = await userLookupGrain.FindByPinHashAsync(pinHash, request.SiteId);
 
             if (lookupResult == null)
-                return Results.BadRequest(new { error = "invalid_pin", error_description = "Invalid PIN" });
+                return Results.BadRequest(Hal.Error("invalid_pin", "Invalid PIN"));
 
             var userGrain = grainFactory.GetGrain<IUserGrain>(GrainKeys.User(request.OrganizationId, lookupResult.UserId));
             var authResult = await userGrain.VerifyPinAsync(request.Pin);
 
             if (!authResult.Success)
-                return Results.BadRequest(new { error = "invalid_pin", error_description = authResult.Error });
+                return Results.BadRequest(Hal.Error("invalid_pin", authResult.Error));
 
             var sessionId = Guid.NewGuid();
             var sessionGrain = grainFactory.GetGrain<ISessionGrain>(GrainKeys.Session(request.OrganizationId, sessionId));
@@ -56,13 +56,20 @@ public static class AuthEndpoints
             await deviceGrain.SetCurrentUserAsync(lookupResult.UserId);
             await userGrain.RecordLoginAsync();
 
-            return Results.Ok(new PinLoginResponse(
+            return Results.Ok(Hal.Resource(new PinLoginResponse(
                 tokens.AccessToken,
                 tokens.RefreshToken,
                 (int)(tokens.AccessTokenExpires - DateTime.UtcNow).TotalSeconds,
                 lookupResult.UserId,
                 lookupResult.DisplayName
-            ));
+            ), new Dictionary<string, object>
+            {
+                ["self"] = new { href = "/api/auth/pin" },
+                ["logout"] = new { href = "/api/auth/logout" },
+                ["refresh"] = new { href = "/api/auth/refresh" },
+                ["organization"] = new { href = $"/api/orgs/{request.OrganizationId}" },
+                ["site"] = new { href = $"/api/orgs/{request.OrganizationId}/sites/{request.SiteId}" }
+            }));
         });
 
         group.MapPost("/logout", async (
@@ -86,7 +93,10 @@ public static class AuthEndpoints
             var deviceGrain = grainFactory.GetGrain<IDeviceGrain>(GrainKeys.Device(request.OrganizationId, request.DeviceId));
             await deviceGrain.SetCurrentUserAsync(null);
 
-            return Results.Ok(new { message = "Logged out successfully" });
+            return Results.Ok(Hal.Resource(new { loggedOut = true }, new Dictionary<string, object>
+            {
+                ["login"] = new { href = "/api/auth/pin" }
+            }));
         });
 
         group.MapPost("/refresh", async (
@@ -97,13 +107,17 @@ public static class AuthEndpoints
             var result = await sessionGrain.RefreshAsync(request.RefreshToken);
 
             if (!result.Success)
-                return Results.BadRequest(new { error = "invalid_token", error_description = result.Error });
+                return Results.BadRequest(Hal.Error("invalid_token", result.Error));
 
-            return Results.Ok(new RefreshTokenResponse(
+            return Results.Ok(Hal.Resource(new RefreshTokenResponse(
                 result.Tokens!.AccessToken,
                 result.Tokens.RefreshToken,
                 (int)(result.Tokens.AccessTokenExpires - DateTime.UtcNow).TotalSeconds
-            ));
+            ), new Dictionary<string, object>
+            {
+                ["refresh"] = new { href = "/api/auth/refresh" },
+                ["logout"] = new { href = "/api/auth/logout" }
+            }));
         });
 
         return app;

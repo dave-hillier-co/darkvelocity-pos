@@ -137,7 +137,10 @@ public static class BookingEndpoints
         var links = new Dictionary<string, object>
         {
             ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/bookings/{bookingId}" },
-            ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" }
+            ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
+            ["availability"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/availability" },
+            ["floor-plans"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans" },
+            ["waitlist"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist" }
         };
 
         // Cross-domain resource links

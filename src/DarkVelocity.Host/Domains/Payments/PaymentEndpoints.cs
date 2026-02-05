@@ -98,7 +98,9 @@ public static class PaymentEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Payment not found"));
 
             await grain.VoidAsync(new Grains.VoidPaymentCommand(request.VoidedBy, request.Reason));
-            return Results.Ok(new { message = "Payment voided" });
+            var state = await grain.GetStateAsync();
+            var links = BuildPaymentLinks(orgId, siteId, paymentId, state);
+            return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         });
 
         group.MapPost("/{paymentId}/refund", async (
@@ -131,7 +133,8 @@ public static class PaymentEndpoints
             // Core resource links
             ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/payments/{paymentId}" },
             ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
-            ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{state.OrderId}" }
+            ["order"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{state.OrderId}" },
+            ["order:lines"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{state.OrderId}/lines" }
         };
 
         // Conditional cross-domain links based on associated resources

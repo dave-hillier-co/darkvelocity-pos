@@ -24,7 +24,11 @@ public static class OrganizationEndpoints
             ["menu:cms"] = new { href = $"/api/orgs/{orgId}/menu/cms" },
             ["recipes"] = new { href = $"/api/orgs/{orgId}/recipes/cms" },
             ["webhooks"] = new { href = $"/api/orgs/{orgId}/webhooks" },
-            ["search"] = new { href = $"/api/orgs/{orgId}/search" }
+            ["search"] = new { href = $"/api/orgs/{orgId}/search" },
+            ["users"] = new { href = $"/api/orgs/{orgId}/users" },
+            ["groups"] = new { href = $"/api/orgs/{orgId}/groups" },
+            ["roles"] = new { href = $"/api/orgs/{orgId}/roles" },
+            ["api-keys"] = new { href = $"/api/orgs/{orgId}/api-keys" }
         };
     }
 
@@ -84,7 +88,8 @@ public static class OrganizationEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Organization not found"));
 
             await grain.SuspendAsync(request.Reason);
-            return Results.Ok(new { message = "Organization suspended" });
+            var state = await grain.GetStateAsync();
+            return Results.Ok(Hal.Resource(new { status = "Suspended", reason = request.Reason }, BuildOrgLinks(orgId)));
         });
 
         return app;

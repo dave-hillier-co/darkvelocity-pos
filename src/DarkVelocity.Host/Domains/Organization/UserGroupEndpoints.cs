@@ -136,7 +136,13 @@ public static class UserGroupEndpoints
             await groupGrain.AddMemberAsync(userId);
             await userGrain.AddToGroupAsync(groupId);
 
-            return Results.Ok(new { message = "Member added to group" });
+            return Results.Ok(Hal.Resource(new { userId, added = true }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}/members/{userId}" },
+                ["group"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}" },
+                ["user"] = new { href = $"/api/orgs/{orgId}/users/{userId}" },
+                ["members"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}/members" }
+            }));
         });
 
         // Remove member from group
@@ -190,12 +196,11 @@ public static class UserGroupEndpoints
                 }
             }
 
-            return Results.Ok(new
+            return Results.Ok(Hal.Resource(new { addedCount = added.Count, added, notFound }, new Dictionary<string, object>
             {
-                message = $"Added {added.Count} members to group",
-                added,
-                notFound
-            });
+                ["self"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}/members" },
+                ["group"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}" }
+            }));
         });
 
         // Bulk remove members from group
@@ -222,11 +227,11 @@ public static class UserGroupEndpoints
                 }
             }
 
-            return Results.Ok(new
+            return Results.Ok(Hal.Resource(new { removedCount = removed.Count, removed }, new Dictionary<string, object>
             {
-                message = $"Removed {removed.Count} members from group",
-                removed
-            });
+                ["self"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}/members" },
+                ["group"] = new { href = $"/api/orgs/{orgId}/groups/{groupId}" }
+            }));
         });
 
         // Check if user is member of group

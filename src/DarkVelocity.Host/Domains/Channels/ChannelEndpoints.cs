@@ -179,7 +179,8 @@ public static class ChannelEndpoints
             var registry = grainFactory.GetGrain<IChannelRegistryGrain>(GrainKeys.ChannelRegistry(orgId));
             await registry.UpdateChannelStatusAsync(channelId, ChannelStatus.Paused);
 
-            return Results.Ok(new { status = "paused", reason = request?.Reason });
+            var snapshot = await grain.GetSnapshotAsync();
+            return Results.Ok(BuildChannelResponse(orgId, channelId, snapshot));
         })
         .WithName("PauseChannel")
         .WithSummary("Pause order acceptance on a channel");
@@ -192,7 +193,8 @@ public static class ChannelEndpoints
             var registry = grainFactory.GetGrain<IChannelRegistryGrain>(GrainKeys.ChannelRegistry(orgId));
             await registry.UpdateChannelStatusAsync(channelId, ChannelStatus.Active);
 
-            return Results.Ok(new { status = "active" });
+            var snapshot = await grain.GetSnapshotAsync();
+            return Results.Ok(BuildChannelResponse(orgId, channelId, snapshot));
         })
         .WithName("ResumeChannel")
         .WithSummary("Resume order acceptance on a channel");
@@ -202,7 +204,10 @@ public static class ChannelEndpoints
             var grain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
             var accepting = await grain.IsAcceptingOrdersAsync();
 
-            return Results.Ok(new { acceptingOrders = accepting });
+            return Results.Ok(Hal.Resource(new { acceptingOrders = accepting }, new Dictionary<string, object>
+            {
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+            }));
         })
         .WithName("CheckChannelAcceptingOrders")
         .WithSummary("Check if channel is accepting orders");
@@ -301,7 +306,10 @@ public static class ChannelEndpoints
             var grain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
             await grain.RecordOrderAsync(request.OrderTotal);
 
-            return Results.Ok(new { recorded = true });
+            return Results.Ok(Hal.Resource(new { recorded = true }, new Dictionary<string, object>
+            {
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+            }));
         })
         .WithName("RecordChannelOrder")
         .WithSummary("Record an order received from this channel");
@@ -311,7 +319,10 @@ public static class ChannelEndpoints
             var grain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
             await grain.RecordHeartbeatAsync();
 
-            return Results.Ok(new { timestamp = DateTime.UtcNow });
+            return Results.Ok(Hal.Resource(new { timestamp = DateTime.UtcNow }, new Dictionary<string, object>
+            {
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+            }));
         })
         .WithName("RecordChannelHeartbeat")
         .WithSummary("Record a heartbeat from the channel integration");
@@ -321,7 +332,10 @@ public static class ChannelEndpoints
             var grain = grainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
             await grain.RecordSyncAsync();
 
-            return Results.Ok(new { syncedAt = DateTime.UtcNow });
+            return Results.Ok(Hal.Resource(new { syncedAt = DateTime.UtcNow }, new Dictionary<string, object>
+            {
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" }
+            }));
         })
         .WithName("RecordChannelSync")
         .WithSummary("Record a successful sync with the external platform");
@@ -338,7 +352,11 @@ public static class ChannelEndpoints
             var registry = grainFactory.GetGrain<IChannelRegistryGrain>(GrainKeys.ChannelRegistry(orgId));
             await registry.UpdateChannelStatusAsync(channelId, ChannelStatus.Error);
 
-            return Results.Ok(new { status = "error", message = request.ErrorMessage });
+            return Results.Ok(Hal.Resource(new { status = "error", message = request.ErrorMessage }, new Dictionary<string, object>
+            {
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" },
+                ["resume"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}/resume" }
+            }));
         })
         .WithName("RecordChannelError")
         .WithSummary("Record an error that occurred on this channel");
@@ -408,7 +426,11 @@ public static class ChannelEndpoints
                 request.PosActionType));
 
             return Results.Created($"/api/orgs/{orgId}/status-mappings/{platformType}/mappings/{request.ExternalStatusCode}",
-                new { externalStatusCode = request.ExternalStatusCode, internalStatus = request.InternalStatus });
+                Hal.Resource(new { externalStatusCode = request.ExternalStatusCode, internalStatus = request.InternalStatus }, new Dictionary<string, object>
+                {
+                    ["self"] = new { href = $"/api/orgs/{orgId}/status-mappings/{platformType}/mappings/{request.ExternalStatusCode}" },
+                    ["status-mapping"] = new { href = $"/api/orgs/{orgId}/status-mappings/{platformType}" }
+                }));
         })
         .WithName("AddStatusMappingEntry")
         .WithSummary("Add or update a status mapping entry");
@@ -441,12 +463,16 @@ public static class ChannelEndpoints
 
             await grain.RecordUsageAsync(externalStatusCode);
 
-            return Results.Ok(new
+            return Results.Ok(Hal.Resource(new
             {
                 externalStatusCode,
                 internalStatus = internalStatus.Value.ToString(),
                 internalStatusCode = (int)internalStatus.Value
-            });
+            }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/status-mappings/{platformType}/translate/{externalStatusCode}" },
+                ["status-mapping"] = new { href = $"/api/orgs/{orgId}/status-mappings/{platformType}" }
+            }));
         })
         .WithName("TranslateStatus")
         .WithSummary("Translate an external status code to internal status");
@@ -537,14 +563,19 @@ public static class ChannelEndpoints
             // Note: In a real implementation, this would call the platform adapter
             // to update the store's busy mode
 
-            return Results.Ok(new
+            return Results.Ok(Hal.Resource(new
             {
                 channelId,
                 locationId,
                 busyMode = request.IsBusy,
                 additionalPrepTime = request.AdditionalPrepMinutes,
                 effectiveUntil = request.Duration.HasValue ? DateTime.UtcNow.Add(request.Duration.Value) : (DateTime?)null
-            });
+            }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}/locations/{locationId}" },
+                ["channel"] = new { href = $"/api/orgs/{orgId}/channels/{channelId}" },
+                ["site"] = new { href = $"/api/orgs/{orgId}/sites/{locationId}" }
+            }));
         })
         .WithName("SetChannelLocationBusyMode")
         .WithSummary("Set busy mode for a location on this channel");
@@ -569,10 +600,23 @@ public static class ChannelEndpoints
             ["external-orders"] = new { href = $"{basePath}/external-orders" },
             ["locations"] = new { href = $"{basePath}/locations" },
             ["status-mappings"] = new { href = $"/api/orgs/{orgId}/status-mappings/{snapshot.PlatformType}" },
-            ["pause"] = new { href = $"{basePath}/pause" },
-            ["resume"] = new { href = $"{basePath}/resume" },
-            ["menu-sync"] = new { href = $"{basePath}/menu-sync" }
+            ["menu-sync"] = new { href = $"{basePath}/menu-sync" },
+            ["payouts"] = new { href = $"{basePath}/payouts" }
         };
+
+        // State-conditional action links
+        switch (snapshot.Status)
+        {
+            case ChannelStatus.Active:
+                links["pause"] = new { href = $"{basePath}/pause" };
+                break;
+            case ChannelStatus.Paused:
+                links["resume"] = new { href = $"{basePath}/resume" };
+                break;
+            case ChannelStatus.Error:
+                links["resume"] = new { href = $"{basePath}/resume" };
+                break;
+        }
 
         return links;
     }

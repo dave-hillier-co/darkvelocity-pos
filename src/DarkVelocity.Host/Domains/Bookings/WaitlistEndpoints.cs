@@ -47,6 +47,7 @@ public static class WaitlistEndpoints
             var entries = await grain.GetEntriesAsync();
             var items = entries.Select(e => Hal.Resource(e, new Dictionary<string, object>
             {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{e.Id}" },
                 ["notify"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{e.Id}/notify" },
                 ["seat"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{e.Id}/seat" }
             })).ToList();
@@ -59,12 +60,20 @@ public static class WaitlistEndpoints
             var date = DateOnly.FromDateTime(DateTime.UtcNow);
             var grain = grainFactory.GetGrain<IWaitlistGrain>(GrainKeys.Waitlist(orgId, siteId, date));
             if (!await grain.ExistsAsync())
-                return Results.Ok(new { estimatedWait = TimeSpan.FromMinutes(15), waitingCount = 0 });
+                return Results.Ok(Hal.Resource(new { estimatedWait = TimeSpan.FromMinutes(15), waitingCount = 0 }, new Dictionary<string, object>
+                {
+                    ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/estimate?partySize={partySize}" },
+                    ["waitlist"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist" }
+                }));
 
             var estimatedWait = await grain.GetEstimatedWaitAsync(partySize);
             var waitingCount = await grain.GetWaitingCountAsync();
 
-            return Results.Ok(new { estimatedWait, waitingCount });
+            return Results.Ok(Hal.Resource(new { estimatedWait, waitingCount }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/estimate?partySize={partySize}" },
+                ["waitlist"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist" }
+            }));
         });
 
         group.MapPost("/{entryId}/notify", async (Guid orgId, Guid siteId, Guid entryId, IGrainFactory grainFactory) =>
@@ -75,7 +84,12 @@ public static class WaitlistEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Waitlist not found"));
 
             await grain.NotifyEntryAsync(entryId);
-            return Results.Ok(new { message = "Guest notified" });
+            return Results.Ok(Hal.Resource(new { notified = true }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{entryId}" },
+                ["waitlist"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist" },
+                ["seat"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{entryId}/seat" }
+            }));
         });
 
         group.MapPost("/{entryId}/seat", async (
@@ -89,7 +103,12 @@ public static class WaitlistEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Waitlist not found"));
 
             await grain.SeatEntryAsync(entryId, request.TableId);
-            return Results.Ok(new { message = "Guest seated" });
+            return Results.Ok(Hal.Resource(new { seated = true, tableId = request.TableId }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist/{entryId}" },
+                ["table"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/tables/{request.TableId}" },
+                ["waitlist"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/waitlist" }
+            }));
         });
 
         group.MapDelete("/{entryId}", async (

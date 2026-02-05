@@ -45,7 +45,7 @@ public static class ExpenseEndpoints
 
             return Results.Created(
                 $"/api/orgs/{orgId}/sites/{siteId}/expenses/{expenseId}",
-                Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+                Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Get expense by ID
@@ -62,7 +62,7 @@ public static class ExpenseEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Expense not found"));
 
             var snapshot = await grain.GetSnapshotAsync();
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // List expenses (with filtering)
@@ -95,16 +95,23 @@ public static class ExpenseEndpoints
                 skip ?? 0,
                 take ?? 50));
 
-            return Results.Ok(new
+            var items = result.Expenses.Select(e => (object)Hal.Resource(e, new Dictionary<string, object>
             {
-                _links = new
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/expenses/{e.ExpenseId}" }
+            })).ToList();
+
+            return Results.Ok(Hal.Collection(
+                items,
+                new Dictionary<string, object>
                 {
-                    self = new { href = $"/api/orgs/{orgId}/sites/{siteId}/expenses" }
+                    ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/expenses" },
+                    ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" }
                 },
-                totalCount = result.TotalCount,
-                totalAmount = result.TotalAmount,
-                expenses = result.Expenses
-            });
+                new Dictionary<string, object>
+                {
+                    ["totalCount"] = result.TotalCount,
+                    ["totalAmount"] = result.TotalAmount
+                }));
         });
 
         // Update expense
@@ -137,7 +144,7 @@ public static class ExpenseEndpoints
                 request.Notes,
                 request.Tags));
 
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Approve expense
@@ -158,7 +165,7 @@ public static class ExpenseEndpoints
                 request.ApprovedBy,
                 request.Notes));
 
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Reject expense
@@ -179,7 +186,7 @@ public static class ExpenseEndpoints
                 request.RejectedBy,
                 request.Reason));
 
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Mark expense as paid
@@ -202,7 +209,7 @@ public static class ExpenseEndpoints
                 request.ReferenceNumber,
                 request.PaymentMethod));
 
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Void expense
@@ -243,7 +250,7 @@ public static class ExpenseEndpoints
                 request.Filename,
                 request.AttachedBy));
 
-            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId)));
+            return Results.Ok(Hal.Resource(snapshot, BuildExpenseLinks(orgId, siteId, expenseId, snapshot.Status)));
         });
 
         // Get category totals
@@ -283,17 +290,31 @@ public static class ExpenseEndpoints
         return app;
     }
 
-    private static Dictionary<string, object> BuildExpenseLinks(Guid orgId, Guid siteId, Guid expenseId)
+    private static Dictionary<string, object> BuildExpenseLinks(Guid orgId, Guid siteId, Guid expenseId, ExpenseStatus? status = null)
     {
         var basePath = $"/api/orgs/{orgId}/sites/{siteId}/expenses/{expenseId}";
-        return new Dictionary<string, object>
+        var links = new Dictionary<string, object>
         {
             ["self"] = new { href = basePath },
-            ["approve"] = new { href = $"{basePath}/approve" },
-            ["reject"] = new { href = $"{basePath}/reject" },
-            ["pay"] = new { href = $"{basePath}/pay" },
-            ["document"] = new { href = $"{basePath}/document" },
-            ["collection"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/expenses" }
+            ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
+            ["collection"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/expenses" },
+            ["document"] = new { href = $"{basePath}/document" }
         };
+
+        // State-conditional action links
+        switch (status)
+        {
+            case ExpenseStatus.Draft:
+            case null:
+                links["approve"] = new { href = $"{basePath}/approve" };
+                links["reject"] = new { href = $"{basePath}/reject" };
+                break;
+            case ExpenseStatus.Approved:
+                links["pay"] = new { href = $"{basePath}/pay" };
+                break;
+            // Paid, Rejected, Voided have no action links
+        }
+
+        return links;
     }
 }

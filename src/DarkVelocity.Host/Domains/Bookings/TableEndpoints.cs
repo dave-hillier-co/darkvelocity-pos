@@ -87,7 +87,9 @@ public static class TableEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Table not found"));
 
             await grain.ClearAsync();
-            return Results.Ok(new { message = "Table cleared" });
+            var state = await grain.GetStateAsync();
+            var links = BuildTableLinks(orgId, siteId, tableId, state);
+            return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         });
 
         group.MapPost("/{tableId}/status", async (
@@ -100,7 +102,9 @@ public static class TableEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Table not found"));
 
             await grain.SetStatusAsync(request.Status);
-            return Results.Ok(new { status = request.Status });
+            var state = await grain.GetStateAsync();
+            var links = BuildTableLinks(orgId, siteId, tableId, state);
+            return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         });
 
         group.MapDelete("/{tableId}", async (Guid orgId, Guid siteId, Guid tableId, IGrainFactory grainFactory) =>
@@ -131,7 +135,9 @@ public static class TableEndpoints
         var links = new Dictionary<string, object>
         {
             ["self"] = new { href = basePath },
-            ["site"] = new { href = sitePath }
+            ["site"] = new { href = sitePath },
+            ["bookings"] = new { href = $"{sitePath}/bookings{{?tableId}}", templated = true },
+            ["waitlist"] = new { href = $"{sitePath}/waitlist" }
         };
 
         // Add floor-plan link if the table is assigned to a floor plan
