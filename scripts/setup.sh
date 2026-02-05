@@ -3,7 +3,7 @@
 # DarkVelocity POS - Local Development Environment Setup
 #
 # This script sets up the complete local development environment including:
-# - Docker infrastructure (PostgreSQL, Kafka, Zookeeper)
+# - Docker infrastructure (PostgreSQL, Azurite, SpiceDB)
 # - .NET backend services build
 # - Node.js frontend apps dependencies
 #
@@ -25,7 +25,6 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DOCKER_COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.yml"
 AZURITE_WAIT_TIMEOUT=30
 POSTGRES_WAIT_TIMEOUT=60
-KAFKA_WAIT_TIMEOUT=90
 
 # -----------------------------------------------------------------------------
 # Helper Functions
@@ -192,25 +191,6 @@ wait_for_postgres() {
     return 1
 }
 
-wait_for_kafka() {
-    print_info "Waiting for Kafka to be ready..."
-
-    local elapsed=0
-    while [[ $elapsed -lt $KAFKA_WAIT_TIMEOUT ]]; do
-        if docker exec darkvelocity-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 &> /dev/null; then
-            print_success "Kafka is ready"
-            return 0
-        fi
-        sleep 3
-        elapsed=$((elapsed + 3))
-        echo -ne "\r  Waiting... ${elapsed}s"
-    done
-
-    echo ""
-    print_warning "Kafka did not become ready within ${KAFKA_WAIT_TIMEOUT}s (services may still work)"
-    return 0
-}
-
 wait_for_azurite() {
     print_info "Waiting for Azurite (Azure Storage Emulator) to be ready..."
 
@@ -235,7 +215,6 @@ wait_for_services() {
 
     wait_for_azurite
     wait_for_postgres
-    wait_for_kafka
 
     echo ""
     print_success "All infrastructure services are ready!"
@@ -314,9 +293,8 @@ show_status() {
     echo "  Azurite Queue:  localhost:10001"
     echo "  Azurite Table:  localhost:10002"
     echo "  PostgreSQL:     localhost:5432"
-    echo "  Kafka:          localhost:9092"
-    echo "  Zookeeper:      localhost:2181"
-    echo "  Kafka UI:       http://localhost:8080"
+    echo "  SpiceDB gRPC:   localhost:50051"
+    echo "  SpiceDB HTTP:   localhost:8443"
     echo ""
     echo "Database Connection:"
     echo "--------------------"
@@ -359,7 +337,7 @@ show_next_steps() {
     echo ""
     echo "To view logs:"
     echo "  docker logs -f darkvelocity-postgres"
-    echo "  docker logs -f darkvelocity-kafka"
+    echo "  docker logs -f darkvelocity-azurite"
     echo ""
 }
 

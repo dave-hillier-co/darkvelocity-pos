@@ -15,7 +15,7 @@ The backend uses Microsoft Orleans virtual actor framework for distributed state
 - **Azure Table Storage** for JournaledGrain event sourcing (Azurite for local dev)
 - **Entity Framework Core** for persistence
 - **PostgreSQL** for relational data
-- **Kafka** for Orleans streaming (Azure Event Hubs with Kafka protocol in production)
+- **Orleans in-memory streams** for local dev (Azure Event Hubs for production)
 - **SignalR** for real-time updates
 - **xUnit** for testing
 
@@ -154,7 +154,7 @@ cd apps/backoffice && npm install && npm run dev
 ## Key Files
 
 - `DarkVelocity.slnx` - Solution file
-- `docker/docker-compose.yml` - Local Azurite, PostgreSQL, Kafka, Zookeeper
+- `docker/docker-compose.yml` - Local Azurite, PostgreSQL, SpiceDB
 - `docs/orleans-actor-architecture.md` - Detailed architecture docs
 - `architecture.md` - Frontend/backend design decisions
 - `spec.md` - Functional specification
@@ -167,9 +167,6 @@ cd apps/backoffice && npm install && npm run dev
 | Azurite Queue | 10001 |
 | Azurite Table | 10002 |
 | PostgreSQL | 5432 |
-| Kafka | 9092 |
-| Kafka UI | 8080 |
-| Zookeeper | 2181 |
 | SpiceDB gRPC | 50051 |
 | SpiceDB HTTP | 8443 |
 | SpiceDB Metrics | 9090 |
@@ -177,8 +174,6 @@ cd apps/backoffice && npm install && npm run dev
 Database credentials (dev): `darkvelocity` / `darkvelocity_dev`
 
 Azure Storage (dev): `UseDevelopmentStorage=true` (Azurite default connection string)
-
-Kafka (dev): `localhost:9092` (Docker)
 
 SpiceDB (dev): `localhost:50051` with preshared key `darkvelocity_dev_key`
 
