@@ -58,7 +58,7 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        var ingredientSnapshot = new IngredientSnapshot(
+        var ingredientSnapshot = new InventoryIngredientSnapshot(
             IngredientId: Guid.NewGuid(),
             IngredientName: "Flour",
             Sku: "FLR-001",
@@ -94,15 +94,15 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Item 1", "SKU-1", "Cat", 100m, 100m, "ea",
             1.00m, 100.00m, null, false, false, false, false, 1));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Item 2", "SKU-2", "Cat", 5m, 5m, "ea",
             2.00m, 10.00m, null, true, false, false, false, 1));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Item 3", "SKU-3", "Cat", 0m, 0m, "ea",
             3.00m, 0m, null, false, true, false, false, 0));
 
@@ -122,7 +122,7 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Fresh Milk", "MLK-001", "Dairy", 20m, 20m, "L",
             1.50m, 30.00m, DateTime.UtcNow.AddDays(3), false, false, true, false, 1));
 
@@ -141,7 +141,7 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Item A", "SKU-A", "Cat", 50m, 50m, "ea",
             10.00m, 500.00m, null, false, false, false, false, 2));
 
@@ -163,7 +163,7 @@ public class DailyInventorySnapshotGrainTests
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
         // Record an item that is over par
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Excess Item", "SKU-EXCESS", "Dry Goods", 200m, 200m, "kg",
             5.00m, 1000.00m, null, false, false, false, true, 5));
 
@@ -184,15 +184,15 @@ public class DailyInventorySnapshotGrainTests
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
         // Record multiple ingredients
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Flour", "FLR-001", "Dry Goods", 50m, 50m, "kg",
             2.00m, 100.00m, null, false, false, false, false, 2));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Sugar", "SUG-001", "Dry Goods", 30m, 30m, "kg",
             1.50m, 45.00m, null, false, false, false, false, 1));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Butter", "BUT-001", "Dairy", 20m, 18m, "kg",
             8.00m, 160.00m, DateTime.UtcNow.AddDays(5), false, false, true, false, 3));
 
@@ -215,7 +215,7 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             ingredientId, "Test Ingredient", "TST-001", "Test Category", 100m, 95m, "ea",
             5.00m, 500.00m, null, false, false, false, false, 2));
 
@@ -238,7 +238,7 @@ public class DailyInventorySnapshotGrainTests
 
         await grain.InitializeAsync(new InventorySnapshotCommand(date, siteId, "Test Site"));
 
-        await grain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await grain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Item", "SKU", "Cat", 10m, 10m, "ea",
             1.00m, 10.00m, null, false, false, false, false, 1));
 
@@ -913,7 +913,7 @@ public class PeriodAggregationGrainTests
             OutOfStockCount: 2,
             ExpiringSoonCount: 3,
             ExpiringSoonValue: 150m,
-            Ingredients: Array.Empty<IngredientSnapshot>());
+            Ingredients: Array.Empty<InventoryIngredientSnapshot>());
 
         var dailyConsumption = new DailyConsumptionSnapshot(
             Date: new DateTime(2024, 3, 4),
@@ -1010,7 +1010,7 @@ public class PeriodAggregationGrainTests
 
         var dailyInventory = new DailyInventorySnapshot(
             new DateTime(2024, 4, 8), siteId, "Site", 10000m, 100, 3, 1, 2, 50m,
-            Array.Empty<IngredientSnapshot>());
+            Array.Empty<InventoryIngredientSnapshot>());
 
         var dailyConsumption = new DailyConsumptionSnapshot(
             new DateTime(2024, 4, 8), siteId, 270m, 280m, 10m, 3.7m,
@@ -1054,7 +1054,7 @@ public class PeriodAggregationGrainTests
 
         var dailyInventory = new DailyInventorySnapshot(
             new DateTime(2024, 6, 15), siteId, "Site", 7000m, 150, 5, 2, 3, 100m,
-            Array.Empty<IngredientSnapshot>());
+            Array.Empty<InventoryIngredientSnapshot>());
 
         var dailyConsumption = new DailyConsumptionSnapshot(
             new DateTime(2024, 6, 15), siteId, 2700m, 2800m, 100m, 3.7m,
@@ -1094,7 +1094,7 @@ public class PeriodAggregationGrainTests
 
         var dailyInventory = new DailyInventorySnapshot(
             new DateTime(2024, 5, 13), siteId, "Site", 15000m, 200, 8, 3, 5, 200m,
-            Array.Empty<IngredientSnapshot>());
+            Array.Empty<InventoryIngredientSnapshot>());
 
         var dailyConsumption = new DailyConsumptionSnapshot(
             new DateTime(2024, 5, 13), siteId, 810m, 850m, 40m, 4.94m,
@@ -1136,7 +1136,7 @@ public class PeriodAggregationGrainTests
 
         var dailyInventory = new DailyInventorySnapshot(
             new DateTime(2024, 6, 17), siteId, "Site", 20000m, 180, 6, 2, 4, 150m,
-            Array.Empty<IngredientSnapshot>());
+            Array.Empty<InventoryIngredientSnapshot>());
 
         var dailyConsumption = new DailyConsumptionSnapshot(
             new DateTime(2024, 6, 17), siteId, 1350m, 1400m, 50m, 3.7m,
@@ -1350,7 +1350,7 @@ public class SiteDashboardGrainTests
         var inventoryGrain = _fixture.Cluster.GrainFactory.GetGrain<IDailyInventorySnapshotGrain>(inventoryKey);
         await inventoryGrain.InitializeAsync(new InventorySnapshotCommand(today, siteId, "Inventory Test Site"));
 
-        await inventoryGrain.RecordIngredientSnapshotAsync(new IngredientSnapshot(
+        await inventoryGrain.RecordIngredientSnapshotAsync(new InventoryIngredientSnapshot(
             Guid.NewGuid(), "Test Flour", "FLR-001", "Dry Goods", 50m, 50m, "kg",
             2.50m, 125.00m, null, false, false, false, false, 2));
 

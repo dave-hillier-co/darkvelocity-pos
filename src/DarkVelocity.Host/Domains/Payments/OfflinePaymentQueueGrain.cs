@@ -345,5 +345,7 @@ public record OfflinePaymentFailureAlertEvent(
     [property: Id(6)] string ErrorMessage,
     [property: Id(7)] int TotalAttempts) : IStreamEvent
 {
-    [Id(8)] Guid IStreamEvent.OrganizationId { get; init; } = OrganizationId;
+    [Id(8)] public Guid EventId { get; init; } = Guid.NewGuid();
+    [Id(9)] public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
+    Guid IStreamEvent.OrganizationId => OrganizationId;
 }

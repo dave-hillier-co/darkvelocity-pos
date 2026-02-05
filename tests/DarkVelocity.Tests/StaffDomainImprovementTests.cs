@@ -266,7 +266,7 @@ public class StaffDomainImprovementTests
 
         // Assert
         result.BreakId.Should().NotBeEmpty();
-        result.DurationMinutes.Should().BeGreaterOrEqualTo(0);
+        result.DurationMinutes.Should().BeGreaterThanOrEqualTo(0);
         (await grain.IsOnBreakAsync()).Should().BeFalse();
     }
 
@@ -297,8 +297,8 @@ public class StaffDomainImprovementTests
 
         // Assert
         summary.BreakCount.Should().Be(2);
-        summary.TotalPaidBreakMinutes.Should().BeGreaterOrEqualTo(0);
-        summary.TotalUnpaidBreakMinutes.Should().BeGreaterOrEqualTo(0);
+        summary.TotalPaidBreakMinutes.Should().BeGreaterThanOrEqualTo(0);
+        summary.TotalUnpaidBreakMinutes.Should().BeGreaterThanOrEqualTo(0);
         summary.IsCurrentlyOnBreak.Should().BeFalse();
     }
 
@@ -579,7 +579,7 @@ public class StaffDomainImprovementTests
         // Assert
         alerts.Should().HaveCount(1);
         alerts[0].CertificationType.Should().Be("food_handler");
-        alerts[0].DaysUntilExpiration.Should().BeLessOrEqualTo(7);
+        alerts[0].DaysUntilExpiration.Should().BeLessThanOrEqualTo(7);
     }
 
     // ============================================================================

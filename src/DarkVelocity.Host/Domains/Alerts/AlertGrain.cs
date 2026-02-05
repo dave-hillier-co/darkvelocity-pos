@@ -512,6 +512,11 @@ public class AlertGrain : Grain, IAlertGrain
         await _state.WriteStateAsync();
     }
 
+    public Task<bool> ExistsAsync()
+    {
+        return Task.FromResult(_state.State.SiteId != Guid.Empty);
+    }
+
     private void EnsureInitialized()
     {
         if (_state.State.SiteId == Guid.Empty)

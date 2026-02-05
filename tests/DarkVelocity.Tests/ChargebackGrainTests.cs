@@ -231,7 +231,7 @@ public class ChargebackGrainTests
         summary.Amount.Should().Be(150m);
         summary.Status.Should().Be(ChargebackStatus.EvidenceGathering);
         summary.EvidenceCount.Should().Be(1);
-        summary.DaysUntilDeadline.Should().BeGreaterOrEqualTo(6);
+        summary.DaysUntilDeadline.Should().BeGreaterThanOrEqualTo(6);
     }
 
     [Fact]

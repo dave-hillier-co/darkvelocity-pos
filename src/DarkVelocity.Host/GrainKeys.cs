@@ -984,4 +984,38 @@ public static class GrainKeys
     /// </summary>
     public static string WeekCalendar(Guid orgId, Guid siteId, DateOnly startDate)
         => $"{orgId}:{siteId}:weekcalendar:{startDate:yyyy-MM-dd}";
+
+    // ============================================================================
+    // Fiscal Grains (Additional)
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for the fiscal job scheduler grain.
+    /// </summary>
+    public static string FiscalJobScheduler(Guid orgId)
+        => $"{orgId}:fiscaljobs";
+
+    /// <summary>
+    /// Creates a key for the Z-report grain.
+    /// </summary>
+    public static string ZReport(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:zreport";
+
+    /// <summary>
+    /// Creates a key for the multi-country fiscal grain.
+    /// </summary>
+    public static string MultiCountryFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal";
+
+    /// <summary>
+    /// Creates a key for the French fiscal grain.
+    /// </summary>
+    public static string FrenchFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal:france";
+
+    /// <summary>
+    /// Creates a key for the Polish fiscal grain.
+    /// </summary>
+    public static string PolishFiscal(Guid orgId, Guid siteId)
+        => $"{orgId}:{siteId}:fiscal:poland";
 }

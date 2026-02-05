@@ -14,7 +14,7 @@ public class AdvancedReportingGrainTests
 {
     private readonly TestCluster _cluster;
 
-    public AdvancedReportingGrainTests(ClusterFixture fixture)
+    public AdvancedReportingGrainTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }
@@ -559,7 +559,7 @@ public class AdvancedReportingGrainTests
         // Should have one exception for cash variance
         Assert.Single(snapshot.Exceptions);
         Assert.Equal("CashVariance", snapshot.Exceptions[0].ExceptionType);
-        Assert.Equal(ReconciliationStatus.Discrepancy, snapshot.Status);
+        Assert.Equal(PaymentReconciliationStatus.Discrepancy, snapshot.Status);
     }
 
     [Fact]
@@ -598,8 +598,8 @@ public class AdvancedReportingGrainTests
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
 
-        Assert.Equal(ReconciliationStatus.Matched, snapshot.Status);
-        Assert.Equal(ReconciliationStatus.Resolved, snapshot.Exceptions[0].Status);
+        Assert.Equal(PaymentReconciliationStatus.Matched, snapshot.Status);
+        Assert.Equal(PaymentReconciliationStatus.Resolved, snapshot.Exceptions[0].Status);
         Assert.Equal("Verified with camera footage - cashier error", snapshot.Exceptions[0].Resolution);
     }
 

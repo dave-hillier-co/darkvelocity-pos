@@ -1,3 +1,4 @@
+using DarkVelocity.Host;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using Orleans.TestingHost;
@@ -170,7 +171,7 @@ public class AllergenInheritanceTests
 {
     private readonly TestCluster _cluster;
 
-    public AllergenInheritanceTests(ClusterFixture fixture)
+    public AllergenInheritanceTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }
@@ -330,7 +331,7 @@ public class NutritionalCalculationTests
 {
     private readonly TestCluster _cluster;
 
-    public NutritionalCalculationTests(ClusterFixture fixture)
+    public NutritionalCalculationTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }
@@ -471,7 +472,7 @@ public class RecipeValidationTests
 {
     private readonly TestCluster _cluster;
 
-    public RecipeValidationTests(ClusterFixture fixture)
+    public RecipeValidationTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }
@@ -670,7 +671,7 @@ public class SubRecipeCostingTests
 {
     private readonly TestCluster _cluster;
 
-    public SubRecipeCostingTests(ClusterFixture fixture)
+    public SubRecipeCostingTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }

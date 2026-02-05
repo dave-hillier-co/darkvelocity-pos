@@ -731,21 +731,3 @@ public sealed class ZReportGrain : Grain, IZReportGrain
     }
 }
 
-// ============================================================================
-// Grain Keys Extensions
-// ============================================================================
-
-public static partial class GrainKeys
-{
-    /// <summary>
-    /// Creates a key for the fiscal job scheduler grain
-    /// </summary>
-    public static string FiscalJobScheduler(Guid orgId)
-        => $"{orgId}:fiscaljobs";
-
-    /// <summary>
-    /// Creates a key for the Z-report grain
-    /// </summary>
-    public static string ZReport(Guid orgId, Guid siteId)
-        => $"{orgId}:{siteId}:zreport";
-}

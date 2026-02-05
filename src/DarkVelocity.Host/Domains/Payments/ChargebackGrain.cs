@@ -391,5 +391,7 @@ public record ChargebackNotificationEvent(
     [property: Id(4)] string Message,
     [property: Id(5)] string Status) : IStreamEvent
 {
-    [Id(6)] Guid IStreamEvent.OrganizationId { get; init; } = OrganizationId;
+    [Id(6)] public Guid EventId { get; init; } = Guid.NewGuid();
+    [Id(7)] public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
+    Guid IStreamEvent.OrganizationId => OrganizationId;
 }

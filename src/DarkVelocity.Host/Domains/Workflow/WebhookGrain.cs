@@ -500,6 +500,105 @@ public class BookingCalendarGrain : Grain, IBookingCalendarGrain
 
     public Task<bool> ExistsAsync() => Task.FromResult(_state.State.SiteId != Guid.Empty);
 
+    public Task<CalendarDayView> GetDayViewAsync(TimeSpan? slotDuration = null)
+    {
+        EnsureExists();
+        var duration = slotDuration ?? TimeSpan.FromMinutes(30);
+        var slots = new List<CalendarBookingSlot>();
+
+        var currentTime = new TimeOnly(0, 0);
+        while (currentTime < new TimeOnly(23, 59))
+        {
+            var endTime = currentTime.Add(duration);
+            if (endTime < currentTime) endTime = new TimeOnly(23, 59);
+
+            var slotBookings = _state.State.Bookings
+                .Where(b => b.Time >= currentTime && b.Time < endTime)
+                .ToList();
+
+            slots.Add(new CalendarBookingSlot
+            {
+                StartTime = currentTime,
+                EndTime = endTime,
+                BookingCount = slotBookings.Count,
+                CoverCount = slotBookings.Sum(b => b.PartySize),
+                Bookings = slotBookings
+            });
+
+            currentTime = endTime;
+        }
+
+        return Task.FromResult(new CalendarDayView
+        {
+            Date = _state.State.Date,
+            Slots = slots,
+            TotalBookings = _state.State.Bookings.Count,
+            TotalCovers = _state.State.TotalCovers,
+            ConfirmedBookings = _state.State.Bookings.Count(b => b.Status == BookingStatus.Confirmed),
+            SeatedBookings = _state.State.Bookings.Count(b => b.Status == BookingStatus.Seated),
+            NoShowCount = _state.State.Bookings.Count(b => b.Status == BookingStatus.NoShow)
+        });
+    }
+
+    public Task<IReadOnlyList<AvailableTimeSlot>> GetAvailabilityAsync(GetCalendarAvailabilityQuery query)
+    {
+        EnsureExists();
+        // Simple availability - return slots that have capacity
+        var slots = new List<AvailableTimeSlot>();
+        var duration = query.RequestedDuration ?? TimeSpan.FromMinutes(90);
+
+        var startTime = query.PreferredTime ?? new TimeOnly(12, 0);
+        for (var i = 0; i < 10; i++)
+        {
+            var time = startTime.Add(TimeSpan.FromMinutes(30 * i));
+            slots.Add(new AvailableTimeSlot
+            {
+                Time = time,
+                IsAvailable = true,
+                AvailableCapacity = 20,
+                EstimatedDuration = duration,
+                SuggestedTables = []
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<AvailableTimeSlot>>(slots);
+    }
+
+    public Task<IReadOnlyList<TableAllocation>> GetTableAllocationsAsync()
+    {
+        EnsureExists();
+        var allocations = _state.State.Bookings
+            .Where(b => b.TableId.HasValue)
+            .GroupBy(b => b.TableId!.Value)
+            .Select(g => new TableAllocation
+            {
+                TableId = g.Key,
+                TableNumber = g.First().TableNumber ?? string.Empty,
+                Bookings = g.ToList()
+            })
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<TableAllocation>>(allocations);
+    }
+
+    public async Task SetTableAllocationAsync(Guid bookingId, Guid tableId, string tableNumber)
+    {
+        EnsureExists();
+        var index = _state.State.Bookings.FindIndex(b => b.BookingId == bookingId);
+        if (index < 0)
+            throw new InvalidOperationException("Booking not found in calendar");
+
+        var existing = _state.State.Bookings[index];
+        _state.State.Bookings[index] = existing with
+        {
+            TableId = tableId,
+            TableNumber = tableNumber
+        };
+
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
     private void EnsureExists()
     {
         if (_state.State.SiteId == Guid.Empty)

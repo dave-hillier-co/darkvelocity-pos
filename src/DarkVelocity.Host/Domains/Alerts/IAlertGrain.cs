@@ -345,6 +345,11 @@ public interface IAlertGrain : IGrainWithStringKey
     Task EvaluateRulesAsync();
     Task<IReadOnlyList<AlertRule>> GetRulesAsync();
     Task UpdateRuleAsync(AlertRule rule);
+
+    /// <summary>
+    /// Checks if the alert grain has been initialized.
+    /// </summary>
+    Task<bool> ExistsAsync();
 }
 
 // ============================================================================
@@ -419,17 +424,3 @@ public record NotificationChannel
 public record SendNotificationCommand(
     [property: Id(0)] Alert Alert,
     [property: Id(1)] IReadOnlyList<NotificationChannel> Channels);
-
-/// <summary>
-/// Grain for sending notifications.
-/// Key: "{orgId}:notifications"
-/// </summary>
-public interface INotificationGrain : IGrainWithStringKey
-{
-    Task InitializeAsync(Guid orgId);
-    Task SendAsync(SendNotificationCommand command);
-    Task<IReadOnlyList<NotificationChannel>> GetChannelsAsync();
-    Task AddChannelAsync(NotificationChannel channel);
-    Task RemoveChannelAsync(string channelType, string target);
-    Task UpdateChannelAsync(NotificationChannel channel);
-}

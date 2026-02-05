@@ -257,7 +257,7 @@ public class IdempotencyKeyGrainTests
         var removedCount = await grain.CleanupExpiredKeysAsync();
 
         // Assert
-        removedCount.Should().BeGreaterOrEqualTo(1);
+        removedCount.Should().BeGreaterThanOrEqualTo(1);
 
         var status = await grain.GetKeyStatusAsync(key);
         status.Should().BeNull(); // Key should be removed

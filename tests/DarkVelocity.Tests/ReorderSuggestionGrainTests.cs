@@ -30,7 +30,7 @@ public class ReorderSuggestionGrainTests
         // Simulate consumption to establish usage pattern and bring to current level
         for (int i = 0; i < consumptionDays; i++)
         {
-            await grain.ConsumeAsync(new ConsumeInventoryCommand(dailyConsumption, $"Daily use day {i + 1}"));
+            await grain.ConsumeAsync(new ConsumeStockCommand(dailyConsumption, $"Daily use day {i + 1}"));
         }
 
         return grain;
@@ -123,7 +123,7 @@ public class ReorderSuggestionGrainTests
         // Consume all stock
         for (int i = 0; i < 30; i++)
         {
-            await outOfStockGrain.ConsumeAsync(new ConsumeInventoryCommand(2, $"Day {i + 1}"));
+            await outOfStockGrain.ConsumeAsync(new ConsumeStockCommand(2, $"Day {i + 1}"));
         }
 
         // Create item with critical stock
@@ -171,7 +171,7 @@ public class ReorderSuggestionGrainTests
         // Verify ordering - higher urgency should come first
         for (int i = 1; i < suggestions.Count; i++)
         {
-            suggestions[i - 1].Urgency.Should().BeGreaterThanOrEqualTo(suggestions[i].Urgency);
+            ((int)suggestions[i - 1].Urgency).Should().BeGreaterThanOrEqualTo((int)suggestions[i].Urgency);
         }
     }
 

@@ -204,7 +204,7 @@ public class OrderFiscalIntegrationGrain : Grain, IOrderFiscalIntegrationGrain, 
         // Get order details
         var orderKey = GrainKeys.Order(_state.State.OrgId, _state.State.SiteId, orderId);
         var orderGrain = _grainFactory.GetGrain<IOrderGrain>(orderKey);
-        var order = await orderGrain.GetSnapshotAsync();
+        var order = await orderGrain.GetStateAsync();
 
         // Check if transaction already exists
         if (_state.State.OrderToTransactionMap.TryGetValue(orderId, out var existingTxId))
@@ -496,9 +496,7 @@ public class OrderFiscalIntegrationGrain : Grain, IOrderFiscalIntegrationGrain, 
         var journalGrain = _grainFactory.GetGrain<IFiscalJournalGrain>(
             GrainKeys.FiscalJournal(_state.State.OrgId, _state.State.SiteId, DateOnly.FromDateTime(DateTime.UtcNow)));
 
-        await journalGrain.AppendAsync(new FiscalJournalEntry(
-            EntryId: Guid.NewGuid(),
-            Timestamp: DateTime.UtcNow,
+        await journalGrain.LogEventAsync(new LogFiscalEventCommand(
             LocationId: _state.State.SiteId,
             EventType: eventType,
             DeviceId: deviceId,
@@ -510,7 +508,7 @@ public class OrderFiscalIntegrationGrain : Grain, IOrderFiscalIntegrationGrain, 
             Severity: severity));
     }
 
-    private static Dictionary<string, decimal> CalculateNetAmounts(OrderSnapshot order)
+    private static Dictionary<string, decimal> CalculateNetAmounts(OrderState order)
     {
         var netAmounts = new Dictionary<string, decimal>();
 
@@ -528,7 +526,7 @@ public class OrderFiscalIntegrationGrain : Grain, IOrderFiscalIntegrationGrain, 
         return netAmounts;
     }
 
-    private static Dictionary<string, decimal> CalculateTaxAmounts(OrderSnapshot order)
+    private static Dictionary<string, decimal> CalculateTaxAmounts(OrderState order)
     {
         var taxAmounts = new Dictionary<string, decimal>();
 
@@ -545,7 +543,7 @@ public class OrderFiscalIntegrationGrain : Grain, IOrderFiscalIntegrationGrain, 
         return taxAmounts;
     }
 
-    private static Dictionary<string, decimal> CalculatePaymentTypes(OrderSnapshot order)
+    private static Dictionary<string, decimal> CalculatePaymentTypes(OrderState order)
     {
         var paymentTypes = new Dictionary<string, decimal>();
 

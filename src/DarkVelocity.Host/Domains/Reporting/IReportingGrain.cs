@@ -128,7 +128,7 @@ public record DailyInventorySnapshot(
 public interface IDailyInventorySnapshotGrain : IGrainWithStringKey
 {
     Task InitializeAsync(InventorySnapshotCommand command);
-    Task RecordIngredientSnapshotAsync(IngredientSnapshot snapshot);
+    Task RecordIngredientSnapshotAsync(InventoryIngredientSnapshot snapshot);
     Task<DailyInventorySnapshot> GetSnapshotAsync();
     Task<StockHealthMetrics> GetHealthMetricsAsync();
     Task<IReadOnlyList<InventoryFact>> GetFactsAsync();

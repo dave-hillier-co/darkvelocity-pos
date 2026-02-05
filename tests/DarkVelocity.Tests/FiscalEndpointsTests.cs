@@ -281,7 +281,7 @@ public class FiscalDeviceLifecycleTests
         health.DeviceId.Should().Be(deviceId);
         health.IsOnline.Should().BeTrue();
         health.CertificateValid.Should().BeTrue();
-        health.DaysUntilCertificateExpiry.Should().BeCloseTo(30, 1);
+        health.DaysUntilCertificateExpiry.Should().BeInRange(29, 31);
     }
 
     [Fact]

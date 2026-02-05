@@ -1,3 +1,4 @@
+using DarkVelocity.Host;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
 using Orleans.TestingHost;
@@ -12,7 +13,7 @@ public class IngredientGrainTests
 {
     private readonly TestCluster _cluster;
 
-    public IngredientGrainTests(ClusterFixture fixture)
+    public IngredientGrainTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }
@@ -310,7 +311,7 @@ public class IngredientRegistryGrainTests
 {
     private readonly TestCluster _cluster;
 
-    public IngredientRegistryGrainTests(ClusterFixture fixture)
+    public IngredientRegistryGrainTests(TestClusterFixture fixture)
     {
         _cluster = fixture.Cluster;
     }

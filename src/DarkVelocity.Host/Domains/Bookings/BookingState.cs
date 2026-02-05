@@ -146,7 +146,7 @@ public class WaitlistEntry
     [Id(1)] public int Position { get; set; }
     [Id(2)] public GuestInfo Guest { get; set; } = new();
     [Id(3)] public int PartySize { get; set; }
-    [Id(4)] public DateTime AddedAt { get; set; }
+    [Id(4)] public DateTime CheckedInAt { get; set; }
     [Id(5)] public TimeSpan QuotedWait { get; set; }
     [Id(6)] public WaitlistStatus Status { get; set; }
     [Id(7)] public string? TablePreferences { get; set; }

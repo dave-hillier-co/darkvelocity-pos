@@ -907,4 +907,6 @@ public record PaymentRetryExhaustedEvent(
     [property: Id(6)] string? LastErrorMessage) : IStreamEvent
 {
     [Id(7)] public Guid OrganizationId { get; init; }
+    [Id(8)] public Guid EventId { get; init; } = Guid.NewGuid();
+    [Id(9)] public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
 }

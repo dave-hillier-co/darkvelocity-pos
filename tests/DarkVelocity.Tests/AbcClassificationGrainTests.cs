@@ -27,7 +27,7 @@ public class AbcClassificationGrainTests
         {
             if (dailyConsumption > 0)
             {
-                await grain.ConsumeAsync(new ConsumeInventoryCommand(dailyConsumption, $"Daily use day {i + 1}"));
+                await grain.ConsumeAsync(new ConsumeStockCommand(dailyConsumption, $"Daily use day {i + 1}"));
             }
         }
 

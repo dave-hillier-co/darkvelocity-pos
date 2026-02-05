@@ -585,27 +585,3 @@ public sealed class FiscalCountryAdapterFactory : IFiscalCountryAdapterFactory
     }
 }
 
-// ============================================================================
-// Grain Keys Extension
-// ============================================================================
-
-public static partial class GrainKeys
-{
-    /// <summary>
-    /// Creates a key for the multi-country fiscal grain
-    /// </summary>
-    public static string MultiCountryFiscal(Guid orgId, Guid siteId)
-        => $"{orgId}:{siteId}:fiscal";
-
-    /// <summary>
-    /// Creates a key for the French fiscal grain
-    /// </summary>
-    public static string FrenchFiscal(Guid orgId, Guid siteId)
-        => $"{orgId}:{siteId}:fiscal:france";
-
-    /// <summary>
-    /// Creates a key for the Polish fiscal grain
-    /// </summary>
-    public static string PolishFiscal(Guid orgId, Guid siteId)
-        => $"{orgId}:{siteId}:fiscal:poland";
-}

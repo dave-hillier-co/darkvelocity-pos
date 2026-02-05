@@ -157,10 +157,10 @@ public class ReorderSuggestionGrain : Grain, IReorderSuggestionGrain
 
             if (await abcGrain.ExistsAsync())
             {
-                var report = await abcGrain.GetReportAsync();
-                abcClassifications = report.ClassAItems
-                    .Concat(report.ClassBItems)
-                    .Concat(report.ClassCItems)
+                var abcReport = await abcGrain.GetReportAsync();
+                abcClassifications = abcReport.ClassAItems
+                    .Concat(abcReport.ClassBItems)
+                    .Concat(abcReport.ClassCItems)
                     .ToDictionary(i => i.IngredientId, i => i.Classification);
 
                 var policies = await abcGrain.GetAllReorderPoliciesAsync();

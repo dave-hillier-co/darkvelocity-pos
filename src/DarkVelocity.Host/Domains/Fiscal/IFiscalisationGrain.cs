@@ -311,6 +311,8 @@ public interface IFiscalTransactionGrain : IGrainWithStringKey
 public enum FiscalEventType
 {
     TransactionSigned,
+    TransactionCreated,
+    TransactionVoided,
     DeviceRegistered,
     DeviceDecommissioned,
     ExportGenerated,

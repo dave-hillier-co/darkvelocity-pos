@@ -47,7 +47,7 @@ public class DailyInventorySnapshotGrain : Grain, IDailyInventorySnapshotGrain
         await _state.WriteStateAsync();
     }
 
-    public async Task RecordIngredientSnapshotAsync(IngredientSnapshot snapshot)
+    public async Task RecordIngredientSnapshotAsync(InventoryIngredientSnapshot snapshot)
     {
         EnsureInitialized();
 
@@ -132,7 +132,7 @@ public class DailyInventorySnapshotGrain : Grain, IDailyInventorySnapshotGrain
         EnsureInitialized();
 
         var ingredients = _state.State.Ingredients
-            .Select(i => new IngredientSnapshot(
+            .Select(i => new InventoryIngredientSnapshot(
                 IngredientId: i.IngredientId,
                 IngredientName: i.IngredientName,
                 Sku: i.Sku,
@@ -783,7 +783,7 @@ public class SiteDashboardGrain : Grain, ISiteDashboardGrain
             .ToList();
 
         var lowStockItems = _state.State.LowStockItems
-            .Select(i => new IngredientSnapshot(
+            .Select(i => new InventoryIngredientSnapshot(
                 IngredientId: i.IngredientId,
                 IngredientName: i.IngredientName,
                 Sku: i.Sku,

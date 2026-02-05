@@ -337,7 +337,7 @@ public static class SystemEndpoints
             ? Enum.Parse<AlertStatus>(status, ignoreCase: true)
             : null;
 
-        var alerts = await grain.GetAlertsAsync(alertType, alertStatus, limit ?? 100);
+        var alerts = await grain.GetAlertsAsync(alertStatus, alertType, limit ?? 100);
         return Results.Ok(alerts);
     }
 

@@ -72,9 +72,9 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
             var insertPosition = Math.Max(1, activeEntries.Count - boost + 1);
 
             // Shift other entries
-            foreach (var entry in activeEntries.Where(e => e.Position >= insertPosition))
+            foreach (var existingEntry in activeEntries.Where(e => e.Position >= insertPosition))
             {
-                entry.Position++;
+                existingEntry.Position++;
             }
 
             position = insertPosition;
@@ -88,7 +88,7 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
             PartySize = command.PartySize,
             Position = position,
             Status = WaitlistStatus.Waiting,
-            AddedAt = DateTime.UtcNow,
+            CheckedInAt = DateTime.UtcNow,
             QuotedWait = await CalculateEstimatedWaitAsync(command.PartySize, position),
             TablePreferences = command.TablePreferences,
             NotificationMethod = command.NotificationMethod,
@@ -106,7 +106,7 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
             EntryId = entryId,
             Position = position,
             Estimate = estimate,
-            AddedAt = entry.AddedAt
+            AddedAt = entry.CheckedInAt
         };
     }
 
@@ -161,6 +161,19 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
         entry.Status = WaitlistStatus.Notified;
         entry.NotifiedAt = DateTime.UtcNow;
 
+        bool success = false;
+        string? errorMessage = null;
+
+        try
+        {
+            await SendWaitlistNotificationAsync(entry, "table_ready", tableNumber);
+            success = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+
         var notification = new WaitlistNotificationRecord
         {
             EntryId = entryId,
@@ -168,18 +181,9 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
             Type = "table_ready",
             SentAt = DateTime.UtcNow,
             Channel = entry.NotificationMethod.ToString().ToLowerInvariant(),
-            Success = false
+            Success = success,
+            ErrorMessage = errorMessage
         };
-
-        try
-        {
-            await SendWaitlistNotificationAsync(entry, "table_ready", tableNumber);
-            notification.Success = true;
-        }
-        catch (Exception ex)
-        {
-            notification.ErrorMessage = ex.Message;
-        }
 
         _state.State.NotificationHistory.Add(notification);
         _state.State.Version++;
@@ -214,7 +218,7 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
         entry.AssignedTableId = tableId;
 
         // Calculate actual wait time and update turn time data
-        var actualWait = DateTime.UtcNow - entry.AddedAt;
+        var actualWait = DateTime.UtcNow - entry.CheckedInAt;
         await UpdateTurnTimeDataAsync(entry.PartySize, actualWait);
 
         // Update average wait
@@ -366,6 +370,19 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
         if (!IsActive(entry))
             throw new InvalidOperationException("Entry is not active");
 
+        bool success = false;
+        string? errorMessage = null;
+
+        try
+        {
+            await SendWaitlistNotificationAsync(entry, "position_update");
+            success = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+
         var notification = new WaitlistNotificationRecord
         {
             EntryId = entryId,
@@ -373,18 +390,9 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
             Type = "position_update",
             SentAt = DateTime.UtcNow,
             Channel = entry.NotificationMethod.ToString().ToLowerInvariant(),
-            Success = false
+            Success = success,
+            ErrorMessage = errorMessage
         };
-
-        try
-        {
-            await SendWaitlistNotificationAsync(entry, "position_update");
-            notification.Success = true;
-        }
-        catch (Exception ex)
-        {
-            notification.ErrorMessage = ex.Message;
-        }
 
         _state.State.NotificationHistory.Add(notification);
         _state.State.Version++;
@@ -458,7 +466,7 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
         var cutoff = DateTime.UtcNow - maxWait;
 
         var expiredEntries = _state.State.Entries
-            .Where(e => IsActive(e) && e.AddedAt < cutoff)
+            .Where(e => IsActive(e) && e.CheckedInAt < cutoff)
             .ToList();
 
         var expiredIds = new List<Guid>();
@@ -609,7 +617,7 @@ public class EnhancedWaitlistGrain : Grain, IEnhancedWaitlistGrain
 
         if (seatedEntries.Count > 0)
         {
-            var totalWaitMinutes = seatedEntries.Sum(e => (e.SeatedAt!.Value - e.AddedAt).TotalMinutes);
+            var totalWaitMinutes = seatedEntries.Sum(e => (e.SeatedAt!.Value - e.CheckedInAt).TotalMinutes);
             _state.State.AverageWait = TimeSpan.FromMinutes(totalWaitMinutes / seatedEntries.Count);
         }
     }

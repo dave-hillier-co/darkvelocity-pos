@@ -114,9 +114,9 @@ public class IdempotencyKeyGrain : Grain, IIdempotencyKeyGrain
                     .Select(k => k.Key)
                     .ToList();
 
-                foreach (var key in oldestKeys)
+                foreach (var oldKey in oldestKeys)
                 {
-                    _state.State.Keys.Remove(key);
+                    _state.State.Keys.Remove(oldKey);
                 }
             }
         }
