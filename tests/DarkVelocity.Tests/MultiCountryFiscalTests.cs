@@ -305,7 +305,7 @@ public class FrenchCumulativeTotalTests
 public class PolishJpkFormatTests
 {
     [Theory]
-    [InlineData("1234567890", true)]  // Valid NIP with checksum
+    [InlineData("1234567890", false)]  // Invalid checksum (yields 10)
     [InlineData("5260250995", true)]  // Valid NIP
     [InlineData("123456789", false)]  // Too short
     [InlineData("12345678901", false)] // Too long
