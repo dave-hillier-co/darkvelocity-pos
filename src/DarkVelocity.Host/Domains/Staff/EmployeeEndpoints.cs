@@ -108,7 +108,9 @@ public static class EmployeeEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Employee not found"));
 
             await grain.AssignRoleAsync(new AssignRoleCommand(request.RoleId, request.RoleName, request.Department, request.IsPrimary, request.HourlyRateOverride));
-            return Results.Ok(new { message = "Role assigned" });
+            var state = await grain.GetStateAsync();
+            var links = BuildEmployeeLinks(orgId, employeeId, state);
+            return Results.Ok(Hal.Resource(new { roleId = request.RoleId, roleName = request.RoleName, assigned = true }, links));
         });
 
         group.MapDelete("/{employeeId}/roles/{roleId}", async (Guid orgId, Guid employeeId, Guid roleId, IGrainFactory grainFactory) =>
@@ -142,7 +144,10 @@ public static class EmployeeEndpoints
             ["time-entries"] = new { href = $"{basePath}/time-entries" },
             // Schedules are site-scoped, so use templated link with siteId parameter
             ["schedules"] = new { href = $"/api/orgs/{orgId}/sites/{{siteId}}/schedules{{?weekStartDate}}", templated = true },
-            ["availability"] = new { href = $"{basePath}/availability" }
+            ["availability"] = new { href = $"{basePath}/availability" },
+            ["shift-swaps"] = new { href = $"{basePath}/shift-swaps" },
+            ["time-off"] = new { href = $"{basePath}/time-off" },
+            ["payroll"] = new { href = $"/api/orgs/{orgId}/payroll{{?employeeId}}", templated = true }
         };
 
         // Add clock-in/clock-out links based on current state

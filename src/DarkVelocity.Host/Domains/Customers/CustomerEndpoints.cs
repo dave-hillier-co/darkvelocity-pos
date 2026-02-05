@@ -73,7 +73,9 @@ public static class CustomerEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Customer not found"));
 
             await grain.EnrollInLoyaltyAsync(new EnrollLoyaltyCommand(request.ProgramId, request.MemberNumber, request.InitialTierId, request.TierName));
-            return Results.Ok(new { message = "Enrolled in loyalty program" });
+            var state = await grain.GetStateAsync();
+            var links = await BuildCustomerLinksAsync(orgId, customerId, state, grainFactory);
+            return Results.Ok(Hal.Resource(new { enrolled = true, programId = request.ProgramId }, links));
         });
 
         group.MapPost("/{customerId}/loyalty/earn", async (
@@ -136,10 +138,17 @@ public static class CustomerEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Customer not found"));
 
             var visits = await grain.GetVisitHistoryAsync(limit ?? 50);
-            var items = visits.Select(v => Hal.Resource(v, new Dictionary<string, object>
+            var items = visits.Select(v =>
             {
-                ["customer"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}" }
-            })).ToList();
+                var visitLinks = new Dictionary<string, object>
+                {
+                    ["customer"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}" },
+                    ["site"] = new { href = $"/api/orgs/{orgId}/sites/{v.SiteId}" }
+                };
+                if (v.OrderId != null)
+                    visitLinks["order"] = new { href = $"/api/orgs/{orgId}/sites/{v.SiteId}/orders/{v.OrderId}" };
+                return Hal.Resource(v, visitLinks);
+            }).ToList();
 
             return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/customers/{customerId}/visits", items, items.Count));
         });
@@ -203,7 +212,12 @@ public static class CustomerEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Customer not found"));
 
             await grain.AddTagAsync(request.Tag);
-            return Results.Ok(new { message = "Tag added" });
+            var state = await grain.GetStateAsync();
+            return Results.Ok(Hal.Resource(new { tag = request.Tag, added = true }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}/tags" },
+                ["customer"] = new { href = $"/api/orgs/{orgId}/customers/{customerId}" }
+            }));
         });
 
         group.MapDelete("/{customerId}/tags/{tag}", async (Guid orgId, Guid customerId, string tag, IGrainFactory grainFactory) =>
@@ -240,7 +254,8 @@ public static class CustomerEndpoints
             ["visits"] = new { href = $"{basePath}/visits" },
             ["preferences"] = new { href = $"{basePath}/preferences" },
             ["tags"] = new { href = $"{basePath}/tags" },
-            ["rewards"] = new { href = $"{basePath}/rewards" }
+            ["rewards"] = new { href = $"{basePath}/rewards" },
+            ["gift-cards"] = new { href = $"{basePath}/gift-cards" }
         };
 
         // Add loyalty link if customer is enrolled in a loyalty program

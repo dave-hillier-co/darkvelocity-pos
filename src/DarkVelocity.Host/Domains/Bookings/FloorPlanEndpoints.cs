@@ -43,6 +43,7 @@ public static class FloorPlanEndpoints
             return Results.Ok(Hal.Resource(state, new Dictionary<string, object>
             {
                 ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}" },
+                ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
                 ["tables"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}/tables" }
             }));
         });
@@ -75,7 +76,12 @@ public static class FloorPlanEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Floor plan not found"));
 
             await grain.AddTableAsync(request.TableId);
-            return Results.Ok(new { message = "Table added to floor plan" });
+            return Results.Ok(Hal.Resource(new { tableId = request.TableId, added = true }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}" },
+                ["table"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/tables/{request.TableId}" },
+                ["tables"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}/tables" }
+            }));
         });
 
         group.MapDelete("/{floorPlanId}/tables/{tableId}", async (Guid orgId, Guid siteId, Guid floorPlanId, Guid tableId, IGrainFactory grainFactory) =>

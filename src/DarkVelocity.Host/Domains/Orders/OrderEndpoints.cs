@@ -138,7 +138,9 @@ public static class OrderEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Order not found"));
 
             await grain.CloseAsync(request.ClosedBy);
-            return Results.Ok(new { message = "Order closed" });
+            var state = await grain.GetStateAsync();
+            var links = BuildOrderLinks(orgId, siteId, orderId, state);
+            return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Operate, isSiteScoped: true));
 
         // Void requires manager-level permission
@@ -152,7 +154,9 @@ public static class OrderEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Order not found"));
 
             await grain.VoidAsync(new VoidOrderCommand(request.VoidedBy, request.Reason));
-            return Results.Ok(new { message = "Order voided" });
+            var state = await grain.GetStateAsync();
+            var links = BuildOrderLinks(orgId, siteId, orderId, state);
+            return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         }).WithMetadata(new RequirePermissionAttribute(ResourceTypes.Site, Permissions.Manage, isSiteScoped: true));
 
         // Discounts require supervisor-level permission
@@ -466,7 +470,10 @@ public static class OrderEndpoints
             ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}" },
             ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" },
             ["lines"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/lines" },
-            ["payments"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/payments" }
+            ["payments"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/payments" },
+            ["totals"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/totals" },
+            ["hold-summary"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/hold-summary" },
+            ["courses"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/courses" }
         };
 
         // Conditional cross-domain links based on associated resources
@@ -498,12 +505,16 @@ public static class OrderEndpoints
                 links["send"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/send" };
                 links["void"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/void" };
                 links["cancel"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/cancel" };
+                links["split:by-items"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/split/by-items" };
+                links["split:by-people"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/split/by-people{{?count}}", templated = true };
                 break;
 
             case OrderStatus.Sent:
             case OrderStatus.PartiallyPaid:
                 links["close"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/close" };
                 links["void"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/void" };
+                links["split:by-items"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/split/by-items" };
+                links["split:by-people"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/orders/{orderId}/split/by-people{{?count}}", templated = true };
                 break;
 
             case OrderStatus.Paid:

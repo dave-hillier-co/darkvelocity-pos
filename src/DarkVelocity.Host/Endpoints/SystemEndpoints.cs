@@ -174,7 +174,12 @@ public static class SystemEndpoints
             _ => throw new ArgumentException($"Unknown notification type: {request.Type}")
         };
 
-        return Results.Created($"/api/orgs/{orgId}/notifications/{notification.NotificationId}", notification);
+        return Results.Created($"/api/orgs/{orgId}/notifications/{notification.NotificationId}",
+            Hal.Resource(notification, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/notifications/{notification.NotificationId}" },
+                ["retry"] = new { href = $"/api/orgs/{orgId}/notifications/{notification.NotificationId}/retry" }
+            }));
     }
 
     private static async Task<IResult> GetNotifications(
@@ -202,7 +207,12 @@ public static class SystemEndpoints
             notificationStatus,
             limit ?? 100);
 
-        return Results.Ok(notifications);
+        var items = notifications.Select(n => (object)Hal.Resource(n, new Dictionary<string, object>
+        {
+            ["self"] = new { href = $"/api/orgs/{orgId}/notifications/{n.NotificationId}" },
+            ["retry"] = new { href = $"/api/orgs/{orgId}/notifications/{n.NotificationId}/retry" }
+        })).ToList();
+        return Results.Ok(Hal.Collection($"/api/orgs/{orgId}/notifications", items, items.Count));
     }
 
     private static async Task<IResult> GetNotification(
@@ -216,7 +226,12 @@ public static class SystemEndpoints
             return Results.NotFound();
 
         var notification = await grain.GetNotificationAsync(notificationId);
-        return notification != null ? Results.Ok(notification) : Results.NotFound();
+        if (notification == null) return Results.NotFound();
+        return Results.Ok(Hal.Resource(notification, new Dictionary<string, object>
+        {
+            ["self"] = new { href = $"/api/orgs/{orgId}/notifications/{notificationId}" },
+            ["retry"] = new { href = $"/api/orgs/{orgId}/notifications/{notificationId}/retry" }
+        }));
     }
 
     private static async Task<IResult> RetryNotification(
@@ -230,7 +245,11 @@ public static class SystemEndpoints
             return Results.NotFound();
 
         var notification = await grain.RetryAsync(notificationId);
-        return Results.Ok(notification);
+        return Results.Ok(Hal.Resource(notification, new Dictionary<string, object>
+        {
+            ["self"] = new { href = $"/api/orgs/{orgId}/notifications/{notificationId}" },
+            ["retry"] = new { href = $"/api/orgs/{orgId}/notifications/{notificationId}/retry" }
+        }));
     }
 
     private static async Task<IResult> GetNotificationChannels(
@@ -313,7 +332,14 @@ public static class SystemEndpoints
             EntityType: request.EntityType,
             Metadata: request.Metadata));
 
-        return Results.Created($"/api/orgs/{orgId}/sites/{siteId}/alerts/{alert.AlertId}", alert);
+        return Results.Created($"/api/orgs/{orgId}/sites/{siteId}/alerts/{alert.AlertId}",
+            Hal.Resource(alert, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/alerts/{alert.AlertId}" },
+                ["acknowledge"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/alerts/{alert.AlertId}/acknowledge" },
+                ["resolve"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/alerts/{alert.AlertId}/resolve" },
+                ["site"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}" }
+            }));
     }
 
     private static async Task<IResult> GetAlerts(
@@ -531,7 +557,14 @@ public static class SystemEndpoints
             _ => throw new ArgumentException($"Unknown trigger type: {request.TriggerType}")
         };
 
-        return Results.Created($"/api/orgs/{orgId}/jobs/{job.JobId}", job);
+        return Results.Created($"/api/orgs/{orgId}/jobs/{job.JobId}",
+            Hal.Resource(job, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/jobs/{job.JobId}" },
+                ["trigger"] = new { href = $"/api/orgs/{orgId}/jobs/{job.JobId}/trigger" },
+                ["pause"] = new { href = $"/api/orgs/{orgId}/jobs/{job.JobId}/pause" },
+                ["executions"] = new { href = $"/api/orgs/{orgId}/jobs/{job.JobId}/executions" }
+            }));
     }
 
     private static async Task<IResult> GetJobs(

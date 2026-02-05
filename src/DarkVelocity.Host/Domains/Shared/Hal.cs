@@ -45,6 +45,39 @@ public static class Hal
         return result;
     }
 
+    public static object PaginatedCollection(
+        string basePath,
+        IEnumerable<object> items,
+        int count,
+        int total,
+        int skip,
+        int take)
+    {
+        var links = new Dictionary<string, object>
+        {
+            ["self"] = new { href = $"{basePath}?skip={skip}&take={take}" },
+            ["first"] = new { href = $"{basePath}?skip=0&take={take}" }
+        };
+
+        if (skip + take < total)
+        {
+            links["next"] = new { href = $"{basePath}?skip={skip + take}&take={take}" };
+        }
+
+        if (skip > 0)
+        {
+            links["prev"] = new { href = $"{basePath}?skip={Math.Max(0, skip - take)}&take={take}" };
+        }
+
+        return new Dictionary<string, object>
+        {
+            ["_links"] = links,
+            ["_embedded"] = new { items },
+            ["count"] = count,
+            ["total"] = total
+        };
+    }
+
     public static object Error(string code, string message) =>
         new { error = code, error_description = message };
 }
