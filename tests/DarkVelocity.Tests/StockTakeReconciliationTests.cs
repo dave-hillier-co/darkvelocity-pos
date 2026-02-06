@@ -40,6 +40,9 @@ public class StockTakeReconciliationTests
     // Negative Stock Reconciliation Tests
     // ============================================================================
 
+    // Given: An ingredient with negative system stock of -30 units due to consumption exceeding recorded receipts
+    // When: A physical count records 40 units actually on hand (unrecorded transfer arrived)
+    // Then: A critical positive variance of +70 is calculated (40 minus -30)
     [Fact]
     public async Task StockTake_SystemShowsNegative_PhysicalCountPositive_ShouldReconcile()
     {
@@ -83,6 +86,9 @@ public class StockTakeReconciliationTests
         lineItems[0].Severity.Should().Be(VarianceSeverity.Critical); // Large positive variance
     }
 
+    // Given: Olive oil inventory at -15 units due to consumption exceeding recorded receipts
+    // When: A physical count records zero units on the shelf
+    // Then: A positive variance of +15 is calculated (reconciling from -15 to 0)
     [Fact]
     public async Task StockTake_SystemShowsNegative_PhysicalCountZero_ShouldReconcile()
     {
@@ -113,6 +119,9 @@ public class StockTakeReconciliationTests
         lineItems[0].Variance.Should().Be(15); // 0 - (-15) = 15
     }
 
+    // Given: Salmon fillet inventory at -50 units from event catering consumption
+    // When: A physical count records zero units (cannot physically count negative stock)
+    // Then: A positive variance of +50 is calculated (reconciling from -50 to 0)
     [Fact]
     public async Task StockTake_SystemShowsNegative_PhysicalCountStillNegative_ShouldReconcile()
     {
@@ -153,6 +162,9 @@ public class StockTakeReconciliationTests
     // Finalization with Adjustments Tests
     // ============================================================================
 
+    // Given: An ingredient at -20 units with a physical count of 25, submitted for approval
+    // When: The stock take is finalized with adjustments applied
+    // Then: The inventory is adjusted from -20 to the counted quantity of 25
     [Fact]
     public async Task FinalizeAsync_WithNegativeTheoreticalAndPositiveCount_ShouldAdjustCorrectly()
     {
@@ -186,6 +198,9 @@ public class StockTakeReconciliationTests
         inventoryState.QuantityOnHand.Should().Be(25);
     }
 
+    // Given: Inventory at 80 units with a stock take counting 75, submitted for approval
+    // When: The stock take is finalized without applying adjustments
+    // Then: The inventory remains at 80 units, unchanged by the stock take
     [Fact]
     public async Task FinalizeAsync_WithoutApplyingAdjustments_ShouldNotChangeInventory()
     {
@@ -223,6 +238,9 @@ public class StockTakeReconciliationTests
     // Variance Severity Tests
     // ============================================================================
 
+    // Given: An ingredient with 100 units on hand during a stock take
+    // When: A physical count of 98 is recorded (2% shortage)
+    // Then: The variance severity is classified as Low
     [Fact]
     public async Task VarianceSeverity_SmallVariance_ShouldBeLow()
     {
@@ -253,6 +271,9 @@ public class StockTakeReconciliationTests
         lineItems[0].Severity.Should().Be(VarianceSeverity.Low);
     }
 
+    // Given: An ingredient with 100 high-value units ($50 each) during a stock take
+    // When: A physical count of 70 is recorded (30% shortage)
+    // Then: The variance severity is classified as Critical
     [Fact]
     public async Task VarianceSeverity_LargeVariance_ShouldBeCritical()
     {
@@ -287,6 +308,9 @@ public class StockTakeReconciliationTests
     // Multi-Ingredient Stock Take Tests
     // ============================================================================
 
+    // Given: Three ingredients (flour, sugar, salt) with known stock levels in a single stock take
+    // When: Physical counts are recorded showing -5 flour, +5 sugar, and 0 salt variance
+    // Then: The variance report shows $10 negative and $15 positive variance across 2 items with discrepancies
     [Fact]
     public async Task MultiIngredient_MixedVariances_ShouldTrackAll()
     {
@@ -339,6 +363,9 @@ public class StockTakeReconciliationTests
         report.TotalPositiveVariance.Should().Be(15);
     }
 
+    // Given: Three ingredients included in a stock take
+    // When: Only two of the three ingredients are physically counted
+    // Then: The variance report shows 3 total items but only 2 counted
     [Fact]
     public async Task MultiIngredient_PartialCounts_ShouldTrackProgress()
     {
@@ -385,6 +412,9 @@ public class StockTakeReconciliationTests
     // Recount Tests
     // ============================================================================
 
+    // Given: A stock take with an initial physical count of 90 recorded for an ingredient
+    // When: A recount of 95 is recorded for the same ingredient
+    // Then: The recount replaces the original, showing 95 counted with a variance of -5
     [Fact]
     public async Task Recount_ShouldOverridePreviousCount()
     {
@@ -427,6 +457,9 @@ public class StockTakeReconciliationTests
     // Blind Count Tests
     // ============================================================================
 
+    // Given: A stock take started in blind count mode for an ingredient with 100 units on hand
+    // When: Line items are retrieved first without and then with theoretical quantities revealed
+    // Then: Theoretical is hidden (0) when not revealed and shows the actual 100 when revealed
     [Fact]
     public async Task BlindCount_ShouldHideTheoreticalUntilRevealed()
     {
@@ -465,6 +498,9 @@ public class StockTakeReconciliationTests
     // Workflow State Tests
     // ============================================================================
 
+    // Given: A stock take that has been submitted for approval with counts already recorded
+    // When: An attempt is made to record additional counts after submission
+    // Then: The operation is rejected because the stock take is no longer in counting phase
     [Fact]
     public async Task Workflow_CannotRecordCountOnSubmittedStockTake()
     {
@@ -494,6 +530,9 @@ public class StockTakeReconciliationTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    // Given: A stock take with counts recorded but not yet submitted for approval
+    // When: An attempt is made to finalize the stock take directly
+    // Then: The operation is rejected because the approval workflow step was skipped
     [Fact]
     public async Task Workflow_CannotFinalizeWithoutApproval()
     {

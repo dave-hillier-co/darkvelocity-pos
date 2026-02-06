@@ -47,6 +47,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // 3D Secure Authentication Flow Tests
     // =========================================================================
 
+    // Given: a mock processor authorization request with a 3D Secure-required card token
+    // When: the authorization is attempted and then the 3DS completion webhook is received
+    // Then: the payment initially requires action with a redirect URL, then transitions to authorized after 3DS authentication
     [Fact]
     public async Task ThreeDSecure_MockProcessor_RequiresAction_ThenCompletes()
     {
@@ -86,6 +89,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         stateAfterCompletion.AuthorizationCode.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a Stripe processor with an authorized payment
+    // When: a payment_intent.succeeded webhook is received from Stripe
+    // Then: the webhook event is recorded in the processor's event history
     [Fact]
     public async Task ThreeDSecure_StripeProcessor_WebhookCompletesPayment()
     {
@@ -117,6 +123,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         state.Events.Should().Contain(e => e.EventType == "payment_intent.succeeded");
     }
 
+    // Given: an Adyen processor with an authorized EUR payment
+    // When: an AUTHORISATION notification is received from Adyen
+    // Then: the notification event is recorded in the processor's event history
     [Fact]
     public async Task ThreeDSecure_AdyenProcessor_NotificationUpdatesState()
     {
@@ -150,6 +159,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Webhook Signature Validation Tests (Stub Behavior)
     // =========================================================================
 
+    // Given: a Stripe processor with a captured payment
+    // When: a charge.succeeded webhook with a unique event ID is received
+    // Then: the event type and external event ID are recorded in the processor state
     [Fact]
     public async Task Webhook_StripeProcessor_RecordsEventDetails()
     {
@@ -181,6 +193,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         state.Events.Should().Contain(e => e.ExternalEventId != null && e.ExternalEventId.Contains(eventId));
     }
 
+    // Given: an Adyen processor with a captured EUR payment
+    // When: a CHARGEBACK webhook is received indicating suspected fraud
+    // Then: the processor status transitions to disputed
     [Fact]
     public async Task Webhook_AdyenProcessor_ChargebackUpdatesStatus()
     {
@@ -206,6 +221,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         state.Status.Should().Be("disputed");
     }
 
+    // Given: a mock processor with a captured $150 payment
+    // When: a fraudulent dispute is simulated for the full amount
+    // Then: the processor status becomes disputed and a dispute_created event is recorded
     [Fact]
     public async Task Webhook_MockProcessor_DisputeCreation()
     {
@@ -236,6 +254,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Idempotency Key Handling Tests
     // =========================================================================
 
+    // Given: a Stripe processor grain for a new payment intent
+    // When: the authorization is processed
+    // Then: the retry count is incremented to track the idempotent request attempt
     [Fact]
     public async Task Idempotency_StripeProcessor_TracksRetryCount()
     {
@@ -262,6 +283,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result1.Success.Should().BeTrue();
     }
 
+    // Given: an Adyen processor grain for a new EUR payment intent
+    // When: the authorization is processed
+    // Then: the retry count is incremented to track the idempotent request attempt
     [Fact]
     public async Task Idempotency_AdyenProcessor_TracksRetryCount()
     {
@@ -287,6 +311,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         state.RetryCount.Should().Be(1);
     }
 
+    // Given: a Stripe processor with a $100 authorization using manual capture
+    // When: a partial capture of $75 is submitted
+    // Then: the captured amount is $75 while the authorized amount remains $100
     [Fact]
     public async Task Idempotency_MultipleCaptures_TracksCorrectAmount()
     {
@@ -320,6 +347,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Timeout Handling Tests (using MockProcessor delay feature)
     // =========================================================================
 
+    // Given: a mock processor configured with a 100ms response delay
+    // When: an authorization is submitted
+    // Then: the authorization succeeds after the configured delay has elapsed
     [Fact]
     public async Task Timeout_MockProcessor_WithDelay_ShouldComplete()
     {
@@ -350,6 +380,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(100);
     }
 
+    // Given: a mock processor configured to respond with a timeout failure after 50ms
+    // When: an authorization is submitted
+    // Then: the authorization fails with a timeout decline code
     [Fact]
     public async Task Timeout_MockProcessor_ConfiguredFailure_ShouldFail()
     {
@@ -382,6 +415,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Processor Failover Scenario Tests
     // =========================================================================
 
+    // Given: a Stripe processor circuit breaker that has been tripped open by 5 consecutive failures
+    // When: a new authorization is attempted
+    // Then: the request is rejected with a circuit_open decline code indicating the processor is temporarily unavailable
     [Fact]
     public async Task Failover_StripeProcessor_CircuitOpenReturnsUnavailable()
     {
@@ -417,6 +453,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result.DeclineMessage.Should().Contain("temporarily unavailable");
     }
 
+    // Given: an Adyen processor circuit breaker that has been tripped open by 5 consecutive failures
+    // When: a new EUR authorization is attempted
+    // Then: the request is rejected with a circuit_open decline code
     [Fact]
     public async Task Failover_AdyenProcessor_CircuitOpenReturnsUnavailable()
     {
@@ -451,6 +490,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result.DeclineCode.Should().Be("circuit_open");
     }
 
+    // Given: a Stripe processor circuit breaker that was tripped open and then manually reset to simulate recovery
+    // When: a new authorization is attempted after circuit recovery
+    // Then: the authorization succeeds normally
     [Fact]
     public async Task Failover_SuccessAfterCircuitRecovery()
     {
@@ -487,6 +529,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result.Success.Should().BeTrue("should succeed after circuit recovery");
     }
 
+    // Given: a Stripe processor with a successful $80 authorization, followed by the circuit breaker being tripped open
+    // When: a capture is attempted for the authorized payment
+    // Then: the capture is blocked with a circuit_open error code
     [Fact]
     public async Task Failover_CaptureBlockedByOpenCircuit()
     {
@@ -528,6 +573,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Error Classification in Grain Context Tests
     // =========================================================================
 
+    // Given: a mock processor authorization request with a specific test card token
+    // When: the authorization is processed
+    // Then: the processor returns the correct decline code matching the card's simulated failure mode
     [Theory]
     [InlineData("pm_card_0002", "card_declined")]
     [InlineData("pm_card_9995", "insufficient_funds")]
@@ -559,6 +607,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result.DeclineMessage.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a mock processor configured to fail with a rate_limit error on the next request
+    // When: an authorization is submitted with a normally-successful card
+    // Then: the processor state records the failure status and error details
     [Fact]
     public async Task ErrorClassification_ConfiguredFailure_TracksInState()
     {
@@ -591,6 +642,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // State Management Tests
     // =========================================================================
 
+    // Given: a Stripe processor with a $100 manual-capture authorization
+    // When: the payment is captured, partially refunded ($30), then fully refunded (remaining $70)
+    // Then: the processor state transitions through authorized, captured, partially refunded, and fully refunded
     [Fact]
     public async Task State_StripeProcessor_TracksFullLifecycle()
     {
@@ -640,6 +694,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         finalState.RefundedAmount.Should().Be(10000);
     }
 
+    // Given: an Adyen processor grain for a EUR payment
+    // When: the payment is authorized, captured, and partially refunded
+    // Then: at least three events are recorded in the processor's event history
     [Fact]
     public async Task State_AdyenProcessor_TracksEvents()
     {
@@ -671,6 +728,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Adyen Split Payment Tests
     // =========================================================================
 
+    // Given: an Adyen authorization request with a split between platform revenue and merchant commission
+    // When: the split payment authorization is processed
+    // Then: the payment succeeds, is captured, and a split event is recorded in the processor history
     [Fact]
     public async Task SplitPayment_Adyen_ProcessesMultipleSplits()
     {
@@ -710,6 +770,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Stripe Connect Tests
     // =========================================================================
 
+    // Given: a Stripe Connect authorization request on behalf of a connected merchant account with a 5% application fee
+    // When: the payment is authorized on behalf of the connected account
+    // Then: the authorization succeeds with a valid transaction ID
     [Fact]
     public async Task Connect_Stripe_AuthorizeOnBehalfOf()
     {
@@ -738,6 +801,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         result.TransactionId.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a Stripe processor with an initialized payment
+    // When: a SetupIntent is created for saving a customer's payment method
+    // Then: a client secret is returned for the frontend to complete the setup flow
     [Fact]
     public async Task Connect_Stripe_SetupIntent()
     {
@@ -768,6 +834,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
     // Multiple Refund Tests
     // =========================================================================
 
+    // Given: a mock processor with a captured $100 payment
+    // When: four partial refunds are issued ($20, $30, $25, $25) totaling the full captured amount
+    // Then: the refunded amount accumulates correctly and the status transitions to refunded after the final refund
     [Fact]
     public async Task MultipleRefunds_TracksTotalCorrectly()
     {
@@ -809,6 +878,9 @@ public class PaymentProcessorIntegrationTests : IDisposable
         finalState.Status.Should().Be("refunded");
     }
 
+    // Given: a mock processor with a captured $50 payment that has already been partially refunded $30
+    // When: a second refund of $30 is attempted (exceeding the remaining $20 balance)
+    // Then: the refund is rejected with an amount_too_large error
     [Fact]
     public async Task MultipleRefunds_ExceedsBalance_ShouldFail()
     {

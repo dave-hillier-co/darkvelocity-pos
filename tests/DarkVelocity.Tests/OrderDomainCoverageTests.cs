@@ -34,6 +34,9 @@ public class OrderDomainCoverageTests
 
     #region Event Sourcing - State Consistency
 
+    // Given: A dine-in order with multiple line items, quantity updates, voids, and discounts applied
+    // When: The full sequence of operations completes
+    // Then: Order state reflects correct subtotals, discounts, tax, and grand total
     [Fact]
     public async Task State_ShouldBeConsistent_AfterMultipleOperations()
     {
@@ -64,6 +67,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(15.00m); // 15 - 1.50 + 1.50
     }
 
+    // Given: A dine-in order with a $100 meal
+    // When: Three partial payments with tips are recorded totaling the full balance
+    // Then: Order is marked as paid with correct paid amount, tip total, and zero balance due
     [Fact]
     public async Task State_ShouldMaintainIntegrity_AfterPaymentOperations()
     {
@@ -100,6 +106,9 @@ public class OrderDomainCoverageTests
 
     #region Hold/Fire - Edge Cases
 
+    // Given: An open dine-in order with one line item
+    // When: A hold is requested with an empty list of line IDs
+    // Then: The hold is rejected because at least one line must be specified
     [Fact]
     public async Task HoldItemsAsync_WithEmptyLineIds_ShouldThrow()
     {
@@ -124,6 +133,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*At least one line*");
     }
 
+    // Given: An open dine-in order with one line item
+    // When: A hold is requested for a non-existent line ID
+    // Then: The hold is rejected because no valid pending items match
     [Fact]
     public async Task HoldItemsAsync_WithNonExistentLineId_ShouldNotHoldAnything()
     {
@@ -148,6 +160,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*No valid pending items to hold*");
     }
 
+    // Given: A dine-in order where one item has already been fired to the kitchen
+    // When: A hold is requested for the already-fired item
+    // Then: The hold is rejected because sent items cannot be held back
     [Fact]
     public async Task HoldItemsAsync_AlreadySentItem_ShouldNotBeHeld()
     {
@@ -176,6 +191,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*No valid pending items to hold*");
     }
 
+    // Given: A dine-in order with a pending (not held) line item
+    // When: A release is requested for the non-held item
+    // Then: The release is rejected because the item is not on hold
     [Fact]
     public async Task ReleaseItemsAsync_WithNonHeldItem_ShouldThrow()
     {
@@ -200,6 +218,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*No valid held items to release*");
     }
 
+    // Given: A dine-in order with one line item
+    // When: A course number of zero is assigned to the item
+    // Then: The assignment is rejected because course numbers must be at least 1
     [Fact]
     public async Task SetItemCourseAsync_WithInvalidCourseNumber_ShouldThrow()
     {
@@ -224,6 +245,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Course number must be at least 1*");
     }
 
+    // Given: A dine-in order with one item assigned to course 1
+    // When: Course 2 is fired to the kitchen
+    // Then: The fire is rejected because course 2 has no pending items
     [Fact]
     public async Task FireCourseAsync_WithNoItemsInCourse_ShouldThrow()
     {
@@ -249,6 +273,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*No pending items in course 2*");
     }
 
+    // Given: A dine-in order where all items have already been fired to the kitchen
+    // When: A fire-all is requested again
+    // Then: The fire is rejected because no pending items remain
     [Fact]
     public async Task FireAllAsync_WithNoPendingItems_ShouldThrow()
     {
@@ -273,6 +300,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*No pending items to fire*");
     }
 
+    // Given: A dine-in order with two items placed on hold
+    // When: One of the held items is voided
+    // Then: The hold summary reflects only the remaining held item
     [Fact]
     public async Task HoldItems_ThenVoidLine_ShouldRemoveFromHoldSummary()
     {
@@ -312,6 +342,9 @@ public class OrderDomainCoverageTests
 
     #region Order Reopening
 
+    // Given: A fully paid and closed dine-in order
+    // When: The order is reopened by staff
+    // Then: The order returns to open status with closed timestamp cleared
     [Fact]
     public async Task ReopenAsync_ClosedOrder_ShouldReopenSuccessfully()
     {
@@ -341,6 +374,9 @@ public class OrderDomainCoverageTests
         state.ClosedAt.Should().BeNull();
     }
 
+    // Given: A voided dine-in order
+    // When: The order is reopened because the void was a mistake
+    // Then: The order returns to open status with void reason cleared
     [Fact]
     public async Task ReopenAsync_VoidedOrder_ShouldReopenSuccessfully()
     {
@@ -370,6 +406,9 @@ public class OrderDomainCoverageTests
         state.VoidReason.Should().BeNull();
     }
 
+    // Given: A closed order that has been reopened after full payment
+    // When: A new line item is added to the reopened order
+    // Then: The order reflects the additional item and the balance due for the new item
     [Fact]
     public async Task ReopenedOrder_ShouldAcceptNewLines()
     {
@@ -397,6 +436,9 @@ public class OrderDomainCoverageTests
         state.BalanceDue.Should().Be(20.00m); // Already paid 30, added 20 more
     }
 
+    // Given: A dine-in order with a partial payment and outstanding balance
+    // When: A reopen is attempted on the still-open order
+    // Then: The reopen is rejected because only closed or voided orders can be reopened
     [Fact]
     public async Task ReopenAsync_FromPartiallyPaid_ShouldThrow()
     {
@@ -427,6 +469,9 @@ public class OrderDomainCoverageTests
 
     #region Discount Stacking
 
+    // Given: A dine-in order with a $100 item
+    // When: Two percentage discounts (10% and 5%) are applied to the order
+    // Then: Both discounts stack for a combined discount of $15
     [Fact]
     public async Task MultiplePercentageDiscounts_ShouldStack()
     {
@@ -450,6 +495,9 @@ public class OrderDomainCoverageTests
         state.DiscountTotal.Should().Be(15.00m); // 10% + 5% of 100
     }
 
+    // Given: A dine-in order with a $100 item
+    // When: A 10% percentage discount and a $5 fixed discount are applied
+    // Then: Both discount types stack for a combined discount of $15
     [Fact]
     public async Task PercentageAndFixedDiscounts_ShouldStack()
     {
@@ -473,6 +521,9 @@ public class OrderDomainCoverageTests
         state.DiscountTotal.Should().Be(15.00m); // 10 + 5
     }
 
+    // Given: A dine-in order with two items totaling $100
+    // When: A $10 line-level discount is applied to one item and a 10% order-level discount is applied
+    // Then: Both discount levels are applied for a total discount of $20
     [Fact]
     public async Task LineDiscountAndOrderDiscount_ShouldBothApply()
     {
@@ -502,6 +553,9 @@ public class OrderDomainCoverageTests
         state.DiscountTotal.Should().Be(20.00m);
     }
 
+    // Given: A dine-in order with an $80 line item
+    // When: A 25% line discount is applied as a manager comp
+    // Then: The discount of $20 is applied and grand total reflects $60
     [Fact]
     public async Task LinePercentageDiscount_ShouldCalculateCorrectly()
     {
@@ -526,6 +580,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(60.00m);
     }
 
+    // Given: A dine-in order with a $100 item and a $20 line discount applied
+    // When: The line discount is removed
+    // Then: Order totals recalculate to reflect the full $100 price
     [Fact]
     public async Task RemoveLineDiscountAsync_ShouldRecalculateTotals()
     {
@@ -554,6 +611,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(100.00m);
     }
 
+    // Given: A dine-in order with a voided line item
+    // When: A discount is applied to the voided line
+    // Then: The discount is rejected because voided items cannot be discounted
     [Fact]
     public async Task ApplyLineDiscountAsync_OnVoidedLine_ShouldThrow()
     {
@@ -577,6 +637,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*voided item*");
     }
 
+    // Given: A dine-in order with a $50 line item
+    // When: A $100 fixed discount is applied to the line exceeding its total
+    // Then: The discount is capped at the line total of $50
     [Fact]
     public async Task LineDiscount_ShouldNotExceedLineTotal()
     {
@@ -609,6 +672,9 @@ public class OrderDomainCoverageTests
 
     #region Tax Edge Cases
 
+    // Given: A dine-in order with a zero-rated item (e.g., gift card)
+    // When: Order totals are calculated
+    // Then: No tax is charged on the zero-rated item
     [Fact]
     public async Task TaxCalculation_WithZeroRatedItems_ShouldNotChargeZeroTax()
     {
@@ -631,6 +697,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(50.00m);
     }
 
+    // Given: A dine-in order with food at 10% tax and alcohol at 20% tax
+    // When: The higher-taxed alcohol item is voided
+    // Then: Tax is recalculated to reflect only the food item's rate
     [Fact]
     public async Task TaxCalculation_MixedRatesAfterVoid_ShouldRecalculate()
     {
@@ -660,6 +729,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(22.00m);
     }
 
+    // Given: A dine-in order with food (10% tax) and alcohol (20% tax) totaling $100
+    // When: A taxable service charge is added
+    // Then: The service charge is taxed at the weighted average rate across items
     [Fact]
     public async Task TaxCalculation_WithServiceChargeOnMixedRates_ShouldUseWeightedAverage()
     {
@@ -689,6 +761,9 @@ public class OrderDomainCoverageTests
         state.TaxTotal.Should().Be(15.40m);
     }
 
+    // Given: A dine-in order with one item at 8% tax rate
+    // When: The item quantity is increased from 1 to 4
+    // Then: Tax is recalculated on the updated subtotal
     [Fact]
     public async Task TaxCalculation_AfterQuantityUpdate_ShouldRecalculate()
     {
@@ -715,6 +790,9 @@ public class OrderDomainCoverageTests
         state.GrandTotal.Should().Be(108.00m);
     }
 
+    // Given: A dine-in order with a burger plus paid modifiers (extra cheese, bacon) at 10% tax
+    // When: The line item with modifiers is added
+    // Then: Tax is computed on the full line total including modifier prices
     [Fact]
     public async Task TaxCalculation_WithModifiers_ShouldIncludeModifierInTaxBase()
     {
@@ -755,6 +833,9 @@ public class OrderDomainCoverageTests
 
     #region Price Override
 
+    // Given: A dine-in order with an item priced at $50 (quantity 2) at 10% tax
+    // When: A manager overrides the unit price to $30
+    // Then: The line total, tax, and original price are updated accordingly
     [Fact]
     public async Task OverridePriceAsync_ShouldUpdateLineAndRecalculate()
     {
@@ -781,6 +862,9 @@ public class OrderDomainCoverageTests
         state.TaxTotal.Should().Be(6.00m); // 10% of 60
     }
 
+    // Given: A dine-in order with a line item
+    // When: A price override is attempted without providing a reason
+    // Then: The override is rejected because a reason is required for audit
     [Fact]
     public async Task OverridePriceAsync_WithoutReason_ShouldThrow()
     {
@@ -803,6 +887,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Reason is required*");
     }
 
+    // Given: A dine-in order with a line item
+    // When: A price override to a negative amount is attempted
+    // Then: The override is rejected because prices cannot be negative
     [Fact]
     public async Task OverridePriceAsync_WithNegativePrice_ShouldThrow()
     {
@@ -825,6 +912,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*cannot be negative*");
     }
 
+    // Given: A dine-in order with a $50 item
+    // When: The price is overridden to $0 as a full comp by a manager
+    // Then: The item price is set to zero and grand total reflects the comp
     [Fact]
     public async Task OverridePriceAsync_ToZero_ShouldSucceed()
     {
@@ -856,6 +946,9 @@ public class OrderDomainCoverageTests
 
     #region Seat Assignment
 
+    // Given: A dine-in order with one line item
+    // When: The item is assigned to seat 3
+    // Then: The line item reflects the seat number assignment
     [Fact]
     public async Task AssignSeatAsync_ShouldSetSeatNumber()
     {
@@ -877,6 +970,9 @@ public class OrderDomainCoverageTests
         state.Lines[0].Seat.Should().Be(3);
     }
 
+    // Given: A dine-in order with one line item
+    // When: The item is assigned to seat 0
+    // Then: The assignment is rejected because seat numbers must be at least 1
     [Fact]
     public async Task AssignSeatAsync_WithInvalidSeatNumber_ShouldThrow()
     {
@@ -898,6 +994,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Seat number must be at least 1*");
     }
 
+    // Given: A dine-in order with a voided line item
+    // When: A seat assignment is attempted on the voided line
+    // Then: The assignment is rejected because voided items cannot be modified
     [Fact]
     public async Task AssignSeatAsync_OnVoidedLine_ShouldThrow()
     {
@@ -920,6 +1019,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*voided item*");
     }
 
+    // Given: An open dine-in order
+    // When: A new line item is added with a seat number specified at creation
+    // Then: The line item is created with the correct seat assignment
     [Fact]
     public async Task AssignSeatAsync_WithSeatOnLineCreation_ShouldWork()
     {
@@ -948,6 +1050,9 @@ public class OrderDomainCoverageTests
 
     #region Order Merge
 
+    // Given: Two open dine-in orders, the source having items and a partial payment
+    // When: The source order is merged into the target order
+    // Then: All lines and payments transfer to the target and the source is closed
     [Fact]
     public async Task MergeFromOrderAsync_ShouldMoveAllLinesAndPayments()
     {
@@ -988,6 +1093,9 @@ public class OrderDomainCoverageTests
         sourceState.Status.Should().Be(OrderStatus.Closed);
     }
 
+    // Given: A target order and a fully paid, closed source order
+    // When: A merge is attempted from the closed source
+    // Then: The merge is rejected because closed orders cannot be merged
     [Fact]
     public async Task MergeFromOrderAsync_FromClosedOrder_ShouldThrow()
     {
@@ -1018,6 +1126,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A closed target order and an open source order
+    // When: A merge is attempted into the closed target
+    // Then: The merge is rejected because closed orders cannot receive merges
     [Fact]
     public async Task MergeFromOrderAsync_WhenTargetClosed_ShouldThrow()
     {
@@ -1056,6 +1167,9 @@ public class OrderDomainCoverageTests
 
     #region Payment Edge Cases
 
+    // Given: An open dine-in order with a balance due
+    // When: A negative payment amount is recorded
+    // Then: The payment is rejected because amounts cannot be negative
     [Fact]
     public async Task RecordPaymentAsync_NegativeAmount_ShouldThrow()
     {
@@ -1077,6 +1191,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*cannot be negative*");
     }
 
+    // Given: An open dine-in order with a balance due
+    // When: A payment with a negative tip amount is recorded
+    // Then: The payment is rejected because tip amounts cannot be negative
     [Fact]
     public async Task RecordPaymentAsync_NegativeTip_ShouldThrow()
     {
@@ -1098,6 +1215,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Tip amount cannot be negative*");
     }
 
+    // Given: An open dine-in order with a balance due
+    // When: A zero-amount payment is recorded
+    // Then: The payment is rejected because amount must be greater than zero when balance is due
     [Fact]
     public async Task RecordPaymentAsync_ZeroWithOutstandingBalance_ShouldThrow()
     {
@@ -1119,6 +1239,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*must be greater than zero when balance is due*");
     }
 
+    // Given: A fully paid dine-in order with a single cash payment and tip
+    // When: The payment is removed
+    // Then: The order reverts to open status with full balance due and tip cleared
     [Fact]
     public async Task RemovePaymentAsync_ShouldRecalculateBalanceAndStatus()
     {
@@ -1156,6 +1279,9 @@ public class OrderDomainCoverageTests
 
     #region Validation Edge Cases
 
+    // Given: No existing order
+    // When: An order is created with a guest count of zero
+    // Then: The creation is rejected because guest count must be greater than zero
     [Fact]
     public async Task CreateAsync_WithZeroGuestCount_ShouldThrow()
     {
@@ -1175,6 +1301,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Guest count must be greater than zero*");
     }
 
+    // Given: An existing dine-in order
+    // When: A second order is created with the same grain identity
+    // Then: The creation is rejected because the order already exists
     [Fact]
     public async Task CreateAsync_AlreadyExists_ShouldThrow()
     {
@@ -1195,6 +1324,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*already exists*");
     }
 
+    // Given: An open dine-in order
+    // When: A line item is added with an empty name
+    // Then: The addition is rejected because item name is required
     [Fact]
     public async Task AddLineAsync_WithEmptyName_ShouldThrow()
     {
@@ -1215,6 +1347,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Name cannot be empty*");
     }
 
+    // Given: An open dine-in order
+    // When: A line item is added with a negative unit price
+    // Then: The addition is rejected because prices cannot be negative
     [Fact]
     public async Task AddLineAsync_WithNegativePrice_ShouldThrow()
     {
@@ -1235,6 +1370,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*cannot be negative*");
     }
 
+    // Given: An open dine-in order
+    // When: A line item is added with zero quantity
+    // Then: The addition is rejected because quantity must be greater than zero
     [Fact]
     public async Task AddLineAsync_WithZeroQuantity_ShouldThrow()
     {
@@ -1255,6 +1393,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Quantity must be greater than zero*");
     }
 
+    // Given: An open dine-in order
+    // When: A line item is added with a negative tax rate
+    // Then: The addition is rejected because tax rates cannot be negative
     [Fact]
     public async Task AddLineAsync_WithNegativeTaxRate_ShouldThrow()
     {
@@ -1276,6 +1417,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Tax rate cannot be negative*");
     }
 
+    // Given: An open dine-in order with no matching line ID
+    // When: An update is attempted on a non-existent line
+    // Then: The update is rejected because the line was not found
     [Fact]
     public async Task UpdateLineAsync_NonExistentLine_ShouldThrow()
     {
@@ -1296,6 +1440,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Line not found*");
     }
 
+    // Given: An open dine-in order with no matching line ID
+    // When: A void is attempted on a non-existent line
+    // Then: The void is rejected because the line was not found
     [Fact]
     public async Task VoidLineAsync_NonExistentLine_ShouldThrow()
     {
@@ -1316,6 +1463,9 @@ public class OrderDomainCoverageTests
             .WithMessage("*Line not found*");
     }
 
+    // Given: An open dine-in order with no matching line ID
+    // When: A removal is attempted on a non-existent line
+    // Then: The removal is rejected because the line was not found
     [Fact]
     public async Task RemoveLineAsync_NonExistentLine_ShouldThrow()
     {

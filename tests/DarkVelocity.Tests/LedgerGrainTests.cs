@@ -25,6 +25,9 @@ public class LedgerGrainTests
 
     #region Initialize Tests
 
+    // Given: A new, uninitialized ledger grain for a gift card
+    // When: The ledger is initialized for an organization
+    // Then: The ledger balance starts at zero
     [Fact]
     public async Task InitializeAsync_ShouldInitializeLedger()
     {
@@ -41,6 +44,9 @@ public class LedgerGrainTests
         balance.Should().Be(0);
     }
 
+    // Given: A ledger already initialized with a $100 credit balance
+    // When: The ledger is initialized again for the same organization
+    // Then: The existing $100 balance is preserved and not reset
     [Fact]
     public async Task InitializeAsync_ReInitialization_ShouldBeNoOp()
     {
@@ -64,6 +70,9 @@ public class LedgerGrainTests
 
     #region Credit Tests
 
+    // Given: An initialized cash drawer ledger with zero balance
+    // When: A $500 opening float credit is applied
+    // Then: The balance increases to $500 and the transaction records before/after balances
     [Fact]
     public async Task CreditAsync_ShouldIncreaseBalance()
     {
@@ -87,6 +96,9 @@ public class LedgerGrainTests
         balance.Should().Be(500m);
     }
 
+    // Given: An initialized cash drawer ledger with zero balance
+    // When: Three successive deposits of $100, $200, and $50 are credited
+    // Then: The balance accumulates to $350
     [Fact]
     public async Task CreditAsync_MultipleTimes_ShouldAccumulateBalance()
     {
@@ -105,6 +117,9 @@ public class LedgerGrainTests
         result.BalanceAfter.Should().Be(350m);
     }
 
+    // Given: An initialized gift card ledger
+    // When: A credit with a negative amount is attempted
+    // Then: The operation fails with a non-negative validation error
     [Fact]
     public async Task CreditAsync_NegativeAmount_ShouldFail()
     {
@@ -122,6 +137,9 @@ public class LedgerGrainTests
         result.Error.Should().Contain("non-negative");
     }
 
+    // Given: A gift card ledger with a $100 balance
+    // When: A zero-amount credit adjustment is applied
+    // Then: The operation succeeds and the balance remains at $100
     [Fact]
     public async Task CreditAsync_ZeroAmount_ShouldSucceed()
     {
@@ -140,6 +158,9 @@ public class LedgerGrainTests
         result.BalanceAfter.Should().Be(100m);
     }
 
+    // Given: An initialized gift card ledger
+    // When: A $100 credit is applied with order and cashier metadata
+    // Then: The transaction stores the metadata fields for audit traceability
     [Fact]
     public async Task CreditAsync_WithMetadata_ShouldStoreMetadata()
     {
@@ -169,6 +190,9 @@ public class LedgerGrainTests
 
     #region Debit Tests
 
+    // Given: A cash drawer ledger with a $1,000 opening float
+    // When: A $200 cash withdrawal debit is applied
+    // Then: The balance decreases to $800 and the debit is recorded as a negative amount
     [Fact]
     public async Task DebitAsync_ShouldDecreaseBalance()
     {
@@ -192,6 +216,9 @@ public class LedgerGrainTests
         balance.Should().Be(800m);
     }
 
+    // Given: A gift card ledger with only $50 balance
+    // When: A $100 redemption debit is attempted
+    // Then: The operation fails with an insufficient balance error showing available vs. requested amounts
     [Fact]
     public async Task DebitAsync_InsufficientBalance_ShouldFail()
     {
@@ -212,6 +239,9 @@ public class LedgerGrainTests
         result.Error.Should().Contain("100");
     }
 
+    // Given: An inventory ledger with 10 units of stock
+    // When: 15 units are consumed with the allowNegative flag set
+    // Then: The debit succeeds and the balance goes to -5, flagging an inventory discrepancy
     [Fact]
     public async Task DebitAsync_WithAllowNegative_ShouldSucceedEvenWithInsufficientBalance()
     {
@@ -235,6 +265,9 @@ public class LedgerGrainTests
         result.BalanceAfter.Should().Be(-5m);
     }
 
+    // Given: An initialized gift card ledger
+    // When: A debit with a negative amount is attempted
+    // Then: The operation fails with a non-negative validation error
     [Fact]
     public async Task DebitAsync_NegativeAmount_ShouldFail()
     {
@@ -252,6 +285,9 @@ public class LedgerGrainTests
         result.Error.Should().Contain("non-negative");
     }
 
+    // Given: A gift card ledger with exactly $100 balance
+    // When: A full $100 redemption debit is applied
+    // Then: The debit succeeds and the balance reaches zero
     [Fact]
     public async Task DebitAsync_ExactBalance_ShouldSucceed()
     {
@@ -274,6 +310,9 @@ public class LedgerGrainTests
 
     #region AdjustTo Tests
 
+    // Given: A cash drawer ledger with a $100 balance
+    // When: The balance is adjusted to $150 after a physical count
+    // Then: The balance is set to $150 and the $50 adjustment amount is recorded
     [Fact]
     public async Task AdjustToAsync_ShouldSetExactBalance()
     {
@@ -294,6 +333,9 @@ public class LedgerGrainTests
         result.Amount.Should().Be(50m); // The adjustment amount
     }
 
+    // Given: A cash drawer ledger with a $500 balance
+    // When: The balance is adjusted down to $300 due to a reconciliation shortage
+    // Then: The balance is set to $300 with a -$200 adjustment recorded
     [Fact]
     public async Task AdjustToAsync_DecreasesBalance_ShouldWork()
     {
@@ -313,6 +355,9 @@ public class LedgerGrainTests
         result.BalanceAfter.Should().Be(300m);
     }
 
+    // Given: A cash drawer ledger with a $100 balance
+    // When: An adjustment to a negative target balance is attempted
+    // Then: The operation fails because ledger balance cannot be negative via adjustment
     [Fact]
     public async Task AdjustToAsync_NegativeBalance_ShouldFail()
     {
@@ -331,6 +376,9 @@ public class LedgerGrainTests
         result.Error.Should().Contain("cannot be negative");
     }
 
+    // Given: A cash drawer ledger with a $100 balance
+    // When: A verification adjustment to the same $100 balance is performed
+    // Then: A zero-amount adjustment transaction is still recorded for audit purposes
     [Fact]
     public async Task AdjustToAsync_SameBalance_ShouldStillCreateTransaction()
     {
@@ -352,6 +400,9 @@ public class LedgerGrainTests
         transactions.Should().HaveCount(2); // Initial credit + adjustment
     }
 
+    // Given: A cash drawer ledger with a $100 balance
+    // When: A physical count adjustment to $120 is made with count ID and counter metadata
+    // Then: The adjustment transaction preserves the count metadata for reconciliation tracking
     [Fact]
     public async Task AdjustToAsync_WithMetadata_ShouldStoreMetadata()
     {
@@ -381,6 +432,9 @@ public class LedgerGrainTests
 
     #region GetBalance Tests
 
+    // Given: A freshly initialized gift card ledger with no transactions
+    // When: The balance is queried
+    // Then: The balance is zero
     [Fact]
     public async Task GetBalanceAsync_NewLedger_ShouldReturnZero()
     {
@@ -397,6 +451,9 @@ public class LedgerGrainTests
         balance.Should().Be(0);
     }
 
+    // Given: A cash drawer ledger with a mix of credits ($1,000 opening + $150 sale) and debits ($200 payout + $50 change)
+    // When: The balance is queried
+    // Then: The balance correctly reflects all transactions at $900
     [Fact]
     public async Task GetBalanceAsync_AfterMultipleTransactions_ShouldReturnCorrectBalance()
     {
@@ -422,6 +479,9 @@ public class LedgerGrainTests
 
     #region HasSufficientBalance Tests
 
+    // Given: A gift card ledger with a $100 balance
+    // When: A sufficiency check is performed for $50
+    // Then: The check returns true indicating sufficient funds
     [Fact]
     public async Task HasSufficientBalanceAsync_SufficientFunds_ShouldReturnTrue()
     {
@@ -439,6 +499,9 @@ public class LedgerGrainTests
         hasSufficient.Should().BeTrue();
     }
 
+    // Given: A gift card ledger with a $50 balance
+    // When: A sufficiency check is performed for $100
+    // Then: The check returns false indicating insufficient funds
     [Fact]
     public async Task HasSufficientBalanceAsync_InsufficientFunds_ShouldReturnFalse()
     {
@@ -456,6 +519,9 @@ public class LedgerGrainTests
         hasSufficient.Should().BeFalse();
     }
 
+    // Given: A gift card ledger with exactly $100 balance
+    // When: A sufficiency check is performed for exactly $100
+    // Then: The check returns true since the balance exactly covers the amount
     [Fact]
     public async Task HasSufficientBalanceAsync_ExactAmount_ShouldReturnTrue()
     {
@@ -473,6 +539,9 @@ public class LedgerGrainTests
         hasSufficient.Should().BeTrue();
     }
 
+    // Given: A gift card ledger with zero balance
+    // When: A sufficiency check is performed for zero amount
+    // Then: The check returns true since zero covers zero
     [Fact]
     public async Task HasSufficientBalanceAsync_ZeroBalance_ZeroAmount_ShouldReturnTrue()
     {
@@ -493,6 +562,9 @@ public class LedgerGrainTests
 
     #region GetTransactions Tests
 
+    // Given: A cash drawer ledger with three transactions (two credits and one debit)
+    // When: The transaction history is retrieved
+    // Then: All three transactions are returned in most-recent-first order
     [Fact]
     public async Task GetTransactionsAsync_ShouldReturnTransactionHistory()
     {
@@ -516,6 +588,9 @@ public class LedgerGrainTests
         transactions[2].Notes.Should().Be("First");
     }
 
+    // Given: A cash drawer ledger with 10 transactions
+    // When: The transaction history is retrieved with a limit of 3
+    // Then: Only the 3 most recent transactions are returned
     [Fact]
     public async Task GetTransactionsAsync_WithLimit_ShouldReturnLimitedHistory()
     {
@@ -540,6 +615,9 @@ public class LedgerGrainTests
         transactions[2].Notes.Should().Be("Transaction 7");
     }
 
+    // Given: An initialized gift card ledger with no transactions
+    // When: The transaction history is retrieved
+    // Then: An empty list is returned
     [Fact]
     public async Task GetTransactionsAsync_EmptyLedger_ShouldReturnEmpty()
     {
@@ -556,6 +634,9 @@ public class LedgerGrainTests
         transactions.Should().BeEmpty();
     }
 
+    // Given: A gift card ledger with a single $75.50 sale payment including order metadata
+    // When: The transaction history is retrieved
+    // Then: The transaction includes all details: amount, running balance, type, notes, timestamp, and metadata
     [Fact]
     public async Task GetTransactionsAsync_ShouldIncludeAllTransactionDetails()
     {
@@ -588,6 +669,9 @@ public class LedgerGrainTests
 
     #region Transaction History Limit Tests
 
+    // Given: A cash drawer ledger that has accumulated 110 transactions
+    // When: The full transaction history is retrieved
+    // Then: Only the most recent 100 transactions are retained due to the history limit
     [Fact]
     public async Task TransactionHistory_ShouldBeLimitedTo100()
     {
@@ -610,6 +694,9 @@ public class LedgerGrainTests
         transactions.Should().HaveCount(100);
     }
 
+    // Given: A cash drawer ledger with 105 transactions (numbered 0 through 104)
+    // When: The transaction history is retrieved
+    // Then: The oldest 5 transactions are trimmed, retaining transactions 5 through 104
     [Fact]
     public async Task TransactionHistory_OldestShouldBeRemovedWhenLimitExceeded()
     {
@@ -634,6 +721,9 @@ public class LedgerGrainTests
         transactions.First().Notes.Should().Be("Transaction 104"); // Most recent
     }
 
+    // Given: A cash drawer ledger with 110 credits of $1.00 each
+    // When: The balance and transaction history are queried
+    // Then: The balance is $110 (all transactions counted) even though only the last 100 transactions are retained
     [Fact]
     public async Task TransactionHistory_BalanceShouldBeCorrectEvenAfterTrimming()
     {
@@ -662,6 +752,9 @@ public class LedgerGrainTests
 
     #region Transaction Metadata Tests
 
+    // Given: An initialized gift card ledger
+    // When: A transaction is recorded with five metadata fields (order, customer, terminal, cashier, receipt)
+    // Then: All five metadata fields are stored and retrievable on the transaction
     [Fact]
     public async Task Transaction_ShouldStoreMultipleMetadataFields()
     {
@@ -691,6 +784,9 @@ public class LedgerGrainTests
         transaction.Metadata["receiptNumber"].Should().Be("REC-12345");
     }
 
+    // Given: An initialized gift card ledger
+    // When: A transaction is recorded with null metadata
+    // Then: The transaction has an empty (non-null) metadata dictionary
     [Fact]
     public async Task Transaction_NullMetadata_ShouldResultInEmptyDictionary()
     {
@@ -713,6 +809,9 @@ public class LedgerGrainTests
 
     #region Different Owner Types Tests
 
+    // Given: A ledger created with gift card owner type
+    // When: The ledger is initialized and a $50 activation credit is applied
+    // Then: The balance reflects $50 for the gift card ledger
     [Fact]
     public async Task Ledger_ShouldWorkWithGiftCardOwnerType()
     {
@@ -730,6 +829,9 @@ public class LedgerGrainTests
         balance.Should().Be(50m);
     }
 
+    // Given: A ledger created with cash drawer owner type
+    // When: The ledger is initialized and a $200 opening float credit is applied
+    // Then: The balance reflects $200 for the cash drawer ledger
     [Fact]
     public async Task Ledger_ShouldWorkWithCashDrawerOwnerType()
     {
@@ -747,6 +849,9 @@ public class LedgerGrainTests
         balance.Should().Be(200m);
     }
 
+    // Given: A ledger created with inventory owner type using a compound site:ingredient key
+    // When: The ledger is initialized and a $100 stock delivery credit is applied
+    // Then: The balance reflects $100 for the inventory ledger
     [Fact]
     public async Task Ledger_ShouldWorkWithInventoryOwnerType()
     {
@@ -766,6 +871,9 @@ public class LedgerGrainTests
         balance.Should().Be(100m);
     }
 
+    // Given: Two ledgers with the same owner ID but different types (gift card vs. cash drawer)
+    // When: Each ledger is credited with different amounts ($100 and $500 respectively)
+    // Then: Each ledger maintains its own independent balance
     [Fact]
     public async Task Ledger_DifferentOwnerTypes_ShouldBeIndependent()
     {
@@ -792,6 +900,9 @@ public class LedgerGrainTests
 
     #region Concurrent Operations Tests
 
+    // Given: An initialized cash drawer ledger with zero balance
+    // When: 10 concurrent $10 credits are applied simultaneously
+    // Then: The final balance is exactly $100 with no lost updates due to Orleans single-writer guarantee
     [Fact]
     public async Task Ledger_ConcurrentCredits_ShouldMaintainConsistency()
     {
@@ -818,6 +929,9 @@ public class LedgerGrainTests
 
     #region Edge Cases
 
+    // Given: An initialized gift card ledger
+    // When: Very small amounts (one cent and a fraction of a cent) are credited
+    // Then: The balance is greater than zero, preserving decimal precision
     [Fact]
     public async Task Ledger_VerySmallAmounts_ShouldHandlePrecision()
     {
@@ -836,6 +950,9 @@ public class LedgerGrainTests
         balance.Should().BeGreaterThan(0);
     }
 
+    // Given: An initialized cash drawer ledger
+    // When: A very large deposit of $999,999,999.99 is credited
+    // Then: The balance correctly reflects the large amount without overflow
     [Fact]
     public async Task Ledger_LargeAmounts_ShouldHandleCorrectly()
     {

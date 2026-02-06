@@ -24,6 +24,9 @@ public class OrderInventoryIntegrationTests
     // Inventory Consumption Tests
     // ============================================================================
 
+    // Given: An inventory item with 100 units of stock
+    // When: 10 units are consumed for an order
+    // Then: Available stock is reduced to 90 units with a non-zero cost recorded
     [Fact]
     public async Task Inventory_ConsumeForOrder_ShouldDeductStock()
     {
@@ -42,6 +45,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(90m);
     }
 
+    // Given: An inventory item with only 5 units of stock
+    // When: 10 units are consumed for an order exceeding available stock
+    // Then: Stock goes negative to -5, flagging a discrepancy for reconciliation
     [Fact]
     public async Task Inventory_ConsumeForOrder_WithInsufficientStock_ShouldAllowNegative()
     {
@@ -58,6 +64,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityOnHand.Should().Be(-5m);
     }
 
+    // Given: An inventory item with exactly 25 units of stock
+    // When: All 25 units are consumed for an order
+    // Then: Available stock reaches zero and level is marked as out of stock
     [Fact]
     public async Task Inventory_ConsumeForOrder_WithExactStock_ShouldSucceed()
     {
@@ -76,6 +85,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.Level.Should().Be(StockLevel.OutOfStock);
     }
 
+    // Given: An inventory item with 100 units of stock
+    // When: Stock is consumed for a specific order
+    // Then: The inventory movement records the order ID as a reference
     [Fact]
     public async Task Inventory_ConsumeForOrder_ShouldTrackOrderId()
     {
@@ -91,6 +103,9 @@ public class OrderInventoryIntegrationTests
         state.RecentMovements.Should().Contain(m => m.ReferenceId == orderId);
     }
 
+    // Given: An inventory item with 100 units of stock
+    // When: Three separate orders consume 10, 20, and 15 units respectively
+    // Then: Available stock is reduced to 55 units reflecting all deductions
     [Fact]
     public async Task Inventory_ConsumeForOrder_MultipleTimes_ShouldAccumulateDeductions()
     {
@@ -111,6 +126,9 @@ public class OrderInventoryIntegrationTests
     // Stock Level Alert Tests
     // ============================================================================
 
+    // Given: An inventory item with 50 units and a reorder point of 20
+    // When: 35 units are consumed dropping stock below the reorder point
+    // Then: Stock level is flagged as low to trigger replenishment
     [Fact]
     public async Task Inventory_ConsumeForOrder_BelowReorderPoint_ShouldTriggerLowStock()
     {
@@ -126,6 +144,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.Level.Should().Be(StockLevel.Low);
     }
 
+    // Given: An inventory item with 100 units of stock
+    // When: A stock sufficiency check is performed for 50 units
+    // Then: The check confirms sufficient stock is available
     [Fact]
     public async Task Inventory_HasSufficientStock_WhenSufficient_ShouldReturnTrue()
     {
@@ -139,6 +160,9 @@ public class OrderInventoryIntegrationTests
         hasSufficient.Should().BeTrue();
     }
 
+    // Given: An inventory item with only 10 units of stock
+    // When: A stock sufficiency check is performed for 50 units
+    // Then: The check reports insufficient stock
     [Fact]
     public async Task Inventory_HasSufficientStock_WhenInsufficient_ShouldReturnFalse()
     {
@@ -156,6 +180,9 @@ public class OrderInventoryIntegrationTests
     // FIFO Consumption Tests
     // ============================================================================
 
+    // Given: Three inventory batches received at different costs ($1, $2, $3 per unit)
+    // When: 25 units are consumed for an order
+    // Then: FIFO costing draws all 20 from the oldest batch and 5 from the next
     [Fact]
     public async Task Inventory_ConsumeForOrder_ShouldUseFifo()
     {
@@ -194,6 +221,9 @@ public class OrderInventoryIntegrationTests
         result.TotalCost.Should().Be(30m);
     }
 
+    // Given: Two inventory batches of 10 units each at different costs
+    // When: Exactly 10 units are consumed exhausting the first batch
+    // Then: Only the second batch remains active with its full quantity
     [Fact]
     public async Task Inventory_ConsumeForOrder_ShouldExhaustBatchesCorrectly()
     {
@@ -222,6 +252,9 @@ public class OrderInventoryIntegrationTests
     // Reversal Tests
     // ============================================================================
 
+    // Given: An inventory item with stock reduced by a 20-unit order consumption
+    // When: The consumption movement is reversed
+    // Then: Stock is fully restored to its original level
     [Fact]
     public async Task Inventory_ReverseConsumption_ShouldRestoreStock()
     {
@@ -251,6 +284,9 @@ public class OrderInventoryIntegrationTests
     // Order Close Integration Tests
     // ============================================================================
 
+    // Given: A recipe-linked inventory item (ground beef) and a dine-in order with 2 hamburgers
+    // When: Inventory is consumed based on the recipe quantities for the order
+    // Then: Stock is reduced by the total recipe requirement (1 lb for 2 burgers)
     [Fact]
     public async Task Order_WithInventoryItems_ShouldConsumeOnSend()
     {
@@ -304,6 +340,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(49m);
     }
 
+    // Given: A dine-in order with inventory consumed and the order subsequently voided
+    // When: The inventory consumption is reversed after the void
+    // Then: Stock is fully restored to its pre-order level
     [Fact]
     public async Task Order_Void_ShouldAllowInventoryReversal()
     {
@@ -347,6 +386,9 @@ public class OrderInventoryIntegrationTests
         orderState.Status.Should().Be(OrderStatus.Voided);
     }
 
+    // Given: An inventory item with two separate consumptions for the same order
+    // When: All consumption movements for the order are reversed
+    // Then: Both movements are reversed and stock is fully restored
     [Fact]
     public async Task Inventory_ReverseOrderConsumption_ShouldRestoreAllMovementsForOrder()
     {
@@ -372,6 +414,9 @@ public class OrderInventoryIntegrationTests
         levelAfterReversal.QuantityAvailable.Should().Be(100m);
     }
 
+    // Given: An inventory item with no consumption movements for the specified order
+    // When: A reversal is attempted for the non-existent order
+    // Then: Zero movements are reversed and stock remains unchanged
     [Fact]
     public async Task Inventory_ReverseOrderConsumption_WhenNoMovements_ShouldReturnZero()
     {
@@ -390,6 +435,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(100m);
     }
 
+    // Given: A dine-in order with line items
+    // When: The order is voided with the ReverseInventory flag set to true
+    // Then: The order is voided and the void reason is recorded for inventory reversal
     [Fact]
     public async Task Order_VoidWithReverseInventory_ShouldPassFlagInEvent()
     {
@@ -413,6 +461,9 @@ public class OrderInventoryIntegrationTests
         orderState.VoidReason.Should().Be("Customer cancelled");
     }
 
+    // Given: A dine-in order with inventory consumed (e.g., dropped food)
+    // When: The order is voided without the ReverseInventory flag
+    // Then: Inventory remains deducted because the stock was physically used
     [Fact]
     public async Task Order_VoidWithoutReverseInventory_ShouldNotReverseStock()
     {
@@ -452,6 +503,9 @@ public class OrderInventoryIntegrationTests
     // Waste Recording Tests
     // ============================================================================
 
+    // Given: An inventory item with 50 units of stock
+    // When: 5 units are recorded as waste due to spoilage
+    // Then: Available stock is reduced to 45 units
     [Fact]
     public async Task Inventory_RecordWaste_ShouldDeductStock()
     {
@@ -467,6 +521,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(45m);
     }
 
+    // Given: An inventory item with only 5 units of stock
+    // When: A waste of 10 units is recorded exceeding available stock
+    // Then: The waste recording is rejected due to insufficient stock
     [Fact]
     public async Task Inventory_RecordWaste_WithInsufficientStock_ShouldThrow()
     {
@@ -486,6 +543,9 @@ public class OrderInventoryIntegrationTests
     // Adjustment Tests
     // ============================================================================
 
+    // Given: An inventory item with 50 units of stock
+    // When: A physical count adjustment sets the quantity to 40 units
+    // Then: Available stock is corrected to 40 units
     [Fact]
     public async Task Inventory_AdjustQuantity_ShouldUpdateStock()
     {
@@ -501,6 +561,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(40m);
     }
 
+    // Given: An inventory item with 50 units of stock
+    // When: A physical count finds extra stock and adjusts quantity to 60 units
+    // Then: On-hand quantity is increased to 60 units
     [Fact]
     public async Task Inventory_AdjustQuantity_CanIncreaseStock()
     {
@@ -520,6 +583,9 @@ public class OrderInventoryIntegrationTests
     // Transfer Tests
     // ============================================================================
 
+    // Given: A source site inventory item with 100 units of stock
+    // When: 25 units are transferred out to another site
+    // Then: Source site stock is reduced to 75 units
     [Fact]
     public async Task Inventory_TransferOut_ShouldDeductFromSource()
     {
@@ -537,6 +603,9 @@ public class OrderInventoryIntegrationTests
         levelInfo.QuantityAvailable.Should().Be(75m);
     }
 
+    // Given: A source site inventory item with only 10 units of stock
+    // When: A transfer of 50 units is attempted exceeding available stock
+    // Then: The transfer is rejected due to insufficient stock at the source
     [Fact]
     public async Task Inventory_TransferOut_WithInsufficientStock_ShouldThrow()
     {
@@ -552,6 +621,9 @@ public class OrderInventoryIntegrationTests
             .WithMessage("*Insufficient*");
     }
 
+    // Given: An empty destination site inventory item
+    // When: A transfer of 25 units is received from another site
+    // Then: Destination stock is increased to 25 units
     [Fact]
     public async Task Inventory_ReceiveTransfer_ShouldAddToDestination()
     {
@@ -577,6 +649,9 @@ public class OrderInventoryIntegrationTests
     // Expiry Tests
     // ============================================================================
 
+    // Given: An inventory item with one expired batch and one valid batch
+    // When: Expired batches are written off
+    // Then: Only the valid batch remains and stock reflects the non-expired quantity
     [Fact]
     public async Task Inventory_WriteOffExpiredBatches_ShouldRemoveExpiredStock()
     {

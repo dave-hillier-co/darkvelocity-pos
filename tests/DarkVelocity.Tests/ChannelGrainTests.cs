@@ -18,6 +18,9 @@ public class StatusMappingGrainTests
     private IStatusMappingGrain GetStatusMappingGrain(Guid orgId, DeliveryPlatformType platformType)
         => _fixture.Cluster.GrainFactory.GetGrain<IStatusMappingGrain>(GrainKeys.StatusMapping(orgId, platformType));
 
+    // Given: A Deliverect platform status mapping is not yet configured
+    // When: The status mappings are configured with four platform-to-internal status entries
+    // Then: The mapping snapshot contains all four entries with the correct platform type and timestamp
     [Fact]
     public async Task ConfigureAsync_ShouldCreateMappings()
     {
@@ -44,6 +47,9 @@ public class StatusMappingGrainTests
         result.ConfiguredAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An UberEats channel has status mappings configured for "accepted" and "picked_up"
+    // When: The internal status for external code "accepted" is requested
+    // Then: The mapped internal order status Accepted is returned
     [Fact]
     public async Task GetInternalStatusAsync_ShouldReturnMappedStatus()
     {
@@ -66,6 +72,9 @@ public class StatusMappingGrainTests
         result.Should().Be(InternalOrderStatus.Accepted);
     }
 
+    // Given: A Deliveroo channel has a single status mapping configured
+    // When: The internal status for an unmapped external code "UNKNOWN_STATUS" is requested
+    // Then: Null is returned indicating no mapping exists for that code
     [Fact]
     public async Task GetInternalStatusAsync_ShouldReturnNullForUnknownStatus()
     {
@@ -87,6 +96,9 @@ public class StatusMappingGrainTests
         result.Should().BeNull();
     }
 
+    // Given: A JustEat channel has status mappings from external codes to internal statuses
+    // When: The external code for internal status Ready is requested
+    // Then: The corresponding JustEat external code "READY_FOR_PICKUP" is returned
     [Fact]
     public async Task GetExternalStatusAsync_ShouldReturnExternalCode()
     {
@@ -109,6 +121,9 @@ public class StatusMappingGrainTests
         result.Should().Be("READY_FOR_PICKUP");
     }
 
+    // Given: A DoorDash channel has one initial status mapping configured
+    // When: A new mapping for the "ready" status is added with a courier notification trigger
+    // Then: The snapshot contains two mappings including the newly added one
     [Fact]
     public async Task AddMappingAsync_ShouldAddNewMapping()
     {
@@ -132,6 +147,9 @@ public class StatusMappingGrainTests
         snapshot.Mappings.Should().Contain(m => m.ExternalStatusCode == "ready");
     }
 
+    // Given: A Wolt channel has a mapping for "accepted" without a POS action trigger
+    // When: The same "accepted" mapping is re-added with a POS action trigger enabled
+    // Then: The mapping is updated in place to trigger the PrintKot action
     [Fact]
     public async Task AddMappingAsync_ShouldUpdateExistingMapping()
     {
@@ -157,6 +175,9 @@ public class StatusMappingGrainTests
         mapping.PosActionType.Should().Be("PrintKot");
     }
 
+    // Given: A GrubHub channel has two status mappings configured
+    // When: The "confirmed" mapping is removed
+    // Then: Only one mapping remains and "confirmed" is no longer present
     [Fact]
     public async Task RemoveMappingAsync_ShouldRemoveMapping()
     {
@@ -181,6 +202,9 @@ public class StatusMappingGrainTests
         snapshot.Mappings.Should().NotContain(m => m.ExternalStatusCode == "confirmed");
     }
 
+    // Given: A Postmates channel has status mappings configured
+    // When: Usage is recorded for the "accepted" external status code
+    // Then: The last-used timestamp is updated to approximately now
     [Fact]
     public async Task RecordUsageAsync_ShouldUpdateLastUsedAt()
     {
@@ -204,6 +228,9 @@ public class StatusMappingGrainTests
         snapshot.LastUsedAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A custom channel has three external codes all mapping to the Preparing internal status
+    // When: The external code for internal status Preparing is requested
+    // Then: The first configured external code "PREP_STARTED" is returned
     [Fact]
     public async Task GetExternalStatusAsync_MultipleMappingsToSame_ShouldReturnFirst()
     {
@@ -228,6 +255,9 @@ public class StatusMappingGrainTests
         result.Should().Be("PREP_STARTED");
     }
 
+    // Given: A status mapping grain has not been configured for any platform
+    // When: Add or remove mapping operations are attempted
+    // Then: Both operations throw indicating the status mapping is not configured
     [Fact]
     public async Task Operations_BeforeConfigureAsync_ShouldThrow()
     {
@@ -247,6 +277,9 @@ public class StatusMappingGrainTests
             .WithMessage("Status mapping not configured");
     }
 
+    // Given: A phone order channel has two existing status mappings configured
+    // When: A new configuration with a single different mapping is applied
+    // Then: The old mappings are replaced entirely by the new configuration
     [Fact]
     public async Task ConfigureAsync_ReplacesExistingConfiguration()
     {
@@ -277,6 +310,9 @@ public class StatusMappingGrainTests
         result.Mappings.Should().NotContain(m => m.ExternalStatusCode == "20");
     }
 
+    // Given: A local website channel has one status mapping configured
+    // When: A non-existent mapping code is removed
+    // Then: The operation succeeds without error and the existing mapping is preserved
     [Fact]
     public async Task RemoveMappingAsync_NonExistent_ShouldBeIdempotent()
     {
@@ -315,6 +351,9 @@ public class ChannelGrainTests
     private IChannelGrain GetChannelGrain(Guid orgId, Guid channelId)
         => _fixture.Cluster.GrainFactory.GetGrain<IChannelGrain>(GrainKeys.Channel(orgId, channelId));
 
+    // Given: A delivery channel grain has not been connected
+    // When: The channel is connected as a Deliverect aggregator with API credentials and webhook secret
+    // Then: The channel snapshot shows active status with correct platform type, integration type, and connection timestamp
     [Fact]
     public async Task ConnectAsync_ShouldCreateChannel()
     {
@@ -345,6 +384,9 @@ public class ChannelGrainTests
         result.ConnectedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An UberEats direct channel is already connected
+    // When: A second connect attempt is made with the same command
+    // Then: An error is thrown indicating the channel is already connected
     [Fact]
     public async Task ConnectAsync_ShouldThrowIfAlreadyConnected()
     {
@@ -367,6 +409,9 @@ public class ChannelGrainTests
             .WithMessage("Channel already connected");
     }
 
+    // Given: A Deliveroo channel is connected with a test name
+    // When: The channel name and API credentials are updated
+    // Then: The channel snapshot reflects the updated name
     [Fact]
     public async Task UpdateAsync_ShouldUpdateChannel()
     {
@@ -393,6 +438,9 @@ public class ChannelGrainTests
         result.Name.Should().Be("Deliveroo Production");
     }
 
+    // Given: A JustEat channel is actively receiving orders
+    // When: The channel is paused due to kitchen overwhelm
+    // Then: The channel status changes to Paused
     [Fact]
     public async Task PauseAsync_ShouldSetPausedStatus()
     {
@@ -415,6 +463,9 @@ public class ChannelGrainTests
         snapshot.Status.Should().Be(ChannelStatus.Paused);
     }
 
+    // Given: A DoorDash channel has been paused
+    // When: The channel is resumed
+    // Then: The channel status returns to Active
     [Fact]
     public async Task ResumeAsync_ShouldSetActiveStatus()
     {
@@ -439,6 +490,9 @@ public class ChannelGrainTests
         snapshot.Status.Should().Be(ChannelStatus.Active);
     }
 
+    // Given: A local website order channel is connected
+    // When: A site location is mapped to an external store ID
+    // Then: The channel tracks the location mapping with the correct external store reference
     [Fact]
     public async Task AddLocationMappingAsync_ShouldAddLocation()
     {
@@ -471,6 +525,9 @@ public class ChannelGrainTests
         snapshot.Locations[0].ExternalStoreId.Should().Be("store-001");
     }
 
+    // Given: A self-service kiosk channel is connected
+    // When: Two orders are recorded with different amounts
+    // Then: The daily order count and revenue totals are accumulated correctly
     [Fact]
     public async Task RecordOrderAsync_ShouldIncrementCounters()
     {
@@ -496,6 +553,9 @@ public class ChannelGrainTests
         snapshot.LastOrderAt.Should().NotBeNull();
     }
 
+    // Given: A Wolt channel is actively connected
+    // When: An API authentication error is recorded
+    // Then: The channel status changes to Error with the error message preserved
     [Fact]
     public async Task RecordErrorAsync_ShouldSetErrorStatus()
     {
@@ -519,6 +579,9 @@ public class ChannelGrainTests
         snapshot.LastErrorMessage.Should().Be("API authentication failed");
     }
 
+    // Given: A phone order channel is connected and active
+    // When: The order acceptance status is checked
+    // Then: The channel reports it is accepting orders
     [Fact]
     public async Task IsAcceptingOrdersAsync_ShouldReturnTrueWhenActive()
     {
@@ -540,6 +603,9 @@ public class ChannelGrainTests
         result.Should().BeTrue();
     }
 
+    // Given: A GrubHub channel has been paused
+    // When: The order acceptance status is checked
+    // Then: The channel reports it is not accepting orders
     [Fact]
     public async Task IsAcceptingOrdersAsync_ShouldReturnFalseWhenPaused()
     {
@@ -563,6 +629,9 @@ public class ChannelGrainTests
         result.Should().BeFalse();
     }
 
+    // Given: An UberEats channel has recorded orders on the current business day
+    // When: Multiple orders are recorded on the same day
+    // Then: The daily counters accumulate correctly within the same business day
     [Fact]
     public async Task RecordOrderAsync_DifferentDay_ShouldResetDailyCounters()
     {
@@ -592,6 +661,9 @@ public class ChannelGrainTests
         // The reset logic in ResetDailyCountersIfNeeded is implementation-tested
     }
 
+    // Given: A Deliverect aggregator channel is connected
+    // When: The channel is disconnected
+    // Then: The channel status changes to Disconnected
     [Fact]
     public async Task DisconnectAsync_ShouldSetStatusToDisconnected()
     {
@@ -614,6 +686,9 @@ public class ChannelGrainTests
         snapshot.Status.Should().Be(ChannelStatus.Disconnected);
     }
 
+    // Given: A DoorDash channel has one site location mapped
+    // When: The location mapping is removed
+    // Then: The channel has no location mappings remaining
     [Fact]
     public async Task RemoveLocationMappingAsync_ShouldRemoveLocation()
     {
@@ -644,6 +719,9 @@ public class ChannelGrainTests
         snapshot.Locations.Should().BeEmpty();
     }
 
+    // Given: A Deliveroo channel has an existing location mapping with store ID and menu version
+    // When: A new mapping for the same location is added with a different external store ID and menu version
+    // Then: The previous mapping is replaced with the updated details
     [Fact]
     public async Task AddLocationMappingAsync_ExistingLocation_ShouldReplace()
     {
@@ -684,6 +762,9 @@ public class ChannelGrainTests
         snapshot.Locations[0].OperatingHoursOverride.Should().Be("{ \"open\": \"10:00\" }");
     }
 
+    // Given: A JustEat channel is connected with active status
+    // When: The channel status is updated to Maintenance
+    // Then: The channel status reflects the Maintenance state
     [Fact]
     public async Task UpdateAsync_WithStatusChange_ShouldUpdateStatus()
     {
@@ -710,6 +791,9 @@ public class ChannelGrainTests
         result.Status.Should().Be(ChannelStatus.Maintenance);
     }
 
+    // Given: A Wolt channel is connected
+    // When: A menu sync operation is recorded
+    // Then: The last sync timestamp is updated to approximately now
     [Fact]
     public async Task RecordSyncAsync_ShouldUpdateTimestamp()
     {
@@ -733,6 +817,9 @@ public class ChannelGrainTests
         snapshot.LastSyncAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A Postmates channel is connected
+    // When: A platform heartbeat is recorded
+    // Then: The last heartbeat timestamp is updated to approximately now
     [Fact]
     public async Task RecordHeartbeatAsync_ShouldUpdateTimestamp()
     {
@@ -756,6 +843,9 @@ public class ChannelGrainTests
         snapshot.LastHeartbeatAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A channel grain has not been connected to any delivery platform
+    // When: Any operational method (update, pause, resume, disconnect, location, order, sync, heartbeat) is called
+    // Then: All operations throw indicating the channel is not connected
     [Fact]
     public async Task Operations_OnUnconnectedGrain_ShouldThrow()
     {
@@ -807,6 +897,9 @@ public class ChannelGrainTests
             .WithMessage("Channel not connected");
     }
 
+    // Given: A Deliverect aggregator channel is connected
+    // When: Three location mappings are added for different sites with varying active statuses
+    // Then: All three locations are tracked with their respective external store IDs and active states
     [Fact]
     public async Task AddLocationMappingAsync_MultipleMappings_ShouldTrackAll()
     {
@@ -869,6 +962,9 @@ public class ChannelRegistryGrainTests
     private IChannelRegistryGrain GetRegistryGrain(Guid orgId)
         => _fixture.Cluster.GrainFactory.GetGrain<IChannelRegistryGrain>(GrainKeys.ChannelRegistry(orgId));
 
+    // Given: An organization's channel registry is empty
+    // When: A Deliverect aggregator channel is registered
+    // Then: The registry contains one channel with the correct platform type and integration type
     [Fact]
     public async Task RegisterChannelAsync_ShouldAddChannel()
     {
@@ -888,6 +984,9 @@ public class ChannelRegistryGrainTests
         channels[0].IntegrationType.Should().Be(IntegrationType.Aggregator);
     }
 
+    // Given: An organization has channels registered with Direct, Aggregator, and Internal integration types
+    // When: Channels are filtered by Direct integration type
+    // Then: Only the two directly integrated channels are returned
     [Fact]
     public async Task GetChannelsByTypeAsync_ShouldFilterByIntegrationType()
     {
@@ -908,6 +1007,9 @@ public class ChannelRegistryGrainTests
         directChannels.Should().AllSatisfy(c => c.IntegrationType.Should().Be(IntegrationType.Direct));
     }
 
+    // Given: An organization has two Deliverect channels and one UberEats channel registered
+    // When: Channels are filtered by Deliverect platform type
+    // Then: Only the two Deliverect channels are returned
     [Fact]
     public async Task GetChannelsByPlatformAsync_ShouldFilterByPlatformType()
     {
@@ -927,6 +1029,9 @@ public class ChannelRegistryGrainTests
         deliverectChannels.Should().AllSatisfy(c => c.PlatformType.Should().Be(DeliveryPlatformType.Deliverect));
     }
 
+    // Given: A JustEat channel is registered in the organization's channel registry
+    // When: The channel status is updated to Paused
+    // Then: The registry reflects the paused status for that channel
     [Fact]
     public async Task UpdateChannelStatusAsync_ShouldUpdateStatus()
     {
@@ -945,6 +1050,9 @@ public class ChannelRegistryGrainTests
         channels.Should().ContainSingle(c => c.ChannelId == channelId && c.Status == ChannelStatus.Paused);
     }
 
+    // Given: A Wolt channel is registered in the organization's channel registry
+    // When: The channel is unregistered
+    // Then: The registry is empty
     [Fact]
     public async Task UnregisterChannelAsync_ShouldRemoveChannel()
     {
@@ -963,6 +1071,9 @@ public class ChannelRegistryGrainTests
         channels.Should().BeEmpty();
     }
 
+    // Given: Three delivery channels are registered without location associations
+    // When: Channels are queried for a specific site location
+    // Then: No channels are returned since locations have not been associated
     [Fact]
     public async Task GetChannelsForLocationAsync_ShouldReturnChannelsForLocation()
     {
@@ -987,6 +1098,9 @@ public class ChannelRegistryGrainTests
         channels.Should().BeEmpty();
     }
 
+    // Given: A channel is registered as UberEats Direct in the registry
+    // When: The same channel ID is re-registered as DoorDash Aggregator
+    // Then: The registration is replaced with the updated platform type, integration type, and name
     [Fact]
     public async Task RegisterChannelAsync_ExistingChannel_ShouldReplace()
     {
@@ -1010,6 +1124,9 @@ public class ChannelRegistryGrainTests
         channels[0].Name.Should().Be("DoorDash Updated");
     }
 
+    // Given: An organization's channel registry is empty
+    // When: A status update is attempted for a non-existent channel
+    // Then: The operation completes without error and the registry remains empty
     [Fact]
     public async Task UpdateChannelStatusAsync_NonExistent_ShouldBeIdempotent()
     {

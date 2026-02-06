@@ -28,6 +28,9 @@ public class WorkflowGrainTests
     // InitializeAsync Tests
     // ============================================================================
 
+    // Given: A new expense workflow with Draft as the initial status and a defined set of allowed statuses
+    // When: The workflow is initialized
+    // Then: The workflow state reflects the organization, owner, initial status, and version 1
     [Fact]
     public async Task InitializeAsync_ValidParameters_ShouldInitializeWorkflow()
     {
@@ -53,6 +56,9 @@ public class WorkflowGrainTests
         state.LastTransitionAt.Should().BeNull();
     }
 
+    // Given: A workflow that has already been initialized
+    // When: Initialization is attempted again
+    // Then: An error is raised indicating the workflow is already initialized
     [Fact]
     public async Task InitializeAsync_AlreadyInitialized_ShouldThrow()
     {
@@ -71,6 +77,9 @@ public class WorkflowGrainTests
             .WithMessage("Workflow already initialized");
     }
 
+    // Given: A new workflow grain
+    // When: Initialization is attempted with an initial status not in the allowed statuses list
+    // Then: An error is raised indicating the initial status must be in the allowed list
     [Fact]
     public async Task InitializeAsync_InitialStatusNotInAllowedList_ShouldThrow()
     {
@@ -87,6 +96,9 @@ public class WorkflowGrainTests
             .WithMessage("*must be in the allowed statuses list*");
     }
 
+    // Given: A new workflow grain
+    // When: Initialization is attempted with an empty allowed statuses list
+    // Then: An error is raised indicating allowed statuses cannot be empty
     [Fact]
     public async Task InitializeAsync_EmptyAllowedStatuses_ShouldThrow()
     {
@@ -103,6 +115,9 @@ public class WorkflowGrainTests
             .WithMessage("*cannot be empty*");
     }
 
+    // Given: A new workflow grain
+    // When: Initialization is attempted with null allowed statuses
+    // Then: An error is raised indicating allowed statuses cannot be empty
     [Fact]
     public async Task InitializeAsync_NullAllowedStatuses_ShouldThrow()
     {
@@ -119,6 +134,9 @@ public class WorkflowGrainTests
             .WithMessage("*cannot be empty*");
     }
 
+    // Given: A new workflow grain
+    // When: Initialization is attempted with an empty string as the initial status
+    // Then: An error is raised indicating the initial status is required
     [Fact]
     public async Task InitializeAsync_EmptyInitialStatus_ShouldThrow()
     {
@@ -135,6 +153,9 @@ public class WorkflowGrainTests
             .WithMessage("*Initial status is required*");
     }
 
+    // Given: A new workflow grain
+    // When: Initialization is attempted with whitespace as the initial status
+    // Then: An error is raised indicating the initial status is required
     [Fact]
     public async Task InitializeAsync_WhitespaceInitialStatus_ShouldThrow()
     {
@@ -155,6 +176,9 @@ public class WorkflowGrainTests
     // TransitionAsync Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The workflow is transitioned to Pending with a reason
+    // Then: The transition succeeds and the current status is Pending with a recorded transition ID
     [Fact]
     public async Task TransitionAsync_ValidTransition_ShouldSucceed()
     {
@@ -181,6 +205,9 @@ public class WorkflowGrainTests
         status.Should().Be("Pending");
     }
 
+    // Given: An expense workflow currently in Draft status
+    // When: A transition to the same Draft status is attempted
+    // Then: The transition fails with an "Already in status" message and no transition is recorded
     [Fact]
     public async Task TransitionAsync_SameStatus_ShouldReturnFailed()
     {
@@ -204,6 +231,9 @@ public class WorkflowGrainTests
         result.TransitionedAt.Should().BeNull();
     }
 
+    // Given: An expense workflow initialized in Draft status with a defined set of allowed statuses
+    // When: A transition to an invalid status not in the allowed list is attempted
+    // Then: The transition fails and the workflow remains in Draft
     [Fact]
     public async Task TransitionAsync_StatusNotInAllowedList_ShouldReturnFailed()
     {
@@ -225,6 +255,9 @@ public class WorkflowGrainTests
         result.CurrentStatus.Should().Be("Draft");
     }
 
+    // Given: A workflow grain that has not been initialized
+    // When: A status transition is attempted
+    // Then: An error is raised indicating the workflow is not initialized
     [Fact]
     public async Task TransitionAsync_NotInitialized_ShouldThrow()
     {
@@ -242,6 +275,9 @@ public class WorkflowGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: An expense workflow in Draft status
+    // When: The workflow is transitioned to Approved with a performer and reason
+    // Then: The transition history captures the performer, reason, timestamps, and status change
     [Fact]
     public async Task TransitionAsync_CapturesMetadata()
     {
@@ -272,6 +308,9 @@ public class WorkflowGrainTests
         transition.PerformedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: A transition with an empty target status is attempted
+    // Then: The transition fails with a message indicating the status is required
     [Fact]
     public async Task TransitionAsync_EmptyNewStatus_ShouldReturnFailed()
     {
@@ -291,6 +330,9 @@ public class WorkflowGrainTests
         result.ErrorMessage.Should().Contain("required");
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The workflow is transitioned to Pending without providing a reason
+    // Then: The transition succeeds and the history records a null reason
     [Fact]
     public async Task TransitionAsync_NullReason_ShouldSucceed()
     {
@@ -316,6 +358,9 @@ public class WorkflowGrainTests
     // GetStatusAsync Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The current status is queried
+    // Then: The status returned is Draft
     [Fact]
     public async Task GetStatusAsync_ReturnsCurrentStatus()
     {
@@ -333,6 +378,9 @@ public class WorkflowGrainTests
         status.Should().Be("Draft");
     }
 
+    // Given: A workflow grain that has not been initialized
+    // When: The current status is queried
+    // Then: An error is raised indicating the workflow is not initialized
     [Fact]
     public async Task GetStatusAsync_NotInitialized_ShouldThrow()
     {
@@ -349,6 +397,9 @@ public class WorkflowGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: An expense workflow that has been transitioned from Draft to Approved
+    // When: The current status is queried
+    // Then: The status returned is Approved
     [Fact]
     public async Task GetStatusAsync_AfterTransition_ReturnsUpdatedStatus()
     {
@@ -372,6 +423,9 @@ public class WorkflowGrainTests
     // GetHistoryAsync Tests
     // ============================================================================
 
+    // Given: An expense workflow that has undergone three transitions (Draft to Pending to Approved to Closed)
+    // When: The transition history is retrieved
+    // Then: All three transitions are returned in chronological order with correct from/to statuses and reasons
     [Fact]
     public async Task GetHistoryAsync_ReturnsAllTransitionsInOrder()
     {
@@ -404,6 +458,9 @@ public class WorkflowGrainTests
         history[2].Reason.Should().Be("Third transition");
     }
 
+    // Given: A workflow grain that has not been initialized
+    // When: The transition history is requested
+    // Then: An error is raised indicating the workflow is not initialized
     [Fact]
     public async Task GetHistoryAsync_NotInitialized_ShouldThrow()
     {
@@ -420,6 +477,9 @@ public class WorkflowGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A workflow initialized in Draft status with no transitions performed
+    // When: The transition history is requested
+    // Then: An empty list is returned
     [Fact]
     public async Task GetHistoryAsync_NoTransitions_ReturnsEmptyList()
     {
@@ -441,6 +501,9 @@ public class WorkflowGrainTests
     // CanTransitionToAsync Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft with Pending as an allowed status
+    // When: The workflow checks if it can transition to Pending
+    // Then: The check returns true
     [Fact]
     public async Task CanTransitionToAsync_ValidTarget_ReturnsTrue()
     {
@@ -458,6 +521,9 @@ public class WorkflowGrainTests
         canTransition.Should().BeTrue();
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The workflow checks if it can transition to an invalid status not in the allowed list
+    // Then: The check returns false
     [Fact]
     public async Task CanTransitionToAsync_InvalidTarget_ReturnsFalse()
     {
@@ -475,6 +541,9 @@ public class WorkflowGrainTests
         canTransition.Should().BeFalse();
     }
 
+    // Given: An expense workflow currently in Draft status
+    // When: The workflow checks if it can transition to Draft (the same status)
+    // Then: The check returns false
     [Fact]
     public async Task CanTransitionToAsync_SameStatus_ReturnsFalse()
     {
@@ -492,6 +561,9 @@ public class WorkflowGrainTests
         canTransition.Should().BeFalse();
     }
 
+    // Given: A workflow grain that has not been initialized
+    // When: The workflow checks if it can transition to Pending
+    // Then: The check returns false instead of throwing
     [Fact]
     public async Task CanTransitionToAsync_NotInitialized_ReturnsFalse()
     {
@@ -507,6 +579,9 @@ public class WorkflowGrainTests
         canTransition.Should().BeFalse();
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The workflow checks if it can transition to an empty string target
+    // Then: The check returns false
     [Fact]
     public async Task CanTransitionToAsync_EmptyTarget_ReturnsFalse()
     {
@@ -524,6 +599,9 @@ public class WorkflowGrainTests
         canTransition.Should().BeFalse();
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: The workflow checks if it can transition to a whitespace-only target
+    // Then: The check returns false
     [Fact]
     public async Task CanTransitionToAsync_WhitespaceTarget_ReturnsFalse()
     {
@@ -545,6 +623,9 @@ public class WorkflowGrainTests
     // GetStateAsync Tests
     // ============================================================================
 
+    // Given: A booking workflow initialized in Pending and transitioned to Approved
+    // When: The full workflow state is retrieved
+    // Then: The state includes the organization, owner type, current status, one transition, and version 2
     [Fact]
     public async Task GetStateAsync_ReturnsCompleteState()
     {
@@ -572,6 +653,9 @@ public class WorkflowGrainTests
         state.LastTransitionAt.Should().NotBeNull();
     }
 
+    // Given: A workflow grain that has not been initialized
+    // When: The full workflow state is requested
+    // Then: An error is raised indicating the workflow is not initialized
     [Fact]
     public async Task GetStateAsync_NotInitialized_ShouldThrow()
     {
@@ -592,6 +676,9 @@ public class WorkflowGrainTests
     // Version Tracking Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft status (version 1)
+    // When: Two successive transitions are performed (Draft to Pending, Pending to Approved)
+    // Then: The version increments to 2 after the first transition and 3 after the second
     [Fact]
     public async Task Version_IncrementsOnTransitions()
     {
@@ -615,6 +702,9 @@ public class WorkflowGrainTests
         stateAfterSecond.Version.Should().Be(3);
     }
 
+    // Given: An expense workflow initialized in Draft status
+    // When: An invalid transition to a disallowed status is attempted
+    // Then: The version remains unchanged from the pre-transition value
     [Fact]
     public async Task Version_DoesNotIncrementOnFailedTransition()
     {
@@ -640,6 +730,9 @@ public class WorkflowGrainTests
     // LastTransitionAt Timestamp Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft with no prior transitions
+    // When: The workflow is transitioned to Pending
+    // Then: The last transition timestamp is set to approximately the current time
     [Fact]
     public async Task LastTransitionAt_UpdatesOnTransition()
     {
@@ -665,6 +758,9 @@ public class WorkflowGrainTests
         stateAfterTransition.LastTransitionAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An expense workflow that has already been transitioned once (Draft to Pending)
+    // When: A second transition to Approved is performed
+    // Then: The last transition timestamp advances beyond the first transition time
     [Fact]
     public async Task LastTransitionAt_UpdatesOnEachTransition()
     {
@@ -695,6 +791,9 @@ public class WorkflowGrainTests
     // Multiple Consecutive Transitions Tests
     // ============================================================================
 
+    // Given: A purchase document workflow initialized in Draft status with multiple staff members
+    // When: Six transitions simulate a full approval lifecycle (submit, reject, correct, resubmit, approve, close)
+    // Then: The complete transition path is recorded with correct performers, and the final status is Closed at version 7
     [Fact]
     public async Task MultipleTransitions_BuildsCompleteHistory()
     {
@@ -746,6 +845,9 @@ public class WorkflowGrainTests
     // Different Owner Types Tests
     // ============================================================================
 
+    // Given: Three workflow grains for different owner types (expense, booking, purchase document) within the same organization
+    // When: Each workflow is initialized and transitioned independently
+    // Then: Each grain maintains its own status and transition history without cross-contamination
     [Fact]
     public async Task WorkflowGrain_DifferentOwnerTypes_MaintainSeparateState()
     {
@@ -788,6 +890,9 @@ public class WorkflowGrainTests
     // Transition ID Uniqueness Tests
     // ============================================================================
 
+    // Given: An expense workflow initialized in Draft status
+    // When: Three successive transitions are performed (Draft to Pending to Approved to Closed)
+    // Then: Each transition is assigned a unique, non-empty ID
     [Fact]
     public async Task TransitionIds_AreUnique()
     {
@@ -814,6 +919,9 @@ public class WorkflowGrainTests
     // Custom Status Values Tests
     // ============================================================================
 
+    // Given: A workflow with custom status values including "New", "In Progress", "Under Review", "On Hold", "Completed", and "Cancelled"
+    // When: The workflow progresses through five transitions ending in Completed
+    // Then: All custom statuses are accepted, the final status is Completed, and all five transitions are recorded
     [Fact]
     public async Task WorkflowGrain_CustomStatusValues_WorksCorrectly()
     {

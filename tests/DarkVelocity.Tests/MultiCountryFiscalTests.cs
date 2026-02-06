@@ -25,6 +25,9 @@ public class MultiCountryFiscalGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IMultiCountryFiscalGrain>(key);
     }
 
+    // Given: An unconfigured multi-country fiscal grain for a site
+    // When: Configuring it for Germany with a Fiskaly Cloud TSE device and API credentials
+    // Then: The compliance standard is set to "KassenSichV" and the TSE type is FiskalyCloud
     [Fact]
     public async Task ConfigureAsync_WithGermany_SetsKassenSichVCompliance()
     {
@@ -51,6 +54,9 @@ public class MultiCountryFiscalGrainTests
         snapshot.TseType.Should().Be(ExternalTseType.FiskalyCloud);
     }
 
+    // Given: An unconfigured multi-country fiscal grain for a site
+    // When: Configuring it for France with NF525 certification number and SIREN
+    // Then: The compliance standard is set to "NF 525"
     [Fact]
     public async Task ConfigureAsync_WithFrance_SetsNF525Compliance()
     {
@@ -76,6 +82,9 @@ public class MultiCountryFiscalGrainTests
         snapshot.Enabled.Should().BeTrue();
     }
 
+    // Given: An unconfigured multi-country fiscal grain for a site
+    // When: Configuring it for Poland with NIP and KSeF enabled
+    // Then: The compliance standard is set to "JPK/KSeF"
     [Fact]
     public async Task ConfigureAsync_WithPoland_SetsJpkKsefCompliance()
     {
@@ -101,6 +110,9 @@ public class MultiCountryFiscalGrainTests
         snapshot.Enabled.Should().BeTrue();
     }
 
+    // Given: A multi-country fiscal grain configured for Austria with a Swissbit Cloud TSE
+    // When: Retrieving the fiscal configuration snapshot
+    // Then: The snapshot contains the correct org ID, site ID, country, and RKSV compliance standard
     [Fact]
     public async Task GetSnapshotAsync_ReturnsConfiguredState()
     {
@@ -123,6 +135,9 @@ public class MultiCountryFiscalGrainTests
         snapshot.ComplianceStandard.Should().Be("RKSV");
     }
 
+    // Given: A multi-country fiscal grain that has never been configured
+    // When: Validating the fiscal configuration
+    // Then: Validation fails with an error indicating the site is "not configured"
     [Fact]
     public async Task ValidateConfigurationAsync_WhenNotConfigured_ReturnsInvalid()
     {
@@ -136,6 +151,9 @@ public class MultiCountryFiscalGrainTests
         result.Errors.Should().Contain(e => e.Contains("not configured"));
     }
 
+    // Given: A multi-country fiscal grain that has never been configured
+    // When: Querying the supported fiscal features
+    // Then: An empty feature set is returned
     [Fact]
     public async Task GetSupportedFeaturesAsync_WhenNotConfigured_ReturnsEmpty()
     {
@@ -148,6 +166,9 @@ public class MultiCountryFiscalGrainTests
         features.Should().BeEmpty();
     }
 
+    // Given: A multi-country fiscal grain that has never been configured
+    // When: Attempting to record a 119.00 EUR receipt transaction
+    // Then: The operation fails with error code "NOT_CONFIGURED"
     [Fact]
     public async Task RecordTransactionAsync_WhenNotConfigured_ReturnsFailure()
     {
@@ -175,6 +196,9 @@ public class MultiCountryFiscalGrainTests
         result.ErrorCode.Should().Be("NOT_CONFIGURED");
     }
 
+    // Given: A multi-country fiscal grain configured and enabled for Italy
+    // When: Reconfiguring with Enabled set to false
+    // Then: The fiscal integration is disabled
     [Fact]
     public async Task ConfigureAsync_DisablesFiscal_SetsEnabledFalse()
     {
@@ -209,6 +233,9 @@ public class MultiCountryFiscalGrainTests
 [Trait("Category", "Unit")]
 public class FrenchCumulativeTotalTests
 {
+    // Given: French cumulative totals with a grand total of 1000.00 and 10 transactions
+    // When: Adding a 119.00 EUR transaction to the perpetual grand total
+    // Then: The grand total increases to 1119.00 and the transaction count becomes 11
     [Fact]
     public void CumulativeTotals_AddTransaction_IncrementsGrandTotal()
     {
@@ -229,6 +256,9 @@ public class FrenchCumulativeTotalTests
         totals.TransactionCount.Should().Be(11);
     }
 
+    // Given: French cumulative totals with a grand total of 1000.00 and no voids
+    // When: Processing a 50.00 EUR void transaction
+    // Then: The grand total decreases to 950.00, void count is 1, and void total is 50.00
     [Fact]
     public void CumulativeTotals_AddVoid_TracksVoidSeparately()
     {
@@ -250,6 +280,9 @@ public class FrenchCumulativeTotalTests
         totals.VoidTotal.Should().Be(50.00m);
     }
 
+    // Given: French cumulative totals with existing VAT breakdowns at 20%, 10%, and 5.5%
+    // When: Adding amounts to existing rates and introducing a new 2.1% rate
+    // Then: Existing rate totals are updated and the new rate is tracked, totaling 4 VAT categories
     [Fact]
     public void CumulativeTotals_TotalsByVatRate_AggregatesCorrectly()
     {
@@ -277,6 +310,9 @@ public class FrenchCumulativeTotalTests
         totals.TotalsByVatRate.Should().HaveCount(4);
     }
 
+    // Given: French cumulative totals with a sequence number of 100
+    // When: Processing three consecutive transactions
+    // Then: Sequence numbers increment monotonically to 101, 102, and 103
     [Fact]
     public void CumulativeTotals_SequenceNumber_IncrementsMonotonically()
     {
@@ -304,6 +340,9 @@ public class FrenchCumulativeTotalTests
 [Trait("Category", "Unit")]
 public class PolishJpkFormatTests
 {
+    // Given: Various Polish NIP (tax identification number) inputs including valid, invalid checksum, wrong length, and non-numeric
+    // When: Validating each NIP against the Polish checksum algorithm
+    // Then: Only correctly formatted 10-digit NIPs with valid checksums pass validation
     [Theory]
     [InlineData("1234567890", false)]  // Invalid checksum (yields 10)
     [InlineData("5260250995", true)]  // Valid NIP
@@ -317,6 +356,9 @@ public class PolishJpkFormatTests
         isValid.Should().Be(expectedValid);
     }
 
+    // Given: A Polish VAT entry for invoice "FV/123/2024" with 100.00 net and 23.00 VAT at 23% rate
+    // When: Creating the VAT entry record
+    // Then: The document number starts with "FV/" and ends with "/2024", and gross equals net plus VAT
     [Fact]
     public void PolandVatEntry_CorrectlyFormatsDocumentNumber()
     {
@@ -339,6 +381,9 @@ public class PolishJpkFormatTests
         entry.GrossAmount.Should().Be(entry.NetAmount + entry.VatAmount);
     }
 
+    // Given: The Polish VAT rate enum values (23%, 8%, 5%, 0%, Exempt)
+    // When: Mapping each enum value to its decimal rate
+    // Then: Each rate maps to the correct decimal value
     [Theory]
     [InlineData(PolandVatRate.Rate23, 0.23)]
     [InlineData(PolandVatRate.Rate8, 0.08)]
@@ -360,6 +405,9 @@ public class PolishJpkFormatTests
         vatRateValues[rate].Should().Be((decimal)expectedRate);
     }
 
+    // Given: A pending KSeF invoice record with no KSeF number assigned
+    // When: Simulating acceptance by updating the status to Accepted with a KSeF reference number
+    // Then: The accepted record has a KSeF number, submission timestamp, and acceptance timestamp
     [Fact]
     public void KsefInvoiceRecord_TracksSubmissionStatus()
     {
@@ -418,6 +466,9 @@ public class PolishJpkFormatTests
 [Trait("Category", "Unit")]
 public class MultiCountryRoutingTests
 {
+    // Given: A fiscal country (Germany, Austria, Italy, France, or Poland)
+    // When: Resolving the compliance standard for that country
+    // Then: The correct standard is returned (KassenSichV, RKSV, RT, NF 525, or JPK/KSeF respectively)
     [Theory]
     [InlineData(FiscalCountry.Germany, "KassenSichV")]
     [InlineData(FiscalCountry.Austria, "RKSV")]
@@ -430,6 +481,9 @@ public class MultiCountryRoutingTests
         standard.Should().Be(expectedStandard);
     }
 
+    // Given: The set of documented supported countries (Germany, Austria, Italy, France, Poland)
+    // When: Checking all FiscalCountry enum values against the supported set
+    // Then: Every enum value is in the supported countries list
     [Fact]
     public void FiscalCountryAdapterFactory_SupportsAllDocumentedCountries()
     {
@@ -449,6 +503,9 @@ public class MultiCountryRoutingTests
         }
     }
 
+    // Given: The expected set of external TSE types (None, SwissbitCloud, SwissbitUsb, FiskalyCloud, Epson, Diebold, Custom)
+    // When: Checking the ExternalTseType enum values
+    // Then: All expected TSE hardware and cloud provider types are present
     [Fact]
     public void ExternalTseType_HasExpectedTypes()
     {
@@ -502,6 +559,9 @@ public class ZReportGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IZReportGrain>(key);
     }
 
+    // Given: A Z-report grain for a site with no prior reports generated
+    // When: Requesting the latest Z-report
+    // Then: Null is returned
     [Fact]
     public async Task GetLatestReportAsync_WhenNoReports_ReturnsNull()
     {
@@ -514,6 +574,9 @@ public class ZReportGrainTests
         report.Should().BeNull();
     }
 
+    // Given: A Z-report grain for a site with no prior reports generated
+    // When: Querying reports for the past month
+    // Then: An empty list is returned
     [Fact]
     public async Task GetReportsAsync_WhenNoReports_ReturnsEmptyList()
     {
@@ -528,6 +591,9 @@ public class ZReportGrainTests
         reports.Should().BeEmpty();
     }
 
+    // Given: A Z-report grain for a site with no prior reports generated
+    // When: Requesting a specific report by number 999 that does not exist
+    // Then: Null is returned
     [Fact]
     public async Task GetReportAsync_WhenReportDoesNotExist_ReturnsNull()
     {
@@ -562,6 +628,9 @@ public class FiscalJobSchedulerGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalJobSchedulerGrain>(key);
     }
 
+    // Given: A fiscal job scheduler grain for an organization
+    // When: Configuring a site with daily close at 23:30, archive at 03:00, and certificate monitoring with 30-day warning
+    // Then: The configuration is stored with the correct times, monitoring settings, and timezone
     [Fact]
     public async Task ConfigureSiteJobsAsync_StoresConfiguration()
     {
@@ -591,6 +660,9 @@ public class FiscalJobSchedulerGrainTests
         retrievedConfig.CertificateMonitoringEnabled.Should().BeTrue();
     }
 
+    // Given: A fiscal job scheduler with an existing site job configuration
+    // When: Removing the site's job configuration
+    // Then: The site is no longer listed in the scheduler's configurations
     [Fact]
     public async Task RemoveSiteJobsAsync_RemovesConfiguration()
     {
@@ -607,6 +679,9 @@ public class FiscalJobSchedulerGrainTests
         configs.Should().NotContain(c => c.SiteId == siteId);
     }
 
+    // Given: A new fiscal job scheduler with no jobs executed
+    // When: Querying the job execution history
+    // Then: An empty history is returned
     [Fact]
     public async Task GetJobHistoryAsync_ReturnsEmptyInitially()
     {
@@ -618,6 +693,9 @@ public class FiscalJobSchedulerGrainTests
         history.Should().BeEmpty();
     }
 
+    // Given: A fiscal job scheduler with no TSE certificates registered
+    // When: Checking for certificate expiry warnings
+    // Then: No warnings are returned
     [Fact]
     public async Task CheckCertificateExpiryAsync_ReturnsEmptyWhenNoCertificates()
     {
@@ -637,6 +715,9 @@ public class FiscalJobSchedulerGrainTests
 [Trait("Category", "Unit")]
 public class FiscalFeatureSupportTests
 {
+    // Given: The expected feature set for the French NF 525 fiscal adapter
+    // When: Checking for cumulative totals and electronic journal support
+    // Then: Both CumulativeTotals and ElectronicJournal features are present
     [Fact]
     public void FrenchAdapter_SupportsCumulativeTotals()
     {
@@ -653,6 +734,9 @@ public class FiscalFeatureSupportTests
         supportedFeatures.Should().Contain(FiscalFeature.ElectronicJournal);
     }
 
+    // Given: The expected feature set for the Polish JPK/KSeF fiscal adapter
+    // When: Checking for VAT register export and invoice verification support
+    // Then: Both VatRegisterExport and InvoiceVerification features are present
     [Fact]
     public void PolishAdapter_SupportsVatRegisterExport()
     {
@@ -668,6 +752,9 @@ public class FiscalFeatureSupportTests
         supportedFeatures.Should().Contain(FiscalFeature.InvoiceVerification);
     }
 
+    // Given: The expected feature set for the German KassenSichV fiscal adapter
+    // When: Checking for hardware TSE and cloud TSE support
+    // Then: Both HardwareTse and CloudTse features are present
     [Fact]
     public void GermanAdapter_SupportsHardwareAndCloudTse()
     {

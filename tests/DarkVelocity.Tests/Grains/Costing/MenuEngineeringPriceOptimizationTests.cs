@@ -25,6 +25,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Price Suggestion Tests
     // ============================================================================
 
+    // Given: a menu item with 50% margin when the target margin is 70%
+    // When: price optimization suggestions are requested
+    // Then: the item receives a price increase suggestion to reach the target margin
     [Fact]
     public async Task GetPriceSuggestionsAsync_ItemsBelowTargetMargin_ShouldSuggestPriceIncrease()
     {
@@ -63,6 +66,9 @@ public class MenuEngineeringPriceOptimizationTests
         suggestion.SuggestionType.Should().Be(PriceSuggestionType.IncreaseToTargetMargin);
     }
 
+    // Given: a menu item with 75% margin exceeding the 70% target
+    // When: price optimization suggestions are requested
+    // Then: no price change is suggested for this already-profitable item
     [Fact]
     public async Task GetPriceSuggestionsAsync_ItemsAtOrAboveTargetMargin_ShouldNotSuggestChange()
     {
@@ -96,6 +102,9 @@ public class MenuEngineeringPriceOptimizationTests
         suggestions.Should().NotContain(s => s.ProductId == highMarginItemId);
     }
 
+    // Given: a very low margin item (20%) requiring over 100% price increase to reach the 70% target
+    // When: price suggestions are requested with a 15% maximum price change cap
+    // Then: no suggestion is made because the required increase exceeds the cap
     [Fact]
     public async Task GetPriceSuggestionsAsync_ExceedingMaxPriceChange_ShouldNotSuggest()
     {
@@ -132,6 +141,9 @@ public class MenuEngineeringPriceOptimizationTests
         suggestions.Should().NotContain(s => s.ProductId == lowMarginItemId);
     }
 
+    // Given: three menu items with margins of 60%, 50%, and 40% against a 70% target
+    // When: price optimization suggestions are requested
+    // Then: suggestions are ordered by largest margin gap first
     [Fact]
     public async Task GetPriceSuggestionsAsync_ShouldOrderByMarginGap()
     {
@@ -190,6 +202,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Target Margin Setting Tests
     // ============================================================================
 
+    // Given: a menu engineering grain initialized with a 65% default target margin
+    // When: the target margin is updated to 72%
+    // Then: subsequent price suggestions use the new 72% target
     [Fact]
     public async Task SetTargetMarginAsync_ShouldUpdateDefaultTargetMargin()
     {
@@ -222,6 +237,9 @@ public class MenuEngineeringPriceOptimizationTests
         suggestions.First().TargetMargin.Should().Be(72m);
     }
 
+    // Given: a menu engineering grain with default target margin
+    // When: category-specific target margins are set (75% for Beverages, 60% for Food)
+    // Then: category analysis reflects the category-specific targets
     [Fact]
     public async Task SetCategoryTargetMarginAsync_ShouldSetCategorySpecificTarget()
     {
@@ -259,6 +277,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Menu Mix and Contribution Analysis Tests
     // ============================================================================
 
+    // Given: two menu items with 60 and 40 units sold respectively
+    // When: menu engineering analysis is performed
+    // Then: each item's menu mix percentage reflects its share of total units sold
     [Fact]
     public async Task AnalyzeAsync_ShouldCalculateMenuMixCorrectly()
     {
@@ -303,6 +324,9 @@ public class MenuEngineeringPriceOptimizationTests
         item2!.MenuMix.Should().Be(40m);
     }
 
+    // Given: two menu items contributing $800 and $200 in revenue
+    // When: menu engineering analysis is performed
+    // Then: each item's revenue mix reflects its percentage of total revenue
     [Fact]
     public async Task AnalyzeAsync_ShouldCalculateRevenueMixCorrectly()
     {
@@ -347,6 +371,9 @@ public class MenuEngineeringPriceOptimizationTests
         item2!.RevenueMix.Should().Be(20m);
     }
 
+    // Given: two menu items with $500 and $100 total contribution respectively
+    // When: menu engineering analysis is performed
+    // Then: each item's contribution mix reflects its share of total profit contribution
     [Fact]
     public async Task AnalyzeAsync_ShouldCalculateContributionMixCorrectly()
     {
@@ -396,6 +423,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Report Summary Tests
     // ============================================================================
 
+    // Given: ten menu items with varying prices and sales volumes
+    // When: menu engineering analysis is performed
+    // Then: the report totals for items, units sold, revenue, cost, and classification counts are accurate
     [Fact]
     public async Task AnalyzeAsync_ReportShouldIncludeCorrectTotals()
     {
@@ -435,6 +465,9 @@ public class MenuEngineeringPriceOptimizationTests
             .Should().Be(report.TotalMenuItems);
     }
 
+    // Given: one high-contribution item ($3500) alongside five lower-contribution items ($140 each)
+    // When: menu engineering analysis is performed
+    // Then: the top contributors list is led by the high-contribution item
     [Fact]
     public async Task AnalyzeAsync_ReportShouldIncludeTopContributors()
     {
@@ -483,6 +516,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Bulk Recording Tests
     // ============================================================================
 
+    // Given: twenty items split across two categories prepared for bulk import
+    // When: sales data is bulk-recorded and analyzed
+    // Then: all twenty items are included in the report across both categories
     [Fact]
     public async Task BulkRecordSalesAsync_ShouldRecordMultipleItems()
     {
@@ -519,6 +555,9 @@ public class MenuEngineeringPriceOptimizationTests
     // Category Filter Tests
     // ============================================================================
 
+    // Given: menu items in both Mains and Drinks categories after analysis
+    // When: item analysis is requested filtered by a specific category
+    // Then: only items in the requested category are returned
     [Fact]
     public async Task GetItemAnalysisAsync_WithCategoryFilter_ShouldReturnOnlyCategoryItems()
     {

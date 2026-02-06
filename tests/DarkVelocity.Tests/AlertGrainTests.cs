@@ -20,6 +20,9 @@ public class AlertGrainTests
     private string GetGrainKey(Guid orgId, Guid siteId)
         => $"{orgId}:{siteId}:alerts";
 
+    // Given: a new site without an alert grain
+    // When: the alert grain is initialized
+    // Then: default alert rules for LowStock, OutOfStock, and ExpiryRisk should be loaded
     [Fact]
     public async Task InitializeAsync_ShouldInitializeWithDefaultRules()
     {
@@ -40,6 +43,9 @@ public class AlertGrainTests
         rules.Should().Contain(r => r.Type == AlertType.ExpiryRisk);
     }
 
+    // Given: an initialized alert grain for a site
+    // When: a low stock alert is created for an ingredient
+    // Then: the alert should be created with Active status and the specified severity
     [Fact]
     public async Task CreateAlertAsync_ShouldCreateAlert()
     {
@@ -67,6 +73,9 @@ public class AlertGrainTests
         alert.Status.Should().Be(AlertStatus.Active);
     }
 
+    // Given: a site with active low stock and expiry risk alerts
+    // When: retrieving active alerts
+    // Then: both alerts should be returned sorted by severity descending
     [Fact]
     public async Task GetActiveAlertsAsync_ShouldReturnActiveAlerts()
     {
@@ -97,6 +106,9 @@ public class AlertGrainTests
         activeAlerts.Should().BeInDescendingOrder(a => a.Severity);
     }
 
+    // Given: an active low stock alert
+    // When: a staff member acknowledges the alert
+    // Then: the alert status should change to Acknowledged with the acknowledger's identity and timestamp
     [Fact]
     public async Task AcknowledgeAsync_ShouldUpdateAlertStatus()
     {
@@ -125,6 +137,9 @@ public class AlertGrainTests
         updatedAlert.AcknowledgedAt.Should().NotBeNull();
     }
 
+    // Given: an active low stock alert
+    // When: a staff member resolves the alert with resolution notes
+    // Then: the alert status should change to Resolved with the resolver's identity and notes
     [Fact]
     public async Task ResolveAsync_ShouldUpdateAlertStatus()
     {
@@ -153,6 +168,9 @@ public class AlertGrainTests
         updatedAlert.ResolutionNotes.Should().Be("Ordered more stock");
     }
 
+    // Given: an active low stock alert
+    // When: a staff member snoozes the alert for 4 hours
+    // Then: the alert status should change to Snoozed with a snooze expiry timestamp
     [Fact]
     public async Task SnoozeAsync_ShouldUpdateAlertStatus()
     {
@@ -180,6 +198,9 @@ public class AlertGrainTests
         updatedAlert.SnoozedUntil.Should().NotBeNull();
     }
 
+    // Given: a site with two low stock alerts and one expiry risk alert
+    // When: querying alert counts grouped by type
+    // Then: LowStock should show 2 and ExpiryRisk should show 1
     [Fact]
     public async Task GetAlertCountsByTypeAsync_ShouldReturnCorrectCounts()
     {
@@ -216,6 +237,9 @@ public class AlertGrainTests
         counts[AlertType.ExpiryRisk].Should().Be(1);
     }
 
+    // Given: an active low stock alert
+    // When: a staff member dismisses the alert as a false positive
+    // Then: the alert should no longer appear in the active alerts list
     [Fact]
     public async Task DismissAsync_ShouldRemoveFromActive()
     {
@@ -241,6 +265,9 @@ public class AlertGrainTests
         activeAlerts.Should().NotContain(a => a.AlertId == alert.AlertId);
     }
 
+    // Given: an initialized alert grain with a default LowStock rule
+    // When: the LowStock rule is updated to be disabled with Low severity
+    // Then: the rule should reflect the new enabled state and severity
     [Fact]
     public async Task UpdateRuleAsync_ShouldUpdateExistingRule()
     {
@@ -271,6 +298,9 @@ public class AlertGrainTests
 
     #region Error Handling Tests
 
+    // Given: an alert grain that has not been initialized
+    // When: attempting to create an alert
+    // Then: the operation should be rejected as not initialized
     [Fact]
     public async Task CreateAlertAsync_WhenNotInitialized_ShouldThrow()
     {
@@ -291,6 +321,9 @@ public class AlertGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: an initialized alert grain with no alerts
+    // When: attempting to acknowledge a nonexistent alert ID
+    // Then: the operation should fail with an alert not found error
     [Fact]
     public async Task AcknowledgeAsync_WhenAlertNotFound_ShouldThrow()
     {
@@ -308,6 +341,9 @@ public class AlertGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: an initialized alert grain with no alerts
+    // When: attempting to resolve a nonexistent alert ID
+    // Then: the operation should fail with an alert not found error
     [Fact]
     public async Task ResolveAsync_WhenAlertNotFound_ShouldThrow()
     {
@@ -325,6 +361,9 @@ public class AlertGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: an initialized alert grain with no alerts
+    // When: attempting to snooze a nonexistent alert ID
+    // Then: the operation should fail with an alert not found error
     [Fact]
     public async Task SnoozeAsync_WhenAlertNotFound_ShouldThrow()
     {
@@ -342,6 +381,9 @@ public class AlertGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: an initialized alert grain with no alerts
+    // When: attempting to dismiss a nonexistent alert ID
+    // Then: the operation should fail with an alert not found error
     [Fact]
     public async Task DismissAsync_WhenAlertNotFound_ShouldThrow()
     {
@@ -359,6 +401,9 @@ public class AlertGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: an already initialized alert grain with an existing alert
+    // When: initializing the grain again
+    // Then: the operation should be idempotent and preserve existing alerts
     [Fact]
     public async Task InitializeAsync_WhenAlreadyInitialized_ShouldBeIdempotent()
     {
@@ -388,6 +433,9 @@ public class AlertGrainTests
 
     #region Snooze Behavior Tests
 
+    // Given: an alert snoozed for a very short duration that has already expired
+    // When: retrieving active alerts
+    // Then: the expired-snoozed alert should reappear in the active alerts list
     [Fact]
     public async Task GetActiveAlertsAsync_ShouldIncludeExpiredSnoozedAlerts()
     {
@@ -416,6 +464,9 @@ public class AlertGrainTests
         activeAlerts.Should().Contain(a => a.AlertId == alert.AlertId);
     }
 
+    // Given: an alert snoozed for 4 hours (still active snooze)
+    // When: retrieving active alerts
+    // Then: the currently-snoozed alert should not appear in the active alerts list
     [Fact]
     public async Task GetActiveAlertsAsync_ShouldExcludeCurrentlySnoozedAlerts()
     {
@@ -441,6 +492,9 @@ public class AlertGrainTests
         activeAlerts.Should().NotContain(a => a.AlertId == alert.AlertId);
     }
 
+    // Given: an active alert
+    // When: snoozing the alert for 2 hours
+    // Then: the SnoozedUntil timestamp should be approximately 2 hours from now
     [Fact]
     public async Task SnoozeAsync_ShouldCalculateSnoozedUntilCorrectly()
     {
@@ -474,6 +528,9 @@ public class AlertGrainTests
 
     #region Active Count Tests
 
+    // Given: one active and one acknowledged alert
+    // When: querying the active alert count
+    // Then: both Active and Acknowledged alerts should be counted (total 2)
     [Fact]
     public async Task GetActiveAlertCountAsync_ShouldIncludeAcknowledgedAlerts()
     {
@@ -504,6 +561,9 @@ public class AlertGrainTests
         count.Should().Be(2);
     }
 
+    // Given: one active and one resolved alert
+    // When: querying the active alert count
+    // Then: only the active alert should be counted (total 1)
     [Fact]
     public async Task GetActiveAlertCountAsync_ShouldExcludeResolvedAlerts()
     {
@@ -534,6 +594,9 @@ public class AlertGrainTests
         count.Should().Be(1);
     }
 
+    // Given: one active and one dismissed alert
+    // When: querying the active alert count
+    // Then: only the active alert should be counted (total 1)
     [Fact]
     public async Task GetActiveAlertCountAsync_ShouldExcludeDismissedAlerts()
     {
@@ -564,6 +627,9 @@ public class AlertGrainTests
         count.Should().Be(1);
     }
 
+    // Given: one active alert and one currently-snoozed alert
+    // When: querying the active alert count
+    // Then: only the active (non-snoozed) alert should be counted (total 1)
     [Fact]
     public async Task GetActiveAlertCountAsync_ShouldHandleExpiredSnoozes()
     {
@@ -598,6 +664,9 @@ public class AlertGrainTests
 
     #region Filtering Tests
 
+    // Given: one active and one resolved alert
+    // When: filtering alerts by status
+    // Then: each status filter should return only the matching alerts
     [Fact]
     public async Task GetAlertsAsync_WithStatusFilter_ShouldReturnMatching()
     {
@@ -633,6 +702,9 @@ public class AlertGrainTests
         resolvedAlerts[0].AlertId.Should().Be(resolvedAlert.AlertId);
     }
 
+    // Given: two LowStock alerts and one OutOfStock alert
+    // When: filtering alerts by type
+    // Then: each type filter should return only the matching alerts
     [Fact]
     public async Task GetAlertsAsync_WithTypeFilter_ShouldReturnMatching()
     {
@@ -672,6 +744,9 @@ public class AlertGrainTests
         outOfStockAlerts[0].Type.Should().Be(AlertType.OutOfStock);
     }
 
+    // Given: active and resolved alerts of LowStock and OutOfStock types
+    // When: filtering by both status (Active) and type (LowStock)
+    // Then: only the active LowStock alert should be returned
     [Fact]
     public async Task GetAlertsAsync_WithStatusAndTypeFilter_ShouldReturnMatching()
     {
@@ -711,6 +786,9 @@ public class AlertGrainTests
         activeLowStockAlerts[0].AlertId.Should().Be(lowStockActive.AlertId);
     }
 
+    // Given: 5 active alerts
+    // When: querying alerts with a limit of 3
+    // Then: only 3 alerts should be returned
     [Fact]
     public async Task GetAlertsAsync_WithLimit_ShouldRespectLimit()
     {
@@ -741,6 +819,9 @@ public class AlertGrainTests
 
     #region Metadata & Entity Tests
 
+    // Given: an initialized alert grain
+    // When: creating a low stock alert with ingredient metadata (name, quantity, reorder point)
+    // Then: the metadata should be persisted and retrievable on the alert
     [Fact]
     public async Task CreateAlertAsync_WithMetadata_ShouldPersistMetadata()
     {
@@ -774,6 +855,9 @@ public class AlertGrainTests
         retrievedAlert.Metadata["reorderPoint"].Should().Be("20");
     }
 
+    // Given: an initialized alert grain
+    // When: creating a low stock alert linked to a specific ingredient entity
+    // Then: the entity ID and type should be persisted on the alert
     [Fact]
     public async Task CreateAlertAsync_WithEntityLink_ShouldPersistEntityInfo()
     {
@@ -804,6 +888,9 @@ public class AlertGrainTests
 
     #region Stream Event Tests
 
+    // Given: an organization with an alert stream subscription
+    // When: a high-severity low stock alert is created
+    // Then: an AlertTriggered stream event should be published with the alert details
     [Fact]
     public async Task CreateAlertAsync_ShouldPublishAlertTriggeredEvent()
     {
@@ -856,6 +943,9 @@ public class AlertGrainTests
 
     #region Rules Tests
 
+    // Given: a new site without an alert grain
+    // When: the alert grain is initialized
+    // Then: all seven default alert rules should be loaded (LowStock, OutOfStock, ExpiryRisk, GPDropped, HighVariance, SupplierPriceSpike, NegativeStock)
     [Fact]
     public async Task InitializeAsync_ShouldLoadAllSevenDefaultRules()
     {
@@ -879,6 +969,9 @@ public class AlertGrainTests
         rules.Should().Contain(r => r.Type == AlertType.NegativeStock);
     }
 
+    // Given: an initialized alert grain with 7 default rules
+    // When: a new HighWaste alert rule is added
+    // Then: the rules list should contain 8 rules including the new HighWaste rule
     [Fact]
     public async Task UpdateRuleAsync_WithNewRule_ShouldAddRule()
     {
@@ -918,6 +1011,9 @@ public class AlertGrainTests
         addedRule.Type.Should().Be(AlertType.HighWaste);
     }
 
+    // Given: an initialized alert grain with an enabled LowStock rule
+    // When: the rule is disabled and then re-enabled
+    // Then: the rule enabled state should toggle correctly each time
     [Fact]
     public async Task UpdateRuleAsync_EnableDisable_ShouldWork()
     {
@@ -954,6 +1050,9 @@ public class AlertGrainTests
 
     #region Severity Tests
 
+    // Given: an initialized alert grain
+    // When: creating an aged stock alert with Low severity
+    // Then: the alert should be created with Low severity
     [Fact]
     public async Task CreateAlertAsync_LowSeverity_ShouldCreate()
     {
@@ -975,6 +1074,9 @@ public class AlertGrainTests
         alert.Severity.Should().Be(AlertSeverity.Low);
     }
 
+    // Given: an initialized alert grain
+    // When: creating a negative stock alert with Critical severity
+    // Then: the alert should be created with Critical severity
     [Fact]
     public async Task CreateAlertAsync_CriticalSeverity_ShouldCreate()
     {
@@ -996,6 +1098,9 @@ public class AlertGrainTests
         alert.Severity.Should().Be(AlertSeverity.Critical);
     }
 
+    // Given: alerts with Critical, High, Medium, and Low severities created in mixed order
+    // When: retrieving active alerts
+    // Then: alerts should be ordered by severity descending (Critical, High, Medium, Low)
     [Fact]
     public async Task GetActiveAlertsAsync_ShouldOrderBySeverityThenTime()
     {
@@ -1051,6 +1156,9 @@ public class AlertGrainTests
 
     #region Alert Types Tests
 
+    // Given: an initialized alert grain
+    // When: creating an OutOfStock alert for an ingredient
+    // Then: the alert should be created with OutOfStock type
     [Fact]
     public async Task CreateAlertAsync_OutOfStock_ShouldCreate()
     {
@@ -1074,6 +1182,9 @@ public class AlertGrainTests
         alert.Type.Should().Be(AlertType.OutOfStock);
     }
 
+    // Given: an initialized alert grain
+    // When: creating a NegativeStock alert with quantity metadata
+    // Then: the alert should be created with NegativeStock type
     [Fact]
     public async Task CreateAlertAsync_NegativeStock_ShouldCreate()
     {
@@ -1098,6 +1209,9 @@ public class AlertGrainTests
         alert.Type.Should().Be(AlertType.NegativeStock);
     }
 
+    // Given: an initialized alert grain
+    // When: creating a GPDropped alert with gross profit change metadata
+    // Then: the alert should be created with GPDropped type
     [Fact]
     public async Task CreateAlertAsync_GPDropped_ShouldCreate()
     {
@@ -1125,6 +1239,9 @@ public class AlertGrainTests
         alert.Type.Should().Be(AlertType.GPDropped);
     }
 
+    // Given: an initialized alert grain
+    // When: creating a HighVariance alert with cost variance metadata
+    // Then: the alert should be created with HighVariance type
     [Fact]
     public async Task CreateAlertAsync_HighVariance_ShouldCreate()
     {
@@ -1152,6 +1269,9 @@ public class AlertGrainTests
         alert.Type.Should().Be(AlertType.HighVariance);
     }
 
+    // Given: an initialized alert grain
+    // When: creating a SupplierPriceSpike alert linked to a supplier entity
+    // Then: the alert should be created with SupplierPriceSpike type and Supplier entity type
     [Fact]
     public async Task CreateAlertAsync_SupplierPriceSpike_ShouldCreate()
     {
@@ -1188,6 +1308,9 @@ public class AlertGrainTests
 
     #region State Transition Tests
 
+    // Given: an alert already acknowledged by one staff member
+    // When: a different staff member acknowledges the same alert
+    // Then: the acknowledgment should update to the second staff member with a newer timestamp
     [Fact]
     public async Task AcknowledgeAsync_AlreadyAcknowledged_ShouldUpdate()
     {
@@ -1223,6 +1346,9 @@ public class AlertGrainTests
         updatedAlert.AcknowledgedAt.Should().BeAfter(firstAckTime!.Value);
     }
 
+    // Given: an alert that has been acknowledged by one staff member
+    // When: a different staff member resolves the alert
+    // Then: both the acknowledgment and resolution history should be preserved on the alert
     [Fact]
     public async Task ResolveAsync_AfterAcknowledge_ShouldMaintainHistory()
     {
@@ -1257,6 +1383,9 @@ public class AlertGrainTests
         resolvedAlert.ResolutionNotes.Should().Be("Ordered more stock");
     }
 
+    // Given: an initialized alert grain with no matching alert
+    // When: querying for a nonexistent alert ID
+    // Then: null should be returned
     [Fact]
     public async Task GetAlertAsync_WhenNotFound_ShouldReturnNull()
     {

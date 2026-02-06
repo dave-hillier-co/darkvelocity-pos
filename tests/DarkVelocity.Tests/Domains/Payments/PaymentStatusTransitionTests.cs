@@ -24,6 +24,9 @@ public class PaymentStatusTransitionTests
     // Payment Status Transitions - Happy Path
     // ============================================================================
 
+    // Given: A cash payment initiated for $100
+    // When: The cash payment is completed with the tendered amount
+    // Then: The payment transitions to Completed status with a completion timestamp
     [Fact]
     public async Task Payment_CashFlow_Initiated_To_Completed()
     {
@@ -43,6 +46,9 @@ public class PaymentStatusTransitionTests
         finalState.CompletedAt.Should().NotBeNull();
     }
 
+    // Given: A credit card payment initiated for $100
+    // When: The payment is authorized and then captured in sequence
+    // Then: The payment transitions through Authorizing, Authorized, and Captured statuses with timestamps
     [Fact]
     public async Task Payment_CardFlow_Initiated_Authorizing_Authorized_Captured()
     {
@@ -79,6 +85,9 @@ public class PaymentStatusTransitionTests
         state4.CapturedAt.Should().NotBeNull();
     }
 
+    // Given: A credit card payment in Authorizing status
+    // When: The card authorization is declined for insufficient funds
+    // Then: The payment transitions to Declined status
     [Fact]
     public async Task Payment_CardFlow_Initiated_Authorizing_Declined()
     {
@@ -99,6 +108,9 @@ public class PaymentStatusTransitionTests
     // Void vs Refund Logic
     // ============================================================================
 
+    // Given: A cash payment that has been initiated but not yet completed
+    // When: The payment is voided because the customer changed their mind
+    // Then: The payment transitions to Voided status with the void reason recorded
     [Fact]
     public async Task Payment_Void_InitiatedPayment_ShouldSucceed()
     {
@@ -115,6 +127,9 @@ public class PaymentStatusTransitionTests
         state.VoidReason.Should().Be("Customer changed mind");
     }
 
+    // Given: A credit card payment that has been authorized but not yet captured
+    // When: The payment is voided because the customer cancelled the order
+    // Then: The payment transitions to Voided status
     [Fact]
     public async Task Payment_Void_AuthorizedPayment_ShouldSucceed()
     {
@@ -139,6 +154,9 @@ public class PaymentStatusTransitionTests
         state.Status.Should().Be(PaymentStatus.Voided);
     }
 
+    // Given: A completed cash payment
+    // When: The payment is voided via manager override
+    // Then: The payment transitions to Voided status
     [Fact]
     public async Task Payment_Void_CompletedPayment_ShouldSucceed()
     {
@@ -153,6 +171,9 @@ public class PaymentStatusTransitionTests
         state.Status.Should().Be(PaymentStatus.Voided);
     }
 
+    // Given: A payment that has already been voided
+    // When: A second void is attempted
+    // Then: The void is rejected because the payment is already voided
     [Fact]
     public async Task Payment_Void_AlreadyVoidedPayment_ShouldThrow()
     {
@@ -168,6 +189,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Cannot void*");
     }
 
+    // Given: A completed payment that has been fully refunded
+    // When: A void is attempted on the refunded payment
+    // Then: The void is rejected because fully refunded payments cannot be voided
     [Fact]
     public async Task Payment_Void_FullyRefundedPayment_ShouldThrow()
     {
@@ -186,6 +210,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Cannot void*");
     }
 
+    // Given: A completed cash payment of $100
+    // When: A full refund of $100 is issued for a customer return
+    // Then: The payment transitions to Refunded status
     [Fact]
     public async Task Payment_Refund_CompletedPayment_ShouldSucceed()
     {
@@ -200,6 +227,9 @@ public class PaymentStatusTransitionTests
         state.Status.Should().Be(PaymentStatus.Refunded);
     }
 
+    // Given: A payment that has been voided
+    // When: A refund is attempted on the voided payment
+    // Then: The refund is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_Refund_VoidedPayment_ShouldThrow()
     {
@@ -215,6 +245,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*only refund completed*");
     }
 
+    // Given: A completed payment that has received a $30 partial refund
+    // When: The partially refunded payment is voided
+    // Then: The payment transitions to Voided status
     [Fact]
     public async Task Payment_PartialRefund_ThenVoid_ShouldSucceed()
     {
@@ -237,6 +270,9 @@ public class PaymentStatusTransitionTests
     // Invalid Status Transitions
     // ============================================================================
 
+    // Given: A completed payment
+    // When: An authorization request is attempted
+    // Then: The request is rejected due to invalid status transition
     [Fact]
     public async Task Payment_RequestAuthorization_WhenNotInitiated_ShouldThrow()
     {
@@ -251,6 +287,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A credit card payment in Initiated status (not yet in Authorizing)
+    // When: An authorization result is recorded directly
+    // Then: The recording is rejected due to invalid status transition
     [Fact]
     public async Task Payment_RecordAuthorization_WhenNotAuthorizing_ShouldThrow()
     {
@@ -270,6 +309,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A credit card payment in Initiated status (not yet authorized)
+    // When: A capture is attempted
+    // Then: The capture is rejected due to invalid status transition
     [Fact]
     public async Task Payment_Capture_WhenNotAuthorized_ShouldThrow()
     {
@@ -284,6 +326,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A credit card payment in Initiated status (not yet in Authorizing)
+    // When: A decline is recorded directly
+    // Then: The recording is rejected due to invalid status transition
     [Fact]
     public async Task Payment_RecordDecline_WhenNotAuthorizing_ShouldThrow()
     {
@@ -299,6 +344,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A payment that has already been completed
+    // When: A cash completion is attempted again
+    // Then: The completion is rejected due to invalid status transition
     [Fact]
     public async Task Payment_CompleteCash_WhenNotInitiated_ShouldThrow()
     {
@@ -313,6 +361,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A payment that has already been completed
+    // When: A gift card completion is attempted
+    // Then: The completion is rejected due to invalid status transition
     [Fact]
     public async Task Payment_CompleteGiftCard_WhenNotInitiated_ShouldThrow()
     {
@@ -328,6 +379,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: A cash payment in Initiated status (not yet completed)
+    // When: A tip adjustment of $10 is attempted
+    // Then: The adjustment is rejected because tips can only be adjusted on completed payments
     [Fact]
     public async Task Payment_AdjustTip_WhenNotCompleted_ShouldThrow()
     {
@@ -342,6 +396,9 @@ public class PaymentStatusTransitionTests
             .WithMessage("*only adjust tip on completed*");
     }
 
+    // Given: A cash payment in Initiated status (not yet completed)
+    // When: A refund is attempted
+    // Then: The refund is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_Refund_WhenInitiated_ShouldThrow()
     {
@@ -360,6 +417,9 @@ public class PaymentStatusTransitionTests
     // CompleteCard Status Transition Tests
     // ============================================================================
 
+    // Given: A credit card payment in Initiated status
+    // When: The card payment is completed directly with processor details
+    // Then: The payment transitions to Completed status
     [Fact]
     public async Task Payment_CompleteCard_FromInitiated_ShouldSucceed()
     {
@@ -377,6 +437,9 @@ public class PaymentStatusTransitionTests
         state.Status.Should().Be(PaymentStatus.Completed);
     }
 
+    // Given: A credit card payment that has been authorized
+    // When: The card payment is completed with processor details
+    // Then: The payment transitions to Completed status
     [Fact]
     public async Task Payment_CompleteCard_FromAuthorized_ShouldSucceed()
     {
@@ -401,6 +464,9 @@ public class PaymentStatusTransitionTests
         state.Status.Should().Be(PaymentStatus.Completed);
     }
 
+    // Given: A credit card payment in Authorizing status (awaiting authorization response)
+    // When: A direct card completion is attempted
+    // Then: The completion is rejected due to invalid status transition
     [Fact]
     public async Task Payment_CompleteCard_FromAuthorizing_ShouldThrow()
     {
@@ -423,6 +489,9 @@ public class PaymentStatusTransitionTests
     // Refund After Status Change Tests
     // ============================================================================
 
+    // Given: A completed payment that has received a $30 partial refund
+    // When: A second partial refund of $40 is issued
+    // Then: The payment remains in PartiallyRefunded status with $70 total refunded
     [Fact]
     public async Task Payment_Refund_PartiallyRefunded_ShouldSucceed()
     {
@@ -439,6 +508,9 @@ public class PaymentStatusTransitionTests
         state.RefundedAmount.Should().Be(70m);
     }
 
+    // Given: A completed payment with a $60 partial refund already applied
+    // When: The remaining $40 is refunded
+    // Then: The payment transitions to Refunded status with the full $100 refunded
     [Fact]
     public async Task Payment_Refund_CompletingRefund_ShouldChangeToRefundedStatus()
     {
@@ -459,6 +531,9 @@ public class PaymentStatusTransitionTests
     // Exists and Status Query Tests
     // ============================================================================
 
+    // Given: A payment identifier that has never been initiated
+    // When: Checking whether the payment exists
+    // Then: The payment is reported as not existing
     [Fact]
     public async Task Payment_ExistsAsync_WhenNotCreated_ShouldReturnFalse()
     {
@@ -473,6 +548,9 @@ public class PaymentStatusTransitionTests
         exists.Should().BeFalse();
     }
 
+    // Given: A cash payment that has been initiated
+    // When: Checking whether the payment exists
+    // Then: The payment is reported as existing
     [Fact]
     public async Task Payment_ExistsAsync_WhenCreated_ShouldReturnTrue()
     {
@@ -486,6 +564,9 @@ public class PaymentStatusTransitionTests
         exists.Should().BeTrue();
     }
 
+    // Given: A cash payment that transitions through Initiated, Completed, and Voided statuses
+    // When: The status is queried at each stage
+    // Then: The correct status is returned at each transition
     [Fact]
     public async Task Payment_GetStatusAsync_ShouldReturnCurrentStatus()
     {
@@ -509,6 +590,9 @@ public class PaymentStatusTransitionTests
     // Idempotency Tests
     // ============================================================================
 
+    // Given: A payment that has already been initiated
+    // When: A second initiation is attempted for the same payment
+    // Then: The initiation is rejected because the payment already exists
     [Fact]
     public async Task Payment_Initiate_Twice_ShouldThrow()
     {
@@ -537,6 +621,9 @@ public class PaymentStatusTransitionTests
     // Batch Assignment Tests
     // ============================================================================
 
+    // Given: A completed payment
+    // When: The payment is assigned to a settlement batch
+    // Then: The payment stores the batch identifier
     [Fact]
     public async Task Payment_AssignToBatch_ShouldSetBatchId()
     {
@@ -552,6 +639,9 @@ public class PaymentStatusTransitionTests
         state.BatchId.Should().Be(batchId);
     }
 
+    // Given: A completed payment assigned to a first settlement batch
+    // When: The payment is reassigned to a second batch
+    // Then: The batch identifier is updated to the second batch
     [Fact]
     public async Task Payment_AssignToBatch_MultipleTimes_ShouldUpdateBatchId()
     {

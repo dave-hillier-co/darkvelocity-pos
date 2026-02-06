@@ -28,6 +28,9 @@ public class DeviceAuthGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeviceAuthGrain>(userCode);
     }
 
+    // Given: A POS device requesting authorization
+    // When: The device authorization flow is initiated
+    // Then: A user code, device code, and verification URI are generated with proper expiration
     [Fact]
     public async Task InitiateAsync_ShouldCreateUserCodeAndDeviceCode()
     {
@@ -49,6 +52,9 @@ public class DeviceAuthGrainTests
         response.Interval.Should().Be(5); // 5 seconds polling interval
     }
 
+    // Given: A POS device initiating authorization
+    // When: A user code is generated
+    // Then: The code follows the XXXX-XXXX alphanumeric display format
     [Fact]
     public async Task InitiateAsync_UserCode_ShouldHaveExpectedFormat()
     {
@@ -65,6 +71,9 @@ public class DeviceAuthGrainTests
         response.UserCode.Should().MatchRegex(@"^[A-Z0-9]{4}-[A-Z0-9]{4}$");
     }
 
+    // Given: A device authorization has been initiated
+    // When: The authorization status is checked
+    // Then: The status is pending awaiting user approval
     [Fact]
     public async Task GetStatusAsync_AfterInitiation_ShouldReturnPending()
     {
@@ -80,6 +89,9 @@ public class DeviceAuthGrainTests
         status.Should().Be(DeviceAuthStatus.Pending);
     }
 
+    // Given: No device authorization has been initiated
+    // When: The authorization status is checked
+    // Then: The status is expired
     [Fact]
     public async Task GetStatusAsync_WithoutInitiation_ShouldReturnExpired()
     {
@@ -94,6 +106,9 @@ public class DeviceAuthGrainTests
         status.Should().Be(DeviceAuthStatus.Expired);
     }
 
+    // Given: A pending device authorization
+    // When: An admin approves the device for a site
+    // Then: The authorization status transitions to authorized
     [Fact]
     public async Task AuthorizeAsync_ShouldCompleteAuthorization()
     {
@@ -118,6 +133,9 @@ public class DeviceAuthGrainTests
         status.Should().Be(DeviceAuthStatus.Authorized);
     }
 
+    // Given: A pending device authorization
+    // When: The authorization is denied by an admin
+    // Then: The authorization status transitions to denied
     [Fact]
     public async Task DenyAsync_ShouldDenyAuthorization()
     {
@@ -134,6 +152,9 @@ public class DeviceAuthGrainTests
         status.Should().Be(DeviceAuthStatus.Denied);
     }
 
+    // Given: An authorized device with completed pairing
+    // When: The device polls for tokens using the correct device code
+    // Then: Access and refresh tokens are issued with organization and site context
     [Fact]
     public async Task GetTokenAsync_AfterAuthorization_ShouldReturnTokens()
     {
@@ -161,6 +182,9 @@ public class DeviceAuthGrainTests
         tokenResponse.ExpiresIn.Should().Be(3600 * 24 * 90); // 90 days
     }
 
+    // Given: A pending device authorization not yet approved
+    // When: The device polls for tokens before approval
+    // Then: No tokens are returned
     [Fact]
     public async Task GetTokenAsync_BeforeAuthorization_ShouldReturnNull()
     {
@@ -176,6 +200,9 @@ public class DeviceAuthGrainTests
         tokenResponse.Should().BeNull();
     }
 
+    // Given: An authorized device
+    // When: The device polls with an incorrect device code
+    // Then: No tokens are returned
     [Fact]
     public async Task GetTokenAsync_WithIncorrectDeviceCode_ShouldReturnNull()
     {
@@ -197,6 +224,9 @@ public class DeviceAuthGrainTests
         tokenResponse.Should().BeNull();
     }
 
+    // Given: No device authorization has been initiated
+    // When: Expiration is checked
+    // Then: The authorization is considered expired
     [Fact]
     public async Task IsExpiredAsync_BeforeInitiation_ShouldReturnTrue()
     {
@@ -211,6 +241,9 @@ public class DeviceAuthGrainTests
         isExpired.Should().BeTrue();
     }
 
+    // Given: A freshly initiated device authorization
+    // When: Expiration is checked
+    // Then: The authorization is not yet expired
     [Fact]
     public async Task IsExpiredAsync_AfterInitiation_ShouldReturnFalse()
     {
@@ -226,6 +259,9 @@ public class DeviceAuthGrainTests
         isExpired.Should().BeFalse();
     }
 
+    // Given: A device authorization already initiated
+    // When: A second initiation is attempted for the same user code
+    // Then: An error is raised preventing duplicate authorization flows
     [Fact]
     public async Task InitiateAsync_Twice_ShouldThrow()
     {
@@ -242,6 +278,9 @@ public class DeviceAuthGrainTests
             .WithMessage("*already initiated*");
     }
 
+    // Given: No device authorization has been initiated
+    // When: Authorization approval is attempted without a pending flow
+    // Then: An error is raised because there is no pending authorization
     [Fact]
     public async Task AuthorizeAsync_WithoutInitiation_ShouldThrow()
     {
@@ -258,6 +297,9 @@ public class DeviceAuthGrainTests
             .WithMessage("*not initiated*");
     }
 
+    // Given: A denied device authorization
+    // When: Authorization approval is attempted after denial
+    // Then: An error is raised because the flow has already been denied
     [Fact]
     public async Task AuthorizeAsync_AfterDenial_ShouldThrow()
     {
@@ -276,6 +318,9 @@ public class DeviceAuthGrainTests
             .WithMessage("*Cannot authorize*");
     }
 
+    // Given: An already authorized device
+    // When: Denial is attempted after authorization
+    // Then: An error is raised because the flow is already completed
     [Fact]
     public async Task DenyAsync_AfterAuthorization_ShouldThrow()
     {
@@ -294,6 +339,9 @@ public class DeviceAuthGrainTests
             .WithMessage("*Cannot deny*");
     }
 
+    // Given: A POS device with a hardware fingerprint and IP address
+    // When: The device authorization flow is initiated
+    // Then: The device fingerprint is captured and the flow proceeds as pending
     [Fact]
     public async Task InitiateAsync_ShouldCaptureDeviceFingerprint()
     {
@@ -316,6 +364,9 @@ public class DeviceAuthGrainTests
         status.Should().Be(DeviceAuthStatus.Pending);
     }
 
+    // Given: A POS device requesting multiple OAuth scopes
+    // When: The device authorization flow is initiated
+    // Then: The scopes are accepted and the flow starts successfully
     [Fact]
     public async Task InitiateAsync_WithDifferentScopes_ShouldAcceptValidScopes()
     {
@@ -355,6 +406,9 @@ public class DeviceGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeviceGrain>(key);
     }
 
+    // Given: An unregistered device
+    // When: The device is registered for a site with POS type
+    // Then: The device is authorized with correct organization, site, name, and type details
     [Fact]
     public async Task RegisterAsync_ShouldRegisterDevice()
     {
@@ -384,6 +438,9 @@ public class DeviceGrainTests
         snapshot.AuthorizedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An already registered device
+    // When: A duplicate registration is attempted
+    // Then: An error is raised preventing re-registration
     [Fact]
     public async Task RegisterAsync_AlreadyRegistered_ShouldThrow()
     {
@@ -404,6 +461,9 @@ public class DeviceGrainTests
             .WithMessage("*already registered*");
     }
 
+    // Given: An authorized device
+    // When: The device is suspended for a security concern
+    // Then: The device status becomes suspended and authorization is revoked
     [Fact]
     public async Task SuspendAsync_ShouldSuspendDevice()
     {
@@ -424,6 +484,9 @@ public class DeviceGrainTests
         isAuthorized.Should().BeFalse();
     }
 
+    // Given: An authorized device
+    // When: The device is permanently revoked due to loss
+    // Then: The device status becomes revoked and authorization is removed
     [Fact]
     public async Task RevokeAsync_ShouldRevokeDevice()
     {
@@ -444,6 +507,9 @@ public class DeviceGrainTests
         isAuthorized.Should().BeFalse();
     }
 
+    // Given: A suspended device temporarily on hold
+    // When: The device is reactivated
+    // Then: The device status returns to authorized
     [Fact]
     public async Task ReactivateAsync_FromSuspended_ShouldReactivateDevice()
     {
@@ -465,6 +531,9 @@ public class DeviceGrainTests
         isAuthorized.Should().BeTrue();
     }
 
+    // Given: A permanently revoked device
+    // When: Reactivation is attempted
+    // Then: An error is raised because revoked devices cannot be reactivated
     [Fact]
     public async Task ReactivateAsync_FromRevoked_ShouldThrow()
     {
@@ -484,6 +553,9 @@ public class DeviceGrainTests
             .WithMessage("*revoked device*");
     }
 
+    // Given: A registered POS device
+    // When: A staff member logs in to the device
+    // Then: The device tracks the currently signed-in user
     [Fact]
     public async Task SetCurrentUserAsync_ShouldTrackLoggedInUser()
     {
@@ -503,6 +575,9 @@ public class DeviceGrainTests
         snapshot.CurrentUserId.Should().Be(userId);
     }
 
+    // Given: A device with a signed-in user
+    // When: The current user is cleared (logout)
+    // Then: No user is associated with the device
     [Fact]
     public async Task SetCurrentUserAsync_Null_ShouldClearUser()
     {
@@ -522,6 +597,9 @@ public class DeviceGrainTests
         snapshot.CurrentUserId.Should().BeNull();
     }
 
+    // Given: A registered device
+    // When: A heartbeat is received with an app version
+    // Then: The last-seen timestamp is updated
     [Fact]
     public async Task RecordHeartbeatAsync_ShouldUpdateTimestampAndVersion()
     {
@@ -541,6 +619,9 @@ public class DeviceGrainTests
         snapshot.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A device with a known app version
+    // When: A heartbeat is received without version info
+    // Then: Only the last-seen timestamp is updated
     [Fact]
     public async Task RecordHeartbeatAsync_WithNullVersion_ShouldOnlyUpdateTimestamp()
     {
@@ -562,6 +643,9 @@ public class DeviceGrainTests
         snapshot.LastSeenAt.Should().BeAfter(initialSnapshot.LastSeenAt!.Value);
     }
 
+    // Given: A registered and authorized device
+    // When: The authorization status is checked
+    // Then: The device is confirmed as authorized
     [Fact]
     public async Task IsAuthorizedAsync_WhenAuthorized_ShouldReturnTrue()
     {
@@ -579,6 +663,9 @@ public class DeviceGrainTests
         isAuthorized.Should().BeTrue();
     }
 
+    // Given: An unregistered device
+    // When: The authorization status is checked
+    // Then: The device is not authorized
     [Fact]
     public async Task IsAuthorizedAsync_WhenNotRegistered_ShouldReturnFalse()
     {
@@ -594,6 +681,9 @@ public class DeviceGrainTests
         isAuthorized.Should().BeFalse();
     }
 
+    // Given: A registered device
+    // When: Existence is checked
+    // Then: The device is found to exist
     [Fact]
     public async Task ExistsAsync_WhenRegistered_ShouldReturnTrue()
     {
@@ -611,6 +701,9 @@ public class DeviceGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: An unregistered device
+    // When: Existence is checked
+    // Then: The device does not exist
     [Fact]
     public async Task ExistsAsync_WhenNotRegistered_ShouldReturnFalse()
     {
@@ -626,6 +719,9 @@ public class DeviceGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: An unregistered device
+    // When: The device is registered as a kitchen display system
+    // Then: The device type is recorded as KDS
     [Fact]
     public async Task RegisterAsync_KdsDevice_ShouldRegisterKdsType()
     {
@@ -642,6 +738,9 @@ public class DeviceGrainTests
         snapshot.Type.Should().Be(DeviceType.Kds);
     }
 
+    // Given: An unregistered device
+    // When: The device is registered as a back-office device
+    // Then: The device type is recorded as backoffice
     [Fact]
     public async Task RegisterAsync_BackofficeDevice_ShouldRegisterBackofficeType()
     {
@@ -658,6 +757,9 @@ public class DeviceGrainTests
         snapshot.Type.Should().Be(DeviceType.Backoffice);
     }
 
+    // Given: A device with a signed-in staff member
+    // When: The device is suspended for security reasons
+    // Then: The current user session is cleared for security
     [Fact]
     public async Task SuspendAsync_ShouldClearCurrentUser()
     {
@@ -677,6 +779,9 @@ public class DeviceGrainTests
         snapshot.CurrentUserId.Should().BeNull();
     }
 
+    // Given: A device with a signed-in staff member
+    // When: The device is permanently revoked
+    // Then: The current user session is cleared
     [Fact]
     public async Task RevokeAsync_ShouldClearCurrentUser()
     {
@@ -718,6 +823,9 @@ public class SessionGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ISessionGrain>(key);
     }
 
+    // Given: A user authenticating via PIN from a POS device
+    // When: A session is created with device and connection context
+    // Then: Access and refresh tokens are issued with appropriate expiration times
     [Fact]
     public async Task CreateAsync_ShouldCreateSessionWithTokens()
     {
@@ -746,6 +854,9 @@ public class SessionGrainTests
         tokens.RefreshTokenExpires.Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromSeconds(10));
     }
 
+    // Given: A new user session
+    // When: Tokens are generated
+    // Then: The access token expires in 60 minutes
     [Fact]
     public async Task CreateAsync_AccessTokenExpiry_ShouldBe60Minutes()
     {
@@ -763,6 +874,9 @@ public class SessionGrainTests
         tokens.AccessTokenExpires.Should().BeCloseTo(expectedExpiry, TimeSpan.FromSeconds(10));
     }
 
+    // Given: A new user session
+    // When: Tokens are generated
+    // Then: The refresh token expires in 30 days
     [Fact]
     public async Task CreateAsync_RefreshTokenExpiry_ShouldBe30Days()
     {
@@ -780,6 +894,9 @@ public class SessionGrainTests
         tokens.RefreshTokenExpires.Should().BeCloseTo(expectedExpiry, TimeSpan.FromSeconds(10));
     }
 
+    // Given: An active session with valid tokens
+    // When: The refresh token is used to obtain new tokens
+    // Then: Both tokens are rotated and the old refresh token is invalidated
     [Fact]
     public async Task RefreshAsync_WithValidToken_ShouldRotateTokens()
     {
@@ -801,6 +918,9 @@ public class SessionGrainTests
         result.Tokens.RefreshToken.Should().NotBe(initialTokens.RefreshToken); // Token rotated
     }
 
+    // Given: An active session
+    // When: An invalid refresh token is presented
+    // Then: The refresh is rejected with an error message
     [Fact]
     public async Task RefreshAsync_WithInvalidToken_ShouldReturnError()
     {
@@ -820,6 +940,9 @@ public class SessionGrainTests
         result.Tokens.Should().BeNull();
     }
 
+    // Given: No session exists
+    // When: A token refresh is attempted
+    // Then: The refresh is rejected because the session is not found
     [Fact]
     public async Task RefreshAsync_OnNonExistentSession_ShouldReturnError()
     {
@@ -836,6 +959,9 @@ public class SessionGrainTests
         result.Error.Should().Be("Session not found");
     }
 
+    // Given: A revoked session
+    // When: A token refresh is attempted with the old refresh token
+    // Then: The refresh is rejected because the session was revoked
     [Fact]
     public async Task RefreshAsync_OnRevokedSession_ShouldReturnError()
     {
@@ -855,6 +981,9 @@ public class SessionGrainTests
         result.Error.Should().Be("Session revoked");
     }
 
+    // Given: An active session
+    // When: The session is revoked
+    // Then: The session becomes invalid and no further operations are allowed
     [Fact]
     public async Task RevokeAsync_ShouldInvalidateSession()
     {
@@ -873,6 +1002,9 @@ public class SessionGrainTests
         isValid.Should().BeFalse();
     }
 
+    // Given: A freshly created session
+    // When: Session validity is checked
+    // Then: The session is confirmed as valid
     [Fact]
     public async Task IsValidAsync_WhenValid_ShouldReturnTrue()
     {
@@ -890,6 +1022,9 @@ public class SessionGrainTests
         isValid.Should().BeTrue();
     }
 
+    // Given: No session has been created
+    // When: Session validity is checked
+    // Then: The session is not valid
     [Fact]
     public async Task IsValidAsync_WhenNotCreated_ShouldReturnFalse()
     {
@@ -905,6 +1040,9 @@ public class SessionGrainTests
         isValid.Should().BeFalse();
     }
 
+    // Given: An active session with prior activity
+    // When: New user activity is recorded
+    // Then: The last-activity timestamp is updated
     [Fact]
     public async Task RecordActivityAsync_ShouldUpdateActivityTimestamp()
     {
@@ -926,6 +1064,9 @@ public class SessionGrainTests
         newState.LastActivityAt.Should().BeAfter(initialState.LastActivityAt!.Value);
     }
 
+    // Given: A session created via PIN authentication from a specific IP
+    // When: The session state is retrieved
+    // Then: The state includes user, organization, auth method, and connection details
     [Fact]
     public async Task GetStateAsync_ShouldReturnSessionState()
     {
@@ -950,6 +1091,9 @@ public class SessionGrainTests
         state.RefreshCount.Should().Be(0);
     }
 
+    // Given: An active session with zero refreshes
+    // When: A token refresh succeeds
+    // Then: The refresh count is incremented for audit tracking
     [Fact]
     public async Task RefreshAsync_ShouldIncrementRefreshCount()
     {
@@ -969,6 +1113,9 @@ public class SessionGrainTests
         state.RefreshCount.Should().Be(1);
     }
 
+    // Given: An existing session
+    // When: A duplicate session creation is attempted for the same session ID
+    // Then: An error is raised preventing session duplication
     [Fact]
     public async Task CreateAsync_Twice_ShouldThrow()
     {
@@ -988,6 +1135,9 @@ public class SessionGrainTests
             .WithMessage("*already exists*");
     }
 
+    // Given: An active session
+    // When: A token refresh succeeds
+    // Then: The new refresh token expiry is extended to 30 days from now
     [Fact]
     public async Task RefreshAsync_ExtendRefreshTokenExpiry()
     {
@@ -1041,6 +1191,9 @@ public class UserLookupGrainTests
         return Convert.ToBase64String(bytes);
     }
 
+    // Given: A registered user in the organization
+    // When: A PIN hash is registered for the user
+    // Then: The PIN can be used to look up the user
     [Fact]
     public async Task RegisterPinAsync_ShouldCreateMapping()
     {
@@ -1063,6 +1216,9 @@ public class UserLookupGrainTests
         result!.UserId.Should().Be(userId);
     }
 
+    // Given: A user with a registered PIN
+    // When: The correct PIN hash is used for lookup
+    // Then: The user's identity, display name, and organization are returned
     [Fact]
     public async Task FindByPinHashAsync_WithValidPin_ShouldReturnUser()
     {
@@ -1087,6 +1243,9 @@ public class UserLookupGrainTests
         result.OrganizationId.Should().Be(orgId);
     }
 
+    // Given: A user with a registered PIN
+    // When: A different PIN hash is used for lookup
+    // Then: No user is found
     [Fact]
     public async Task FindByPinHashAsync_WithInvalidPin_ShouldReturnNull()
     {
@@ -1107,6 +1266,9 @@ public class UserLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: A user with site access and a registered PIN
+    // When: The PIN is used for lookup at the authorized site
+    // Then: The user is found and authenticated
     [Fact]
     public async Task FindByPinHashAsync_WithSiteAccess_ShouldValidateSiteAccess()
     {
@@ -1131,6 +1293,9 @@ public class UserLookupGrainTests
         result!.UserId.Should().Be(userId);
     }
 
+    // Given: A user with access to one site but not another
+    // When: The PIN is used for lookup at the unauthorized site
+    // Then: No user is found due to missing site access
     [Fact]
     public async Task FindByPinHashAsync_WithoutSiteAccess_ShouldReturnNull()
     {
@@ -1155,6 +1320,9 @@ public class UserLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: A user with a registered PIN
+    // When: The PIN mapping is unregistered
+    // Then: The PIN can no longer be used for lookup
     [Fact]
     public async Task UnregisterPinAsync_ShouldRemoveMapping()
     {
@@ -1180,6 +1348,9 @@ public class UserLookupGrainTests
         after.Should().BeNull();
     }
 
+    // Given: Multiple users with different site access levels
+    // When: Users for a specific site are requested
+    // Then: Only users with access to that site are listed
     [Fact]
     public async Task GetUsersForSiteAsync_ShouldListUsersWithAccess()
     {
@@ -1218,6 +1389,9 @@ public class UserLookupGrainTests
         users.Should().NotContain(u => u.UserId == user3Id);
     }
 
+    // Given: Active and deactivated users with site access
+    // When: Users for the site are listed
+    // Then: Only active users are included
     [Fact]
     public async Task GetUsersForSiteAsync_WithInactiveUser_ShouldExcludeInactive()
     {
@@ -1249,6 +1423,9 @@ public class UserLookupGrainTests
         users.Should().Contain(u => u.UserId == activeUserId);
     }
 
+    // Given: A deactivated user with a registered PIN
+    // When: The PIN is used for lookup
+    // Then: No user is found because the account is inactive
     [Fact]
     public async Task FindByPinHashAsync_WithInactiveUser_ShouldReturnNull()
     {
@@ -1270,6 +1447,9 @@ public class UserLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: A user with an existing registered PIN
+    // When: A second PIN is registered for the same user
+    // Then: Both PINs can be used for lookup
     [Fact]
     public async Task RegisterPinAsync_MultipleTimesForSameUser_ShouldAllowBothPins()
     {
@@ -1297,6 +1477,9 @@ public class UserLookupGrainTests
         result2!.UserId.Should().Be(userId);
     }
 
+    // Given: A PIN hash already mapped to one user
+    // When: The same PIN hash is registered for a different user
+    // Then: The PIN mapping is overwritten to point to the new user
     [Fact]
     public async Task RegisterPinAsync_SamePinForDifferentUser_ShouldOverwrite()
     {
@@ -1351,6 +1534,9 @@ public class RefreshTokenLookupGrainTests
         return Convert.ToBase64String(bytes);
     }
 
+    // Given: A new session requiring token tracking
+    // When: A refresh token hash is registered
+    // Then: The token maps to the correct organization and session
     [Fact]
     public async Task RegisterAsync_ShouldCreateMapping()
     {
@@ -1370,6 +1556,9 @@ public class RefreshTokenLookupGrainTests
         result.SessionId.Should().Be(sessionId);
     }
 
+    // Given: A registered refresh token
+    // When: The token hash is used for lookup
+    // Then: The associated organization and session are returned
     [Fact]
     public async Task LookupAsync_WithValidHash_ShouldFindSession()
     {
@@ -1389,6 +1578,9 @@ public class RefreshTokenLookupGrainTests
         result.SessionId.Should().Be(sessionId);
     }
 
+    // Given: A registered refresh token
+    // When: A non-existent token hash is used for lookup
+    // Then: No session is found
     [Fact]
     public async Task LookupAsync_WithInvalidHash_ShouldReturnNull()
     {
@@ -1404,6 +1596,9 @@ public class RefreshTokenLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: A registered refresh token
+    // When: The token mapping is removed
+    // Then: The token hash can no longer be used for session lookup
     [Fact]
     public async Task RemoveAsync_ShouldDeleteMapping()
     {
@@ -1424,6 +1619,9 @@ public class RefreshTokenLookupGrainTests
         after.Should().BeNull();
     }
 
+    // Given: No registered refresh token for the given hash
+    // When: Removal of a non-existent hash is attempted
+    // Then: No error is raised
     [Fact]
     public async Task RemoveAsync_WithNonExistentHash_ShouldNotThrow()
     {
@@ -1437,6 +1635,9 @@ public class RefreshTokenLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: A session with an active refresh token
+    // When: Token rotation is performed
+    // Then: The old token is invalidated and the new token maps to the same session
     [Fact]
     public async Task RotateAsync_ShouldAtomicallyRotateTokens()
     {
@@ -1462,6 +1663,9 @@ public class RefreshTokenLookupGrainTests
         newResult.SessionId.Should().Be(sessionId);
     }
 
+    // Given: A session with an active refresh token
+    // When: Token rotation is performed with new organization and session context
+    // Then: The new token maps to the updated organization and session
     [Fact]
     public async Task RotateAsync_ShouldUpdateOrgAndSessionIds()
     {
@@ -1485,6 +1689,9 @@ public class RefreshTokenLookupGrainTests
         result.SessionId.Should().Be(newSessionId);
     }
 
+    // Given: Multiple active sessions in the same organization
+    // When: Each session's refresh token is registered
+    // Then: All tokens are independently tracked and resolvable
     [Fact]
     public async Task RegisterAsync_MultipleSessions_ShouldTrackAll()
     {
@@ -1518,6 +1725,9 @@ public class RefreshTokenLookupGrainTests
         result3!.SessionId.Should().Be(session3Id);
     }
 
+    // Given: A registered refresh token mapping
+    // When: The same hash is re-registered with different session context
+    // Then: The mapping is updated to the new organization and session
     [Fact]
     public async Task RegisterAsync_SameHashOverwrites_ShouldUpdateMapping()
     {

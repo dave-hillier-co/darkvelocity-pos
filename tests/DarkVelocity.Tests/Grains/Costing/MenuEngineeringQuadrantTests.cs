@@ -27,6 +27,9 @@ public class MenuEngineeringQuadrantTests
     // Star Classification Tests - High Margin, High Popularity
     // ============================================================================
 
+    // Given: a premium burger with above-average margin and above-average sales volume
+    // When: menu engineering analysis classifies all items
+    // Then: the item is classified as a Star with popularity and profitability indexes above 1.0
     [Fact]
     public async Task AnalyzeAsync_HighMarginHighPopularity_ShouldClassifyAsStar()
     {
@@ -73,6 +76,9 @@ public class MenuEngineeringQuadrantTests
         item.ProfitabilityIndex.Should().BeGreaterThan(1.0m); // Above average
     }
 
+    // Given: a signature steak with high margin ($33) and high volume (150 units)
+    // When: menu engineering analysis is performed
+    // Then: the item appears in the top stars report
     [Fact]
     public async Task AnalyzeAsync_Star_ShouldAppearInTopStarsReport()
     {
@@ -117,6 +123,9 @@ public class MenuEngineeringQuadrantTests
     // Plowhorse Classification Tests - Low Margin, High Popularity
     // ============================================================================
 
+    // Given: a basic burger with below-average margin but high sales volume (180 units)
+    // When: menu engineering analysis classifies all items
+    // Then: the item is classified as a Plowhorse (popular but low-profit)
     [Fact]
     public async Task AnalyzeAsync_LowMarginHighPopularity_ShouldClassifyAsPlowhorse()
     {
@@ -160,6 +169,9 @@ public class MenuEngineeringQuadrantTests
         item.ProfitabilityIndex.Should().BeLessThan(1.0m); // Below average margin
     }
 
+    // Given: a kids meal selling 200 units with only $3 margin per unit
+    // When: menu engineering analysis is performed
+    // Then: the item appears in the low-margin, high-volume items list
     [Fact]
     public async Task AnalyzeAsync_Plowhorse_ShouldAppearInLowMarginHighVolumeList()
     {
@@ -202,6 +214,9 @@ public class MenuEngineeringQuadrantTests
     // Puzzle Classification Tests - High Margin, Low Popularity
     // ============================================================================
 
+    // Given: a gourmet seafood platter with $40 margin but only 15 units sold
+    // When: menu engineering analysis classifies all items
+    // Then: the item is classified as a Puzzle (profitable but unpopular)
     [Fact]
     public async Task AnalyzeAsync_HighMarginLowPopularity_ShouldClassifyAsPuzzle()
     {
@@ -245,6 +260,9 @@ public class MenuEngineeringQuadrantTests
         item.ProfitabilityIndex.Should().BeGreaterThan(1.0m); // Above average margin
     }
 
+    // Given: a Wagyu beef item with $60 margin but only 8 units sold
+    // When: menu engineering analysis is performed
+    // Then: the item appears in the high-margin, low-volume items list
     [Fact]
     public async Task AnalyzeAsync_Puzzle_ShouldAppearInHighMarginLowVolumeList()
     {
@@ -287,6 +305,9 @@ public class MenuEngineeringQuadrantTests
     // Dog Classification Tests - Low Margin, Low Popularity
     // ============================================================================
 
+    // Given: an old recipe soup with only $2 margin and 10 units sold
+    // When: menu engineering analysis classifies all items
+    // Then: the item is classified as a Dog (low profit, low popularity)
     [Fact]
     public async Task AnalyzeAsync_LowMarginLowPopularity_ShouldClassifyAsDog()
     {
@@ -330,6 +351,9 @@ public class MenuEngineeringQuadrantTests
         item.ProfitabilityIndex.Should().BeLessThan(1.0m); // Below average margin
     }
 
+    // Given: a discontinued item with $2 margin and only 5 units sold
+    // When: menu engineering analysis is performed
+    // Then: the item appears in the dogs-to-review list for potential menu removal
     [Fact]
     public async Task AnalyzeAsync_Dog_ShouldAppearInDogsToReviewList()
     {
@@ -372,6 +396,9 @@ public class MenuEngineeringQuadrantTests
     // Comprehensive Quadrant Tests
     // ============================================================================
 
+    // Given: four menu items designed to fall into each quadrant (Star, Plowhorse, Puzzle, Dog)
+    // When: menu engineering analysis classifies all items
+    // Then: each item is classified into its expected quadrant based on margin and popularity
     [Fact]
     public async Task AnalyzeAsync_AllFourQuadrants_ShouldClassifyCorrectly()
     {
@@ -451,6 +478,9 @@ public class MenuEngineeringQuadrantTests
         dogItem!.Classification.Should().Be(MenuClass.Dog);
     }
 
+    // Given: menu items with contrasting margin and volume characteristics after analysis
+    // When: items are queried by classification (Star, Dog)
+    // Then: each query returns only items matching the requested classification
     [Fact]
     public async Task GetItemsByClassAsync_ShouldReturnCorrectItemsForEachClass()
     {
@@ -493,6 +523,9 @@ public class MenuEngineeringQuadrantTests
         dogs.All(i => i.Classification == MenuClass.Dog).Should().BeTrue();
     }
 
+    // Given: five menu items (three high-performers, two low-performers) after analysis
+    // When: classification counts are retrieved
+    // Then: counts for all four quadrants sum to the total number of menu items
     [Fact]
     public async Task GetClassificationCountsAsync_ShouldReturnAccurateCounts()
     {
@@ -547,6 +580,9 @@ public class MenuEngineeringQuadrantTests
     // Edge Cases
     // ============================================================================
 
+    // Given: a single menu item as the only item in the analysis
+    // When: menu engineering analysis is performed
+    // Then: the item's popularity and profitability indexes are exactly 1.0 (at average)
     [Fact]
     public async Task AnalyzeAsync_SingleItem_ShouldClassifyAsStarByDefault()
     {
@@ -579,6 +615,9 @@ public class MenuEngineeringQuadrantTests
         item.ProfitabilityIndex.Should().Be(1.0m);
     }
 
+    // Given: five menu items with identical pricing, cost, and sales volume
+    // When: menu engineering analysis is performed
+    // Then: all items receive the same classification
     [Fact]
     public async Task AnalyzeAsync_ItemsWithSameMetrics_ShouldAllBeClassifiedSame()
     {
@@ -618,6 +657,9 @@ public class MenuEngineeringQuadrantTests
         classifications.Distinct().Count().Should().Be(1);
     }
 
+    // Given: a digital gift card with zero cost (100% margin) alongside a regular item
+    // When: menu engineering analysis is performed
+    // Then: the zero-cost item is analyzed with full contribution margin without errors
     [Fact]
     public async Task AnalyzeAsync_ZeroCostItems_ShouldNotBreakClassification()
     {
@@ -664,6 +706,9 @@ public class MenuEngineeringQuadrantTests
     // Category-Specific Classification Tests
     // ============================================================================
 
+    // Given: menu items across Mains and Drinks categories after analysis
+    // When: category-level analysis is retrieved
+    // Then: each category includes its own item count and classification quadrant breakdown
     [Fact]
     public async Task GetCategoryAnalysisAsync_ShouldIncludeClassificationBreakdownPerCategory()
     {

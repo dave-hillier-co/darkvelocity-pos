@@ -23,6 +23,9 @@ public class AdvancedReportingGrainTests
     // Daypart Analysis Grain Tests
     // ============================================================================
 
+    // Given: A daypart analysis grain is initialized for today's business date
+    // When: Hourly sales are recorded for lunch (11, 12) and dinner (18) hours
+    // Then: The snapshot identifies the peak hour within lunch and dinner as the peak daypart
     [Fact]
     public async Task DaypartAnalysisGrain_RecordHourlySale_AggregatesCorrectly()
     {
@@ -71,6 +74,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(55, hour12.GuestCount);
     }
 
+    // Given: A daypart analysis grain has recorded lunch-hour sales of 1000
+    // When: 8 labor hours at 120 cost are recorded for the same hour
+    // Then: The sales per labor hour (SPLH) is calculated as 125
     [Fact]
     public async Task DaypartAnalysisGrain_RecordHourlyLabor_CalculatesSPLH()
     {
@@ -105,6 +111,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(125.00m, hour12.SalesPerLaborHour); // 1000 / 8 = 125
     }
 
+    // Given: A daypart analysis grain has recorded sales across three lunch hours (11, 12, 13)
+    // When: The lunch daypart performance is retrieved
+    // Then: Net sales, transactions, and guest counts are aggregated across all lunch hours
     [Fact]
     public async Task DaypartAnalysisGrain_GetDaypartPerformance_CorrectlyGroupsHours()
     {
@@ -134,6 +143,9 @@ public class AdvancedReportingGrainTests
     // Labor Report Grain Tests
     // ============================================================================
 
+    // Given: A labor report grain is initialized for a weekly period with FOH and BOH staff entries
+    // When: Labor entries with regular and overtime hours are recorded alongside 5000 in net sales
+    // Then: The total labor cost and labor cost percentage are calculated correctly
     [Fact]
     public async Task LaborReportGrain_RecordLaborEntry_CalculatesLaborCostPercent()
     {
@@ -177,6 +189,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(26.85m, Math.Round(laborCostPercent, 2));
     }
 
+    // Given: A labor report grain is initialized for a weekly period
+    // When: Two employees are recorded, one with 10 hours of overtime and one with none
+    // Then: An overtime alert is generated only for the employee exceeding regular hours
     [Fact]
     public async Task LaborReportGrain_TrackOvertimeHours_IdentifiesOvertimeAlerts()
     {
@@ -221,6 +236,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(50.0m, overtimeAlerts[0].WeeklyHoursTotal); // 40 + 10
     }
 
+    // Given: A labor report grain has 80 labor hours recorded with 4000 in net sales
+    // When: The sales per labor hour metric is calculated
+    // Then: SPLH equals 50 (4000 / 80)
     [Fact]
     public async Task LaborReportGrain_CalculatesSalesPerLaborHour()
     {
@@ -255,6 +273,9 @@ public class AdvancedReportingGrainTests
     // Product Mix Grain Tests
     // ============================================================================
 
+    // Given: A product mix grain is initialized for today's business date
+    // When: Sales are recorded for burgers and fries with quantities, revenue, and COGS
+    // Then: The snapshot calculates gross profit and gross profit percentage per product
     [Fact]
     public async Task ProductMixGrain_RecordProductSale_AggregatesCorrectly()
     {
@@ -302,6 +323,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(70.00m, burger.GrossProfitPercent); // 350 / 500 * 100
     }
 
+    // Given: A product mix grain is initialized for today's business date
+    // When: Burger sales are recorded with cheese and bacon modifiers across multiple transactions
+    // Then: Modifier performance tracks times applied and total revenue per modifier
     [Fact]
     public async Task ProductMixGrain_RecordModifiers_TracksModifierPerformance()
     {
@@ -356,6 +380,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(2.00m, baconModifier.TotalRevenue);
     }
 
+    // Given: A product mix grain has recorded 100 units sold of a test item
+    // When: Voids for customer request and kitchen error plus a service recovery comp are recorded
+    // Then: The void/comp analysis tracks total counts, amounts, percentages, and reasons
     [Fact]
     public async Task ProductMixGrain_RecordVoidsAndComps_TracksVoidCompAnalysis()
     {
@@ -412,6 +439,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(50.00m, customerVoids.Amount);
     }
 
+    // Given: A product mix grain has recorded three products with different revenue, quantity, and profit profiles
+    // When: Top products are requested sorted by revenue, quantity, and profit respectively
+    // Then: Each sort order returns products in the correct descending sequence
     [Fact]
     public async Task ProductMixGrain_GetTopProducts_ReturnsSortedCorrectly()
     {
@@ -468,6 +498,9 @@ public class AdvancedReportingGrainTests
     // Payment Reconciliation Grain Tests
     // ============================================================================
 
+    // Given: A payment reconciliation grain is initialized for today's business date
+    // When: Cash and card payments are recorded from the POS system
+    // Then: The snapshot aggregates cash total, card total, and grand total correctly
     [Fact]
     public async Task PaymentReconciliationGrain_RecordPayments_AggregatesCorrectly()
     {
@@ -507,6 +540,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(2300.00m, snapshot.PosGrandTotal);
     }
 
+    // Given: POS recorded 500 cash and 1500 card, but the cash count is short by 10
+    // When: The payments are reconciled against the physical cash count and processor settlement
+    // Then: A cash variance exception is detected and the reconciliation status shows Discrepancy
     [Fact]
     public async Task PaymentReconciliationGrain_ReconcilePayments_DetectsDiscrepancies()
     {
@@ -562,6 +598,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(PaymentReconciliationStatus.Discrepancy, snapshot.Status);
     }
 
+    // Given: A payment reconciliation has detected a cash variance exception
+    // When: The exception is resolved with camera footage verification and a manager resolution
+    // Then: The exception status changes to Resolved and the overall reconciliation status becomes Matched
     [Fact]
     public async Task PaymentReconciliationGrain_ResolveException_UpdatesStatus()
     {
@@ -603,6 +642,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal("Verified with camera footage - cashier error", snapshot.Exceptions[0].Resolution);
     }
 
+    // Given: A payment reconciliation has matching cash count and POS totals
+    // When: The reconciliation is finalized by a manager
+    // Then: The reconciliation timestamp and manager ID are recorded
     [Fact]
     public async Task PaymentReconciliationGrain_Finalize_SetsReconciliationData()
     {
@@ -637,6 +679,9 @@ public class AdvancedReportingGrainTests
         Assert.Equal(managerId, snapshot.ReconciledBy);
     }
 
+    // Given: POS recorded 500 cash and 1000 card, cash count is over by 5, and processor settled 10 less
+    // When: The total payment variance is calculated
+    // Then: The total variance combines cash overage (+5) and card shortfall (+10) to equal +15
     [Fact]
     public async Task PaymentReconciliationGrain_GetTotalVariance_CalculatesCorrectly()
     {
@@ -691,6 +736,9 @@ public class AdvancedReportingGrainTests
     // Category Performance Tests
     // ============================================================================
 
+    // Given: A product mix grain has recorded sales for burgers and steak in Entrees and fries in Sides
+    // When: The category performance breakdown is retrieved
+    // Then: Entrees aggregates both items with combined quantities, revenue, and profit; Sides shows independently
     [Fact]
     public async Task ProductMixGrain_GetCategoryPerformance_GroupsCorrectly()
     {

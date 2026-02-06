@@ -20,6 +20,9 @@ public class OfflineSyncQueueGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IOfflineSyncQueueGrain>(key);
     }
 
+    // Given: A new offline sync queue for a device
+    // When: The queue is initialized
+    // Then: The queue starts with zero queued and zero synced operations
     [Fact]
     public async Task InitializeAsync_ShouldInitializeQueue()
     {
@@ -37,6 +40,9 @@ public class OfflineSyncQueueGrainTests
         summary.SyncedCount.Should().Be(0);
     }
 
+    // Given: An initialized offline sync queue for a POS device
+    // When: An order creation operation is queued while the device is offline
+    // Then: The operation is stored with queued status and correct metadata
     [Fact]
     public async Task QueueOperationAsync_ShouldQueueOperation()
     {
@@ -66,6 +72,9 @@ public class OfflineSyncQueueGrainTests
         result.IdempotencyKey.Should().Be("order-001");
     }
 
+    // Given: An operation already queued with a specific idempotency key
+    // When: A duplicate operation with the same idempotency key is queued
+    // Then: The original operation is returned instead of creating a duplicate
     [Fact]
     public async Task QueueOperationAsync_WithDuplicateIdempotencyKey_ShouldReturnExisting()
     {
@@ -99,6 +108,9 @@ public class OfflineSyncQueueGrainTests
         secondOperation.OperationId.Should().Be(firstOperation.OperationId);
     }
 
+    // Given: Three operations queued with out-of-order client sequence numbers
+    // When: The queued operations are retrieved
+    // Then: The operations are returned ordered by client sequence number
     [Fact]
     public async Task GetQueuedOperationsAsync_ShouldReturnQueuedOperationsInOrder()
     {
@@ -128,6 +140,9 @@ public class OfflineSyncQueueGrainTests
         queued[2].ClientSequence.Should().Be(3);
     }
 
+    // Given: A device with two queued offline operations (order and payment)
+    // When: The sync queue is processed upon reconnection
+    // Then: All operations are synced successfully with no failures or conflicts
     [Fact]
     public async Task ProcessQueueAsync_ShouldSyncAllOperations()
     {
@@ -154,6 +169,9 @@ public class OfflineSyncQueueGrainTests
         result.ConflictedCount.Should().Be(0);
     }
 
+    // Given: A queued offline operation
+    // When: The operation is marked as synced with a server acknowledgment
+    // Then: The operation status transitions to synced with a timestamp
     [Fact]
     public async Task MarkSyncedAsync_ShouldTransitionToSynced()
     {
@@ -175,6 +193,9 @@ public class OfflineSyncQueueGrainTests
         result.SyncedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A queued offline order update operation
+    // When: The sync detects the order was modified by another user on the server
+    // Then: The operation is marked as conflicted with the reason and server state
     [Fact]
     public async Task MarkConflictedAsync_ShouldTransitionToConflicted()
     {
@@ -200,6 +221,9 @@ public class OfflineSyncQueueGrainTests
         result.ServerPayloadJson.Should().Be("{\"status\": \"voided\"}");
     }
 
+    // Given: A queued offline operation
+    // When: The sync fails due to a network timeout
+    // Then: The operation is marked as failed with error details and retry count incremented
     [Fact]
     public async Task MarkFailedAsync_ShouldTransitionToFailed()
     {
@@ -222,6 +246,9 @@ public class OfflineSyncQueueGrainTests
         result.RetryCount.Should().Be(1);
     }
 
+    // Given: Two operations where one is conflicted and one is synced
+    // When: Conflicted operations are queried
+    // Then: Only the conflicted operation is returned
     [Fact]
     public async Task GetConflictedOperationsAsync_ShouldReturnOnlyConflicted()
     {
@@ -249,6 +276,9 @@ public class OfflineSyncQueueGrainTests
         conflicts[0].OperationId.Should().Be(op1.OperationId);
     }
 
+    // Given: A conflicted offline operation
+    // When: The conflict is resolved with server-wins strategy
+    // Then: The operation is marked as synced, accepting the server version
     [Fact]
     public async Task ResolveConflictAsync_WithServerWins_ShouldMarkAsSynced()
     {
@@ -272,6 +302,9 @@ public class OfflineSyncQueueGrainTests
         result.Status.Should().Be(SyncOperationStatus.Synced);
     }
 
+    // Given: A conflicted offline operation
+    // When: The conflict is resolved with client-wins strategy
+    // Then: The operation is requeued for sync with the client's version
     [Fact]
     public async Task ResolveConflictAsync_WithClientWins_ShouldRequeueForSync()
     {
@@ -296,6 +329,9 @@ public class OfflineSyncQueueGrainTests
         result.ConflictReason.Should().BeNull();
     }
 
+    // Given: A conflicted operation with differing client and server amounts
+    // When: The conflict is resolved manually with a merged payload
+    // Then: The operation is requeued with the manually resolved payload
     [Fact]
     public async Task ResolveConflictAsync_WithManual_ShouldUseResolvedPayload()
     {
@@ -322,6 +358,9 @@ public class OfflineSyncQueueGrainTests
         result.PayloadJson.Should().Be("{\"amount\": 15}");
     }
 
+    // Given: An initialized sync queue with no operations
+    // When: Pending operations status is checked
+    // Then: No pending operations exist
     [Fact]
     public async Task HasPendingOperationsAsync_WhenNoOperations_ShouldReturnFalse()
     {
@@ -336,6 +375,9 @@ public class OfflineSyncQueueGrainTests
         hasPending.Should().BeFalse();
     }
 
+    // Given: A sync queue with one queued operation
+    // When: Pending operations status is checked
+    // Then: Pending operations are detected
     [Fact]
     public async Task HasPendingOperationsAsync_WhenHasQueued_ShouldReturnTrue()
     {
@@ -356,6 +398,9 @@ public class OfflineSyncQueueGrainTests
         hasPending.Should().BeTrue();
     }
 
+    // Given: A sync queue with a synced operation
+    // When: Synced operations are cleared from the queue
+    // Then: The synced operation count resets to zero
     [Fact]
     public async Task ClearSyncedOperationsAsync_ShouldRemoveSyncedOperations()
     {
@@ -378,6 +423,9 @@ public class OfflineSyncQueueGrainTests
         summary.SyncedCount.Should().Be(0);
     }
 
+    // Given: An initialized sync queue that has never synced
+    // When: The last sync time is queried
+    // Then: No sync time is available
     [Fact]
     public async Task GetLastSyncTimeAsync_WhenNeverSynced_ShouldReturnNull()
     {
@@ -392,6 +440,9 @@ public class OfflineSyncQueueGrainTests
         lastSync.Should().BeNull();
     }
 
+    // Given: A sync queue with a recently synced operation
+    // When: The last sync time is queried
+    // Then: The timestamp of the most recent sync is returned
     [Fact]
     public async Task GetLastSyncTimeAsync_AfterSync_ShouldReturnTime()
     {
@@ -414,6 +465,9 @@ public class OfflineSyncQueueGrainTests
         lastSync.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A sync queue with operations in queued, synced, and conflicted states
+    // When: The queue summary is requested
+    // Then: The summary reports correct counts for each operation status
     [Fact]
     public async Task GetSummaryAsync_ShouldReturnCorrectCounts()
     {

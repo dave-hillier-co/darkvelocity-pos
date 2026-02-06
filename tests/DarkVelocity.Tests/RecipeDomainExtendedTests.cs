@@ -22,6 +22,9 @@ public class SubRecipeCompositionTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a marinara sauce sub-recipe with tomato and garlic ingredients
+    // When: a spaghetti marinara recipe uses the sub-recipe output as an ingredient
+    // Then: the main recipe inherits cost calculations from the sub-recipe
     [Fact]
     public async Task Recipe_WithSubRecipeIngredient_InheritsCostFromSubRecipe()
     {
@@ -110,6 +113,9 @@ public class SubRecipeCompositionTests
         mainRecipe.Published.Ingredients.Should().HaveCount(2);
     }
 
+    // Given: a three-level recipe hierarchy (flour/butter -> pastry dough -> fruit tart)
+    // When: the top-level tart recipe is created with nested sub-recipe ingredients
+    // Then: cost per portion is calculated correctly through all nesting levels
     [Fact]
     public async Task Recipe_WithMultipleLevelsOfNesting_CalculatesCostCorrectly()
     {
@@ -184,6 +190,9 @@ public class SubRecipeCompositionTests
         tartRecipe.Published.Ingredients.Should().HaveCount(2);
     }
 
+    // Given: a published recipe with a single ingredient at known cost
+    // When: the ingredient cost is doubled via cost recalculation
+    // Then: the recipe's ingredient line cost updates to reflect the new unit cost
     [Fact]
     public async Task SubRecipe_CostUpdate_PropagatesToParentRecipe()
     {
@@ -237,6 +246,9 @@ public class BatchPrepRecipeTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a batch prep recipe definition with shelf life, output units, and min/max batch sizes
+    // When: the recipe is created and published
+    // Then: all batch prep properties including shelf life, output unit, and batch constraints are persisted
     [Fact]
     public async Task BatchPrepRecipe_CreatesWithCorrectProperties()
     {
@@ -284,6 +296,9 @@ public class BatchPrepRecipeTests
         recipe.Published.OutputInventoryItemId.Should().Be(outputItemId);
     }
 
+    // Given: a simple syrup batch recipe using 1000g sugar at 0.001/g yielding 500ml
+    // When: the recipe is published
+    // Then: the cost per output unit is correctly calculated as total ingredient cost divided by yield
     [Fact]
     public async Task BatchPrepRecipe_CalculatesCostPerOutputUnit()
     {
@@ -319,6 +334,9 @@ public class BatchPrepRecipeTests
         recipe.Published.CostPerPortion.Should().Be(0.002m); // 1.00 / 500 = 0.002 per ml
     }
 
+    // Given: a recipe registry containing both made-to-order and batch prep recipes
+    // When: querying for batch prep recipes only
+    // Then: only batch prep recipes are returned, excluding made-to-order recipes
     [Fact]
     public async Task Registry_GetBatchPrepRecipes_FiltersCorrectly()
     {
@@ -344,6 +362,9 @@ public class BatchPrepRecipeTests
         batchPrepRecipes.Should().Contain(r => r.Name == "Prep Dough");
     }
 
+    // Given: a recipe registry with multiple batch prep recipes, two sharing the same output inventory item
+    // When: querying recipes by the shared output item ID
+    // Then: only the two recipes producing that output item are returned
     [Fact]
     public async Task Registry_GetRecipesByOutputItem_ReturnsMatchingRecipes()
     {
@@ -385,6 +406,9 @@ public class IngredientSubstitutionTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a cookie recipe with butter as the primary ingredient
+    // When: the recipe is created with margarine and coconut oil as substitution options
+    // Then: both substitution IDs are stored on the ingredient entry
     [Fact]
     public async Task Recipe_WithSubstitutions_TracksSubstitutionOptions()
     {
@@ -437,6 +461,9 @@ public class IngredientSubstitutionTests
         butterIngredient.SubstitutionIds.Should().Contain(substitution2Id);
     }
 
+    // Given: a published recipe with an ingredient that has no substitutions
+    // When: a draft is created adding a substitution option to that ingredient
+    // Then: the draft ingredient includes the new substitution ID
     [Fact]
     public async Task Recipe_Draft_CanUpdateSubstitutions()
     {
@@ -498,6 +525,9 @@ public class AdvancedAllergenAggregationTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a fresh pasta sub-recipe containing gluten and a cream sauce containing dairy
+    // When: allergens are calculated for a recipe using both ingredients
+    // Then: the aggregated allergens include dairy from direct ingredients
     [Fact]
     public async Task Recipe_WithSubRecipe_InheritsAllergensFromSubRecipe()
     {
@@ -572,6 +602,9 @@ public class AdvancedAllergenAggregationTests
         // The service should detect the linked sub-recipe and include its allergens
     }
 
+    // Given: three ingredients (bread crumbs, pasta, soy sauce) all declaring gluten
+    // When: allergens are aggregated for a recipe containing all three
+    // Then: gluten appears only once in the allergen list, and soy is also included
     [Fact]
     public async Task Recipe_WithMultipleIngredientsContainingSameAllergen_DeduplicatesAllergens()
     {
@@ -629,6 +662,9 @@ public class AdvancedAllergenAggregationTests
         result.ContainsAllergens.Should().Contain(StandardAllergens.Soy);
     }
 
+    // Given: oat flour processed on equipment that handles tree nuts (may-contain declaration)
+    // When: allergens are calculated for a recipe using this ingredient
+    // Then: tree nuts appear in the may-contain list but not in the contains list
     [Fact]
     public async Task Recipe_CrossContamination_TrackedAsMayContain()
     {
@@ -681,6 +717,9 @@ public class PrepInstructionOrderingTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: three ingredients each assigned a specific display order
+    // When: the recipe is created and published
+    // Then: ingredients are retrievable in the specified display order
     [Fact]
     public async Task Recipe_IngredientsWithDisplayOrder_MaintainsOrder()
     {
@@ -726,6 +765,9 @@ public class PrepInstructionOrderingTests
         ingredients[2].IngredientName.Should().Be("Ingredient B");
     }
 
+    // Given: a french onion soup recipe with ingredient-level and recipe-level prep instructions
+    // When: the recipe is created with prep time and cook time
+    // Then: both prep instructions, prep time, and cook time are persisted on the published version
     [Fact]
     public async Task Recipe_IngredientsWithPrepInstructions_StoresPrepInstructions()
     {
@@ -764,6 +806,9 @@ public class PrepInstructionOrderingTests
         recipe.Published.CookTimeMinutes.Should().Be(30);
     }
 
+    // Given: a chicken salad recipe with chicken breast (required) and bacon bits (optional)
+    // When: the recipe is created and published
+    // Then: the required ingredient is marked as non-optional and the optional ingredient is marked as optional
     [Fact]
     public async Task Recipe_WithOptionalIngredients_MarksOptionalCorrectly()
     {
@@ -822,6 +867,9 @@ public class RecipeVersionEdgeCaseTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a recipe progressed through three published versions
+    // When: the recipe is reverted to version 1
+    // Then: a fourth version is created with version 1 content and full version history is preserved
     [Fact]
     public async Task Recipe_MultipleVersionReverts_MaintainsVersionHistory()
     {
@@ -870,6 +918,9 @@ public class RecipeVersionEdgeCaseTests
         snapshot.TotalVersions.Should().Be(4);
     }
 
+    // Given: a published recipe using ingredient 1
+    // When: a draft is created using a completely different ingredient 2
+    // Then: the published version retains ingredient 1 while the draft contains ingredient 2
     [Fact]
     public async Task Recipe_DraftWithDifferentIngredients_PreservesPublishedVersion()
     {
@@ -924,6 +975,9 @@ public class RecipeVersionEdgeCaseTests
         snapshot.Draft.Ingredients[0].IngredientId.Should().Be(ingredient2Id);
     }
 
+    // Given: a recipe with a single published version
+    // When: requesting a version number that does not exist
+    // Then: null is returned without error
     [Fact]
     public async Task Recipe_GetNonExistentVersion_ReturnsNull()
     {
@@ -972,6 +1026,9 @@ public class RecipeCostEdgeCaseTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a recipe ingredient (whole lobster) with 30% waste factor
+    // When: 200g of usable lobster meat is required
+    // Then: the effective purchase quantity is adjusted upward to 285.71g and cost reflects the higher quantity
     [Fact]
     public async Task Recipe_WithHighWastePercentage_CalculatesCorrectEffectiveQuantity()
     {
@@ -1013,6 +1070,9 @@ public class RecipeCostEdgeCaseTests
         lobsterIngredient.LineCost.Should().BeApproximately(14.29m, 0.1m);
     }
 
+    // Given: a steak dinner recipe with carrots (15% peeling waste), olive oil (no waste), and steak (10% trimming waste)
+    // When: the recipe is created and published
+    // Then: each ingredient's effective quantity and cost reflects its individual waste factor
     [Fact]
     public async Task Recipe_WithMixedIngredientWaste_CalculatesTotalCorrectly()
     {
@@ -1072,6 +1132,9 @@ public class RecipeCostEdgeCaseTests
         recipe.Published.TheoreticalCost.Should().BeLessThan(29m);
     }
 
+    // Given: a recipe with a required base ingredient and an expensive optional topping
+    // When: the recipe cost is calculated
+    // Then: only the required ingredient contributes to the theoretical cost
     [Fact]
     public async Task Recipe_OptionalIngredients_ExcludedFromCost()
     {
@@ -1123,6 +1186,9 @@ public class RecipeTranslationTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a published chicken soup recipe
+    // When: translations are added for Spanish, French, and German locales
+    // Then: all three translations are stored and retrievable by locale key
     [Fact]
     public async Task Recipe_MultipleTranslations_StoredCorrectly()
     {
@@ -1177,6 +1243,9 @@ public class RecipeTranslationTests
         published.Translations["fr-FR"].Name.Should().Be("Soupe au Poulet");
     }
 
+    // Given: a published recipe with Spanish and French translations
+    // When: the Spanish translation is removed
+    // Then: only the French translation remains
     [Fact]
     public async Task Recipe_RemoveTranslation_RemovesCorrectLocale()
     {

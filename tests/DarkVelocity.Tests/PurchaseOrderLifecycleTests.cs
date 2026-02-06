@@ -39,6 +39,9 @@ public class PurchaseOrderLifecycleTests
     // Complete Workflow Tests
     // ============================================================================
 
+    // Given: a draft purchase order with produce line items
+    // When: the order is submitted and all lines are fully received in sequence
+    // Then: the PO transitions through Draft, Submitted, PartiallyReceived, and Received statuses
     [Fact]
     public async Task CompleteWorkflow_DraftToReceived_ShouldTransitionCorrectly()
     {
@@ -85,6 +88,9 @@ public class PurchaseOrderLifecycleTests
         (await grain.IsFullyReceivedAsync()).Should().BeTrue();
     }
 
+    // Given: a submitted purchase order with line items
+    // When: the order is cancelled due to supplier being out of stock
+    // Then: the PO moves to Cancelled status with the cancellation reason and timestamp recorded
     [Fact]
     public async Task CompleteWorkflow_DraftToCancelled_ShouldTransitionCorrectly()
     {
@@ -117,6 +123,9 @@ public class PurchaseOrderLifecycleTests
     // Draft Modification Tests
     // ============================================================================
 
+    // Given: a draft purchase order with one line item
+    // When: the line quantity, unit price, and notes are updated
+    // Then: the line reflects the new values and the order total is recalculated
     [Fact]
     public async Task Draft_CanModifyLines_BeforeSubmission()
     {
@@ -145,6 +154,9 @@ public class PurchaseOrderLifecycleTests
         snapshot.OrderTotal.Should().Be(120m); // 20 * 6
     }
 
+    // Given: a draft purchase order with two line items
+    // When: one line item is removed
+    // Then: only the remaining line exists and the order total reflects the removal
     [Fact]
     public async Task Draft_CanRemoveLines_BeforeSubmission()
     {
@@ -172,6 +184,9 @@ public class PurchaseOrderLifecycleTests
         snapshot.OrderTotal.Should().Be(60m);
     }
 
+    // Given: a draft purchase order with no line items
+    // When: multiple lines are added and removed in sequence
+    // Then: the final line count and order total reflect all add/remove operations correctly
     [Fact]
     public async Task Draft_CanAddRemoveAddLines_MultipleOperations()
     {
@@ -204,6 +219,9 @@ public class PurchaseOrderLifecycleTests
     // Under-Delivery Tests
     // ============================================================================
 
+    // Given: a submitted purchase order for 100 units of an ingredient
+    // When: only 80 units are received from the supplier
+    // Then: the PO remains in PartiallyReceived status with the shortfall recorded
     [Fact]
     public async Task Receive_UnderDelivery_ShouldAcceptPartial()
     {
@@ -235,6 +253,9 @@ public class PurchaseOrderLifecycleTests
         snapshot.Status.Should().Be(PurchaseOrderStatus.PartiallyReceived);
     }
 
+    // Given: a partially received purchase order with 60 of 100 units delivered
+    // When: the remaining 40 units are received in a follow-up delivery
+    // Then: the PO moves to Received status with the full ordered quantity
     [Fact]
     public async Task Receive_UnderDelivery_CanContinueReceiving()
     {
@@ -269,6 +290,9 @@ public class PurchaseOrderLifecycleTests
     // Over-Delivery Tests (Per Negative Stock Philosophy)
     // ============================================================================
 
+    // Given: a submitted purchase order for 50 units of an ingredient
+    // When: the supplier delivers 60 units (over-delivery)
+    // Then: the PO accepts the excess quantity and moves to Received status
     [Fact]
     public async Task Receive_OverDelivery_ShouldAcceptExtraQuantity()
     {
@@ -298,6 +322,9 @@ public class PurchaseOrderLifecycleTests
         snapshot.Status.Should().Be(PurchaseOrderStatus.Received);
     }
 
+    // Given: a submitted purchase order for 30 units of an ingredient
+    // When: three separate deliveries totaling 45 units are received
+    // Then: the received quantity accumulates beyond the ordered amount across all receipts
     [Fact]
     public async Task Receive_OverDelivery_MultipleReceipts_ShouldAccumulate()
     {
@@ -331,6 +358,9 @@ public class PurchaseOrderLifecycleTests
     // State Validation Tests
     // ============================================================================
 
+    // Given: a purchase order that has already been submitted to the supplier
+    // When: adding a new line item is attempted
+    // Then: the operation is rejected because the PO is no longer in draft status
     [Fact]
     public async Task SubmittedPO_CannotAddLines()
     {
@@ -356,6 +386,9 @@ public class PurchaseOrderLifecycleTests
             .WithMessage("*submitted*");
     }
 
+    // Given: a purchase order that has been cancelled
+    // When: receiving a delivery against the cancelled PO is attempted
+    // Then: the operation is rejected because goods cannot be received against a cancelled order
     [Fact]
     public async Task CancelledPO_CannotReceive()
     {
@@ -381,6 +414,9 @@ public class PurchaseOrderLifecycleTests
             .WithMessage("*Cannot receive*");
     }
 
+    // Given: a purchase order that has been fully received
+    // When: cancellation is attempted after all goods have arrived
+    // Then: the operation is rejected because a received PO cannot be cancelled
     [Fact]
     public async Task ReceivedPO_CannotCancel()
     {
@@ -414,6 +450,9 @@ public class PurchaseOrderLifecycleTests
     // Order Number and Metadata Tests
     // ============================================================================
 
+    // Given: three new purchase orders for the same organization
+    // When: all three orders are created
+    // Then: each receives a unique PO number with the standard "PO-" prefix
     [Fact]
     public async Task CreatePO_ShouldGenerateUniqueOrderNumber()
     {
@@ -445,6 +484,9 @@ public class PurchaseOrderLifecycleTests
         orderNumbers.Distinct().Count().Should().Be(3);
     }
 
+    // Given: a new purchase order
+    // When: created with a scheduled delivery date and procurement notes
+    // Then: the order records the expected delivery schedule and notes
     [Fact]
     public async Task CreatePO_ShouldTrackExpectedDeliveryDate()
     {
@@ -468,6 +510,9 @@ public class PurchaseOrderLifecycleTests
     // Total Calculation Tests
     // ============================================================================
 
+    // Given: a draft purchase order with three line items at varying quantities and prices
+    // When: the order total is requested
+    // Then: the total equals the sum of all line totals
     [Fact]
     public async Task GetTotal_ShouldReturnCorrectSum()
     {
@@ -494,6 +539,9 @@ public class PurchaseOrderLifecycleTests
         total.Should().Be(200m);
     }
 
+    // Given: a draft purchase order with one line of 7 units at a fractional unit price
+    // When: the line total is calculated
+    // Then: the total is the precise product of quantity and unit price
     [Fact]
     public async Task LineTotal_ShouldCalculateCorrectly()
     {
@@ -518,6 +566,9 @@ public class PurchaseOrderLifecycleTests
     // Multi-Line Receive Tests
     // ============================================================================
 
+    // Given: a submitted purchase order with three line items
+    // When: one line is fully received, one partially received, and one not received at all
+    // Then: each line tracks its received quantity independently and the PO remains PartiallyReceived
     [Fact]
     public async Task MultiLineReceive_MixedProgress_ShouldTrackSeparately()
     {
@@ -558,6 +609,9 @@ public class PurchaseOrderLifecycleTests
         noLine.QuantityReceived.Should().Be(0);
     }
 
+    // Given: a submitted purchase order with five line items at varying quantities
+    // When: all five lines are received in full
+    // Then: the PO moves to Received status and is marked as fully received
     [Fact]
     public async Task MultiLineReceive_AllComplete_ShouldMarkReceived()
     {

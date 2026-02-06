@@ -22,6 +22,9 @@ public class InventoryTransferGrainTests
         return grain;
     }
 
+    // Given: A new inter-site inventory transfer with one line item for ground beef
+    // When: The transfer is requested with source site, destination site, and 25 lb of ground beef
+    // Then: The transfer is created with status Requested and the line item records the requested quantity
     [Fact]
     public async Task RequestAsync_ShouldCreateTransfer()
     {
@@ -51,6 +54,9 @@ public class InventoryTransferGrainTests
         state.Lines[0].RequestedQuantity.Should().Be(25);
     }
 
+    // Given: A pending inventory transfer between two sites
+    // When: A manager approves the transfer
+    // Then: The transfer status transitions to Approved with the approver recorded
     [Fact]
     public async Task ApproveAsync_ShouldTransitionToApproved()
     {
@@ -78,6 +84,9 @@ public class InventoryTransferGrainTests
         state.ApprovedBy.Should().Be(approverId);
     }
 
+    // Given: A pending inventory transfer between two sites
+    // When: The transfer is rejected due to insufficient stock at the source site
+    // Then: The transfer status transitions to Rejected with the rejection reason recorded
     [Fact]
     public async Task RejectAsync_ShouldTransitionToRejected()
     {
@@ -104,6 +113,9 @@ public class InventoryTransferGrainTests
         state.RejectionReason.Should().Be("Insufficient stock at source");
     }
 
+    // Given: An approved transfer of 25 lb ground beef from a source site with 100 units on hand
+    // When: The transfer is shipped with a tracking number
+    // Then: The transfer status transitions to Shipped and source inventory is deducted to 75 units
     [Fact]
     public async Task ShipAsync_ShouldDeductFromSourceInventory()
     {
@@ -141,6 +153,9 @@ public class InventoryTransferGrainTests
         sourceLevel.QuantityOnHand.Should().Be(75); // 100 - 25
     }
 
+    // Given: A shipped transfer of 25 lb ground beef with destination inventory initialized
+    // When: The transfer receipt is finalized at the destination site
+    // Then: The transfer status transitions to Received and destination inventory is credited with 25 units
     [Fact]
     public async Task FinalizeReceiptAsync_ShouldCreditDestinationInventory()
     {
@@ -181,6 +196,9 @@ public class InventoryTransferGrainTests
         destLevel.QuantityOnHand.Should().Be(25);
     }
 
+    // Given: A shipped transfer of 25 lb ground beef between two sites
+    // When: The destination receives only 23 units due to transit damage
+    // Then: A negative variance of -2 units is recorded for the transfer line
     [Fact]
     public async Task ReceiveItemAsync_WithVariance_ShouldTrackDifference()
     {
@@ -219,6 +237,9 @@ public class InventoryTransferGrainTests
         variances[0].Variance.Should().Be(-2);
     }
 
+    // Given: A shipped transfer that deducted 25 units from source inventory (100 down to 75)
+    // When: The transfer is cancelled with stock return to source enabled
+    // Then: The transfer status transitions to Cancelled and source inventory is restored to 100 units
     [Fact]
     public async Task CancelAsync_AfterShipped_ShouldReturnStock()
     {

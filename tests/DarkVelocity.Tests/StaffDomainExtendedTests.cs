@@ -32,6 +32,9 @@ public class StaffDomainExtendedTests
     // Schedule Management Tests
     // ============================================================================
 
+    // Given: a published weekly schedule with one employee already assigned a morning shift (9 AM - 5 PM)
+    // When: a second evening shift (5 PM - 11 PM) is added for the same employee on the same day
+    // Then: both shifts should be tracked on the schedule for that employee
     [Fact]
     public async Task ScheduleGrain_AddShift_AddsMultipleShiftsForSameEmployee()
     {
@@ -82,6 +85,9 @@ public class StaffDomainExtendedTests
         employeeShifts.Should().HaveCount(2);
     }
 
+    // Given: a weekly schedule for a site
+    // When: an 8-hour shift with a 30-minute break at $15/hr is added
+    // Then: the total labor cost should be $112.50 (7.5 billable hours at $15/hr)
     [Fact]
     public async Task ScheduleGrain_AddShift_CalculatesLaborCostCorrectly()
     {
@@ -116,6 +122,9 @@ public class StaffDomainExtendedTests
         laborCost.Should().Be(112.50m);
     }
 
+    // Given: a weekly schedule that has been locked by a manager
+    // When: an attempt is made to add a new shift to the locked schedule
+    // Then: the system should reject the modification with an error
     [Fact]
     public async Task ScheduleGrain_AddShift_ThrowsWhenLocked()
     {
@@ -149,6 +158,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Cannot modify a locked schedule");
     }
 
+    // Given: a schedule with an existing shift running from 9 AM to 5 PM
+    // When: the shift times are updated to 10 AM to 6 PM
+    // Then: the shift should reflect the new start and end times
     [Fact]
     public async Task ScheduleGrain_UpdateShift_UpdatesTimeCorrectly()
     {
@@ -198,6 +210,9 @@ public class StaffDomainExtendedTests
     // Time Off Accrual and Balance Tests
     // ============================================================================
 
+    // Given: an employee requesting vacation time
+    // When: a time off request is created spanning 5 calendar days (inclusive)
+    // Then: the total days should be calculated as 5
     [Fact]
     public async Task TimeOffGrain_Create_CalculatesCorrectTotalDays()
     {
@@ -222,6 +237,9 @@ public class StaffDomainExtendedTests
         snapshot.TotalDays.Should().Be(5);
     }
 
+    // Given: an employee requesting a single personal day
+    // When: a time off request is created with the same start and end date
+    // Then: the total days should be calculated as 1
     [Fact]
     public async Task TimeOffGrain_Create_SingleDayRequest_CalculatesCorrectly()
     {
@@ -245,6 +263,9 @@ public class StaffDomainExtendedTests
         snapshot.TotalDays.Should().Be(1);
     }
 
+    // Given: an employee requesting vacation time off
+    // When: the vacation time off request is created
+    // Then: the request should be automatically classified as paid leave
     [Fact]
     public async Task TimeOffGrain_VacationTimeOff_MarkedAsPaid()
     {
@@ -267,6 +288,9 @@ public class StaffDomainExtendedTests
         snapshot.Type.Should().Be(TimeOffType.Vacation);
     }
 
+    // Given: an employee calling in sick
+    // When: a sick leave time off request is created
+    // Then: the request should be automatically classified as paid leave
     [Fact]
     public async Task TimeOffGrain_SickTimeOff_MarkedAsPaid()
     {
@@ -289,6 +313,9 @@ public class StaffDomainExtendedTests
         snapshot.Type.Should().Be(TimeOffType.Sick);
     }
 
+    // Given: an employee requesting extended unpaid leave
+    // When: the unpaid leave request is created
+    // Then: the request should be classified as unpaid
     [Fact]
     public async Task TimeOffGrain_UnpaidLeave_MarkedAsUnpaid()
     {
@@ -310,6 +337,9 @@ public class StaffDomainExtendedTests
         snapshot.IsPaid.Should().BeFalse();
     }
 
+    // Given: a pending vacation time off request
+    // When: the employee cancels the request before it is reviewed
+    // Then: the request status should change to cancelled
     [Fact]
     public async Task TimeOffGrain_Cancel_CanCancelPendingRequest()
     {
@@ -333,6 +363,9 @@ public class StaffDomainExtendedTests
         snapshot.Status.Should().Be(TimeOffStatus.Cancelled);
     }
 
+    // Given: a vacation request that has already been approved by a manager
+    // When: the employee attempts to cancel the approved request
+    // Then: the system should reject the cancellation since the request has been finalized
     [Fact]
     public async Task TimeOffGrain_Cancel_ThrowsIfAlreadyApproved()
     {
@@ -363,6 +396,9 @@ public class StaffDomainExtendedTests
     // Shift Swap Workflow Edge Cases
     // ============================================================================
 
+    // Given: a pending shift swap request between two employees
+    // When: a manager rejects the request citing staffing requirements
+    // Then: the request status should change to rejected with the rejection notes and response timestamp
     [Fact]
     public async Task ShiftSwapGrain_Reject_UpdatesStatusAndNotes()
     {
@@ -391,6 +427,9 @@ public class StaffDomainExtendedTests
         snapshot.RespondedAt.Should().NotBeNull();
     }
 
+    // Given: a shift drop request that has already been approved
+    // When: the employee attempts to cancel the approved request
+    // Then: the system should reject the cancellation since the swap has been finalized
     [Fact]
     public async Task ShiftSwapGrain_Cancel_ThrowsIfAlreadyApproved()
     {
@@ -418,6 +457,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Cannot cancel this request");
     }
 
+    // Given: a shift pickup request that has already been cancelled by the employee
+    // When: a manager attempts to approve the cancelled request
+    // Then: the system should reject the approval since the request is no longer pending
     [Fact]
     public async Task ShiftSwapGrain_Approve_ThrowsIfAlreadyCancelled()
     {
@@ -446,6 +488,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Request is not pending");
     }
 
+    // Given: a newly created shift drop request
+    // When: the current status is queried
+    // Then: the status should be pending
     [Fact]
     public async Task ShiftSwapGrain_GetStatus_ReturnsCurrentStatus()
     {
@@ -470,6 +515,9 @@ public class StaffDomainExtendedTests
         status.Should().Be(ShiftSwapStatus.Pending);
     }
 
+    // Given: two employees who want to swap shifts
+    // When: a swap-type shift swap request is created with both target employee and shift specified
+    // Then: the request should have the swap type with target employee and shift IDs populated
     [Fact]
     public async Task ShiftSwapGrain_CreateSwapType_RequiresTargetEmployee()
     {
@@ -498,6 +546,9 @@ public class StaffDomainExtendedTests
     // Availability Matching Tests
     // ============================================================================
 
+    // Given: an initialized employee availability grain
+    // When: a full week of availability is set (Monday-Friday 9-5, weekends off)
+    // Then: all 7 days should have availability entries recorded
     [Fact]
     public async Task EmployeeAvailabilityGrain_SetWeekAvailability_SetsAllDays()
     {
@@ -531,6 +582,9 @@ public class StaffDomainExtendedTests
         snapshot.Availabilities.Should().HaveCount(7);
     }
 
+    // Given: an employee available on Monday from 9 AM to 5 PM
+    // When: availability is checked at 8 AM (too early), 6 PM (too late), and noon (within range)
+    // Then: only the noon check should return available
     [Fact]
     public async Task EmployeeAvailabilityGrain_IsAvailableOn_ReturnsFalseOutsideAvailableHours()
     {
@@ -557,6 +611,9 @@ public class StaffDomainExtendedTests
         (await grain.IsAvailableOnAsync(1, TimeSpan.FromHours(12))).Should().BeTrue(); // Within range
     }
 
+    // Given: an employee who has marked Sunday as unavailable (day off)
+    // When: availability is checked for Sunday at noon
+    // Then: the employee should not be available
     [Fact]
     public async Task EmployeeAvailabilityGrain_IsAvailableOn_ReturnsFalseForUnavailableDay()
     {
@@ -584,6 +641,9 @@ public class StaffDomainExtendedTests
         isAvailable.Should().BeFalse();
     }
 
+    // Given: an employee with a Monday availability entry on record
+    // When: the availability entry is removed
+    // Then: the entry should no longer appear in the employee's availability snapshot
     [Fact]
     public async Task EmployeeAvailabilityGrain_RemoveAvailability_RemovesEntry()
     {
@@ -612,6 +672,9 @@ public class StaffDomainExtendedTests
         snapshot.Availabilities.Should().NotContain(a => a.Id == entry.Id);
     }
 
+    // Given: an employee with availability entries that have no expiration date
+    // When: current availability is queried
+    // Then: the active availability entries should be returned
     [Fact]
     public async Task EmployeeAvailabilityGrain_GetCurrentAvailability_ReturnsOnlyCurrentEntries()
     {
@@ -645,6 +708,9 @@ public class StaffDomainExtendedTests
     // Overtime Edge Case Tests
     // ============================================================================
 
+    // Given: an employee in California who has worked 8 hours each day for 7 consecutive days
+    // When: overtime is calculated under California labor law
+    // Then: the 7th consecutive day should trigger special overtime rules with total hours at 56
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_CaliforniaSeventhDay()
     {
@@ -677,6 +743,9 @@ public class StaffDomainExtendedTests
         result.SeventhDayHours.Should().BeGreaterThan(0m); // 7th day should trigger special rules
     }
 
+    // Given: an employee in Colorado who worked a 14-hour shift
+    // When: overtime is calculated under Colorado labor law (12-hour daily threshold)
+    // Then: 12 hours should be regular and 2 hours should be overtime
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_ColoradoDaily12Hours()
     {
@@ -707,6 +776,9 @@ public class StaffDomainExtendedTests
         result.OvertimeHours.Should().Be(2m); // Hours over 12
     }
 
+    // Given: an employee in California who worked 9 hours per day for 5 days (45 total hours)
+    // When: overtime is calculated under California law with both daily (over 8) and weekly (over 40) thresholds
+    // Then: overtime hours should be greater than zero reflecting combined daily and weekly overtime
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_CombinedDailyAndWeeklyOvertime()
     {
@@ -741,6 +813,9 @@ public class StaffDomainExtendedTests
         result.OvertimeHours.Should().BeGreaterThan(0m);
     }
 
+    // Given: an employee in the UK who worked 50 hours in a week (5 days of 10 hours)
+    // When: overtime is calculated under UK labor law
+    // Then: total hours should be tracked at 50 (UK has no mandatory overtime pay but tracks hours over 48)
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_UKNoMandatoryOvertimePay()
     {
@@ -778,6 +853,9 @@ public class StaffDomainExtendedTests
     // Break Enforcement Tests
     // ============================================================================
 
+    // Given: a California employee who worked a 4-hour shift with no rest break taken
+    // When: break compliance is checked under California labor law
+    // Then: a rest break violation should be flagged since California requires paid rest breaks for 4+ hour shifts
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_CaliforniaRestBreak()
     {
@@ -803,6 +881,9 @@ public class StaffDomainExtendedTests
         result.Violations.Should().Contain(v => v.BreakType == "rest");
     }
 
+    // Given: a New York employee who worked a 7-hour shift and took a 30-minute meal break
+    // When: break compliance is checked under New York labor law
+    // Then: the employee should be compliant since New York requires a 30-minute meal break for shifts over 6 hours
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_NewYorkMealBreak()
     {
@@ -830,6 +911,9 @@ public class StaffDomainExtendedTests
         result.IsCompliant.Should().BeTrue();
     }
 
+    // Given: a Texas employee who worked a 3-hour shift with no breaks taken
+    // When: break compliance is checked under Texas labor law
+    // Then: the employee should be compliant since Texas has no mandatory break requirements for short shifts
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_ShortShiftNoBreakRequired()
     {
@@ -854,6 +938,9 @@ public class StaffDomainExtendedTests
         result.IsCompliant.Should().BeTrue();
     }
 
+    // Given: a California employee who worked an 11-hour shift and took two 30-minute meal breaks
+    // When: break compliance is checked under California labor law
+    // Then: the employee should be compliant since California requires 2 meal breaks for shifts over 10 hours
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_MultipleBreaksRequired()
     {
@@ -886,6 +973,9 @@ public class StaffDomainExtendedTests
     // Tip Pool Edge Cases
     // ============================================================================
 
+    // Given: a tip pool with $100 distributed by hours worked, where one employee worked 8 hours and another worked 0 hours
+    // When: tips are distributed
+    // Then: the employee with 8 hours should receive all $100 and the zero-hours employee should receive nothing
     [Fact]
     public async Task TipPoolGrain_DistributeByHoursWorked_HandlesZeroHoursParticipant()
     {
@@ -923,6 +1013,9 @@ public class StaffDomainExtendedTests
         dist2.TipAmount.Should().Be(0m); // Gets nothing
     }
 
+    // Given: a tip pool with $100 to be split equally among 3 employees
+    // When: tips are distributed
+    // Then: the total distributed should approximate $100 (allowing for rounding to the nearest cent)
     [Fact]
     public async Task TipPoolGrain_DistributeEqual_HandlesRoundingCorrectly()
     {
@@ -960,6 +1053,9 @@ public class StaffDomainExtendedTests
     // Employee Time Tracking Edge Cases
     // ============================================================================
 
+    // Given: an active employee who is not currently clocked in
+    // When: a clock-out is attempted
+    // Then: the system should reject the clock-out since the employee is not on the clock
     [Fact]
     public async Task EmployeeGrain_ClockOut_ThrowsIfNotClockedIn()
     {
@@ -979,6 +1075,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Employee is not clocked in");
     }
 
+    // Given: an employee who is already clocked in at a site
+    // When: a second clock-in is attempted at the same site
+    // Then: the system should reject the duplicate clock-in
     [Fact]
     public async Task EmployeeGrain_ClockIn_ThrowsIfAlreadyClockedIn()
     {
@@ -1000,6 +1099,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Employee is already clocked in");
     }
 
+    // Given: an employee whose account has been deactivated (e.g., terminated)
+    // When: a clock-in is attempted
+    // Then: the system should reject the clock-in since only active employees can clock in
     [Fact]
     public async Task EmployeeGrain_Deactivate_PreventsClockIn()
     {
@@ -1021,6 +1123,9 @@ public class StaffDomainExtendedTests
             .WithMessage("Only active employees can clock in");
     }
 
+    // Given: an employee who has been placed on leave status
+    // When: a clock-in is attempted
+    // Then: the system should reject the clock-in since only active employees can clock in
     [Fact]
     public async Task EmployeeGrain_SetOnLeave_PreventsClockIn()
     {
@@ -1046,6 +1151,9 @@ public class StaffDomainExtendedTests
     // Payroll Period Tests
     // ============================================================================
 
+    // Given: a payroll period with no employees added
+    // When: payroll details are requested for a non-existent employee
+    // Then: the system should reject the request with an employee-not-found error
     [Fact]
     public async Task PayrollPeriodGrain_GetEmployeePayroll_ThrowsIfEmployeeNotFound()
     {
@@ -1071,6 +1179,9 @@ public class StaffDomainExtendedTests
     // Role Grain Tests
     // ============================================================================
 
+    // Given: a Bartender role created in the Front of House department at $14/hr
+    // When: the role is updated (no changes specified)
+    // Then: the role should retain its original name and properties
     [Fact]
     public async Task RoleGrain_Update_CanAddRequiredCertifications()
     {
@@ -1105,6 +1216,9 @@ public class StaffDomainExtendedTests
     // Tax Calculation Edge Cases
     // ============================================================================
 
+    // Given: an employee with $195,000 YTD gross pay earning $10,000 this period (crossing the $200K Medicare threshold)
+    // When: tax withholding is calculated
+    // Then: Medicare withholding should include the additional 0.9% surtax on the $5,000 above the threshold
     [Fact]
     public void TaxCalculationService_CalculateWithholding_AdditionalMedicareAboveThreshold()
     {
@@ -1123,6 +1237,9 @@ public class StaffDomainExtendedTests
         withholding.MedicareWithholding.Should().BeGreaterThan(grossPay * config.MedicareRate);
     }
 
+    // Given: a tax calculation service
+    // When: a tax configuration is requested for an unknown jurisdiction code
+    // Then: the service should fall back to the US-FEDERAL default configuration
     [Fact]
     public void TaxCalculationService_GetTaxConfiguration_ReturnsDefaultForUnknownJurisdiction()
     {
@@ -1136,6 +1253,9 @@ public class StaffDomainExtendedTests
         config.JurisdictionCode.Should().Be("US-FEDERAL");
     }
 
+    // Given: a California employee with $2,000 gross pay this period and $50,000 YTD gross pay
+    // When: the full employee tax summary is calculated
+    // Then: both current-period and year-to-date withholdings should be included, with YTD totals exceeding current period
     [Fact]
     public void TaxCalculationService_CalculateEmployeeTaxSummary_IncludesYtdCalculations()
     {

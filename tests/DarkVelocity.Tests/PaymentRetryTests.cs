@@ -30,6 +30,9 @@ public class PaymentRetryTests
         return grain;
     }
 
+    // Given: an initiated credit card payment of $100
+    // When: a retry is scheduled due to a gateway timeout
+    // Then: the retry count is 1, a future retry time is set, and retries are not yet exhausted
     [Fact]
     public async Task ScheduleRetryAsync_ShouldScheduleRetry()
     {
@@ -51,6 +54,9 @@ public class PaymentRetryTests
         retryInfo.RetryExhausted.Should().BeFalse();
     }
 
+    // Given: an initiated credit card payment of $100
+    // When: a retry is scheduled with a custom maximum of 5 retries
+    // Then: the retry info reflects the custom max retries value
     [Fact]
     public async Task ScheduleRetryAsync_WithCustomMaxRetries_ShouldUseCustomValue()
     {
@@ -69,6 +75,9 @@ public class PaymentRetryTests
         retryInfo.MaxRetries.Should().Be(5);
     }
 
+    // Given: a payment with a scheduled retry after a gateway timeout
+    // When: the retry attempt succeeds
+    // Then: the retry schedule is cleared, the error is removed, and a successful attempt is recorded in history
     [Fact]
     public async Task RecordRetryAttemptAsync_Success_ShouldClearRetryState()
     {
@@ -93,6 +102,9 @@ public class PaymentRetryTests
         state.RetryHistory[0].Success.Should().BeTrue();
     }
 
+    // Given: a payment with a scheduled retry after a gateway timeout
+    // When: the retry attempt fails with a TIMEOUT error code
+    // Then: the error code and message are recorded and the failed attempt is added to retry history
     [Fact]
     public async Task RecordRetryAttemptAsync_Failure_ShouldRecordError()
     {
@@ -117,6 +129,9 @@ public class PaymentRetryTests
         state.RetryHistory[0].Success.Should().BeFalse();
     }
 
+    // Given: a payment that has already failed 3 retry attempts (the default maximum)
+    // When: a fourth retry is scheduled
+    // Then: retries are marked as exhausted and no further retry time is scheduled
     [Fact]
     public async Task ScheduleRetryAsync_ExceedsMaxRetries_ShouldMarkExhausted()
     {
@@ -144,6 +159,9 @@ public class PaymentRetryTests
         retryInfo.NextRetryAt.Should().BeNull();
     }
 
+    // Given: a payment whose retries have already been exhausted
+    // When: another retry is scheduled
+    // Then: an InvalidOperationException is thrown indicating retries are already exhausted
     [Fact]
     public async Task ScheduleRetryAsync_AlreadyExhausted_ShouldThrow()
     {
@@ -167,6 +185,9 @@ public class PaymentRetryTests
             .WithMessage("*already exhausted*");
     }
 
+    // Given: an initiated payment with no retries ever scheduled
+    // When: the payment is checked for pending retries
+    // Then: no retry is pending
     [Fact]
     public async Task ShouldRetryAsync_NotScheduled_ShouldReturnFalse()
     {
@@ -184,6 +205,9 @@ public class PaymentRetryTests
         shouldRetry.Should().BeFalse();
     }
 
+    // Given: a payment whose retries have been exhausted (max retries of 1 exceeded)
+    // When: the payment is checked for pending retries
+    // Then: no retry is pending because retries are exhausted
     [Fact]
     public async Task ShouldRetryAsync_Exhausted_ShouldReturnFalse()
     {
@@ -206,6 +230,9 @@ public class PaymentRetryTests
         shouldRetry.Should().BeFalse();
     }
 
+    // Given: a payment with a retry scheduled due to a gateway error, configured for up to 5 retries
+    // When: the retry info is retrieved
+    // Then: the info contains the retry count, max retries, next retry time, and the original error message
     [Fact]
     public async Task GetRetryInfoAsync_ShouldReturnCompleteInfo()
     {
@@ -228,6 +255,9 @@ public class PaymentRetryTests
         retryInfo.LastErrorMessage.Should().Be("Gateway error");
     }
 
+    // Given: a payment that undergoes multiple retry cycles
+    // When: two retries fail with different error codes and the third succeeds
+    // Then: all three attempts are recorded in the retry history with their respective outcomes and error codes
     [Fact]
     public async Task RetryHistory_ShouldTrackAllAttempts()
     {

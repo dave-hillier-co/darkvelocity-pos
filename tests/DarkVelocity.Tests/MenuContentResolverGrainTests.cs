@@ -62,6 +62,9 @@ public class MenuContentResolverGrainTests
     // Basic Content Resolution Tests
     // ============================================================================
 
+    // Given: a site with no menu items or categories registered
+    // When: the menu content resolver resolves the menu for the POS channel
+    // Then: an empty result is returned with correct org, site, channel, locale, and a valid ETag
     [Fact]
     public async Task ResolveAsync_EmptyMenu_ShouldReturnEmptyResult()
     {
@@ -92,6 +95,9 @@ public class MenuContentResolverGrainTests
         result.ETag.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a published menu category "Appetizers" registered in the menu registry
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved menu contains the category with its name, color, and display order
     [Fact]
     public async Task ResolveAsync_WithPublishedCategory_ShouldReturnCategory()
     {
@@ -131,6 +137,9 @@ public class MenuContentResolverGrainTests
         result.Categories[0].DisplayOrder.Should().Be(1);
     }
 
+    // Given: a published menu item "Caesar Salad" at $12.99 registered in the menu registry
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved menu contains the item with correct name, price, description, and availability flags
     [Fact]
     public async Task ResolveAsync_WithPublishedItem_ShouldReturnItem()
     {
@@ -172,6 +181,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].IsSnoozed.Should().BeFalse();
     }
 
+    // Given: three published menu items (Burger, Pizza, Pasta) registered in the menu registry
+    // When: the menu content resolver resolves the menu
+    // Then: all three items are returned in the resolved menu
     [Fact]
     public async Task ResolveAsync_WithMultipleItems_ShouldReturnAllItems()
     {
@@ -221,6 +233,9 @@ public class MenuContentResolverGrainTests
     // Site Override Tests - Price Overrides
     // ============================================================================
 
+    // Given: a published menu item "Premium Steak" at $45.00 with a site-level price override of $39.99
+    // When: the menu content resolver resolves the menu for that site
+    // Then: the resolved item price reflects the site override ($39.99) instead of the org-level price
     [Fact]
     public async Task ResolveAsync_WithPriceOverride_ShouldApplyOverriddenPrice()
     {
@@ -264,6 +279,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Price.Should().Be(39.99m); // Overridden price
     }
 
+    // Given: a menu item with a site price override whose effective window has already expired
+    // When: the menu content resolver resolves the menu at the current time
+    // Then: the original org-level price ($12.00) is used since the happy hour override has lapsed
     [Fact]
     public async Task ResolveAsync_WithExpiredPriceOverride_ShouldUseOriginalPrice()
     {
@@ -308,6 +326,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Price.Should().Be(12.00m); // Original price since override expired
     }
 
+    // Given: a menu item with a site price override scheduled to start 7 days in the future
+    // When: the menu content resolver resolves the menu at the current time
+    // Then: the original org-level price ($25.00) is used since the promotion is not yet active
     [Fact]
     public async Task ResolveAsync_WithFuturePriceOverride_ShouldUseOriginalPrice()
     {
@@ -355,6 +376,9 @@ public class MenuContentResolverGrainTests
     // Site Override Tests - Hidden Items/Categories
     // ============================================================================
 
+    // Given: two published menu items, one of which is hidden at the site level
+    // When: the menu content resolver resolves the menu with IncludeHidden=false
+    // Then: only the visible item appears in the resolved menu
     [Fact]
     public async Task ResolveAsync_WithHiddenItem_ShouldExcludeItem()
     {
@@ -399,6 +423,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Name.Should().Be("Visible Item");
     }
 
+    // Given: a published menu item that is hidden at the site level
+    // When: the menu content resolver resolves the menu with IncludeHidden=true
+    // Then: the hidden item is included in the resolved menu
     [Fact]
     public async Task ResolveAsync_WithHiddenItem_IncludeHiddenTrue_ShouldIncludeItem()
     {
@@ -436,6 +463,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Name.Should().Be("Hidden Item");
     }
 
+    // Given: two published categories, one of which is hidden at the site level
+    // When: the menu content resolver resolves the menu with IncludeHidden=false
+    // Then: only the visible category appears in the resolved menu
     [Fact]
     public async Task ResolveAsync_WithHiddenCategory_ShouldExcludeCategory()
     {
@@ -483,6 +513,9 @@ public class MenuContentResolverGrainTests
     // Snoozing Tests (86'd Items)
     // ============================================================================
 
+    // Given: a published menu item that has been 86'd (snoozed) at the site for 2 hours
+    // When: the menu content resolver resolves the menu with IncludeSnoozed=false
+    // Then: the snoozed item is excluded from the resolved menu
     [Fact]
     public async Task ResolveAsync_WithSnoozedItem_ShouldExcludeItem()
     {
@@ -522,6 +555,9 @@ public class MenuContentResolverGrainTests
         result.Items.Should().BeEmpty();
     }
 
+    // Given: a published menu item that has been 86'd (snoozed) at the site until a specific time
+    // When: the menu content resolver resolves the menu with IncludeSnoozed=true
+    // Then: the item is included but marked as snoozed, unavailable, with its snooze expiry timestamp
     [Fact]
     public async Task ResolveAsync_WithSnoozedItem_IncludeSnoozedTrue_ShouldIncludeItemWithFlag()
     {
@@ -563,6 +599,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].SnoozedUntil.Should().BeCloseTo(snoozeUntil, TimeSpan.FromSeconds(1));
     }
 
+    // Given: a menu item that was previously snoozed but whose snooze window has expired
+    // When: the menu content resolver resolves the menu
+    // Then: the item is included and marked as available (no longer snoozed)
     [Fact]
     public async Task ResolveAsync_WithExpiredSnooze_ShouldIncludeItemAsAvailable()
     {
@@ -610,6 +649,9 @@ public class MenuContentResolverGrainTests
     // Availability Window Tests
     // ============================================================================
 
+    // Given: a menu item with an availability window that includes the current day and time
+    // When: the menu content resolver resolves the menu at the current time
+    // Then: the item is included in the resolved menu
     [Fact]
     public async Task ResolveAsync_ItemWithinAvailabilityWindow_ShouldIncludeItem()
     {
@@ -655,6 +697,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Name.Should().Be("Available Item");
     }
 
+    // Given: a menu item with an availability window that starts 3 hours in the future
+    // When: the menu content resolver resolves the menu at the current time
+    // Then: the item is excluded because it is outside its scheduled availability window
     [Fact]
     public async Task ResolveAsync_ItemOutsideAvailabilityWindow_ShouldExcludeItem()
     {
@@ -699,6 +744,9 @@ public class MenuContentResolverGrainTests
         result.Items.Should().BeEmpty();
     }
 
+    // Given: a published menu item with no availability window restrictions configured
+    // When: the menu content resolver resolves the menu
+    // Then: the item is always available regardless of the time of day
     [Fact]
     public async Task ResolveAsync_ItemWithNoAvailabilityWindow_ShouldAlwaysBeAvailable()
     {
@@ -734,6 +782,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Name.Should().Be("Always Available");
     }
 
+    // Given: a menu item with an availability window configured for a different day of the week
+    // When: the menu content resolver resolves the menu on today's day
+    // Then: the item is excluded because today is not in the window's allowed days
     [Fact]
     public async Task ResolveAsync_ItemOnWrongDayOfWeek_ShouldExcludeItem()
     {
@@ -785,6 +836,9 @@ public class MenuContentResolverGrainTests
     // Localization Tests
     // ============================================================================
 
+    // Given: a menu item "Chicken" with a Spanish translation "Pollo" added
+    // When: the menu content resolver resolves the menu with locale es-ES
+    // Then: the resolved item name and description are returned in Spanish
     [Fact]
     public async Task ResolveAsync_WithTranslation_ShouldReturnLocalizedName()
     {
@@ -828,6 +882,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Description.Should().Be("Pollo a la parrilla");
     }
 
+    // Given: a menu item with only an en-US locale and no German translation
+    // When: the menu content resolver resolves the menu with locale de-DE
+    // Then: the item falls back to its en-US name since the requested locale is unavailable
     [Fact]
     public async Task ResolveAsync_WithMissingTranslation_ShouldFallbackToEnUS()
     {
@@ -868,6 +925,9 @@ public class MenuContentResolverGrainTests
     // Modifier Block Tests
     // ============================================================================
 
+    // Given: a menu item "Coffee" linked to a published "Size" modifier block with Small/Medium/Large options
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved item includes the modifier block with its selection rule, required flag, and all options
     [Fact]
     public async Task ResolveAsync_WithModifierBlock_ShouldIncludeResolvedModifiers()
     {
@@ -934,6 +994,9 @@ public class MenuContentResolverGrainTests
     // Content Tag Tests
     // ============================================================================
 
+    // Given: a menu item "Almond Salad" tagged with "Gluten Free" (Dietary) and "Contains Nuts" (Allergen)
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved item includes both content tags with their names and categories
     [Fact]
     public async Task ResolveAsync_WithTags_ShouldIncludeResolvedTags()
     {
@@ -988,6 +1051,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Tags.Should().Contain(t => t.Name == "Contains Nuts" && t.Category == TagCategory.Allergen);
     }
 
+    // Given: a menu item tagged with an active "Vegan" tag and a deactivated "Old Promo" tag
+    // When: the menu content resolver resolves the menu
+    // Then: only the active "Vegan" tag is included; the deactivated tag is filtered out
     [Fact]
     public async Task ResolveAsync_WithDeactivatedTag_ShouldExcludeTag()
     {
@@ -1045,6 +1111,9 @@ public class MenuContentResolverGrainTests
     // Draft/Published Version Tests
     // ============================================================================
 
+    // Given: a menu item with a published version at $10.00 and an unpublished draft at $12.00
+    // When: the menu content resolver resolves the menu with IncludeDraft=false
+    // Then: the published version is returned, not the draft
     [Fact]
     public async Task ResolveAsync_IncludeDraftFalse_ShouldOnlyReturnPublished()
     {
@@ -1087,6 +1156,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Price.Should().Be(10.00m);
     }
 
+    // Given: a menu item with a published version and a pending draft with updated name and price
+    // When: the menu content resolver resolves the menu with IncludeDraft=true
+    // Then: the draft version is returned instead of the published version
     [Fact]
     public async Task ResolveAsync_IncludeDraftTrue_ShouldReturnDraftWhenAvailable()
     {
@@ -1132,6 +1204,9 @@ public class MenuContentResolverGrainTests
     // Cache Tests
     // ============================================================================
 
+    // Given: a resolved menu cached with "Original Name", then the item is updated and republished as "Updated Name"
+    // When: the resolver cache is invalidated and the menu is resolved again
+    // Then: the freshly resolved menu reflects the updated item name
     [Fact]
     public async Task InvalidateCacheAsync_ShouldClearCache()
     {
@@ -1184,6 +1259,9 @@ public class MenuContentResolverGrainTests
     // Preview Tests
     // ============================================================================
 
+    // Given: a menu with a draft-only item, a hidden item, and a snoozed item
+    // When: the menu content resolver previews the menu with ShowDraft, ShowHidden, and ShowSnoozed enabled
+    // Then: all three items are returned including draft, hidden, and snoozed items
     [Fact]
     public async Task PreviewAsync_ShouldApplyPreviewOptions()
     {
@@ -1253,6 +1331,9 @@ public class MenuContentResolverGrainTests
     // ResolveItemAsync Tests
     // ============================================================================
 
+    // Given: a published menu item "Single Item" at $20.00 registered in the menu
+    // When: the resolver resolves that specific item by its document ID
+    // Then: the individual item is returned with its full details (name, price, description)
     [Fact]
     public async Task ResolveItemAsync_ExistingItem_ShouldReturnItem()
     {
@@ -1292,6 +1373,9 @@ public class MenuContentResolverGrainTests
         result.Description.Should().Be("A specific item");
     }
 
+    // Given: an empty menu with no registered items
+    // When: the resolver attempts to resolve a non-existent item document ID
+    // Then: null is returned indicating the item does not exist
     [Fact]
     public async Task ResolveItemAsync_NonExistingItem_ShouldReturnNull()
     {
@@ -1321,6 +1405,9 @@ public class MenuContentResolverGrainTests
     // WouldBeActiveAsync Tests
     // ============================================================================
 
+    // Given: a published menu item at version 1
+    // When: checking whether version 1 would be active at the current time
+    // Then: true is returned because the current published version matches
     [Fact]
     public async Task WouldBeActiveAsync_CurrentVersion_ShouldReturnTrue()
     {
@@ -1344,6 +1431,9 @@ public class MenuContentResolverGrainTests
         result.Should().BeTrue();
     }
 
+    // Given: a published menu item at version 1
+    // When: checking whether a non-existent version 999 would be active
+    // Then: false is returned because that version does not exist
     [Fact]
     public async Task WouldBeActiveAsync_WrongVersion_ShouldReturnFalse()
     {
@@ -1371,6 +1461,9 @@ public class MenuContentResolverGrainTests
     // Edge Cases
     // ============================================================================
 
+    // Given: one active menu item and one archived (discontinued) item in the registry
+    // When: the menu content resolver resolves the menu
+    // Then: only the active item is returned; the archived item is excluded
     [Fact]
     public async Task ResolveAsync_WithArchivedItem_ShouldNotIncludeItem()
     {
@@ -1416,6 +1509,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].Name.Should().Be("Active Item");
     }
 
+    // Given: a "Main Courses" category and a "Steak Dinner" item assigned to that category
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved item includes its category ID and the resolved category name
     [Fact]
     public async Task ResolveAsync_WithCategoryAndItems_ShouldResolveCategoryName()
     {
@@ -1467,6 +1563,9 @@ public class MenuContentResolverGrainTests
         result.Items[0].CategoryName.Should().Be("Main Courses");
     }
 
+    // Given: three categories (Desserts at position 3, Appetizers at 1, Main Courses at 2) registered out of order
+    // When: the menu content resolver resolves the menu
+    // Then: categories are returned sorted by display order: Appetizers, Main Courses, Desserts
     [Fact]
     public async Task ResolveAsync_MultipleCategoriesOrdered_ShouldReturnInDisplayOrder()
     {
@@ -1520,6 +1619,9 @@ public class MenuContentResolverGrainTests
         result.Categories[2].Name.Should().Be("Desserts");
     }
 
+    // Given: a published menu item registered in the menu
+    // When: the menu content resolver resolves the menu
+    // Then: the result includes a non-empty ETag (16-char truncated Base64 SHA256) for cache validation
     [Fact]
     public async Task ResolveAsync_ShouldComputeETag()
     {
@@ -1555,6 +1657,9 @@ public class MenuContentResolverGrainTests
         result.ETag.Length.Should().Be(16); // Base64-encoded SHA256 truncated to 16 chars
     }
 
+    // Given: a site with a menu (empty or populated)
+    // When: the menu content resolver resolves the menu
+    // Then: the result includes a CacheUntil timestamp approximately 5 minutes in the future
     [Fact]
     public async Task ResolveAsync_ShouldSetCacheUntil()
     {
@@ -1580,6 +1685,9 @@ public class MenuContentResolverGrainTests
         result.CacheUntil.Should().BeCloseTo(DateTimeOffset.UtcNow.AddMinutes(5), TimeSpan.FromSeconds(10));
     }
 
+    // Given: a resolve context specifying channel "online" and locale "fr-FR"
+    // When: the menu content resolver resolves the menu
+    // Then: the resolved result echoes back the requested channel and locale
     [Fact]
     public async Task ResolveAsync_ChannelAndLocaleStoredInResult()
     {
@@ -1605,6 +1713,9 @@ public class MenuContentResolverGrainTests
         result.Locale.Should().Be("fr-FR");
     }
 
+    // Given: a site with a menu
+    // When: the menu content resolver resolves the menu
+    // Then: the ResolvedAt timestamp falls between the time before and after the resolve call
     [Fact]
     public async Task ResolveAsync_ResolvedAtTimestamp_ShouldBeSetCorrectly()
     {

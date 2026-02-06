@@ -49,6 +49,9 @@ public class MenuItemAvailabilityTests
 
     #region Snooze Tests
 
+    // Given: an active menu item
+    // When: the item is snoozed (86'd)
+    // Then: the item is marked as snoozed but remains active on the menu
     [Fact]
     public async Task SetSnoozedAsync_ShouldSnoozeItem()
     {
@@ -67,6 +70,9 @@ public class MenuItemAvailabilityTests
         snapshot.IsActive.Should().BeTrue(); // Still active, just snoozed
     }
 
+    // Given: an active menu item
+    // When: the item is snoozed for a 2-hour duration
+    // Then: the item is snoozed with an expiry timestamp approximately 2 hours from now
     [Fact]
     public async Task SetSnoozedAsync_WithDuration_ShouldSetSnoozedUntil()
     {
@@ -87,6 +93,9 @@ public class MenuItemAvailabilityTests
         snapshot.SnoozedUntil.Should().BeCloseTo(DateTime.UtcNow.Add(duration), TimeSpan.FromSeconds(5));
     }
 
+    // Given: a menu item that is currently snoozed with a 1-hour duration
+    // When: the item is unsnoozed
+    // Then: the snooze state and expiry are cleared
     [Fact]
     public async Task SetSnoozedAsync_Unsnooze_ShouldClearSnooze()
     {
@@ -106,6 +115,9 @@ public class MenuItemAvailabilityTests
         snapshot.SnoozedUntil.Should().BeNull();
     }
 
+    // Given: a menu item that is snoozed, unsnoozed, and then snoozed again for 4 hours
+    // When: the final snooze state is inspected
+    // Then: the item is snoozed with an expiry approximately 4 hours from now
     [Fact]
     public async Task SetSnoozedAsync_MultipleTimes_ShouldUpdateCorrectly()
     {
@@ -126,6 +138,9 @@ public class MenuItemAvailabilityTests
         snapshot.SnoozedUntil.Should().BeCloseTo(DateTime.UtcNow.AddHours(4), TimeSpan.FromSeconds(5));
     }
 
+    // Given: an active menu item
+    // When: the item is snoozed indefinitely (no duration specified)
+    // Then: the item is snoozed with no expiry timestamp
     [Fact]
     public async Task SetSnoozedAsync_IndefiniteSnooze_ShouldHaveNoExpiry()
     {
@@ -148,6 +163,9 @@ public class MenuItemAvailabilityTests
 
     #region Deactivation Tests
 
+    // Given: an active menu item
+    // When: the item is deactivated
+    // Then: the item is marked as inactive and no longer available for sale
     [Fact]
     public async Task DeactivateAsync_ShouldMakeItemUnavailable()
     {
@@ -165,6 +183,9 @@ public class MenuItemAvailabilityTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a deactivated menu item
+    // When: the item is updated with IsActive=true to reactivate it
+    // Then: the item is marked as active and available for sale again
     [Fact]
     public async Task UpdateAsync_Reactivate_ShouldMakeItemAvailable()
     {
@@ -193,6 +214,9 @@ public class MenuItemAvailabilityTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: a menu item that is currently snoozed with a 1-hour duration
+    // When: the item is deactivated
+    // Then: the item becomes inactive and the snooze state is cleared
     [Fact]
     public async Task DeactivateAsync_SnoozedItem_ShouldDeactivateAndClearSnooze()
     {
@@ -216,6 +240,9 @@ public class MenuItemAvailabilityTests
 
     #region Category Deactivation Tests
 
+    // Given: an active menu category "Lunch Specials"
+    // When: the category is deactivated
+    // Then: the category is marked as inactive
     [Fact]
     public async Task DeactivateCategory_ShouldMakeCategoryUnavailable()
     {
@@ -238,6 +265,9 @@ public class MenuItemAvailabilityTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a deactivated "Seasonal" menu category
+    // When: the category is updated with IsActive=true
+    // Then: the category is reactivated and available again
     [Fact]
     public async Task UpdateCategory_Reactivate_ShouldMakeCategoryAvailable()
     {
@@ -270,6 +300,9 @@ public class MenuItemAvailabilityTests
 
     #region Modifier Availability Tests
 
+    // Given: a menu item with a "Size" modifier group (Small/Large)
+    // When: the modifier group is removed from the item
+    // Then: the item has no modifier groups remaining
     [Fact]
     public async Task RemoveModifierAsync_ShouldRemoveModifierGroup()
     {
@@ -301,6 +334,9 @@ public class MenuItemAvailabilityTests
         snapshot.Modifiers.Should().BeEmpty();
     }
 
+    // Given: a deactivated menu item with no modifiers
+    // When: a "Temperature" modifier group (Rare/Medium/Well Done) is added to the item
+    // Then: the modifier is added successfully even though the item is inactive
     [Fact]
     public async Task AddModifierAsync_ToDeactivatedItem_ShouldStillWork()
     {
@@ -336,6 +372,9 @@ public class MenuItemAvailabilityTests
 
     #region Product Tag Tests
 
+    // Given: a menu item with no product tags
+    // When: "Vegetarian" and "Gluten-Free" tags are added
+    // Then: the item has both tags attached
     [Fact]
     public async Task AddProductTagAsync_ShouldAddTag()
     {
@@ -357,6 +396,9 @@ public class MenuItemAvailabilityTests
         snapshot.ProductTags.Should().Contain(t => t.Name == "Gluten-Free");
     }
 
+    // Given: a menu item tagged with "Vegetarian" and "Vegan"
+    // When: the "Vegetarian" tag is removed
+    // Then: only the "Vegan" tag remains on the item
     [Fact]
     public async Task RemoveProductTagAsync_ShouldRemoveTag()
     {
@@ -377,6 +419,9 @@ public class MenuItemAvailabilityTests
         snapshot.ProductTags.Should().Contain(t => t.TagId == 2);
     }
 
+    // Given: a menu item with a tag ID 1 named "Original Name"
+    // When: a tag with the same ID 1 but name "Updated Name" is added
+    // Then: the existing tag is replaced with the new name instead of duplicating
     [Fact]
     public async Task AddProductTagAsync_DuplicateTagId_ShouldUpdateExisting()
     {
@@ -400,6 +445,9 @@ public class MenuItemAvailabilityTests
 
     #region Contextual Tax Rates Tests
 
+    // Given: a menu item with no contextual tax rates configured
+    // When: contextual tax rates are set (5% delivery, 7.5% takeaway, 10% dine-in)
+    // Then: the item stores all three channel-specific tax rates
     [Fact]
     public async Task UpdateTaxRatesAsync_ShouldSetContextualRates()
     {
@@ -425,6 +473,9 @@ public class MenuItemAvailabilityTests
         snapshot.TaxRates.DineInTaxPercent.Should().Be(10.0m);
     }
 
+    // Given: contextual tax rates (0% delivery, 5% takeaway, 8% dine-in) provided at creation time
+    // When: a new menu item is created with those tax rates
+    // Then: the created item stores the channel-specific tax rates from creation
     [Fact]
     public async Task CreateAsync_WithTaxRates_ShouldSetContextualRates()
     {
@@ -464,6 +515,9 @@ public class MenuItemAvailabilityTests
 
     #region Variation Availability Tests
 
+    // Given: a "Coffee" menu item at base price $3.50
+    // When: a "Large" variation is added at a fixed price of $4.50
+    // Then: the variation is created as active with the correct name and price
     [Fact]
     public async Task AddVariationAsync_ShouldAddVariation()
     {
@@ -487,6 +541,9 @@ public class MenuItemAvailabilityTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: a "Beer" menu item with a "Pint" variation
+    // When: the "Pint" variation is removed
+    // Then: the item has no variations remaining
     [Fact]
     public async Task RemoveVariationAsync_ShouldRemoveVariation()
     {
@@ -510,6 +567,9 @@ public class MenuItemAvailabilityTests
         variations.Should().BeEmpty();
     }
 
+    // Given: a "Pizza" menu item with an "Extra Large" variation
+    // When: the "Extra Large" variation is deactivated
+    // Then: the variation is marked as inactive and unavailable for ordering
     [Fact]
     public async Task UpdateVariationAsync_Deactivate_ShouldMakeVariationUnavailable()
     {
@@ -535,6 +595,9 @@ public class MenuItemAvailabilityTests
         variations[0].IsActive.Should().BeFalse();
     }
 
+    // Given: a "Soda" menu item
+    // When: Large (order 3), Small (order 1), and Medium (order 2) variations are added
+    // Then: variations are returned sorted by display order: Small, Medium, Large
     [Fact]
     public async Task AddVariationAsync_MultipleVariations_ShouldOrderByDisplayOrder()
     {
@@ -560,6 +623,9 @@ public class MenuItemAvailabilityTests
         variations[2].Name.Should().Be("Large");
     }
 
+    // Given: an "Open Item" menu item with a $0 base price
+    // When: a "Custom Price" variation is added with Variable pricing type and no fixed price
+    // Then: the variation is created with PricingType.Variable and a null price (entered at time of sale)
     [Fact]
     public async Task AddVariationAsync_VariablePricing_ShouldAllowNullPrice()
     {
@@ -585,6 +651,9 @@ public class MenuItemAvailabilityTests
 
     #region Price Update Tests
 
+    // Given: a "Burger" menu item priced at $12.99
+    // When: the price is updated to $14.99
+    // Then: the item's price reflects the new amount
     [Fact]
     public async Task UpdateAsync_Price_ShouldUpdatePrice()
     {
@@ -612,6 +681,9 @@ public class MenuItemAvailabilityTests
         price.Should().Be(14.99m);
     }
 
+    // Given: a "Seasonal Special" menu item at $19.99 that has been snoozed
+    // When: the item's price is queried
+    // Then: the price is still returned ($19.99) even though the item is temporarily unavailable
     [Fact]
     public async Task GetPriceAsync_SnoozedItem_ShouldStillReturnPrice()
     {
@@ -629,6 +701,9 @@ public class MenuItemAvailabilityTests
         price.Should().Be(19.99m);
     }
 
+    // Given: a "Discontinued Item" at $25.00 that has been deactivated
+    // When: the item's price is queried
+    // Then: the price is still returned ($25.00) even though the item is inactive
     [Fact]
     public async Task GetPriceAsync_DeactivatedItem_ShouldStillReturnPrice()
     {

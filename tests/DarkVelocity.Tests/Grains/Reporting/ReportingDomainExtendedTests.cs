@@ -31,6 +31,9 @@ public class ReportingDomainExtendedTests
     // Cross-Grain Data Aggregation Tests
     // ============================================================================
 
+    // Given: A daily sales grain has recorded dine-in and takeout transactions for today
+    // When: Today's sales are retrieved through the site dashboard
+    // Then: The dashboard aggregates gross sales, net sales, transaction count, and guest count across all channels
     [Fact]
     public async Task SiteDashboard_GetTodaySales_AggregatesFromDailySalesGrain()
     {
@@ -96,6 +99,9 @@ public class ReportingDomainExtendedTests
         todaySales.SalesByChannel.Should().ContainKey(SaleChannel.TakeOut);
     }
 
+    // Given: A daily inventory snapshot has recorded flour, sugar, and near-expiry milk
+    // When: The current inventory is retrieved through the site dashboard
+    // Then: The dashboard aggregates total stock value, SKU count, and flags low-stock and expiring-soon items
     [Fact]
     public async Task SiteDashboard_GetCurrentInventory_AggregatesFromDailyInventorySnapshotGrain()
     {
@@ -138,6 +144,9 @@ public class ReportingDomainExtendedTests
         inventory.Ingredients.Should().HaveCount(3);
     }
 
+    // Given: A daily consumption grain has recorded ingredients with 50%, 5%, and 20% cost variances
+    // When: The top variances are retrieved through the site dashboard
+    // Then: Variances are ordered by absolute cost variance descending with the highest-variance ingredient first
     [Fact]
     public async Task SiteDashboard_GetTopVariances_AggregatesFromDailyConsumptionGrain()
     {
@@ -186,6 +195,9 @@ public class ReportingDomainExtendedTests
     // Extended Metrics Calculation Tests
     // ============================================================================
 
+    // Given: A daily sales grain has recorded a single steak sale with gross, net, tax, and COGS
+    // When: Extended dashboard metrics are retrieved
+    // Then: Average ticket size, revenue per cover, and gross profit percent are calculated correctly
     [Fact]
     public async Task SiteDashboard_GetExtendedMetrics_CalculatesTodayMetricsCorrectly()
     {
@@ -238,6 +250,9 @@ public class ReportingDomainExtendedTests
         extendedMetrics.TodayGrossProfitPercent.Should().BeApproximately(65.22m, 0.01m);
     }
 
+    // Given: Yesterday's sales were 92 net and today's sales are 105.80 net
+    // When: Extended dashboard metrics are retrieved with day-over-day comparison
+    // Then: The today-vs-yesterday percentage reflects the approximately 15% increase
     [Fact]
     public async Task SiteDashboard_GetExtendedMetrics_CalculatesComparisonPercentages()
     {
@@ -311,6 +326,9 @@ public class ReportingDomainExtendedTests
     // Period Rollup Accuracy Tests
     // ============================================================================
 
+    // Given: A weekly period aggregation is initialized for 7 days with incrementing daily sales and waste
+    // When: All 7 days of sales, inventory, consumption, and waste data are aggregated
+    // Then: The period summary totals gross sales, net sales, transactions, and waste across the entire week
     [Fact]
     public async Task PeriodAggregation_AggregatesMultipleDaysCorrectly()
     {
@@ -396,6 +414,9 @@ public class ReportingDomainExtendedTests
         summary.TotalWasteValue.Should().Be(182m);
     }
 
+    // Given: A monthly period has daily data with 3000 COGS and 10000 closing stock value
+    // When: The period summary stock health metrics are calculated
+    // Then: Stock turn is calculated as 0.3 (COGS / closing stock)
     [Fact]
     public async Task PeriodAggregation_CalculatesStockTurnCorrectly()
     {
@@ -458,6 +479,9 @@ public class ReportingDomainExtendedTests
         summary.StockHealth.StockTurn.Should().BeApproximately(0.3m, 0.01m);
     }
 
+    // Given: A weekly period has aggregated daily data with 4500 net sales and 1400 actual COGS
+    // When: Gross profit metrics are retrieved under both FIFO and WAC costing methods
+    // Then: Both methods report the same actual gross profit of 3100 at approximately 68.89%
     [Fact]
     public async Task PeriodAggregation_DifferentCostingMethodsReturnCorrectGP()
     {
@@ -526,6 +550,9 @@ public class ReportingDomainExtendedTests
     // Consumption vs Sales Reconciliation Tests
     // ============================================================================
 
+    // Given: A daily consumption grain has ingredients with over-usage, efficient usage, and zero variance
+    // When: The consumption snapshot and variance breakdown are retrieved
+    // Then: Total variance reflects the net of all ingredient variances, ordered by absolute cost variance
     [Fact]
     public async Task DailyConsumption_VarianceCalculation_CorrectForMultipleIngredients()
     {
@@ -574,6 +601,9 @@ public class ReportingDomainExtendedTests
         variances[0].CostVariance.Should().Be(30.00m);
     }
 
+    // Given: A daily consumption grain has ground beef consumed across three separate orders
+    // When: The variance breakdown is retrieved
+    // Then: All entries are aggregated into a single ground beef entry with combined quantities and costs
     [Fact]
     public async Task DailyConsumption_SameIngredientMultipleEntries_AggregatesCorrectly()
     {
@@ -620,6 +650,9 @@ public class ReportingDomainExtendedTests
     // Dashboard Real-Time Updates Tests
     // ============================================================================
 
+    // Given: A daypart analysis grain has recorded hourly sales for lunch (12, 13) and dinner (19) hours
+    // When: Hourly sales are retrieved through the site dashboard
+    // Then: The dashboard returns all three hours with their respective net sales amounts
     [Fact]
     public async Task SiteDashboard_GetHourlySales_IntegratesWithDaypartAnalysis()
     {
@@ -669,6 +702,9 @@ public class ReportingDomainExtendedTests
         hourlySales.HourlySales.Should().Contain(h => h.Hour == 19 && h.NetSales == 800.00m);
     }
 
+    // Given: A product mix grain has recorded sales for burgers, fries, and craft soda with different revenue levels
+    // When: Top selling items are retrieved through the site dashboard
+    // Then: Items are ranked by net revenue with signature burger first, including gross profit and margin percent
     [Fact]
     public async Task SiteDashboard_GetTopSellingItems_IntegratesWithProductMix()
     {
@@ -727,6 +763,9 @@ public class ReportingDomainExtendedTests
         topItems[0].GrossProfitPercent.Should().Be(70.00m);
     }
 
+    // Given: A payment reconciliation grain has recorded cash, credit card, and debit card payments
+    // When: The payment breakdown is retrieved through the site dashboard
+    // Then: Payments are grouped by method (Cash vs Card) with amounts and percentage-of-total calculated
     [Fact]
     public async Task SiteDashboard_GetPaymentBreakdown_IntegratesWithReconciliation()
     {
@@ -784,6 +823,9 @@ public class ReportingDomainExtendedTests
     // Waste Categorization Extended Tests
     // ============================================================================
 
+    // Given: A daily waste grain has recorded spoilage in Produce, expiry in Proteins, and breakage in Equipment
+    // When: The waste snapshot is retrieved
+    // Then: Waste is aggregated by both category and reason with correct totals for each grouping
     [Fact]
     public async Task DailyWaste_CategoryBreakdown_AggregatesCorrectly()
     {
@@ -839,6 +881,9 @@ public class ReportingDomainExtendedTests
     // Date Boundary and Timing Tests
     // ============================================================================
 
+    // Given: Two daily sales grains are initialized for consecutive business days
+    // When: Different sales amounts are recorded on each day
+    // Then: Each day's grain maintains isolated totals with the correct business date
     [Fact]
     public async Task DailySales_SeparateGrainsPerDay()
     {
@@ -878,6 +923,9 @@ public class ReportingDomainExtendedTests
         day2Snapshot.Date.Should().Be(day2);
     }
 
+    // Given: A four-week accounting period is initialized spanning Feb 26 to Mar 24, 2024
+    // When: The period summary is retrieved
+    // Then: The period type, number, start date, and end date span exactly 27 inclusive days
     [Fact]
     public async Task PeriodAggregation_FourWeekPeriod_HasCorrectDateRange()
     {

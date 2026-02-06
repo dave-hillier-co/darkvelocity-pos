@@ -23,6 +23,9 @@ public class StaffDomainImprovementTests
     // Labor Law Compliance Grain Tests
     // ============================================================================
 
+    // Given: a new labor law compliance grain
+    // When: default jurisdiction configurations are initialized
+    // Then: US-FEDERAL, US-CA, and US-NY jurisdictions should be configured with US-FEDERAL as the default
     [Fact]
     public async Task LaborLawComplianceGrain_InitializeDefaults_ConfiguresCommonJurisdictions()
     {
@@ -43,6 +46,9 @@ public class StaffDomainImprovementTests
         snapshot.DefaultJurisdictionCode.Should().Be("US-FEDERAL");
     }
 
+    // Given: a labor law compliance grain with initialized default jurisdictions
+    // When: the California (US-CA) jurisdiction configuration is retrieved
+    // Then: it should include 8-hour daily OT, 12-hour double OT, 40-hour weekly threshold, 7th-day rules, and 1.5x/2x multipliers
     [Fact]
     public async Task LaborLawComplianceGrain_GetCaliforniaConfig_HasCorrectOvertimeRules()
     {
@@ -66,6 +72,9 @@ public class StaffDomainImprovementTests
         config.OvertimeRule.DoubleOvertimeMultiplier.Should().Be(2.0m);
     }
 
+    // Given: a California employee who worked a 10-hour shift in one day
+    // When: overtime is calculated under California daily overtime rules
+    // Then: 8 hours should be regular and 2 hours should be overtime (over the 8-hour daily threshold)
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_CaliforniaDaily_Over8Hours()
     {
@@ -97,6 +106,9 @@ public class StaffDomainImprovementTests
         result.DoubleOvertimeHours.Should().Be(0m);
     }
 
+    // Given: a California employee who worked a 14-hour shift in one day
+    // When: overtime is calculated under California daily overtime rules
+    // Then: 8 hours should be regular, 4 hours overtime (8-12), and 2 hours double overtime (over 12)
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_CaliforniaDaily_Over12Hours()
     {
@@ -128,6 +140,9 @@ public class StaffDomainImprovementTests
         result.DoubleOvertimeHours.Should().Be(2m);
     }
 
+    // Given: an employee under federal jurisdiction who worked 5 days of 10 hours each (50 total hours)
+    // When: overtime is calculated under federal weekly overtime rules
+    // Then: 40 hours should be regular and 10 hours should be weekly overtime
     [Fact]
     public async Task LaborLawComplianceGrain_CalculateOvertime_FederalWeekly_Over40Hours()
     {
@@ -162,6 +177,9 @@ public class StaffDomainImprovementTests
         result.OvertimeHours.Should().Be(10m);
     }
 
+    // Given: a California employee who worked an 8-hour shift with no meal break taken
+    // When: break compliance is checked under California labor law
+    // Then: the result should flag a violation for insufficient breaks
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_CaliforniaMealBreak()
     {
@@ -188,6 +206,9 @@ public class StaffDomainImprovementTests
         result.Violations.Should().Contain(v => v.ViolationType == "INSUFFICIENT_BREAK");
     }
 
+    // Given: a California employee who worked a 6-hour shift and took a 30-minute meal break
+    // When: break compliance is checked under California labor law
+    // Then: the result should be compliant with no violations
     [Fact]
     public async Task LaborLawComplianceGrain_CheckBreakCompliance_WithValidBreak_IsCompliant()
     {
@@ -220,6 +241,9 @@ public class StaffDomainImprovementTests
     // Break Tracking Tests
     // ============================================================================
 
+    // Given: a clocked-in employee at a site
+    // When: the employee starts an unpaid meal break
+    // Then: the break should be recorded with the correct type and the employee should be on break
     [Fact]
     public async Task EmployeeGrain_StartBreak_StartsBreakSuccessfully()
     {
@@ -244,6 +268,9 @@ public class StaffDomainImprovementTests
         (await grain.IsOnBreakAsync()).Should().BeTrue();
     }
 
+    // Given: a clocked-in employee who is currently on a meal break
+    // When: the employee ends their break
+    // Then: the break duration should be calculated and the employee should no longer be on break
     [Fact]
     public async Task EmployeeGrain_EndBreak_EndsBreakAndCalculatesDuration()
     {
@@ -270,6 +297,9 @@ public class StaffDomainImprovementTests
         (await grain.IsOnBreakAsync()).Should().BeFalse();
     }
 
+    // Given: a clocked-in employee who took a paid rest break and an unpaid meal break during the shift
+    // When: the break summary is requested
+    // Then: the summary should show 2 breaks with tracked paid and unpaid break minutes
     [Fact]
     public async Task EmployeeGrain_GetBreakSummary_ReturnsCorrectTotals()
     {
@@ -302,6 +332,9 @@ public class StaffDomainImprovementTests
         summary.IsCurrentlyOnBreak.Should().BeFalse();
     }
 
+    // Given: an employee who is not currently clocked in
+    // When: a break is attempted
+    // Then: the system should reject the break since the employee must be on the clock first
     [Fact]
     public async Task EmployeeGrain_StartBreak_ThrowsIfNotClockedIn()
     {
@@ -321,6 +354,9 @@ public class StaffDomainImprovementTests
             .WithMessage("Employee is not clocked in");
     }
 
+    // Given: a clocked-in employee who is already on a meal break
+    // When: a second break is attempted
+    // Then: the system should reject the duplicate break since the employee is already on break
     [Fact]
     public async Task EmployeeGrain_StartBreak_ThrowsIfAlreadyOnBreak()
     {
@@ -346,6 +382,9 @@ public class StaffDomainImprovementTests
     // Certification Tracking Tests
     // ============================================================================
 
+    // Given: an active employee with no certifications
+    // When: a ServSafe Food Handler certification is added with a valid expiration date
+    // Then: the certification should be recorded with valid status, type, name, number, and days until expiration
     [Fact]
     public async Task EmployeeGrain_AddCertification_AddsCertificationSuccessfully()
     {
@@ -380,6 +419,9 @@ public class StaffDomainImprovementTests
         result.DaysUntilExpiration.Should().BeGreaterThan(300);
     }
 
+    // Given: an active employee
+    // When: a TIPS alcohol service certification is added with an expiration date 30 days in the past
+    // Then: the certification should be automatically marked as expired with negative days until expiration
     [Fact]
     public async Task EmployeeGrain_AddCertification_MarksAsExpired_WhenPastExpirationDate()
     {
@@ -408,6 +450,9 @@ public class StaffDomainImprovementTests
         result.DaysUntilExpiration.Should().BeLessThan(0);
     }
 
+    // Given: an employee with three different certifications (food handler, alcohol service, ServSafe manager)
+    // When: all certifications are retrieved
+    // Then: all three certifications should be returned with their respective types
     [Fact]
     public async Task EmployeeGrain_GetCertifications_ReturnsAllCertifications()
     {
@@ -439,6 +484,9 @@ public class StaffDomainImprovementTests
             .Contain(new[] { "food_handler", "alcohol_service", "servsafe" });
     }
 
+    // Given: an employee with valid food handler and alcohol service certifications
+    // When: certification compliance is checked against both required types
+    // Then: the employee should be fully compliant with no missing or expired certifications
     [Fact]
     public async Task EmployeeGrain_CheckCertificationCompliance_ReturnsCompliant_WhenAllCertsValid()
     {
@@ -469,6 +517,9 @@ public class StaffDomainImprovementTests
         result.ExpiredCertifications.Should().BeEmpty();
     }
 
+    // Given: an employee with only a food handler certification (missing alcohol service)
+    // When: certification compliance is checked against both food handler and alcohol service requirements
+    // Then: the employee should be non-compliant with alcohol service listed as missing
     [Fact]
     public async Task EmployeeGrain_CheckCertificationCompliance_ReturnsMissing_WhenCertsMissing()
     {
@@ -496,6 +547,9 @@ public class StaffDomainImprovementTests
         result.MissingCertifications.Should().Contain("alcohol_service");
     }
 
+    // Given: an employee with a food handler certification expiring in 30 days
+    // When: the certification is renewed with a new expiration date 2 years out
+    // Then: the updated certification should show the new expiration date, valid status, and over 700 days remaining
     [Fact]
     public async Task EmployeeGrain_UpdateCertification_UpdatesExpirationDate()
     {
@@ -525,6 +579,9 @@ public class StaffDomainImprovementTests
         updated.DaysUntilExpiration.Should().BeGreaterThan(700);
     }
 
+    // Given: an employee with a food handler certification on record
+    // When: the certification is removed (e.g., revoked)
+    // Then: the employee should have no certifications remaining
     [Fact]
     public async Task EmployeeGrain_RemoveCertification_RemovesCertification()
     {
@@ -550,6 +607,9 @@ public class StaffDomainImprovementTests
         certifications.Should().BeEmpty();
     }
 
+    // Given: an employee with one certification expiring in 5 days and another valid for a year
+    // When: certification expirations are checked with a 30-day warning and 7-day critical threshold
+    // Then: only the soon-to-expire food handler certification should trigger a critical alert
     [Fact]
     public async Task EmployeeGrain_CheckCertificationExpirations_AlertsForExpiringSoon()
     {
@@ -586,6 +646,9 @@ public class StaffDomainImprovementTests
     // Tax Calculation Service Tests
     // ============================================================================
 
+    // Given: an employee with $1,000 gross pay under federal tax jurisdiction
+    // When: tax withholding is calculated
+    // Then: federal (22%), Social Security (6.2%), and Medicare (1.45%) should total $296.50 with no state/local tax
     [Fact]
     public void TaxCalculationService_CalculateWithholding_FederalTaxes()
     {
@@ -606,6 +669,9 @@ public class StaffDomainImprovementTests
         withholding.TotalWithholding.Should().Be(296.5m);
     }
 
+    // Given: an employee with $1,000 gross pay under California tax jurisdiction
+    // When: tax withholding is calculated
+    // Then: state withholding should be $72.50 (7.25%) in addition to federal taxes, totaling over $350
     [Fact]
     public void TaxCalculationService_CalculateWithholding_CaliforniaTaxes()
     {
@@ -624,6 +690,9 @@ public class StaffDomainImprovementTests
         withholding.TotalWithholding.Should().BeGreaterThan(350m);
     }
 
+    // Given: an employee with $1,000 gross pay under New York tax jurisdiction
+    // When: tax withholding is calculated
+    // Then: NYC local tax should be included, making total withholding exceed just federal plus state
     [Fact]
     public void TaxCalculationService_CalculateWithholding_NewYorkWithLocalTax()
     {
@@ -641,6 +710,9 @@ public class StaffDomainImprovementTests
             withholding.FederalWithholding + withholding.StateWithholding);
     }
 
+    // Given: an employee with $1,000 gross pay under Texas tax jurisdiction
+    // When: tax withholding is calculated
+    // Then: state and local withholding should both be zero since Texas has no state income tax
     [Fact]
     public void TaxCalculationService_CalculateWithholding_TexasNoStateTax()
     {
@@ -657,6 +729,9 @@ public class StaffDomainImprovementTests
         withholding.LocalWithholding.Should().Be(0m);
     }
 
+    // Given: an employee with $165,000 YTD gross pay (near the Social Security wage cap) earning $10,000 this period
+    // When: tax withholding is calculated
+    // Then: Social Security withholding should be less than the full 6.2% since only the remaining amount under the cap is taxable
     [Fact]
     public void TaxCalculationService_CalculateWithholding_SocialSecurityCap()
     {
@@ -677,6 +752,9 @@ public class StaffDomainImprovementTests
     // Payroll Export Service Tests
     // ============================================================================
 
+    // Given: a payroll export entry for a server with 40 regular hours, 5 OT hours, tips, and tax withholdings
+    // When: a CSV payroll export is generated with tax details included
+    // Then: the CSV should contain employee info, hours, and federal tax columns
     [Fact]
     public async Task PayrollExportService_GenerateCsv_CreatesValidCsv()
     {
@@ -722,6 +800,9 @@ public class StaffDomainImprovementTests
         csv.Should().Contain("Federal Tax");
     }
 
+    // Given: a payroll export entry for a server with regular hours, overtime, and tips
+    // When: an ADP-format payroll export is generated
+    // Then: the output should contain ADP header, employee number, and earnings codes (REG, OT, TIPS)
     [Fact]
     public async Task PayrollExportService_ExportToAdp_CreatesAdpFormat()
     {
@@ -766,6 +847,9 @@ public class StaffDomainImprovementTests
         adpContent.Should().Contain("TIPS");
     }
 
+    // Given: a payroll export entry with regular, overtime, and double overtime hours
+    // When: a Gusto-format payroll export is generated
+    // Then: the output should contain Gusto column headers and the correct hour values for all pay categories
     [Fact]
     public async Task PayrollExportService_ExportToGusto_CreatesGustoFormat()
     {
@@ -813,6 +897,9 @@ public class StaffDomainImprovementTests
         gustoContent.Should().Contain("2.00");
     }
 
+    // Given: payroll export entries for 2 employees with combined 75 regular hours, 5 OT hours, and $1,760 gross pay
+    // When: a payroll preview is generated for the pay period
+    // Then: the preview should aggregate totals for employee count, hours, gross pay, withholdings, and net pay
     [Fact]
     public async Task PayrollExportService_GeneratePreview_CalculatesTotals()
     {
@@ -847,6 +934,9 @@ public class StaffDomainImprovementTests
         preview.TotalNetPay.Should().Be(1030.97m); // 612.77 + 418.2
     }
 
+    // Given: a payroll export request in CSV format for one employee
+    // When: the payroll export is executed
+    // Then: the result should include an export ID, CSV format, correct employee count, .csv filename, and content
     [Fact]
     public async Task PayrollExportService_Export_ReturnsCorrectMetadata()
     {

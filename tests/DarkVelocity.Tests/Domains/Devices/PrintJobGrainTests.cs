@@ -26,6 +26,9 @@ public class PrintJobGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDevicePrintQueueGrain>(key);
     }
 
+    // Given: A new print job with receipt content, printer assignment, and order reference
+    // When: The job is queued for printing
+    // Then: The job is created in Pending status with all specified properties and a queued timestamp
     [Fact]
     public async Task QueueAsync_ShouldCreatePendingJob()
     {
@@ -59,6 +62,9 @@ public class PrintJobGrainTests
         result.QueuedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A queued print job in Pending status
+    // When: The printer acknowledges and starts processing the job
+    // Then: The job transitions to Printing status with a started timestamp
     [Fact]
     public async Task StartAsync_ShouldTransitionToPrinting()
     {
@@ -78,6 +84,9 @@ public class PrintJobGrainTests
         result.StartedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A print job currently in Printing status
+    // When: The printer successfully finishes printing
+    // Then: The job transitions to Completed status with a completion timestamp
     [Fact]
     public async Task CompleteAsync_ShouldTransitionToCompleted()
     {
@@ -98,6 +107,9 @@ public class PrintJobGrainTests
         result.CompletedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A print job currently in Printing status
+    // When: The printer reports a failure with an error code
+    // Then: The job transitions to Failed status with error details, incremented retry count, and a scheduled retry time
     [Fact]
     public async Task FailAsync_ShouldTransitionToFailedWithRetryScheduled()
     {
@@ -121,6 +133,9 @@ public class PrintJobGrainTests
         result.NextRetryAt.Should().BeAfter(DateTime.UtcNow);
     }
 
+    // Given: A print job that has failed after a printing attempt
+    // When: The job is retried
+    // Then: The job resets back to Pending status for reprocessing
     [Fact]
     public async Task RetryAsync_ShouldResetToPending()
     {
@@ -141,6 +156,9 @@ public class PrintJobGrainTests
         result.Status.Should().Be(PrintJobStatus.Pending);
     }
 
+    // Given: A queued print job in Pending status
+    // When: A user cancels the print job
+    // Then: The job transitions to Cancelled status
     [Fact]
     public async Task CancelAsync_ShouldCancelJob()
     {
@@ -160,6 +178,9 @@ public class PrintJobGrainTests
         status.Should().Be(PrintJobStatus.Cancelled);
     }
 
+    // Given: A new print job with kitchen ticket content for a table order
+    // When: The job is queued as a kitchen ticket type
+    // Then: The job is created with the KitchenTicket job type
     [Fact]
     public async Task QueueAsync_WithKitchenTicket_ShouldSetCorrectType()
     {
@@ -179,6 +200,9 @@ public class PrintJobGrainTests
         result.JobType.Should().Be(PrintJobType.KitchenTicket);
     }
 
+    // Given: A new print job with elevated priority
+    // When: The job is queued with a priority of 10
+    // Then: The job is created with the specified priority level
     [Fact]
     public async Task QueueAsync_WithPriority_ShouldSetPriority()
     {
@@ -199,6 +223,9 @@ public class PrintJobGrainTests
         result.Priority.Should().Be(10);
     }
 
+    // Given: A print job grain that has never been queued
+    // When: Checking whether the job exists
+    // Then: The job does not exist
     [Fact]
     public async Task ExistsAsync_WhenNotQueued_ShouldReturnFalse()
     {
@@ -212,6 +239,9 @@ public class PrintJobGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: A print job that has been queued
+    // When: Checking whether the job exists
+    // Then: The job exists
     [Fact]
     public async Task ExistsAsync_WhenQueued_ShouldReturnTrue()
     {
@@ -248,6 +278,9 @@ public class DevicePrintQueueGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDevicePrintQueueGrain>(key);
     }
 
+    // Given: A newly created device print queue
+    // When: The queue is initialized for a device
+    // Then: The queue starts empty with zero pending jobs
     [Fact]
     public async Task InitializeAsync_ShouldInitializeQueue()
     {
@@ -264,6 +297,9 @@ public class DevicePrintQueueGrainTests
         summary.PendingJobs.Should().Be(0);
     }
 
+    // Given: An initialized device print queue with no jobs
+    // When: A receipt print job is enqueued
+    // Then: The job is added in Pending status and the queue count increases to one
     [Fact]
     public async Task EnqueueAsync_ShouldAddJobToQueue()
     {
@@ -286,6 +322,9 @@ public class DevicePrintQueueGrainTests
         summary.PendingJobs.Should().Be(1);
     }
 
+    // Given: An initialized device print queue
+    // When: Three print jobs are enqueued sequentially
+    // Then: All three jobs are queued and the pending count reflects the total
     [Fact]
     public async Task EnqueueAsync_MultipleTimes_ShouldQueueInOrder()
     {
@@ -308,6 +347,9 @@ public class DevicePrintQueueGrainTests
         summary.PendingJobs.Should().Be(3);
     }
 
+    // Given: An initialized device print queue with jobs at different priority levels
+    // When: The next job is dequeued
+    // Then: The highest priority job is returned first
     [Fact]
     public async Task EnqueueAsync_WithPriority_ShouldOrderByPriority()
     {
@@ -331,6 +373,9 @@ public class DevicePrintQueueGrainTests
         nextJob!.Content.Should().Be("High priority");
     }
 
+    // Given: An initialized device print queue with no pending jobs
+    // When: A dequeue is attempted
+    // Then: No job is returned
     [Fact]
     public async Task DequeueAsync_WhenEmpty_ShouldReturnNull()
     {
@@ -347,6 +392,9 @@ public class DevicePrintQueueGrainTests
         result.Should().BeNull();
     }
 
+    // Given: An initialized device print queue with two enqueued jobs
+    // When: The pending jobs are retrieved
+    // Then: Both jobs are returned and all are in Pending status
     [Fact]
     public async Task GetPendingJobsAsync_ShouldReturnPendingJobs()
     {
@@ -368,6 +416,9 @@ public class DevicePrintQueueGrainTests
         pending.All(j => j.Status == PrintJobStatus.Pending).Should().BeTrue();
     }
 
+    // Given: An initialized device print queue with one enqueued job
+    // When: The job status is updated to Completed
+    // Then: The job moves from pending to history and completed count increases
     [Fact]
     public async Task NotifyJobStatusChangedAsync_ToCompleted_ShouldMoveToHistory()
     {
@@ -388,6 +439,9 @@ public class DevicePrintQueueGrainTests
         summary.CompletedJobs.Should().Be(1);
     }
 
+    // Given: A device print queue with a completed job in its history
+    // When: The history is cleared
+    // Then: The job history becomes empty
     [Fact]
     public async Task ClearHistoryAsync_ShouldClearHistory()
     {

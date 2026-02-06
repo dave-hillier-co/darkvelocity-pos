@@ -20,6 +20,9 @@ public class DeviceHealthMonitoringTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeviceStatusGrain>(key);
     }
 
+    // Given: A registered POS device at a site location
+    // When: The device sends a heartbeat
+    // Then: The device is marked as online with an updated last-seen timestamp
     [Fact]
     public async Task RecordHeartbeatAsync_ShouldUpdateLastSeenAndSetOnline()
     {
@@ -41,6 +44,9 @@ public class DeviceHealthMonitoringTests
         health.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered POS device at a site location
+    // When: A heartbeat is received with signal strength and latency metrics
+    // Then: The health metrics are recorded for the device
     [Fact]
     public async Task RecordHeartbeatAsync_WithHealthMetrics_ShouldUpdateMetrics()
     {
@@ -65,6 +71,9 @@ public class DeviceHealthMonitoringTests
         health.LatencyMs.Should().Be(50);
     }
 
+    // Given: An initialized site location with no registered devices
+    // When: Health is queried for an unknown device
+    // Then: No health data is returned
     [Fact]
     public async Task GetDeviceHealthAsync_WhenNotRegistered_ShouldReturnNull()
     {
@@ -81,6 +90,9 @@ public class DeviceHealthMonitoringTests
         health.Should().BeNull();
     }
 
+    // Given: A site with multiple registered devices, some online and some offline
+    // When: The health summary is requested
+    // Then: The summary reports correct total, online, and offline device counts
     [Fact]
     public async Task GetHealthSummaryAsync_ShouldReturnCompleteSummary()
     {
@@ -111,6 +123,9 @@ public class DeviceHealthMonitoringTests
         summary.DeviceMetrics.Should().HaveCount(3);
     }
 
+    // Given: A site where all registered devices have sent heartbeats
+    // When: The health summary is requested
+    // Then: The overall connection quality is rated as excellent
     [Fact]
     public async Task GetHealthSummaryAsync_ShouldCalculateConnectionQuality()
     {
@@ -135,6 +150,9 @@ public class DeviceHealthMonitoringTests
         summary.OverallConnectionQuality.Should().Be(ConnectionQuality.Excellent);
     }
 
+    // Given: A site with one heartbeating device and one that never heartbeated
+    // When: A health check is performed with a short stale threshold
+    // Then: The fresh device remains online
     [Fact]
     public async Task PerformHealthCheckAsync_ShouldMarkStaleDevicesOffline()
     {
@@ -161,6 +179,9 @@ public class DeviceHealthMonitoringTests
         freshHealth!.IsOnline.Should().BeTrue();
     }
 
+    // Given: A registered receipt printer at a site
+    // When: The printer reports a paper-out status
+    // Then: A paper-out alert is created for the printer
     [Fact]
     public async Task UpdatePrinterHealthAsync_WithPaperOut_ShouldCreateAlert()
     {
@@ -182,6 +203,9 @@ public class DeviceHealthMonitoringTests
         summary.Alerts[0].DeviceId.Should().Be(printerId);
     }
 
+    // Given: A registered receipt printer at a site
+    // When: The printer reports low paper level at 10%
+    // Then: A paper-low alert is created with the paper level in the message
     [Fact]
     public async Task UpdatePrinterHealthAsync_WithPaperLow_ShouldCreateAlert()
     {
@@ -203,6 +227,9 @@ public class DeviceHealthMonitoringTests
         summary.Alerts[0].Message.Should().Contain("10%");
     }
 
+    // Given: A registered receipt printer at a site
+    // When: The printer reports an error status
+    // Then: A printer error alert is created
     [Fact]
     public async Task UpdatePrinterHealthAsync_WithError_ShouldCreateAlert()
     {
@@ -223,6 +250,9 @@ public class DeviceHealthMonitoringTests
         summary.Alerts[0].AlertType.Should().Be("PrinterError");
     }
 
+    // Given: A printer with an active paper-out alert
+    // When: The printer reports a ready status
+    // Then: All alerts for the printer are cleared
     [Fact]
     public async Task UpdatePrinterHealthAsync_WithReady_ShouldClearAlerts()
     {
@@ -243,6 +273,9 @@ public class DeviceHealthMonitoringTests
         summary.Alerts.Should().BeEmpty();
     }
 
+    // Given: A POS device with strong signal and low latency
+    // When: The device health is queried after a heartbeat with metrics
+    // Then: The connection quality is rated as excellent
     [Fact]
     public async Task GetDeviceHealthAsync_ShouldReturnConnectionQuality()
     {
@@ -268,6 +301,9 @@ public class DeviceHealthMonitoringTests
         health!.ConnectionQuality.Should().Be(ConnectionQuality.Excellent);
     }
 
+    // Given: A POS device with weak signal and high latency
+    // When: The device health is queried after a heartbeat with poor metrics
+    // Then: The connection quality is rated as poor
     [Fact]
     public async Task GetDeviceHealthAsync_WithPoorSignal_ShouldReturnPoorQuality()
     {
@@ -293,6 +329,9 @@ public class DeviceHealthMonitoringTests
         health!.ConnectionQuality.Should().Be(ConnectionQuality.Poor);
     }
 
+    // Given: A registered POS device that has never sent a heartbeat
+    // When: The device health is queried
+    // Then: The device is offline with disconnected connection quality
     [Fact]
     public async Task GetDeviceHealthAsync_WhenOffline_ShouldReturnDisconnected()
     {
@@ -314,6 +353,9 @@ public class DeviceHealthMonitoringTests
         health.ConnectionQuality.Should().Be(ConnectionQuality.Disconnected);
     }
 
+    // Given: A registered printer with a heartbeat including printer-specific metrics
+    // When: The device health is queried
+    // Then: The health includes printer status, paper level, and pending print job count
     [Fact]
     public async Task DeviceHealthMetrics_ShouldIncludePrinterStatus()
     {
@@ -341,6 +383,9 @@ public class DeviceHealthMonitoringTests
         health.PendingPrintJobs.Should().Be(2);
     }
 
+    // Given: A site with two printers having alerts and one POS device
+    // When: The health summary is requested
+    // Then: The summary correctly counts devices with alerts and lists active alerts
     [Fact]
     public async Task GetHealthSummaryAsync_DevicesWithAlerts_ShouldCountCorrectly()
     {

@@ -21,6 +21,9 @@ public class ProfitabilityDashboardGrainTests
     // Initialization Tests
     // ============================================================================
 
+    // Given: a new profitability dashboard grain with no prior state
+    // When: the dashboard is initialized with organization and site identifiers
+    // Then: the dashboard correctly reports the organization and site IDs
     [Fact]
     public async Task InitializeAsync_ShouldSetSiteIdAndOrgId()
     {
@@ -46,6 +49,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.SiteId.Should().Be(siteId);
     }
 
+    // Given: an initialized dashboard with existing item cost data
+    // When: initialization is called again with a different site name
+    // Then: existing data is preserved and the dashboard remains functional
     [Fact]
     public async Task InitializeAsync_AlreadyInitialized_ShouldBeIdempotent()
     {
@@ -76,6 +82,9 @@ public class ProfitabilityDashboardGrainTests
     // Operations On Uninitialized Grain Tests
     // ============================================================================
 
+    // Given: a profitability dashboard grain that has never been initialized
+    // When: the dashboard is requested
+    // Then: an InvalidOperationException is thrown indicating the dashboard is not initialized
     [Fact]
     public async Task GetDashboardAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -95,6 +104,9 @@ public class ProfitabilityDashboardGrainTests
             .WithMessage("Profitability dashboard not initialized");
     }
 
+    // Given: a profitability dashboard grain that has never been initialized
+    // When: item cost data recording is attempted
+    // Then: an InvalidOperationException is thrown indicating the dashboard is not initialized
     [Fact]
     public async Task RecordItemCostDataAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -115,6 +127,9 @@ public class ProfitabilityDashboardGrainTests
             .WithMessage("Profitability dashboard not initialized");
     }
 
+    // Given: a profitability dashboard grain that has never been initialized
+    // When: a daily cost summary recording is attempted
+    // Then: an InvalidOperationException is thrown indicating the dashboard is not initialized
     [Fact]
     public async Task RecordDailyCostSummaryAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -139,6 +154,9 @@ public class ProfitabilityDashboardGrainTests
     // RecordItemCostData Tests
     // ============================================================================
 
+    // Given: an initialized profitability dashboard with no existing items
+    // When: cost data for a new grilled salmon item is recorded
+    // Then: the item's name, category, pricing, costs, units, and revenue are persisted
     [Fact]
     public async Task RecordItemCostDataAsync_NewItem_ShouldAddItem()
     {
@@ -173,6 +191,9 @@ public class ProfitabilityDashboardGrainTests
         item.TotalRevenue.Should().Be(250.00m);
     }
 
+    // Given: a grilled salmon item already recorded with 10 units sold
+    // When: additional sales of 5 units are recorded for the same item at an updated price
+    // Then: units and revenue accumulate while pricing and cost reflect the latest values
     [Fact]
     public async Task RecordItemCostDataAsync_ExistingItem_ShouldUpdateAndAccumulateUnits()
     {
@@ -200,6 +221,9 @@ public class ProfitabilityDashboardGrainTests
         item.TotalRevenue.Should().Be(380.00m); // Accumulated: 250 + 130
     }
 
+    // Given: an initialized profitability dashboard
+    // When: more than 5000 item records are added
+    // Then: the oldest items are trimmed to keep the total at or below the 5000 record limit
     [Fact]
     public async Task RecordItemCostDataAsync_ExceedsMaxRecords_ShouldTrimOldestItems()
     {
@@ -234,6 +258,9 @@ public class ProfitabilityDashboardGrainTests
     // RecordDailyCostSummary Tests
     // ============================================================================
 
+    // Given: an initialized profitability dashboard with no daily summaries
+    // When: a daily cost summary is recorded with food/beverage cost percentages and totals
+    // Then: the summary is retrievable in cost trends for that date
     [Fact]
     public async Task RecordDailyCostSummaryAsync_NewDay_ShouldAddSummary()
     {
@@ -262,6 +289,9 @@ public class ProfitabilityDashboardGrainTests
         trends[0].TotalRevenue.Should().Be(5000.00m);
     }
 
+    // Given: a daily cost summary already recorded for today
+    // When: a new summary is recorded for the same date with updated figures
+    // Then: the previous summary is replaced with the updated values
     [Fact]
     public async Task RecordDailyCostSummaryAsync_SameDay_ShouldReplaceSummary()
     {
@@ -286,6 +316,9 @@ public class ProfitabilityDashboardGrainTests
         trends[0].TotalRevenue.Should().Be(6000.00m);
     }
 
+    // Given: an initialized profitability dashboard
+    // When: 400 days of daily cost summaries are recorded
+    // Then: the oldest summaries are trimmed to keep the total at or below 365 days
     [Fact]
     public async Task RecordDailyCostSummaryAsync_Over365Days_ShouldTrim()
     {
@@ -312,6 +345,9 @@ public class ProfitabilityDashboardGrainTests
     // GetDashboard Tests
     // ============================================================================
 
+    // Given: a food item and a beverage item with known costs, prices, and sales volumes
+    // When: the profitability dashboard is retrieved
+    // Then: total revenue, cost, gross profit, margin percentage, and category cost percentages are correctly calculated
     [Fact]
     public async Task GetDashboardAsync_WithItems_ShouldCalculateCorrectMetrics()
     {
@@ -356,6 +392,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.BeverageCostPercent.Should().Be(25.00m);
     }
 
+    // Given: an item with theoretical cost of $5 and actual cost of $6 per unit
+    // When: the profitability dashboard is retrieved
+    // Then: the variance ($10 total) and variance percentage (20%) are correctly calculated
     [Fact]
     public async Task GetDashboardAsync_WithVariance_ShouldCalculateTheoreticalVsActual()
     {
@@ -386,6 +425,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.TotalVariancePercent.Should().Be(20.00m);
     }
 
+    // Given: an initialized profitability dashboard with no recorded items
+    // When: the dashboard is retrieved
+    // Then: all financial metrics (revenue, cost, profit, margins, variance) return zero
     [Fact]
     public async Task GetDashboardAsync_NoItems_ShouldReturnZeroMetrics()
     {
@@ -408,6 +450,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.TotalVariancePercent.Should().Be(0m);
     }
 
+    // Given: items recorded on different dates (two days ago and yesterday)
+    // When: the dashboard is queried for yesterday's date range only
+    // Then: only the item recorded yesterday is included in the metrics
     [Fact]
     public async Task GetDashboardAsync_FiltersByDateRange()
     {
@@ -436,6 +481,9 @@ public class ProfitabilityDashboardGrainTests
     // Category Classification Tests
     // ============================================================================
 
+    // Given: items categorized under various food-related names (Appetizer, Entree, Dessert, etc.)
+    // When: the profitability dashboard is retrieved
+    // Then: all items are classified as food with the correct combined food cost percentage
     [Fact]
     public async Task GetDashboardAsync_CorrectlyClassifiesFoodCategories()
     {
@@ -462,6 +510,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.BeverageCostPercent.Should().Be(0m); // No beverages
     }
 
+    // Given: items categorized under various beverage-related names (Beer, Wine, Cocktails, Coffee, etc.)
+    // When: the profitability dashboard is retrieved
+    // Then: all items are classified as beverages with the correct combined beverage cost percentage
     [Fact]
     public async Task GetDashboardAsync_CorrectlyClassifiesBeverageCategories()
     {
@@ -492,6 +543,9 @@ public class ProfitabilityDashboardGrainTests
     // GetCategoryBreakdown Tests
     // ============================================================================
 
+    // Given: two mains items and one drinks item recorded with known costs and sales
+    // When: the category breakdown is retrieved
+    // Then: items are grouped by category with correct item counts, revenue, cost, and margin percentages
     [Fact]
     public async Task GetCategoryBreakdownAsync_ShouldGroupByCategory()
     {
@@ -531,6 +585,9 @@ public class ProfitabilityDashboardGrainTests
         drinks.TotalCost.Should().Be(30.00m); // 1.50 * 20
     }
 
+    // Given: items in three categories with distinct revenue totals
+    // When: the category breakdown is retrieved
+    // Then: categories are ordered by total revenue descending
     [Fact]
     public async Task GetCategoryBreakdownAsync_OrderedByRevenue()
     {
@@ -561,6 +618,9 @@ public class ProfitabilityDashboardGrainTests
     // GetItemProfitability Tests
     // ============================================================================
 
+    // Given: a premium steak item with known theoretical cost ($12), actual cost ($14), and 20 units sold
+    // When: item profitability is retrieved
+    // Then: contribution margin, margin percentage, variance, and total contribution are correctly calculated
     [Fact]
     public async Task GetItemProfitabilityAsync_ExistingItem_ShouldReturnCalculatedProfitability()
     {
@@ -604,6 +664,9 @@ public class ProfitabilityDashboardGrainTests
         profitability.TotalContribution.Should().Be(620.00m);
     }
 
+    // Given: an initialized profitability dashboard with no matching item
+    // When: profitability is requested for a non-existent item ID
+    // Then: null is returned
     [Fact]
     public async Task GetItemProfitabilityAsync_NonExistingItem_ShouldReturnNull()
     {
@@ -618,6 +681,9 @@ public class ProfitabilityDashboardGrainTests
         profitability.Should().BeNull();
     }
 
+    // Given: a free sample item with zero selling price
+    // When: item profitability is retrieved
+    // Then: the contribution margin percentage is zero without division errors
     [Fact]
     public async Task GetItemProfitabilityAsync_ZeroSellingPrice_ShouldHandleGracefully()
     {
@@ -637,6 +703,9 @@ public class ProfitabilityDashboardGrainTests
         profitability!.ContributionMarginPercent.Should().Be(0m);
     }
 
+    // Given: a digital item with zero theoretical and actual cost
+    // When: item profitability is retrieved
+    // Then: the variance percentage is zero without division errors
     [Fact]
     public async Task GetItemProfitabilityAsync_ZeroTheoreticalCost_ShouldHandleGracefully()
     {
@@ -660,6 +729,9 @@ public class ProfitabilityDashboardGrainTests
     // GetCostTrends Tests
     // ============================================================================
 
+    // Given: daily cost summaries recorded out of chronological order
+    // When: cost trends are retrieved
+    // Then: the trends are returned ordered by date ascending
     [Fact]
     public async Task GetCostTrendsAsync_MultipleDays_ShouldReturnOrderedByDate()
     {
@@ -686,6 +758,9 @@ public class ProfitabilityDashboardGrainTests
         trends[2].Date.Should().Be(today);
     }
 
+    // Given: daily cost summaries spanning five days
+    // When: cost trends are queried for a three-day window
+    // Then: only summaries within the requested date range are returned
     [Fact]
     public async Task GetCostTrendsAsync_FiltersByDateRange()
     {
@@ -709,6 +784,9 @@ public class ProfitabilityDashboardGrainTests
         trends.Should().NotContain(t => t.Date == today.AddDays(-5));
     }
 
+    // Given: a daily cost summary with $900 cost and $3000 revenue
+    // When: cost trends are retrieved
+    // Then: the overall cost percentage is calculated as 30%
     [Fact]
     public async Task GetCostTrendsAsync_CalculatesOverallCostPercent()
     {
@@ -728,6 +806,9 @@ public class ProfitabilityDashboardGrainTests
         trends[0].OverallCostPercent.Should().Be(30m);
     }
 
+    // Given: a daily cost summary recorded for a zero-revenue day
+    // When: cost trends are retrieved
+    // Then: the overall cost percentage is zero without division errors
     [Fact]
     public async Task GetCostTrendsAsync_ZeroRevenue_ShouldHandleGracefully()
     {
@@ -751,6 +832,9 @@ public class ProfitabilityDashboardGrainTests
     // GetTopVarianceItems Tests
     // ============================================================================
 
+    // Given: three items with small ($5), large ($10), and medium ($8) total cost variances
+    // When: top variance items are retrieved
+    // Then: items are ordered by total absolute variance descending
     [Fact]
     public async Task GetTopVarianceItemsAsync_ShouldReturnOrderedByAbsoluteVariance()
     {
@@ -783,6 +867,9 @@ public class ProfitabilityDashboardGrainTests
         varianceItems[2].ItemName.Should().Be("Small Variance"); // Total: 5
     }
 
+    // Given: twenty items with varying cost variances
+    // When: top 5 variance items are requested
+    // Then: exactly five items are returned
     [Fact]
     public async Task GetTopVarianceItemsAsync_LimitedCount_ShouldReturnRequestedCount()
     {
@@ -804,6 +891,9 @@ public class ProfitabilityDashboardGrainTests
         varianceItems.Should().HaveCount(5);
     }
 
+    // Given: one item with sales and one item with zero sales, both having cost variance
+    // When: top variance items are retrieved
+    // Then: only the item with actual sales is included
     [Fact]
     public async Task GetTopVarianceItemsAsync_ItemsWithZeroSales_ShouldBeExcluded()
     {
@@ -829,6 +919,9 @@ public class ProfitabilityDashboardGrainTests
         varianceItems[0].ItemName.Should().Be("Has Sales");
     }
 
+    // Given: an item with theoretical cost $5, actual cost $6.50, and 10 units sold
+    // When: top variance items are retrieved
+    // Then: per-unit variance ($1.50), variance percent (30%), and total variance ($15) are correctly calculated
     [Fact]
     public async Task GetTopVarianceItemsAsync_ShouldCalculateCorrectVarianceMetrics()
     {
@@ -858,6 +951,9 @@ public class ProfitabilityDashboardGrainTests
     // GetTopMarginItems Tests
     // ============================================================================
 
+    // Given: three items with contribution margins of 30%, 60%, and 80%
+    // When: top margin items are retrieved
+    // Then: items are ordered by contribution margin percentage descending
     [Fact]
     public async Task GetTopMarginItemsAsync_ShouldReturnOrderedByMarginPercent()
     {
@@ -890,6 +986,9 @@ public class ProfitabilityDashboardGrainTests
         topMarginItems[2].ItemName.Should().Be("Low Margin");
     }
 
+    // Given: one item with sales and one item with zero sales
+    // When: top margin items are retrieved
+    // Then: only the item with actual sales is included
     [Fact]
     public async Task GetTopMarginItemsAsync_ItemsWithZeroSales_ShouldBeExcluded()
     {
@@ -913,6 +1012,9 @@ public class ProfitabilityDashboardGrainTests
         topMarginItems[0].ItemName.Should().Be("Has Sales");
     }
 
+    // Given: twenty items with varying margin percentages
+    // When: top 5 margin items are requested
+    // Then: exactly five items are returned
     [Fact]
     public async Task GetTopMarginItemsAsync_LimitedCount_ShouldReturnRequestedCount()
     {
@@ -938,6 +1040,9 @@ public class ProfitabilityDashboardGrainTests
     // GetBottomMarginItems Tests
     // ============================================================================
 
+    // Given: three items with contribution margins of 30%, 60%, and 80%
+    // When: bottom margin items are retrieved
+    // Then: items are ordered by contribution margin percentage ascending (lowest first)
     [Fact]
     public async Task GetBottomMarginItemsAsync_ShouldReturnOrderedByMarginPercentAscending()
     {
@@ -970,6 +1075,9 @@ public class ProfitabilityDashboardGrainTests
         bottomMarginItems[2].ItemName.Should().Be("High Margin");
     }
 
+    // Given: one item with sales and one item with zero sales
+    // When: bottom margin items are retrieved
+    // Then: only the item with actual sales is included
     [Fact]
     public async Task GetBottomMarginItemsAsync_ItemsWithZeroSales_ShouldBeExcluded()
     {
@@ -993,6 +1101,9 @@ public class ProfitabilityDashboardGrainTests
         bottomMarginItems[0].ItemName.Should().Be("Has Sales");
     }
 
+    // Given: twenty items recorded on the profitability dashboard
+    // When: bottom margin items are requested with default count
+    // Then: exactly ten items are returned
     [Fact]
     public async Task GetBottomMarginItemsAsync_DefaultCount_ShouldBeTen()
     {
@@ -1018,6 +1129,9 @@ public class ProfitabilityDashboardGrainTests
     // Clear Tests
     // ============================================================================
 
+    // Given: a profitability dashboard with recorded item data and daily cost summaries
+    // When: the dashboard data is cleared
+    // Then: category breakdown and cost trends are both empty
     [Fact]
     public async Task ClearAsync_ShouldRemoveAllData()
     {
@@ -1044,6 +1158,9 @@ public class ProfitabilityDashboardGrainTests
         trends.Should().BeEmpty();
     }
 
+    // Given: an initialized profitability dashboard with recorded data
+    // When: the dashboard data is cleared
+    // Then: the dashboard remains initialized and operational without throwing errors
     [Fact]
     public async Task ClearAsync_ShouldPreserveInitialization()
     {
@@ -1073,6 +1190,9 @@ public class ProfitabilityDashboardGrainTests
     // Dashboard Breakdown Lists Tests
     // ============================================================================
 
+    // Given: fifteen menu items recorded on the profitability dashboard
+    // When: the dashboard is retrieved
+    // Then: the result includes top margin items, bottom margin items, and variance items lists
     [Fact]
     public async Task GetDashboardAsync_ShouldIncludeTopAndBottomMarginItemsInResult()
     {
@@ -1097,6 +1217,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.TopVarianceItems.Should().NotBeNull();
     }
 
+    // Given: items in Mains and Drinks categories recorded on the dashboard
+    // When: the dashboard is retrieved
+    // Then: the category breakdown contains both categories
     [Fact]
     public async Task GetDashboardAsync_ShouldIncludeCategoryBreakdown()
     {
@@ -1122,6 +1245,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.CategoryBreakdown.Should().Contain(c => c.Category == "Drinks");
     }
 
+    // Given: three days of daily cost summaries recorded on the dashboard
+    // When: the dashboard is retrieved for a date range covering all three days
+    // Then: the cost trends contain all three daily summaries
     [Fact]
     public async Task GetDashboardAsync_ShouldIncludeCostTrends()
     {
@@ -1148,6 +1274,9 @@ public class ProfitabilityDashboardGrainTests
     // Edge Case Tests
     // ============================================================================
 
+    // Given: an item where actual cost ($4) is less than theoretical cost ($5)
+    // When: the item's profitability is retrieved
+    // Then: the variance is negative (-$1) indicating favorable cost performance
     [Fact]
     public async Task RecordItemCostDataAsync_NegativeVariance_ShouldHandleCorrectly()
     {
@@ -1168,6 +1297,9 @@ public class ProfitabilityDashboardGrainTests
         profitability.VariancePercent.Should().Be(-20m); // -1 / 5 * 100
     }
 
+    // Given: item data recorded two years ago
+    // When: the dashboard is queried for the last 30 days
+    // Then: all metrics return zero and breakdown lists are empty
     [Fact]
     public async Task GetDashboardAsync_DateRangeWithNoMatchingItems_ShouldReturnEmpty()
     {
@@ -1191,6 +1323,9 @@ public class ProfitabilityDashboardGrainTests
         dashboard.BottomMarginItems.Should().BeEmpty();
     }
 
+    // Given: the same menu item recorded five separate times with 2 units each
+    // When: the item's profitability is retrieved
+    // Then: units accumulate to 10 and revenue accumulates to the combined total
     [Fact]
     public async Task MultipleRecordsForSameItem_ShouldAccumulateCorrectly()
     {

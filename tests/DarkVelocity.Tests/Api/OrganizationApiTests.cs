@@ -17,6 +17,9 @@ public class OrganizationApiTests
         _client = fixture.CreateClient();
     }
 
+    // Given: A valid organization creation request with name and slug
+    // When: The organization is created via the API
+    // Then: A 201 Created response is returned with HAL+JSON containing self and sites links
     [Fact]
     public async Task CreateOrganization_ReturnsCreatedWithHalResponse()
     {
@@ -42,6 +45,9 @@ public class OrganizationApiTests
             .Should().EndWith("/sites");
     }
 
+    // Given: An organization creation request with default currency and timezone settings
+    // When: The organization is created via the API
+    // Then: A 201 Created response is returned
     [Fact]
     public async Task CreateOrganization_WithSettings_ReturnsCreatedWithSettings()
     {
@@ -60,6 +66,9 @@ public class OrganizationApiTests
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
+    // Given: An existing organization created via the API
+    // When: The organization is retrieved by its ID
+    // Then: A 200 OK response is returned with HAL+JSON containing the organization details and self link
     [Fact]
     public async Task GetOrganization_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -85,6 +94,9 @@ public class OrganizationApiTests
             .Should().Be($"/api/orgs/{orgId}");
     }
 
+    // Given: A nonexistent organization ID
+    // When: The organization is retrieved by that ID
+    // Then: A 404 Not Found response is returned with a "not_found" error
     [Fact]
     public async Task GetOrganization_WhenNotExists_ReturnsNotFound()
     {
@@ -102,6 +114,9 @@ public class OrganizationApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: An existing organization
+    // When: The organization name is updated via PATCH
+    // Then: A 200 OK response is returned with the updated organization name
     [Fact]
     public async Task UpdateOrganization_WhenExists_ReturnsOkWithUpdatedData()
     {
@@ -125,6 +140,9 @@ public class OrganizationApiTests
         json.RootElement.GetProperty("name").GetString().Should().Be("Updated Org Name");
     }
 
+    // Given: A nonexistent organization ID
+    // When: An update is attempted via PATCH
+    // Then: A 404 Not Found response is returned
     [Fact]
     public async Task UpdateOrganization_WhenNotExists_ReturnsNotFound()
     {
@@ -139,6 +157,9 @@ public class OrganizationApiTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    // Given: An existing organization
+    // When: The organization is suspended with a reason of "Non-payment"
+    // Then: A 200 OK response is returned with a confirmation message
     [Fact]
     public async Task SuspendOrganization_WhenExists_ReturnsOk()
     {
@@ -162,6 +183,9 @@ public class OrganizationApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Organization suspended");
     }
 
+    // Given: A nonexistent organization ID
+    // When: Suspension is attempted
+    // Then: A 404 Not Found response is returned
     [Fact]
     public async Task SuspendOrganization_WhenNotExists_ReturnsNotFound()
     {

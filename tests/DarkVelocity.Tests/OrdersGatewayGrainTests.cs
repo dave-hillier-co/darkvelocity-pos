@@ -24,6 +24,9 @@ public class DeliveryPlatformGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeliveryPlatformGrain>(key);
     }
 
+    // Given: An organization without a connected UberEats delivery platform
+    // When: The UberEats platform is connected with API credentials and merchant ID
+    // Then: The platform is active with correct type, name, and merchant ID recorded
     [Fact]
     public async Task ConnectAsync_WithUberEats_CreatesPlatformConnection()
     {
@@ -50,6 +53,9 @@ public class DeliveryPlatformGrainTests
         snapshot.ConnectedAt.Should().NotBeNull();
     }
 
+    // Given: An organization without a connected DoorDash delivery platform
+    // When: The DoorDash platform is connected with API credentials
+    // Then: The platform is active with the DoorDash platform type
     [Fact]
     public async Task ConnectAsync_WithDoorDash_CreatesPlatformConnection()
     {
@@ -72,6 +78,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Status.Should().Be(DeliveryPlatformStatus.Active);
     }
 
+    // Given: An active Deliveroo delivery platform connection
+    // When: The platform name and API credentials are updated
+    // Then: The platform reflects the updated name
     [Fact]
     public async Task UpdateAsync_ChangesStatus_UpdatesPlatform()
     {
@@ -100,6 +109,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Name.Should().Be("Deliveroo Updated");
     }
 
+    // Given: An active Just Eat delivery platform connection
+    // When: The platform is paused
+    // Then: The platform status changes to paused, halting order intake
     [Fact]
     public async Task PauseAsync_SetsStatusToPaused()
     {
@@ -122,6 +134,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Status.Should().Be(DeliveryPlatformStatus.Paused);
     }
 
+    // Given: A paused Wolt delivery platform connection
+    // When: The platform is resumed
+    // Then: The platform status returns to active, resuming order intake
     [Fact]
     public async Task ResumeAsync_AfterPause_SetsStatusToActive()
     {
@@ -145,6 +160,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Status.Should().Be(DeliveryPlatformStatus.Active);
     }
 
+    // Given: An active GrubHub delivery platform connection
+    // When: A site location is mapped to a platform store ID
+    // Then: The platform tracks the location mapping with the external store identifier
     [Fact]
     public async Task AddLocationMappingAsync_AddsLocationToPlatform()
     {
@@ -175,6 +193,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Locations[0].PlatformStoreId.Should().Be("grubhub-store-123");
     }
 
+    // Given: A custom delivery platform with one mapped location
+    // When: The location mapping is removed
+    // Then: The platform has no remaining location mappings
     [Fact]
     public async Task RemoveLocationMappingAsync_RemovesLocationFromPlatform()
     {
@@ -204,6 +225,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Locations.Should().BeEmpty();
     }
 
+    // Given: An active UberEats delivery platform connection
+    // When: Two delivery orders are recorded with revenue totals
+    // Then: Daily order count and revenue metrics are accumulated correctly
     [Fact]
     public async Task RecordOrderAsync_IncrementsDailyMetrics()
     {
@@ -229,6 +253,9 @@ public class DeliveryPlatformGrainTests
         snapshot.LastOrderAt.Should().NotBeNull();
     }
 
+    // Given: An active DoorDash delivery platform connection
+    // When: A menu sync is recorded
+    // Then: The last sync timestamp is updated to the current time
     [Fact]
     public async Task RecordSyncAsync_UpdatesLastSyncAt()
     {
@@ -252,6 +279,9 @@ public class DeliveryPlatformGrainTests
         snapshot.LastSyncAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An active Postmates delivery platform connection
+    // When: The platform is disconnected
+    // Then: The platform status changes to disconnected
     [Fact]
     public async Task DisconnectAsync_DisconnectsPlatform()
     {

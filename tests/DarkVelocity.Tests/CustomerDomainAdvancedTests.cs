@@ -41,6 +41,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== LOYALTY TIER TRANSITION TESTS ====================
 
+    // Given: a loyalty customer enrolled at Gold tier
+    // When: their tier is demoted to Silver
+    // Then: the customer's loyalty tier reflects the Silver downgrade
     [Fact]
     public async Task DemoteTierAsync_ShouldDowngradeTier()
     {
@@ -60,6 +63,9 @@ public class CustomerDomainAdvancedTests
         state.Loyalty.TierName.Should().Be("Silver");
     }
 
+    // Given: a loyalty customer enrolled at Bronze tier
+    // When: they are promoted through Silver, Gold, and Platinum tiers sequentially
+    // Then: their current tier reflects the final Platinum promotion
     [Fact]
     public async Task TierTransition_MultipleUpgrades_ShouldTrackAllChanges()
     {
@@ -78,6 +84,9 @@ public class CustomerDomainAdvancedTests
         state.Loyalty!.TierName.Should().Be("Platinum");
     }
 
+    // Given: a loyalty customer promoted from Bronze to Gold with earned points
+    // When: their tier is demoted back to Silver
+    // Then: the customer's current tier and tier ID reflect the Silver demotion
     [Fact]
     public async Task TierTransition_UpgradeThenDowngrade_ShouldReflectCurrentTier()
     {
@@ -107,6 +116,9 @@ public class CustomerDomainAdvancedTests
         state.Loyalty.TierId.Should().Be(silverTierId);
     }
 
+    // Given: a customer who is not enrolled in the loyalty program
+    // When: a tier promotion is attempted
+    // Then: the operation is rejected because the customer is not a loyalty member
     [Fact]
     public async Task TierTransition_WithoutLoyaltyEnrollment_ShouldThrow()
     {
@@ -126,6 +138,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== POINT EXPIRATION EDGE CASE TESTS ====================
 
+    // Given: a loyalty customer with 50 points earned from a purchase
+    // When: 100 points are expired (more than the available balance)
+    // Then: the points balance floors at zero rather than going negative
     [Fact]
     public async Task ExpirePointsAsync_MoreThanBalance_ShouldNotGoNegative()
     {
@@ -143,6 +158,9 @@ public class CustomerDomainAdvancedTests
         balance.Should().Be(0);
     }
 
+    // Given: a loyalty customer with exactly 100 earned points
+    // When: exactly 100 points are expired
+    // Then: the points balance is reduced to zero
     [Fact]
     public async Task ExpirePointsAsync_ExactBalance_ShouldZeroOut()
     {
@@ -160,6 +178,9 @@ public class CustomerDomainAdvancedTests
         balance.Should().Be(0);
     }
 
+    // Given: a loyalty customer with 500 earned points
+    // When: 200 points are expired
+    // Then: the remaining points balance is 300
     [Fact]
     public async Task ExpirePointsAsync_PartialExpiration_ShouldReduceBalance()
     {
@@ -177,6 +198,9 @@ public class CustomerDomainAdvancedTests
         balance.Should().Be(300);
     }
 
+    // Given: a loyalty customer with 1000 earned points
+    // When: points are expired in three batches of 100, 150, and 250
+    // Then: the remaining balance reflects all accumulated expirations (500 points)
     [Fact]
     public async Task ExpirePointsAsync_MultipleExpirations_ShouldAccumulate()
     {
@@ -196,6 +220,9 @@ public class CustomerDomainAdvancedTests
         balance.Should().Be(500); // 1000 - 100 - 150 - 250 = 500
     }
 
+    // Given: a loyalty customer with 100 earned points
+    // When: zero points are expired
+    // Then: the points balance remains unchanged at 100
     [Fact]
     public async Task ExpirePointsAsync_ZeroPoints_ShouldNotChangeBalance()
     {
@@ -213,6 +240,9 @@ public class CustomerDomainAdvancedTests
         balance.Should().Be(100);
     }
 
+    // Given: a loyalty customer who earned 500 lifetime points
+    // When: 200 points are expired
+    // Then: the available balance decreases to 300 but lifetime points remain at 500
     [Fact]
     public async Task ExpirePointsAsync_PreservesLifetimePoints()
     {
@@ -233,6 +263,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== REFERRAL PROGRAM CAP TESTS ====================
 
+    // Given: a loyalty customer with a referral code who has completed 9 of 10 allowed referrals
+    // When: the 10th referral is completed
+    // Then: the referral cap is marked as reached and bonus points are still awarded
     [Fact]
     public async Task CompleteReferralAsync_ExactlyAtCap_ShouldMarkCapReached()
     {
@@ -261,6 +294,9 @@ public class CustomerDomainAdvancedTests
         finalResult.PointsAwarded.Should().Be(100);
     }
 
+    // Given: a loyalty customer who has already reached the referral cap of 10
+    // When: an 11th referral completion is attempted
+    // Then: the referral is rejected and no bonus points are awarded
     [Fact]
     public async Task CompleteReferralAsync_PastCap_ShouldNotAwardPoints()
     {
@@ -286,6 +322,9 @@ public class CustomerDomainAdvancedTests
         result.CapReached.Should().BeTrue();
     }
 
+    // Given: a loyalty customer who has completed 5 of 10 allowed referrals
+    // When: the referral cap status is checked
+    // Then: the system reports the cap has not yet been reached
     [Fact]
     public async Task HasReachedReferralCapAsync_BeforeCap_ShouldReturnFalse()
     {
@@ -309,6 +348,9 @@ public class CustomerDomainAdvancedTests
         hasReachedCap.Should().BeFalse();
     }
 
+    // Given: a loyalty customer who has completed 5 successful referrals
+    // When: the referral status is retrieved
+    // Then: all referred customer IDs and total referral points are tracked
     [Fact]
     public async Task ReferralStatus_ShouldTrackAllReferredCustomers()
     {
@@ -340,6 +382,9 @@ public class CustomerDomainAdvancedTests
         }
     }
 
+    // Given: a customer with a referral code who is not enrolled in the loyalty program
+    // When: a referral is completed
+    // Then: the referral is tracked but points are not added to loyalty balance
     [Fact]
     public async Task CompleteReferralAsync_WithoutLoyaltyEnrollment_ShouldNotAwardPointsButTrackReferral()
     {
@@ -363,6 +408,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== CUSTOMER MERGE TESTS ====================
 
+    // Given: a primary customer profile
+    // When: five duplicate customer profiles are merged into it
+    // Then: all five source customer IDs are recorded in the merge history
     [Fact]
     public async Task MergeFromAsync_MultipleMerges_ShouldTrackAllSources()
     {
@@ -392,6 +440,9 @@ public class CustomerDomainAdvancedTests
         }
     }
 
+    // Given: a primary customer profile
+    // When: the same source customer is merged twice
+    // Then: both merge entries are recorded (deduplication is the caller's responsibility)
     [Fact]
     public async Task MergeFromAsync_SameCustomerTwice_ShouldAddBothEntries()
     {
@@ -411,6 +462,9 @@ public class CustomerDomainAdvancedTests
         state.MergedFrom.Should().AllBeEquivalentTo(sourceCustomerId);
     }
 
+    // Given: a loyalty customer with 500 earned points
+    // When: another customer profile is merged into theirs
+    // Then: the existing loyalty points balance is preserved after the merge
     [Fact]
     public async Task MergeFromAsync_WithLoyaltyEnrolled_ShouldPreservePoints()
     {
@@ -430,6 +484,9 @@ public class CustomerDomainAdvancedTests
         state.MergedFrom.Should().Contain(sourceCustomerId);
     }
 
+    // Given: a customer with two recorded site visits
+    // When: another customer profile is merged into theirs
+    // Then: the original visit history is preserved after the merge
     [Fact]
     public async Task MergeFromAsync_WithVisitHistory_ShouldPreserveHistory()
     {
@@ -453,6 +510,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== BIRTHDAY REWARD HISTORY AND REDEMPTION TESTS ====================
 
+    // Given: a customer with a birthday set and an issued birthday reward
+    // When: the birthday reward is redeemed against an order
+    // Then: the reward is marked as redeemed and recorded in the birthday reward history
     [Fact]
     public async Task BirthdayReward_Redemption_ShouldUpdateHistory()
     {
@@ -478,6 +538,9 @@ public class CustomerDomainAdvancedTests
         state.BirthdayRewardHistory[0].Year.Should().Be(DateTime.UtcNow.Year);
     }
 
+    // Given: a customer with a birthday set
+    // When: a birthday reward is issued with a 60-day validity period
+    // Then: the reward expiration is set approximately 60 days from now
     [Fact]
     public async Task BirthdayReward_CustomValidDays_ShouldSetCorrectExpiry()
     {
@@ -495,6 +558,9 @@ public class CustomerDomainAdvancedTests
         result.ExpiresAt.Should().BeBefore(DateTime.UtcNow.AddDays(61));
     }
 
+    // Given: a customer with a birthday set
+    // When: a birthday reward is issued with no explicit validity period
+    // Then: the reward defaults to a 30-day expiration window
     [Fact]
     public async Task BirthdayReward_DefaultValidDays_ShouldBe30Days()
     {
@@ -512,6 +578,9 @@ public class CustomerDomainAdvancedTests
         result.ExpiresAt.Should().BeBefore(DateTime.UtcNow.AddDays(31));
     }
 
+    // Given: a customer with a birthday set
+    // When: a birthday reward is issued
+    // Then: the reward appears in the customer's available rewards list
     [Fact]
     public async Task BirthdayReward_ShouldAppearInAvailableRewards()
     {
@@ -531,6 +600,9 @@ public class CustomerDomainAdvancedTests
         rewards[0].Name.Should().Be("Free Birthday Cake");
     }
 
+    // Given: a customer with an issued birthday reward
+    // When: the birthday reward is redeemed
+    // Then: the reward no longer appears in the available rewards list
     [Fact]
     public async Task BirthdayReward_AfterRedemption_ShouldNotAppearInAvailableRewards()
     {
@@ -549,6 +621,9 @@ public class CustomerDomainAdvancedTests
         rewards.Should().BeEmpty();
     }
 
+    // Given: a customer with a birthday already set to June 15, 1990
+    // When: the birthday is updated to December 25, 1985
+    // Then: the stored date of birth reflects the new birthday
     [Fact]
     public async Task SetBirthdayAsync_ShouldOverwriteExistingBirthday()
     {
@@ -568,6 +643,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== SPEND PROJECTION HISTORICAL TRACKING TESTS ====================
 
+    // Given: a new spend projection for a customer
+    // When: a discounted transaction is recorded with $80 net spend ($100 gross, $20 discount)
+    // Then: loyalty points are calculated on net spend and lifetime spend reflects the net amount
     [Fact]
     public async Task RecordSpendAsync_WithDiscount_ShouldTrackCorrectly()
     {
@@ -597,6 +675,9 @@ public class CustomerDomainAdvancedTests
         state.LifetimeSpend.Should().Be(80m);
     }
 
+    // Given: a new spend projection for a customer
+    // When: three transactions totaling $150 are recorded on the same day
+    // Then: lifetime, year-to-date, and month-to-date spend all reflect the accumulated total
     [Fact]
     public async Task RecordSpendAsync_MultipleTransactionsInDay_ShouldAccumulateCorrectly()
     {
@@ -621,6 +702,9 @@ public class CustomerDomainAdvancedTests
         state.MonthToDateSpend.Should().Be(150m);
     }
 
+    // Given: a customer in the Bronze tier with $300 in recorded spend
+    // When: the spend projection snapshot is retrieved
+    // Then: the snapshot shows $200 remaining to reach the Silver tier ($500 threshold)
     [Fact]
     public async Task GetSnapshotAsync_ShouldProvideAccurateSpendToNextTier()
     {
@@ -644,6 +728,9 @@ public class CustomerDomainAdvancedTests
         snapshot.SpendToNextTier.Should().Be(200m); // 500 - 300 = 200
     }
 
+    // Given: a customer with $6000 in recorded spend (Platinum tier)
+    // When: the spend projection snapshot is retrieved
+    // Then: no next tier is shown because Platinum is the highest tier
     [Fact]
     public async Task GetSnapshotAsync_AtMaxTier_ShouldHaveNoNextTier()
     {
@@ -667,6 +754,9 @@ public class CustomerDomainAdvancedTests
         snapshot.SpendToNextTier.Should().Be(0);
     }
 
+    // Given: a customer with $200 in recorded spend from a single order
+    // When: a $50 partial refund is processed against the original order
+    // Then: the lifetime spend is reduced to $150 and earned points are clawed back
     [Fact]
     public async Task ReverseSpendAsync_PartialRefund_ShouldAdjustCorrectly()
     {
@@ -690,6 +780,9 @@ public class CustomerDomainAdvancedTests
         state.AvailablePoints.Should().Be(0); // Points clawed back
     }
 
+    // Given: a customer who has earned 10,000 loyalty points from spending
+    // When: 60 separate point redemptions are made
+    // Then: only the 50 most recent redemptions are retained but all 60 are counted in the total
     [Fact]
     public async Task RedemptionHistory_ShouldLimitTo50()
     {
@@ -718,6 +811,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== POINTS BALANCE TRACKING TESTS ====================
 
+    // Given: a loyalty-enrolled customer
+    // When: points are earned across two purchases with tracked spend amounts ($50 and $100)
+    // Then: total spend accumulates to $150 and points balance reflects both earnings
     [Fact]
     public async Task EarnPointsAsync_WithSpendAmount_ShouldUpdateTotalSpend()
     {
@@ -737,6 +833,9 @@ public class CustomerDomainAdvancedTests
         state.Loyalty.LifetimePoints.Should().Be(300);
     }
 
+    // Given: a loyalty-enrolled customer
+    // When: points are earned from three separate purchases (100, 200, 150 points)
+    // Then: year-to-date points accumulate to the combined total of 450
     [Fact]
     public async Task PointsTracking_YtdPoints_ShouldAccumulate()
     {
@@ -757,6 +856,9 @@ public class CustomerDomainAdvancedTests
 
     // ==================== REWARD EXPIRATION BATCH TESTS ====================
 
+    // Given: a loyalty customer with five issued rewards (three past expiry, two still valid)
+    // When: the reward expiration process runs
+    // Then: only the three expired rewards are removed and the two valid rewards remain available
     [Fact]
     public async Task ExpireRewardsAsync_MixedExpiry_ShouldOnlyExpireExpiredOnes()
     {
@@ -783,6 +885,9 @@ public class CustomerDomainAdvancedTests
         rewards.Should().Contain(r => r.Name == "Valid 2");
     }
 
+    // Given: a loyalty customer with two rewards that are both still valid
+    // When: the reward expiration process runs
+    // Then: both rewards remain available and unchanged
     [Fact]
     public async Task ExpireRewardsAsync_NoExpiredRewards_ShouldNotChange()
     {
@@ -803,6 +908,9 @@ public class CustomerDomainAdvancedTests
         rewards.Should().HaveCount(2);
     }
 
+    // Given: a loyalty customer with three rewards that have all passed their expiry dates
+    // When: the reward expiration process runs
+    // Then: all rewards are expired and none remain available
     [Fact]
     public async Task ExpireRewardsAsync_AllExpired_ShouldExpireAll()
     {

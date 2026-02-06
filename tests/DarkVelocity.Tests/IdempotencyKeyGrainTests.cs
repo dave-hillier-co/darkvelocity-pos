@@ -21,6 +21,9 @@ public class IdempotencyKeyGrainTests
     // Key Generation Tests
     // =========================================================================
 
+    // Given: An idempotency grain for a payment authorization operation
+    // When: Two keys are generated for the same entity and operation
+    // Then: Each key is unique and follows the expected prefix format
     [Fact]
     public async Task GenerateKeyAsync_ShouldReturnUniqueKey()
     {
@@ -40,6 +43,9 @@ public class IdempotencyKeyGrainTests
         key1.Should().StartWith("idem_authorize_");
     }
 
+    // Given: An idempotency grain for a payment capture operation
+    // When: A key is generated with a custom 30-minute TTL
+    // Then: The key status reflects an expiry time approximately 30 minutes in the future
     [Fact]
     public async Task GenerateKeyAsync_WithCustomTtl_ShouldSetExpiry()
     {
@@ -61,6 +67,9 @@ public class IdempotencyKeyGrainTests
     // Key Check Tests
     // =========================================================================
 
+    // Given: A generated idempotency key for a refund operation that has not been used
+    // When: The key is checked
+    // Then: The key exists, is not marked as used, and has no previous success result
     [Fact]
     public async Task CheckKeyAsync_ForExistingUnusedKey_ShouldReturnCorrectState()
     {
@@ -79,6 +88,9 @@ public class IdempotencyKeyGrainTests
         result.PreviousSuccess.Should().BeNull();
     }
 
+    // Given: An idempotency grain with no keys generated
+    // When: A nonexistent key is checked
+    // Then: The result indicates the key does not exist and has not been used
     [Fact]
     public async Task CheckKeyAsync_ForNonExistentKey_ShouldReturnNotExists()
     {
@@ -94,6 +106,9 @@ public class IdempotencyKeyGrainTests
         result.AlreadyUsed.Should().BeFalse();
     }
 
+    // Given: A generated idempotency key for a void operation that has been marked as successfully used
+    // When: The key is checked
+    // Then: The result indicates the key exists, was already used successfully, and includes the result hash
     [Fact]
     public async Task CheckKeyAsync_ForUsedKey_ShouldReturnUsedState()
     {
@@ -120,6 +135,9 @@ public class IdempotencyKeyGrainTests
     // Mark Key Used Tests
     // =========================================================================
 
+    // Given: A generated idempotency key for an authorization operation
+    // When: The key is marked as successfully used with a result hash
+    // Then: The key status shows it as used, successful, with the result hash and usage timestamp
     [Fact]
     public async Task MarkKeyUsedAsync_WithSuccess_ShouldUpdateState()
     {
@@ -141,6 +159,9 @@ public class IdempotencyKeyGrainTests
         status.ResultHash.Should().Be("result_hash_xyz");
     }
 
+    // Given: A generated idempotency key for a payment capture operation
+    // When: The key is marked as used with a failure outcome
+    // Then: The key status shows it as used but unsuccessful
     [Fact]
     public async Task MarkKeyUsedAsync_WithFailure_ShouldUpdateState()
     {
@@ -160,6 +181,9 @@ public class IdempotencyKeyGrainTests
         status.Successful.Should().BeFalse();
     }
 
+    // Given: An idempotency grain with no prior keys
+    // When: A nonexistent key is directly marked as used
+    // Then: The key is created and marked as used in a single operation
     [Fact]
     public async Task MarkKeyUsedAsync_ForNonExistentKey_ShouldCreateAndMarkUsed()
     {
@@ -181,6 +205,9 @@ public class IdempotencyKeyGrainTests
     // TryAcquire Tests
     // =========================================================================
 
+    // Given: A new idempotency key that has not been registered
+    // When: Acquisition is attempted for an authorization operation
+    // Then: The acquisition succeeds, reserving the key for use
     [Fact]
     public async Task TryAcquireAsync_ForNewKey_ShouldSucceed()
     {
@@ -197,6 +224,9 @@ public class IdempotencyKeyGrainTests
         result.Should().BeTrue();
     }
 
+    // Given: An idempotency key that was previously used for a successful authorization
+    // When: Acquisition of the same key is attempted again
+    // Then: The acquisition fails to prevent duplicate execution of the successful operation
     [Fact]
     public async Task TryAcquireAsync_ForUsedSuccessfulKey_ShouldFail()
     {
@@ -216,6 +246,9 @@ public class IdempotencyKeyGrainTests
         result.Should().BeFalse(); // Should not allow re-execution of successful operation
     }
 
+    // Given: An idempotency key that was previously used for a failed authorization
+    // When: Acquisition of the same key is attempted again
+    // Then: The acquisition succeeds to allow retry of the failed operation
     [Fact]
     public async Task TryAcquireAsync_ForUsedFailedKey_ShouldSucceed()
     {
@@ -239,6 +272,9 @@ public class IdempotencyKeyGrainTests
     // Cleanup Tests
     // =========================================================================
 
+    // Given: An idempotency key generated with a 1-millisecond TTL that has already expired
+    // When: Expired key cleanup is triggered
+    // Then: The expired key is removed and no longer retrievable
     [Fact]
     public async Task CleanupExpiredKeysAsync_ShouldRemoveExpiredKeys()
     {
@@ -267,6 +303,9 @@ public class IdempotencyKeyGrainTests
     // Key Status Tests
     // =========================================================================
 
+    // Given: A generated idempotency key for a refund operation with a 2-hour TTL
+    // When: The key status is retrieved
+    // Then: The status includes the key, operation, related entity, unused state, and future expiry
     [Fact]
     public async Task GetKeyStatusAsync_ForExistingKey_ShouldReturnFullStatus()
     {
@@ -288,6 +327,9 @@ public class IdempotencyKeyGrainTests
         status.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
     }
 
+    // Given: An idempotency grain with no keys generated
+    // When: The status of a nonexistent key is requested
+    // Then: Null is returned indicating the key does not exist
     [Fact]
     public async Task GetKeyStatusAsync_ForNonExistentKey_ShouldReturnNull()
     {
@@ -310,6 +352,9 @@ public class PaymentProcessorRetryHelperTests
     // Retry Delay Tests
     // =========================================================================
 
+    // Given: A payment processor retry attempt at various attempt numbers
+    // When: The retry delay is calculated
+    // Then: The delay follows exponential backoff (1s, 2s, 4s, 8s, 16s) with jitter
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -332,6 +377,9 @@ public class PaymentProcessorRetryHelperTests
         delay.TotalMilliseconds.Should().BeLessThan(expectedBase.TotalMilliseconds + tolerance);
     }
 
+    // Given: A negative attempt number for retry delay calculation
+    // When: The retry delay is calculated
+    // Then: The delay is treated as the first attempt with approximately 1 second of delay
     [Fact]
     public void GetRetryDelay_WithNegativeAttempt_ShouldTreatAsZero()
     {
@@ -343,6 +391,9 @@ public class PaymentProcessorRetryHelperTests
         delay.TotalSeconds.Should().BeLessThan(2); // Should be around 1 second with jitter
     }
 
+    // Given: An extremely high retry attempt number (100)
+    // When: The retry delay is calculated
+    // Then: The delay is capped at the maximum (16 seconds plus jitter)
     [Fact]
     public void GetRetryDelay_WithHighAttemptNumber_ShouldCapAtMaxDelay()
     {
@@ -357,6 +408,9 @@ public class PaymentProcessorRetryHelperTests
     // Should Retry Tests
     // =========================================================================
 
+    // Given: A retryable processing error at attempt 2 (below the maximum retry count)
+    // When: The retry eligibility is evaluated
+    // Then: Retry is allowed
     [Fact]
     public void ShouldRetry_WithinMaxRetries_ShouldReturnTrue()
     {
@@ -367,6 +421,9 @@ public class PaymentProcessorRetryHelperTests
         result.Should().BeTrue();
     }
 
+    // Given: A processing error at attempt 5 (the maximum retry count)
+    // When: The retry eligibility is evaluated
+    // Then: Retry is not allowed because the maximum attempts have been exhausted
     [Fact]
     public void ShouldRetry_AtMaxRetries_ShouldReturnFalse()
     {
@@ -377,6 +434,9 @@ public class PaymentProcessorRetryHelperTests
         result.Should().BeFalse();
     }
 
+    // Given: A terminal card_declined error at attempt 1
+    // When: The retry eligibility is evaluated
+    // Then: Retry is not allowed because card declines are non-recoverable
     [Fact]
     public void ShouldRetry_WithTerminalError_ShouldReturnFalse()
     {
@@ -391,6 +451,9 @@ public class PaymentProcessorRetryHelperTests
     // Terminal Error Tests
     // =========================================================================
 
+    // Given: A payment processor error code representing a terminal failure (declined, fraud, blocked, etc.)
+    // When: The error is checked for terminal status
+    // Then: The error is classified as terminal, meaning no retry should be attempted
     [Theory]
     [InlineData("card_declined", true)]
     [InlineData("insufficient_funds", true)]
@@ -408,6 +471,9 @@ public class PaymentProcessorRetryHelperTests
         result.Should().Be(expected);
     }
 
+    // Given: A payment processor error code representing a transient or unknown failure
+    // When: The error is checked for terminal status
+    // Then: The error is not classified as terminal, allowing retry
     [Theory]
     [InlineData("processing_error", false)]
     [InlineData("rate_limit", false)]
@@ -429,6 +495,9 @@ public class PaymentProcessorRetryHelperTests
     // Retryable Error Tests
     // =========================================================================
 
+    // Given: A payment processor error code representing a transient failure (timeout, rate limit, acquirer error, etc.)
+    // When: The error is checked for retryability
+    // Then: The error is classified as retryable
     [Theory]
     [InlineData("processing_error", true)]
     [InlineData("rate_limit", true)]
@@ -445,6 +514,9 @@ public class PaymentProcessorRetryHelperTests
         result.Should().Be(expected);
     }
 
+    // Given: A payment processor error code representing a terminal or unknown failure
+    // When: The error is checked for retryability
+    // Then: The error is not classified as retryable
     [Theory]
     [InlineData("card_declined", false)]
     [InlineData("insufficient_funds", false)]
@@ -464,6 +536,9 @@ public class PaymentProcessorRetryHelperTests
     // Circuit Breaker Tests
     // =========================================================================
 
+    // Given: A payment processor that has never been used
+    // When: The circuit breaker state is checked
+    // Then: The circuit is closed (allowing requests through)
     [Fact]
     public void CircuitBreaker_InitialState_ShouldBeClosed()
     {
@@ -477,6 +552,9 @@ public class PaymentProcessorRetryHelperTests
         isOpen.Should().BeFalse();
     }
 
+    // Given: A payment processor that has experienced six consecutive failures
+    // When: The circuit breaker state is checked
+    // Then: The circuit is open (blocking requests to protect the system)
     [Fact]
     public void CircuitBreaker_AfterMultipleFailures_ShouldOpen()
     {
@@ -497,6 +575,9 @@ public class PaymentProcessorRetryHelperTests
         PaymentProcessorRetryHelper.ResetCircuit(processorKey);
     }
 
+    // Given: A payment processor with two recorded failures
+    // When: A successful transaction is recorded followed by another failure
+    // Then: The failure count resets on success, so one additional failure does not open the circuit
     [Fact]
     public void CircuitBreaker_AfterSuccess_ShouldResetFailureCount()
     {
@@ -519,6 +600,9 @@ public class PaymentProcessorRetryHelperTests
         PaymentProcessorRetryHelper.ResetCircuit(processorKey);
     }
 
+    // Given: A payment processor with two recorded failures
+    // When: The circuit breaker state is retrieved
+    // Then: The state shows a failure count of 2, a Closed circuit, and a last failure timestamp
     [Fact]
     public void CircuitBreaker_GetState_ShouldReturnCurrentState()
     {
@@ -542,6 +626,9 @@ public class PaymentProcessorRetryHelperTests
         PaymentProcessorRetryHelper.ResetCircuit(processorKey);
     }
 
+    // Given: A payment processor with a recorded failure
+    // When: The circuit breaker is reset
+    // Then: The circuit state is cleared entirely (null)
     [Fact]
     public void CircuitBreaker_Reset_ShouldClearState()
     {
@@ -561,6 +648,9 @@ public class PaymentProcessorRetryHelperTests
     // Next Retry Time Tests
     // =========================================================================
 
+    // Given: A first retry attempt (attempt 0)
+    // When: The next retry time is calculated
+    // Then: The retry time is in the future, approximately 1 second from now
     [Fact]
     public void GetNextRetryTime_ShouldReturnFutureTime()
     {
@@ -579,6 +669,9 @@ public class PaymentProcessorRetryHelperTests
 [Trait("Category", "Unit")]
 public class IdempotencyKeyExtensionsTests
 {
+    // Given: A payment operation result object
+    // When: The result hash is computed twice for the same object
+    // Then: Both hashes are identical and have the expected fixed length
     [Fact]
     public void ComputeResultHash_ShouldReturnConsistentHash()
     {
@@ -594,6 +687,9 @@ public class IdempotencyKeyExtensionsTests
         hash1.Should().HaveLength(16);
     }
 
+    // Given: Two different payment operation result objects
+    // When: The result hash is computed for each
+    // Then: The hashes are different, distinguishing the two results
     [Fact]
     public void ComputeResultHash_DifferentObjects_ShouldReturnDifferentHashes()
     {
@@ -609,6 +705,9 @@ public class IdempotencyKeyExtensionsTests
         hash1.Should().NotBe(hash2);
     }
 
+    // Given: A null payment operation result
+    // When: The result hash is computed
+    // Then: The hash returns the string "null"
     [Fact]
     public void ComputeResultHash_NullObject_ShouldReturnNullString()
     {
@@ -619,6 +718,9 @@ public class IdempotencyKeyExtensionsTests
         hash.Should().Be("null");
     }
 
+    // Given: An organization ID
+    // When: The idempotency grain key is generated
+    // Then: The key follows the format "{orgId}:idempotency"
     [Fact]
     public void IdempotencyKeyGrainKey_ShouldReturnCorrectFormat()
     {

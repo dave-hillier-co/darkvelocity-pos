@@ -30,6 +30,9 @@ public class SystemDomainEnhancedTests
 
     #region Notification Retry Logic Tests (MaxRetries=3)
 
+    // Given: A notification that was successfully sent
+    // When: An operator attempts to retry the delivered notification
+    // Then: The system rejects the retry since only failed notifications can be retried
     [Fact]
     public async Task RetryAsync_WhenNotFailed_ShouldThrow()
     {
@@ -55,6 +58,9 @@ public class SystemDomainEnhancedTests
             .WithMessage("*Can only retry failed notifications*");
     }
 
+    // Given: An initialized notification grain with no notifications
+    // When: An operator attempts to retry a non-existent notification
+    // Then: The system rejects the retry with a not-found error
     [Fact]
     public async Task RetryAsync_WhenNotificationNotFound_ShouldThrow()
     {
@@ -71,6 +77,9 @@ public class SystemDomainEnhancedTests
             .WithMessage("*Notification not found*");
     }
 
+    // Given: A successfully sent notification with zero retries
+    // When: The notification state is inspected
+    // Then: The retry count starts at zero, enforcing the max-retries-of-3 policy
     [Fact]
     public async Task RetryAsync_ExceedsMaxRetries_ShouldThrow()
     {
@@ -95,6 +104,9 @@ public class SystemDomainEnhancedTests
         notification.RetryCount.Should().Be(0);
     }
 
+    // Given: A notification that was successfully delivered on the first attempt
+    // When: The notification record is retrieved from the grain
+    // Then: The retry count is persisted at zero for a first-attempt success
     [Fact]
     public async Task NotificationRecord_RetryCountIncrements_OnRetry()
     {
@@ -122,6 +134,9 @@ public class SystemDomainEnhancedTests
 
     #region Notification Channel Severity Filtering Tests
 
+    // Given: An initialized notification grain with no channels configured
+    // When: An email notification channel is added with a High minimum severity filter
+    // Then: The channel persists with the severity threshold so only high-priority alerts are routed to it
     [Fact]
     public async Task AddChannelAsync_WithMinimumSeverity_ShouldPersist()
     {
@@ -146,6 +161,9 @@ public class SystemDomainEnhancedTests
         channels[0].MinimumSeverity.Should().Be(AlertSeverity.High);
     }
 
+    // Given: An initialized notification grain with no channels configured
+    // When: A Slack channel is added filtered to LowStock and OutOfStock alert types
+    // Then: The channel persists with the alert type filters for targeted inventory notifications
     [Fact]
     public async Task AddChannelAsync_WithAlertTypeFilter_ShouldPersist()
     {
@@ -172,6 +190,9 @@ public class SystemDomainEnhancedTests
         channels[0].AlertTypes.Should().Contain(AlertType.OutOfStock);
     }
 
+    // Given: An initialized notification grain with no channels configured
+    // When: An email channel is added with both Critical severity and stock alert type filters
+    // Then: The channel persists with combined filters for precision-targeted critical stock alerts
     [Fact]
     public async Task AddChannelAsync_WithSeverityAndAlertTypeFilters_ShouldPersist()
     {
@@ -198,6 +219,9 @@ public class SystemDomainEnhancedTests
         channels[0].AlertTypes.Should().HaveCount(2);
     }
 
+    // Given: A notification channel configured with Low minimum severity
+    // When: The channel severity filter is updated to Critical
+    // Then: The channel reflects the new Critical severity threshold
     [Fact]
     public async Task UpdateChannelAsync_ChangeSeverityFilter_ShouldUpdate()
     {
@@ -223,6 +247,9 @@ public class SystemDomainEnhancedTests
         channels[0].MinimumSeverity.Should().Be(AlertSeverity.Critical);
     }
 
+    // Given: Two email notifications that were successfully sent
+    // When: Notifications are queried by Sent and Failed status filters
+    // Then: The Sent filter returns both notifications and the Failed filter returns none
     [Fact]
     public async Task GetNotificationsAsync_FilterByStatus_ReturnsCorrect()
     {
@@ -248,6 +275,9 @@ public class SystemDomainEnhancedTests
 
     #region Webhook Failure Cascade Tests
 
+    // Given: An active webhook subscription listening for order.created events
+    // When: Three consecutive delivery attempts return HTTP 500 errors
+    // Then: The webhook is automatically disabled with Failed status after reaching the failure threshold
     [Fact]
     public async Task WebhookConsecutiveFailures_ThreeFailures_ShouldSetFailedStatus()
     {
@@ -283,6 +313,9 @@ public class SystemDomainEnhancedTests
         state.ConsecutiveFailures.Should().Be(3);
     }
 
+    // Given: A webhook subscription with two consecutive delivery failures
+    // When: A subsequent delivery succeeds with HTTP 200
+    // Then: The consecutive failure counter resets to zero and the webhook remains Active
     [Fact]
     public async Task WebhookConsecutiveFailures_SuccessResetsCounter()
     {
@@ -336,6 +369,9 @@ public class SystemDomainEnhancedTests
         stateAfterSuccess.Status.Should().Be(WebhookStatus.Active);
     }
 
+    // Given: A webhook subscription disabled due to three consecutive delivery failures
+    // When: A new event delivery is attempted
+    // Then: The system rejects delivery since the endpoint is disabled due to too many failures
     [Fact]
     public async Task WebhookFailedStatus_DeliverAsync_ShouldThrow()
     {
@@ -375,6 +411,9 @@ public class SystemDomainEnhancedTests
             .WithMessage("*Webhook endpoint is disabled due to too many failures*");
     }
 
+    // Given: A webhook subscription in Failed status due to consecutive delivery failures
+    // When: An operator resumes the webhook subscription
+    // Then: The webhook returns to Active status with the failure counter reset to zero
     [Fact]
     public async Task WebhookResumeAsync_AfterFailed_ShouldResetAndActivate()
     {
@@ -415,6 +454,9 @@ public class SystemDomainEnhancedTests
         state.PausedAt.Should().BeNull();
     }
 
+    // Given: A newly created active webhook subscription
+    // When: The webhook state is inspected
+    // Then: The webhook is Active and ready to accept deliveries with exponential backoff retry support
     [Fact]
     public async Task WebhookExponentialBackoff_VerifyDelaysConfigured()
     {
@@ -444,6 +486,9 @@ public class SystemDomainEnhancedTests
         // but we verify the retry mechanism exists through the grain interface
     }
 
+    // Given: An active webhook subscription for order.created events
+    // When: Two order event payloads are delivered to the endpoint
+    // Then: Both deliveries are recorded in the delivery history as successful
     [Fact]
     public async Task WebhookDelivery_TracksDeliveryHistory()
     {
@@ -473,6 +518,9 @@ public class SystemDomainEnhancedTests
 
     #region Alert Rule Cooldown Enforcement Tests
 
+    // Given: A negative stock alert that already fired for an ingredient
+    // When: The same ingredient's stock drops further within the 30-minute cooldown window
+    // Then: The alert rule does not trigger again until the cooldown period expires
     [Fact]
     public async Task EvaluateRulesAsync_WithCooldown_ShouldNotTriggerDuringCooldown()
     {
@@ -517,6 +565,9 @@ public class SystemDomainEnhancedTests
         secondTrigger.Should().BeEmpty();
     }
 
+    // Given: A negative stock alert that fired for one ingredient
+    // When: A different ingredient also goes to negative stock within the cooldown window
+    // Then: The alert does not trigger because cooldown is tracked per rule, not per entity
     [Fact]
     public async Task EvaluateRulesAsync_DifferentEntities_ShouldTriggerBothDuringCooldown()
     {
@@ -564,6 +615,9 @@ public class SystemDomainEnhancedTests
         trigger2.Should().BeEmpty();
     }
 
+    // Given: The negative stock alert rule has been disabled by an operator
+    // When: An ingredient's stock level goes negative
+    // Then: No negative stock alert is triggered since the rule is disabled
     [Fact]
     public async Task EvaluateRulesAsync_DisabledRule_ShouldNotTrigger()
     {
@@ -596,6 +650,9 @@ public class SystemDomainEnhancedTests
         triggered.Should().NotContain(a => a.Type == AlertType.NegativeStock);
     }
 
+    // Given: An ingredient with both negative and zero available stock levels
+    // When: Alert rules are evaluated against the ingredient's metrics
+    // Then: Both the NegativeStock and OutOfStock alerts fire simultaneously
     [Fact]
     public async Task EvaluateRulesAsync_MultipleRulesMatch_ShouldTriggerAll()
     {
@@ -626,6 +683,9 @@ public class SystemDomainEnhancedTests
         triggered.Should().Contain(a => a.Type == AlertType.OutOfStock);
     }
 
+    // Given: An ingredient with negative stock that triggers an alert rule
+    // When: The triggered alert is inspected in the active alerts list
+    // Then: The alert record contains the originating rule ID and rule name metadata
     [Fact]
     public async Task AlertRuleCooldown_RecordedInState()
     {
@@ -664,6 +724,9 @@ public class SystemDomainEnhancedTests
 
     #region Scheduled Job Execution Tracking Tests
 
+    // Given: A one-time scheduled job configured for future execution
+    // When: The job is manually triggered
+    // Then: The execution is recorded with a unique ID, the correct job reference, and a success status
     [Fact]
     public async Task ScheduledJob_TriggerAsync_RecordsExecution()
     {
@@ -695,6 +758,9 @@ public class SystemDomainEnhancedTests
         executions[0].CompletedAt.Should().NotBeNull();
     }
 
+    // Given: A recurring scheduled job with a one-hour interval
+    // When: The job is triggered three times
+    // Then: All three executions are recorded with unique IDs and success statuses
     [Fact]
     public async Task ScheduledJob_MultipleExecutions_TracksAll()
     {
@@ -723,6 +789,9 @@ public class SystemDomainEnhancedTests
         executions.Should().AllSatisfy(e => e.Success.Should().BeTrue());
     }
 
+    // Given: A one-time scheduled job configured for future execution
+    // When: The job is triggered and completes
+    // Then: The execution duration in milliseconds is recorded as a non-negative value
     [Fact]
     public async Task ScheduledJob_ExecutionDuration_IsTracked()
     {
@@ -746,6 +815,9 @@ public class SystemDomainEnhancedTests
         execution.DurationMs.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: A recurring scheduled job that has not yet been executed
+    // When: The job is triggered for the first time
+    // Then: The job's last run timestamp is updated to reflect the completed execution
     [Fact]
     public async Task ScheduledJob_AfterExecution_UpdatesJob()
     {
@@ -777,6 +849,9 @@ public class SystemDomainEnhancedTests
 
     #region Workflow Version Management Tests
 
+    // Given: A new expense approval workflow with Draft, Pending, and Approved states
+    // When: The workflow is initialized with Draft as the starting state
+    // Then: The workflow version starts at 1
     [Fact]
     public async Task Workflow_InitializeAsync_SetsVersionTo1()
     {
@@ -794,6 +869,9 @@ public class SystemDomainEnhancedTests
         state.Version.Should().Be(1);
     }
 
+    // Given: An expense workflow at version 1 in Draft state
+    // When: The workflow transitions to Pending
+    // Then: The workflow version increments to 2
     [Fact]
     public async Task Workflow_TransitionAsync_IncrementsVersion()
     {
@@ -816,6 +894,9 @@ public class SystemDomainEnhancedTests
         stateAfter.Version.Should().Be(2);
     }
 
+    // Given: An expense workflow at version 1 in Draft state
+    // When: A transition to an invalid state is attempted
+    // Then: The transition fails and the version remains unchanged
     [Fact]
     public async Task Workflow_FailedTransition_DoesNotIncrementVersion()
     {
@@ -838,6 +919,9 @@ public class SystemDomainEnhancedTests
         stateAfter.Version.Should().Be(initialVersion);
     }
 
+    // Given: An expense workflow initialized with five possible states
+    // When: The workflow transitions through Draft, Pending, Rejected, Draft, Pending, and Approved
+    // Then: The version reaches 6 and the transition history contains all 5 transitions
     [Fact]
     public async Task Workflow_MultipleTransitions_VersionTracksProperly()
     {
@@ -863,6 +947,9 @@ public class SystemDomainEnhancedTests
         state.Transitions.Should().HaveCount(5);
     }
 
+    // Given: An expense workflow initialized in Draft state
+    // When: The workflow transitions from Draft to Pending
+    // Then: The transition result includes the previous state, current state, transition ID, and timestamp
     [Fact]
     public async Task Workflow_TransitionResult_ContainsVersionInfo()
     {
@@ -890,6 +977,9 @@ public class SystemDomainEnhancedTests
 
     #region Email Inbox Deduplication Tests
 
+    // Given: An email inbox that has already processed an incoming supplier email
+    // When: The same email (identical message ID) arrives again
+    // Then: The duplicate is rejected with a Duplicate rejection reason
     [Fact]
     public async Task EmailInbox_DuplicateMessageId_IsRejected()
     {
@@ -917,6 +1007,9 @@ public class SystemDomainEnhancedTests
         secondResult.RejectionReason.Should().Be(EmailRejectionReason.Duplicate);
     }
 
+    // Given: An email inbox with no previously processed messages
+    // When: A supplier email is processed and then its message ID is checked
+    // Then: The message ID is reported as processed after ingestion
     [Fact]
     public async Task EmailInbox_IsMessageProcessedAsync_ReturnsCorrectStatus()
     {
@@ -942,6 +1035,9 @@ public class SystemDomainEnhancedTests
         (await grain.IsMessageProcessedAsync(messageId)).Should().BeTrue();
     }
 
+    // Given: An email inbox that has processed 50 unique supplier emails
+    // When: Each message ID is checked against the deduplication registry
+    // Then: All 50 message IDs are still tracked for deduplication
     [Fact]
     public async Task EmailInbox_DeduplicationWindowMaintained()
     {

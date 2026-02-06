@@ -30,6 +30,9 @@ public class PosDeviceGrainTests
 
     #region Registration Tests
 
+    // Given: A new POS tablet device with full registration details including model, OS, and app version
+    // When: The device is registered at a site location
+    // Then: The device is created as active and online with all properties set and default settings enabled
     [Fact]
     public async Task RegisterAsync_WithFullDetails_ShouldRegisterDevice()
     {
@@ -68,6 +71,9 @@ public class PosDeviceGrainTests
         result.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A new POS mobile device with only required registration fields
+    // When: The device is registered without optional model, OS, or app version
+    // Then: The device is created as active with null optional properties
     [Fact]
     public async Task RegisterAsync_WithMinimalDetails_ShouldRegisterDevice()
     {
@@ -94,6 +100,9 @@ public class PosDeviceGrainTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: A new Samsung tablet for tableside ordering
+    // When: The device is registered as a Tablet type
+    // Then: The device type is set to Tablet
     [Fact]
     public async Task RegisterAsync_TabletDevice_ShouldSetCorrectType()
     {
@@ -114,6 +123,9 @@ public class PosDeviceGrainTests
         result.DeviceType.Should().Be(PosDeviceType.Tablet);
     }
 
+    // Given: A Clover checkout terminal
+    // When: The device is registered as a Terminal type
+    // Then: The device type is set to Terminal
     [Fact]
     public async Task RegisterAsync_TerminalDevice_ShouldSetCorrectType()
     {
@@ -134,6 +146,9 @@ public class PosDeviceGrainTests
         result.DeviceType.Should().Be(PosDeviceType.Terminal);
     }
 
+    // Given: An iPhone used as a server handheld device
+    // When: The device is registered as a Mobile type
+    // Then: The device type is set to Mobile
     [Fact]
     public async Task RegisterAsync_MobileDevice_ShouldSetCorrectType()
     {
@@ -154,6 +169,9 @@ public class PosDeviceGrainTests
         result.DeviceType.Should().Be(PosDeviceType.Mobile);
     }
 
+    // Given: A POS device that has already been registered
+    // When: A second registration is attempted on the same device grain
+    // Then: An exception is thrown indicating the device is already registered
     [Fact]
     public async Task RegisterAsync_WhenAlreadyRegistered_ShouldThrowException()
     {
@@ -179,6 +197,9 @@ public class PosDeviceGrainTests
 
     #region Update Tests
 
+    // Given: A registered POS device
+    // When: All configurable fields are updated including name, model, versions, peripherals, and settings
+    // Then: All fields reflect the new values
     [Fact]
     public async Task UpdateAsync_AllFields_ShouldUpdateAllProperties()
     {
@@ -215,6 +236,9 @@ public class PosDeviceGrainTests
         result.OpenDrawerOnCash.Should().BeFalse();
     }
 
+    // Given: A registered POS device with a specific model and OS version
+    // When: Only the name is updated with all other fields set to null
+    // Then: The name changes while model, OS version, and app version remain unchanged
     [Fact]
     public async Task UpdateAsync_PartialUpdate_ShouldOnlyChangeSpecifiedFields()
     {
@@ -245,6 +269,9 @@ public class PosDeviceGrainTests
         result.AppVersion.Should().Be("1.0.0"); // Unchanged
     }
 
+    // Given: A registered POS device with no default printer assigned
+    // When: A default printer ID is set via update
+    // Then: The device is linked to the specified printer
     [Fact]
     public async Task UpdateAsync_DefaultPrinterOnly_ShouldLinkPrinter()
     {
@@ -270,6 +297,9 @@ public class PosDeviceGrainTests
         result.DefaultPrinterId.Should().Be(printerId);
     }
 
+    // Given: A registered POS terminal with no default cash drawer assigned
+    // When: A default cash drawer ID is set via update
+    // Then: The device is linked to the specified cash drawer
     [Fact]
     public async Task UpdateAsync_DefaultCashDrawerOnly_ShouldLinkCashDrawer()
     {
@@ -295,6 +325,9 @@ public class PosDeviceGrainTests
         result.DefaultCashDrawerId.Should().Be(drawerId);
     }
 
+    // Given: A registered POS device with auto-print receipts enabled by default
+    // When: The auto-print receipts setting is disabled via update
+    // Then: The auto-print receipts setting is false
     [Fact]
     public async Task UpdateAsync_DisableAutoPrintReceipts_ShouldUpdateSetting()
     {
@@ -316,6 +349,9 @@ public class PosDeviceGrainTests
         result.AutoPrintReceipts.Should().BeFalse();
     }
 
+    // Given: A registered POS terminal with open-drawer-on-cash enabled by default
+    // When: The open-drawer-on-cash setting is disabled via update
+    // Then: The open-drawer-on-cash setting is false
     [Fact]
     public async Task UpdateAsync_DisableOpenDrawerOnCash_ShouldUpdateSetting()
     {
@@ -337,6 +373,9 @@ public class PosDeviceGrainTests
         result.OpenDrawerOnCash.Should().BeFalse();
     }
 
+    // Given: A registered active POS device
+    // When: The IsActive flag is set to false via update
+    // Then: The device becomes inactive
     [Fact]
     public async Task UpdateAsync_DeactivateViaUpdate_ShouldDeactivateDevice()
     {
@@ -357,6 +396,9 @@ public class PosDeviceGrainTests
         result.IsActive.Should().BeFalse();
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: An update is attempted
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task UpdateAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -378,6 +420,9 @@ public class PosDeviceGrainTests
 
     #region Deactivation Tests
 
+    // Given: A registered active POS device
+    // When: The device is deactivated
+    // Then: The device becomes inactive
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateDevice()
     {
@@ -395,6 +440,9 @@ public class PosDeviceGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: A registered POS device that is currently online
+    // When: The device is deactivated
+    // Then: The device is set to both inactive and offline
     [Fact]
     public async Task DeactivateAsync_ShouldAlsoSetOffline()
     {
@@ -412,6 +460,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: Deactivation is attempted
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task DeactivateAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -430,6 +481,9 @@ public class PosDeviceGrainTests
 
     #region Snapshot Tests
 
+    // Given: A POS device registered with full details
+    // When: The device snapshot is retrieved
+    // Then: The snapshot contains all registration properties including active and online status
     [Fact]
     public async Task GetSnapshotAsync_AfterRegistration_ShouldReturnCompleteSnapshot()
     {
@@ -463,6 +517,9 @@ public class PosDeviceGrainTests
         snapshot.IsOnline.Should().BeTrue();
     }
 
+    // Given: A registered POS device that has been updated with new name, model, OS, and app version
+    // When: The device snapshot is retrieved
+    // Then: The snapshot reflects the updated values
     [Fact]
     public async Task GetSnapshotAsync_AfterUpdate_ShouldReturnUpdatedSnapshot()
     {
@@ -486,6 +543,9 @@ public class PosDeviceGrainTests
         snapshot.AppVersion.Should().Be("2.0.0");
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: A snapshot is requested
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task GetSnapshotAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -504,6 +564,9 @@ public class PosDeviceGrainTests
 
     #region Heartbeat Tests
 
+    // Given: A registered POS device with existing app and OS versions
+    // When: A heartbeat is received with updated app and OS versions
+    // Then: Both versions are updated, the device remains online, and last-seen is refreshed
     [Fact]
     public async Task RecordHeartbeatAsync_WithVersions_ShouldUpdateVersionsAndLastSeen()
     {
@@ -524,6 +587,9 @@ public class PosDeviceGrainTests
         snapshot.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered POS device with specific app and OS versions
+    // When: A heartbeat is received with null version parameters
+    // Then: The existing versions are preserved and the device stays online
     [Fact]
     public async Task RecordHeartbeatAsync_WithNullVersions_ShouldPreserveExistingVersions()
     {
@@ -543,6 +609,9 @@ public class PosDeviceGrainTests
         snapshot.IsOnline.Should().BeTrue();
     }
 
+    // Given: A registered POS mobile device with known versions
+    // When: A heartbeat is received with only the app version updated
+    // Then: The app version is updated while the OS version remains unchanged
     [Fact]
     public async Task RecordHeartbeatAsync_OnlyAppVersion_ShouldUpdateOnlyAppVersion()
     {
@@ -561,6 +630,9 @@ public class PosDeviceGrainTests
         snapshot.OsVersion.Should().Be("17.0"); // Unchanged
     }
 
+    // Given: A registered POS mobile device with known versions
+    // When: A heartbeat is received with only the OS version updated
+    // Then: The OS version is updated while the app version remains unchanged
     [Fact]
     public async Task RecordHeartbeatAsync_OnlyOsVersion_ShouldUpdateOnlyOsVersion()
     {
@@ -579,6 +651,9 @@ public class PosDeviceGrainTests
         snapshot.OsVersion.Should().Be("17.2");
     }
 
+    // Given: A registered POS device that has been set to offline
+    // When: A heartbeat is received
+    // Then: The device comes back online
     [Fact]
     public async Task RecordHeartbeatAsync_AfterSetOffline_ShouldSetBackOnline()
     {
@@ -599,6 +674,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeTrue();
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: A heartbeat is recorded
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task RecordHeartbeatAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -617,6 +695,9 @@ public class PosDeviceGrainTests
 
     #region Online/Offline Status Tests
 
+    // Given: A registered POS device that is currently online
+    // When: The device is set to offline
+    // Then: The device reports as offline
     [Fact]
     public async Task SetOfflineAsync_ShouldSetDeviceOffline()
     {
@@ -636,6 +717,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: Setting the device offline is attempted
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task SetOfflineAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -650,6 +734,9 @@ public class PosDeviceGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A newly registered POS device
+    // When: The online status is checked immediately after registration
+    // Then: The device is online
     [Fact]
     public async Task IsOnlineAsync_AfterRegistration_ShouldReturnTrue()
     {
@@ -666,6 +753,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeTrue();
     }
 
+    // Given: A registered POS device that has been set to offline
+    // When: The online status is checked
+    // Then: The device is offline
     [Fact]
     public async Task IsOnlineAsync_AfterSetOffline_ShouldReturnFalse()
     {
@@ -683,6 +773,9 @@ public class PosDeviceGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: A POS device grain that has never been registered
+    // When: The online status is checked
+    // Then: An exception is thrown indicating the device is not initialized
     [Fact]
     public async Task IsOnlineAsync_WhenNotInitialized_ShouldThrowException()
     {
@@ -701,6 +794,9 @@ public class PosDeviceGrainTests
 
     #region Edge Cases
 
+    // Given: Two POS devices registered under the same organization and location
+    // When: Each device is configured with different names and types
+    // Then: Each device grain maintains independent state
     [Fact]
     public async Task RegisterAsync_MultipleDevicesSameOrg_ShouldHaveIndependentState()
     {
@@ -731,6 +827,9 @@ public class PosDeviceGrainTests
         snapshot2.DeviceType.Should().Be(PosDeviceType.Terminal);
     }
 
+    // Given: A registered POS device with a default printer already assigned
+    // When: The default printer is updated to Guid.Empty
+    // Then: The default printer ID is set to Guid.Empty
     [Fact]
     public async Task UpdateAsync_EmptyGuidForPrinter_ShouldSetPrinterId()
     {
@@ -760,6 +859,9 @@ public class PosDeviceGrainTests
         result.DefaultPrinterId.Should().Be(Guid.Empty);
     }
 
+    // Given: A registered POS mobile device
+    // When: Multiple heartbeats are sent sequentially with incrementing app versions
+    // Then: The last heartbeat's app version is retained and last-seen is current
     [Fact]
     public async Task SequentialHeartbeats_ShouldUpdateLastSeenEachTime()
     {
@@ -782,6 +884,9 @@ public class PosDeviceGrainTests
         snapshot.LastSeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered POS device that has been deactivated
+    // When: The device is reactivated by setting IsActive to true via update
+    // Then: The device becomes active again
     [Fact]
     public async Task DeactivateAsync_ThenUpdate_ShouldAllowReactivation()
     {
@@ -805,6 +910,9 @@ public class PosDeviceGrainTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: A registered POS device
+    // When: The device name is updated to a 200-character string
+    // Then: The long name is accepted and stored correctly
     [Fact]
     public async Task UpdateAsync_WithLongName_ShouldHandleCorrectly()
     {
@@ -825,6 +933,9 @@ public class PosDeviceGrainTests
         result.Name.Should().Be(longName);
     }
 
+    // Given: A new POS device
+    // When: The device is registered with a name containing special characters
+    // Then: The special characters are preserved in the name
     [Fact]
     public async Task RegisterAsync_WithSpecialCharactersInName_ShouldHandleCorrectly()
     {
@@ -841,6 +952,9 @@ public class PosDeviceGrainTests
         result.Name.Should().Be(specialName);
     }
 
+    // Given: A new POS device
+    // When: The device is registered with a Unicode name containing accented characters and bullet points
+    // Then: The Unicode characters are preserved in the name
     [Fact]
     public async Task RegisterAsync_WithUnicodeInName_ShouldHandleCorrectly()
     {
@@ -861,6 +975,9 @@ public class PosDeviceGrainTests
 
     #region State Persistence Tests
 
+    // Given: A POS terminal registered with full details
+    // When: A new grain reference is obtained for the same device
+    // Then: The state is persisted and the snapshot matches the original registration
     [Fact]
     public async Task State_ShouldPersistAcrossGrainActivations()
     {
@@ -883,6 +1000,9 @@ public class PosDeviceGrainTests
         snapshot.Model.Should().Be("Model X");
     }
 
+    // Given: A POS device that has been registered and then updated
+    // When: A new grain reference is obtained for the same device
+    // Then: The updated state is persisted and retrievable from the new reference
     [Fact]
     public async Task UpdateAsync_ShouldPersistChanges()
     {
@@ -911,6 +1031,9 @@ public class PosDeviceGrainTests
 
     #region Concurrent Operations Tests
 
+    // Given: A registered POS device
+    // When: Ten heartbeats with different app versions are sent concurrently
+    // Then: The grain handles all heartbeats without errors and ends in a consistent state
     [Fact]
     public async Task ConcurrentHeartbeats_ShouldHandleGracefully()
     {
@@ -931,6 +1054,9 @@ public class PosDeviceGrainTests
         snapshot.AppVersion.Should().NotBeNull();
     }
 
+    // Given: A registered POS device
+    // When: Five name updates are sent concurrently
+    // Then: The grain serializes the updates and ends with one of the update names
     [Fact]
     public async Task ConcurrentUpdates_ShouldSerializeCorrectly()
     {

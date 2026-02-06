@@ -25,6 +25,9 @@ public class PaymentMethodValidationTests
     // Card Validation Edge Cases
     // ============================================================================
 
+    // Given: A Discover card number is provided for payment method creation
+    // When: The payment method is created
+    // Then: The card brand is detected as "discover" with the correct last four digits
     [Fact]
     public async Task CreateAsync_WithDiscoverCard_ShouldDetectBrand()
     {
@@ -46,6 +49,9 @@ public class PaymentMethodValidationTests
         result.Card.Last4.Should().Be("1117");
     }
 
+    // Given: A Diners Club card number is provided for payment method creation
+    // When: The payment method is created
+    // Then: The card brand is detected as "diners" with the correct last four digits
     [Fact]
     public async Task CreateAsync_WithDinersCard_ShouldDetectBrand()
     {
@@ -67,6 +73,9 @@ public class PaymentMethodValidationTests
         result.Card.Last4.Should().Be("5904");
     }
 
+    // Given: A JCB card number is provided for payment method creation
+    // When: The payment method is created
+    // Then: The card brand is detected as "jcb" with the correct last four digits
     [Fact]
     public async Task CreateAsync_WithJCBCard_ShouldDetectBrand()
     {
@@ -88,6 +97,9 @@ public class PaymentMethodValidationTests
         result.Card.Last4.Should().Be("0000");
     }
 
+    // Given: A card with an expiry date in the current month and year
+    // When: The payment method is created
+    // Then: The card is accepted as still valid for the current month
     [Fact]
     public async Task CreateAsync_WithExpiryInCurrentMonth_ShouldSucceed()
     {
@@ -110,6 +122,9 @@ public class PaymentMethodValidationTests
         result.Card.ExpYear.Should().Be(now.Year);
     }
 
+    // Given: A card with a two-digit expiry year of 35
+    // When: The payment method is created
+    // Then: The expiry year is expanded to 2035
     [Fact]
     public async Task CreateAsync_WithTwoDigitYear_ShouldExpandToFourDigits()
     {
@@ -130,6 +145,9 @@ public class PaymentMethodValidationTests
         result.Card!.ExpYear.Should().Be(2035);
     }
 
+    // Given: A card with a cardholder name provided
+    // When: The payment method is created
+    // Then: The cardholder name is stored on the payment method
     [Fact]
     public async Task CreateAsync_WithCardholderName_ShouldStoreCardholderName()
     {
@@ -150,6 +168,9 @@ public class PaymentMethodValidationTests
         result.Card!.CardholderName.Should().Be("John Smith");
     }
 
+    // Given: An American Express card with a 3-digit CVC (Amex requires 4 digits)
+    // When: The payment method creation is attempted
+    // Then: The creation is rejected because the CVC is invalid for Amex
     [Fact]
     public async Task CreateAsync_WithInvalidCvc_ForAmex_ShouldThrow()
     {
@@ -172,6 +193,9 @@ public class PaymentMethodValidationTests
             .WithMessage("Invalid CVC");
     }
 
+    // Given: An American Express card with a valid 4-digit CVC
+    // When: The payment method is created
+    // Then: The card is accepted and detected as "amex" brand
     [Fact]
     public async Task CreateAsync_WithValidCvc_ForAmex_ShouldSucceed()
     {
@@ -192,6 +216,9 @@ public class PaymentMethodValidationTests
         result.Card!.Brand.Should().Be("amex");
     }
 
+    // Given: A card with expiry month 13, which is invalid
+    // When: The payment method creation is attempted
+    // Then: The creation is rejected due to an invalid expiry month
     [Fact]
     public async Task CreateAsync_WithInvalidMonth_ShouldThrow()
     {
@@ -212,6 +239,9 @@ public class PaymentMethodValidationTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    // Given: A card with expiry month 0, which is invalid
+    // When: The payment method creation is attempted
+    // Then: The creation is rejected due to an invalid expiry month
     [Fact]
     public async Task CreateAsync_WithZeroMonth_ShouldThrow()
     {
@@ -236,6 +266,9 @@ public class PaymentMethodValidationTests
     // Bank Account Validation Tests
     // ============================================================================
 
+    // Given: A German IBAN bank account with individual holder details
+    // When: The bank account payment method is created
+    // Then: The last 4 digits are extracted from the IBAN along with country and currency
     [Fact]
     public async Task CreateAsync_WithIbanBankAccount_ShouldExtractLast4()
     {
@@ -265,6 +298,9 @@ public class PaymentMethodValidationTests
         result.BankAccount.Currency.Should().Be("eur");
     }
 
+    // Given: A US business bank account with routing and account numbers
+    // When: The bank account payment method is created
+    // Then: The account holder type is stored as "company" with the business name
     [Fact]
     public async Task CreateAsync_WithBusinessBankAccount_ShouldStoreHolderType()
     {
@@ -298,6 +334,9 @@ public class PaymentMethodValidationTests
     // Update Operations Tests
     // ============================================================================
 
+    // Given: An existing card payment method with valid expiry details
+    // When: The expiry month is updated to 14, which is invalid
+    // Then: The update is rejected due to an invalid expiry month
     [Fact]
     public async Task UpdateAsync_WithInvalidExpiryMonth_ShouldThrow()
     {
@@ -319,6 +358,9 @@ public class PaymentMethodValidationTests
             .WithMessage("Invalid expiry month");
     }
 
+    // Given: An existing card payment method with valid expiry details
+    // When: The expiry month is updated to 0, which is invalid
+    // Then: The update is rejected due to an invalid expiry month
     [Fact]
     public async Task UpdateAsync_WithZeroExpiryMonth_ShouldThrow()
     {
@@ -340,6 +382,9 @@ public class PaymentMethodValidationTests
             .WithMessage("Invalid expiry month");
     }
 
+    // Given: An existing card payment method expiring in 12/2030
+    // When: Only the expiry month is updated to 6
+    // Then: The expiry month changes to 6 while the year remains 2030
     [Fact]
     public async Task UpdateAsync_ExpiryOnlyMonth_ShouldKeepExistingYear()
     {
@@ -361,6 +406,9 @@ public class PaymentMethodValidationTests
         result.Card.ExpYear.Should().Be(2030);
     }
 
+    // Given: An existing card payment method expiring in 12/2030
+    // When: Only the expiry year is updated to 2035
+    // Then: The expiry year changes to 2035 while the month remains 12
     [Fact]
     public async Task UpdateAsync_ExpiryOnlyYear_ShouldKeepExistingMonth()
     {
@@ -382,6 +430,9 @@ public class PaymentMethodValidationTests
         result.Card.ExpYear.Should().Be(2035);
     }
 
+    // Given: An existing card payment method without billing details
+    // When: Billing details including name, email, phone, and address are provided
+    // Then: All billing details are stored on the payment method
     [Fact]
     public async Task UpdateAsync_BillingDetails_ShouldUpdateAddress()
     {
@@ -415,6 +466,9 @@ public class PaymentMethodValidationTests
         result.BillingDetails.Address!.City.Should().Be("New York");
     }
 
+    // Given: An existing card payment method with metadata key "key1"
+    // When: Metadata is updated with a new key "key2"
+    // Then: The metadata is fully replaced, not merged, so only "key2" exists
     [Fact]
     public async Task UpdateAsync_Metadata_ShouldReplaceExistingMetadata()
     {
@@ -441,6 +495,9 @@ public class PaymentMethodValidationTests
     // Customer Attachment Edge Cases
     // ============================================================================
 
+    // Given: A card payment method that is not attached to any customer
+    // When: A customer detachment is attempted
+    // Then: The detachment is rejected because the card is not attached
     [Fact]
     public async Task DetachFromCustomerAsync_WhenNotAttached_ShouldThrow()
     {
@@ -462,6 +519,9 @@ public class PaymentMethodValidationTests
             .WithMessage("*not attached*");
     }
 
+    // Given: A created card payment method
+    // When: The processor token is retrieved multiple times
+    // Then: The same token is returned each time
     [Fact]
     public async Task GetProcessorTokenAsync_MultipleCalls_ShouldReturnSameToken()
     {
@@ -487,6 +547,9 @@ public class PaymentMethodValidationTests
     // Card Fingerprint Tests
     // ============================================================================
 
+    // Given: Two payment methods created with the same card number on different accounts
+    // When: Both payment methods are created
+    // Then: Both produce the same card fingerprint for duplicate detection
     [Fact]
     public async Task CreateAsync_SameCardNumber_ShouldHaveSameFingerprint()
     {
@@ -513,6 +576,9 @@ public class PaymentMethodValidationTests
         result1.Card!.Fingerprint.Should().Be(result2.Card!.Fingerprint);
     }
 
+    // Given: Two payment methods created with different card numbers (Visa and Mastercard)
+    // When: Both payment methods are created
+    // Then: Each produces a distinct card fingerprint
     [Fact]
     public async Task CreateAsync_DifferentCardNumbers_ShouldHaveDifferentFingerprints()
     {
@@ -543,6 +609,9 @@ public class PaymentMethodValidationTests
     // Non-existent Payment Method Tests
     // ============================================================================
 
+    // Given: A payment method identifier that has never been created
+    // When: Retrieving the payment method snapshot
+    // Then: The request is rejected because the payment method does not exist
     [Fact]
     public async Task GetSnapshotAsync_WhenNotCreated_ShouldThrow()
     {
@@ -557,6 +626,9 @@ public class PaymentMethodValidationTests
             .WithMessage("*does not exist*");
     }
 
+    // Given: A payment method identifier that has never been created
+    // When: Retrieving the processor token
+    // Then: The request is rejected because the payment method does not exist
     [Fact]
     public async Task GetProcessorTokenAsync_WhenNotCreated_ShouldThrow()
     {
@@ -571,6 +643,9 @@ public class PaymentMethodValidationTests
             .WithMessage("*does not exist*");
     }
 
+    // Given: A payment method identifier that has never been created
+    // When: Attaching the payment method to a customer
+    // Then: The request is rejected because the payment method does not exist
     [Fact]
     public async Task AttachToCustomerAsync_WhenNotCreated_ShouldThrow()
     {
@@ -585,6 +660,9 @@ public class PaymentMethodValidationTests
             .WithMessage("*does not exist*");
     }
 
+    // Given: A payment method identifier that has never been created
+    // When: Updating the payment method expiry
+    // Then: The request is rejected because the payment method does not exist
     [Fact]
     public async Task UpdateAsync_WhenNotCreated_ShouldThrow()
     {
@@ -603,6 +681,9 @@ public class PaymentMethodValidationTests
     // Duplicate Creation Test
     // ============================================================================
 
+    // Given: A payment method that has already been created
+    // When: A second creation is attempted for the same payment method
+    // Then: The creation is rejected because the payment method already exists
     [Fact]
     public async Task CreateAsync_Twice_ShouldThrow()
     {

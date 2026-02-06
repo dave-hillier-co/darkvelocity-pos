@@ -47,6 +47,9 @@ public class BookingConflictDetectionTests
         return calendarGrain;
     }
 
+    // Given: a booking calendar for tomorrow with multiple reservations at the 7 PM slot
+    // When: three separate parties are booked into the same time slot
+    // Then: the calendar should track all three bookings and sum their total covers
     [Fact]
     public async Task BookingCalendar_MultipleBookingsSameSlot_ShouldTrackAllBookings()
     {
@@ -75,6 +78,9 @@ public class BookingConflictDetectionTests
         slot.CoverCount.Should().Be(12); // 4 + 2 + 6
     }
 
+    // Given: a booking calendar with reservations at adjacent 15-minute intervals (6:30, 6:45, 7:00 PM)
+    // When: bookings are retrieved for the 6 PM to 8 PM time range
+    // Then: all three overlapping bookings should be returned in ascending time order
     [Fact]
     public async Task BookingCalendar_OverlappingTimeSlots_ShouldCountCorrectly()
     {
@@ -100,6 +106,9 @@ public class BookingConflictDetectionTests
         bookings.Should().BeInAscendingOrder(b => b.Time);
     }
 
+    // Given: booking settings configured with a maximum online party size of 8
+    // When: availability is checked for a party of 4 and a party of 10
+    // Then: the small party should be available but the oversized party should be rejected
     [Fact]
     public async Task BookingSettings_CheckAvailability_WhenAtMaxCapacity_ShouldReturnUnavailable()
     {
@@ -125,6 +134,9 @@ public class BookingConflictDetectionTests
         isAvailableLarge.Should().BeFalse();
     }
 
+    // Given: a site with a specific date blocked for reservations (e.g., private event)
+    // When: availability is checked for morning, afternoon, and evening slots on the blocked date
+    // Then: all time slots should be unavailable for that date
     [Fact]
     public async Task BookingSettings_BlockedDate_ShouldPreventAllBookings()
     {
@@ -164,6 +176,9 @@ public class OverbookingScenarioTests
         _fixture = fixture;
     }
 
+    // Given: a booking calendar with two confirmed reservations at the same time totaling 8 covers
+    // When: one of the bookings is cancelled
+    // Then: the cover count should decrease to reflect only the remaining active booking
     [Fact]
     public async Task BookingCalendar_TrackCovers_WithStatusChanges_ShouldUpdateCorrectly()
     {
@@ -197,6 +212,9 @@ public class OverbookingScenarioTests
         afterCancellationCount.Should().Be(4); // Only active booking counted
     }
 
+    // Given: a booking calendar with bookings across lunch and dinner service in various statuses (confirmed, seated, no-show)
+    // When: the day view summary is requested
+    // Then: the summary should accurately count total bookings, covers, and break down by status
     [Fact]
     public async Task BookingCalendar_DayView_ShouldSummarizeCapacityCorrectly()
     {
@@ -229,6 +247,9 @@ public class OverbookingScenarioTests
         dayView.NoShowCount.Should().Be(1);
     }
 
+    // Given: a booking calendar for a busy evening service
+    // When: 20 bookings are added across the prime time dinner window spread over 15-minute intervals
+    // Then: the calendar should track all bookings and the day view should reflect the high-volume slot
     [Fact]
     public async Task BookingCalendar_HighVolumeSlot_ShouldHandleMany()
     {
@@ -291,6 +312,9 @@ public class TableCombiningSplittingTests
         return grain;
     }
 
+    // Given: three combinable tables (T1, T2, T3) on the floor plan
+    // When: T1 is combined with T2 and then T3 to accommodate a large party
+    // Then: T1 should track both combined table references
     [Fact]
     public async Task Table_CombineMultipleTables_ShouldTrackAllCombinations()
     {
@@ -316,6 +340,9 @@ public class TableCombiningSplittingTests
         state.CombinedWith.Should().Contain(table3Id);
     }
 
+    // Given: a table (T1) that has been combined with two other tables (T2 and T3)
+    // When: the table combination is removed
+    // Then: T1 should no longer be combined with any tables
     [Fact]
     public async Task Table_UncombineFromMultiple_ShouldClearAll()
     {
@@ -341,6 +368,9 @@ public class TableCombiningSplittingTests
         state.CombinedWith.Should().BeEmpty();
     }
 
+    // Given: two 4-top tables combined to seat a large party
+    // When: a party of 8 guests is seated at the combined tables
+    // Then: the primary table should be occupied with 8 guests and retain its combination with the other table
     [Fact]
     public async Task Table_SeatCombinedTables_ShouldWorkCorrectly()
     {
@@ -373,6 +403,9 @@ public class TableCombiningSplittingTests
         state.CombinedWith.Should().Contain(table2Id);
     }
 
+    // Given: a combined table that has been seated and is now being cleared after the guests leave
+    // When: the table is cleared and marked clean
+    // Then: the table should return to available status while preserving the combination for the next seating
     [Fact]
     public async Task Table_ClearCombinedTable_ShouldPreserveCombination()
     {
@@ -398,6 +431,9 @@ public class TableCombiningSplittingTests
         state.CombinedWith.Should().Contain(table2Id);
     }
 
+    // Given: a table assignment optimizer with two combinable 4-top tables registered
+    // When: a recommendation is requested for a party of 8 guests
+    // Then: the optimizer should return a recommendation (possibly combining tables) for the large party
     [Fact]
     public async Task TableOptimizer_RecommendCombination_ForLargeParty()
     {
@@ -454,6 +490,9 @@ public class WaitlistQueueManagementTests
         return grain;
     }
 
+    // Given: a waitlist configured with a 5-minute max wait time and auto-expire enabled, with two waiting guests
+    // When: old entries are expired
+    // Then: stale entries that exceeded the max wait time should be identified for removal
     [Fact]
     public async Task Waitlist_ExpireOldEntries_ShouldRemoveStaleEntries()
     {
@@ -481,6 +520,9 @@ public class WaitlistQueueManagementTests
         expiredIds.Should().NotBeNull();
     }
 
+    // Given: a waitlist with three guests waiting in queue order
+    // When: wait time estimates are recalculated
+    // Then: each guest should have a position and estimated wait time that increases with queue position
     [Fact]
     public async Task Waitlist_RecalculateEstimates_ShouldUpdateAllEntries()
     {
@@ -513,6 +555,9 @@ public class WaitlistQueueManagementTests
         estimate2.EstimatedWait.Should().BeLessThanOrEqualTo(estimate3.EstimatedWait);
     }
 
+    // Given: a waitlist with no historical turn time data for parties of 4
+    // When: multiple actual turn times (~45-50 minutes) are recorded for 4-top tables
+    // Then: the wait estimate should reflect the observed average turn time
     [Fact]
     public async Task Waitlist_UpdateTurnTimeData_ShouldImproveEstimates()
     {
@@ -536,6 +581,9 @@ public class WaitlistQueueManagementTests
         updatedEstimate.AverageTurnTime.Should().BeGreaterThan(TimeSpan.Zero);
     }
 
+    // Given: a waitlist with three guests where one has been seated, one notified of a table, and one still waiting
+    // When: entries are filtered by status (waiting, seated, notified)
+    // Then: each status filter should return exactly the correct guest
     [Fact]
     public async Task Waitlist_GetEntriesByStatus_ShouldFilterCorrectly()
     {
@@ -572,6 +620,9 @@ public class WaitlistQueueManagementTests
         notifiedEntries[0].Id.Should().Be(entry2.EntryId);
     }
 
+    // Given: a guest on the waitlist with a party of 4
+    // When: the guest is promoted from the waitlist to a confirmed booking with a specific table
+    // Then: the promotion should record the booking ID, table assignment, and timestamp
     [Fact]
     public async Task Waitlist_PromoteToBooking_ShouldCreateBookingAndUpdateEntry()
     {
@@ -596,6 +647,9 @@ public class WaitlistQueueManagementTests
         result.PromotedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a waitlist with parties of 8, 4, and 2 guests
+    // When: a 4-top table becomes available and the next suitable party is sought
+    // Then: a party that fits the table capacity (4 or fewer) should be selected
     [Fact]
     public async Task Waitlist_FindNextSuitable_ShouldMatchTableCapacity()
     {
@@ -621,6 +675,9 @@ public class WaitlistQueueManagementTests
         suitable!.PartySize.Should().BeLessThanOrEqualTo(4);
     }
 
+    // Given: a guest on the waitlist who has received notifications
+    // When: a position update and a table-ready notification are sent to the guest
+    // Then: the notification history should contain at least both notification types
     [Fact]
     public async Task Waitlist_NotificationHistory_ShouldTrackAllNotifications()
     {
@@ -656,6 +713,9 @@ public class CapacityValidationTests
         _fixture = fixture;
     }
 
+    // Given: a 4-top table on the floor
+    // When: 6 guests are seated at the table (exceeding its max capacity)
+    // Then: the system should allow seating since hospitality sometimes requires squeezing guests in
     [Fact]
     public async Task Table_SeatGuests_ExceedingCapacity_ShouldStillAllow()
     {
@@ -678,6 +738,9 @@ public class CapacityValidationTests
         state.CurrentOccupancy!.GuestCount.Should().Be(6);
     }
 
+    // Given: booking settings with a maximum online party size of 6
+    // When: availability is checked for parties of 4, 6, and 8
+    // Then: parties at or below the limit should be accepted, but oversized parties should be rejected
     [Fact]
     public async Task BookingSettings_PartySizeValidation_ShouldEnforce()
     {
@@ -701,6 +764,9 @@ public class CapacityValidationTests
         available8.Should().BeFalse();
     }
 
+    // Given: booking settings with operating hours from 11 AM to 10 PM
+    // When: availability is checked for slots before opening, at opening, mid-day, last slot, and after closing
+    // Then: slots outside operating hours should be unavailable while those within hours should be available
     [Fact]
     public async Task BookingSettings_TimeValidation_OutsideHours_ShouldReject()
     {
@@ -731,6 +797,9 @@ public class CapacityValidationTests
         afterClose.Should().BeFalse();
     }
 
+    // Given: a table assignment optimizer with a 2-top, 4-top, and 6-top table registered
+    // When: a recommendation is requested for a party of 3
+    // Then: the optimizer should recommend the 4-top as the best fit over the larger 6-top
     [Fact]
     public async Task TableOptimizer_CapacityMatching_ShouldPreferOptimalFit()
     {
@@ -791,6 +860,9 @@ public class NoShowHandlingTests
         return grain;
     }
 
+    // Given: a confirmed booking whose reservation time has passed (1 hour ago)
+    // When: the host marks the booking as a no-show
+    // Then: the booking status should change to NoShow
     [Fact]
     public async Task Booking_MarkNoShow_ShouldUpdateStatus()
     {
@@ -810,6 +882,9 @@ public class NoShowHandlingTests
         state.Status.Should().Be(BookingStatus.NoShow);
     }
 
+    // Given: a confirmed booking with a paid deposit that the guest never arrived for
+    // When: the booking is marked as a no-show and the deposit is forfeited
+    // Then: the booking should be NoShow status with the deposit marked as forfeited
     [Fact]
     public async Task Booking_NoShowWithDeposit_ShouldAllowForfeit()
     {
@@ -837,6 +912,9 @@ public class NoShowHandlingTests
         state.Deposit!.Status.Should().Be(DepositStatus.Forfeited);
     }
 
+    // Given: a no-show detection grain with a booking registered that was due 30 minutes ago
+    // When: pending no-show checks are retrieved
+    // Then: the late booking should appear in the pending checks list
     [Fact]
     public async Task NoShowDetection_CheckPendingBookings_ShouldIdentifyLateArrivals()
     {
@@ -863,6 +941,9 @@ public class NoShowHandlingTests
         pendingChecks[0].BookingTime.Should().Be(pastBookingTime);
     }
 
+    // Given: a no-show detection grain with default settings
+    // When: the grace period is updated to 30 minutes
+    // Then: the settings should reflect the new 30-minute grace period before flagging no-shows
     [Fact]
     public async Task NoShowDetection_Settings_GracePeriod_ShouldBeRespected()
     {
@@ -883,6 +964,9 @@ public class NoShowHandlingTests
         settings.GracePeriod.Should().Be(TimeSpan.FromMinutes(30));
     }
 
+    // Given: a booking registered for no-show tracking with one pending check
+    // When: the guest arrives and the booking is unregistered from no-show detection
+    // Then: the pending checks list should be empty
     [Fact]
     public async Task NoShowDetection_UnregisterOnArrival_ShouldRemoveFromPending()
     {
@@ -927,6 +1011,9 @@ public class DepositCancellationPolicyTests
         Email = "john@example.com"
     };
 
+    // Given: a booking request for a party of 6 with a required deposit that has not been paid
+    // When: confirmation is attempted without paying the deposit
+    // Then: the system should reject confirmation with a deposit-required error
     [Fact]
     public async Task Booking_RequireDeposit_ShouldBlockConfirmationUntilPaid()
     {
@@ -947,6 +1034,9 @@ public class DepositCancellationPolicyTests
             .WithMessage("*Deposit required but not paid*");
     }
 
+    // Given: a booking request with a required deposit that has been paid via credit card
+    // When: the booking is confirmed
+    // Then: confirmation should succeed with a confirmation code and the deposit marked as paid
     [Fact]
     public async Task Booking_DepositPaid_ShouldAllowConfirmation()
     {
@@ -973,6 +1063,9 @@ public class DepositCancellationPolicyTests
         state.Deposit!.Status.Should().Be(DepositStatus.Paid);
     }
 
+    // Given: a booking request with a required deposit that a manager has waived
+    // When: the booking is confirmed
+    // Then: confirmation should succeed with the deposit status marked as waived
     [Fact]
     public async Task Booking_DepositWaived_ShouldAllowConfirmation()
     {
@@ -999,6 +1092,9 @@ public class DepositCancellationPolicyTests
         state.Deposit!.Status.Should().Be(DepositStatus.Waived);
     }
 
+    // Given: a confirmed booking with a paid deposit cancelled well in advance (within refund policy)
+    // When: the booking is cancelled and the deposit is refunded
+    // Then: the booking should be cancelled with the deposit status set to refunded and a refund timestamp recorded
     [Fact]
     public async Task Booking_CancelWithPaidDeposit_ShouldAllowRefund()
     {
@@ -1028,6 +1124,9 @@ public class DepositCancellationPolicyTests
         state.Deposit.RefundedAt.Should().NotBeNull();
     }
 
+    // Given: a confirmed booking with a paid deposit cancelled at the last minute (within 12 hours)
+    // When: the booking is cancelled and the deposit is forfeited due to late cancellation
+    // Then: the booking should be cancelled with the deposit status set to forfeited
     [Fact]
     public async Task Booking_CancelWithPaidDeposit_ShouldAllowForfeit()
     {
@@ -1056,6 +1155,9 @@ public class DepositCancellationPolicyTests
         state.Deposit!.Status.Should().Be(DepositStatus.Forfeited);
     }
 
+    // Given: initialized booking settings for a site
+    // When: deposit requirements are configured with a $75 deposit amount
+    // Then: the settings should persist the deposit requirement flag and amount
     [Fact]
     public async Task BookingSettings_DepositConfiguration_ShouldPersist()
     {
@@ -1097,6 +1199,9 @@ public class TurnTimeCalculationTests
         return grain;
     }
 
+    // Given: a turn time analytics grain with no prior data
+    // When: multiple table turn times are recorded for varying party sizes (60, 60, 90, and 120 minutes)
+    // Then: the overall stats should show 4 samples with an average turn time between 60 and 120 minutes
     [Fact]
     public async Task TurnTime_RecordMultipleTimes_ShouldCalculateAverages()
     {
@@ -1123,6 +1228,9 @@ public class TurnTimeCalculationTests
         stats.AverageTurnTime.TotalMinutes.Should().BeInRange(60, 120);
     }
 
+    // Given: turn time records for 5 parties of 2 and 3 parties of 4
+    // When: statistics are retrieved grouped by party size
+    // Then: the results should show separate stats with correct sample counts for each party size
     [Fact]
     public async Task TurnTime_StatsByPartySize_ShouldSegmentData()
     {
@@ -1154,6 +1262,9 @@ public class TurnTimeCalculationTests
         statsByPartySize.Should().Contain(s => s.PartySize == 4 && s.Stats.SampleCount == 3);
     }
 
+    // Given: historical Friday dinner turn times recorded over several weeks (100-120 minutes each)
+    // When: an estimated turn time is requested for a party of 4 on Friday at 7 PM
+    // Then: the estimate should reflect the historical pattern (between 90 and 130 minutes)
     [Fact]
     public async Task TurnTime_EstimateByDayAndTime_ShouldConsiderPatterns()
     {
@@ -1183,6 +1294,9 @@ public class TurnTimeCalculationTests
         estimate.TotalMinutes.Should().BeInRange(90, 130);
     }
 
+    // Given: a turn time analytics grain tracking active seatings
+    // When: two parties are registered as currently seated at different tables
+    // Then: the active seatings list should contain both parties with their table assignments
     [Fact]
     public async Task TurnTime_ActiveSeatings_ShouldTrackCurrentOccupancy()
     {
@@ -1208,6 +1322,9 @@ public class TurnTimeCalculationTests
         activeSeatings.Should().Contain(s => s.BookingId == booking2 && s.TableNumber == "T2");
     }
 
+    // Given: two active seatings, one seated 30 minutes ago and another seated 3 hours ago
+    // When: long-running tables are queried with a 30-minute overdue threshold
+    // Then: only the 3-hour seating should be flagged as overdue
     [Fact]
     public async Task TurnTime_LongRunningTables_ShouldIdentifyOverdue()
     {
@@ -1243,6 +1360,9 @@ public class TimeSlotAvailabilityTests
         _fixture = fixture;
     }
 
+    // Given: booking settings configured with 15-minute slot intervals from 6 PM to 9 PM
+    // When: availability slots are generated for a party of 4
+    // Then: 12 slots should be returned spanning from 6:00 PM to 8:45 PM at 15-minute intervals
     [Fact]
     public async Task Availability_CustomSlotIntervals_ShouldGenerateCorrectSlots()
     {
@@ -1269,6 +1389,9 @@ public class TimeSlotAvailabilityTests
         slots.Last().Time.Should().Be(new TimeOnly(20, 45));
     }
 
+    // Given: booking settings with a 14-day advance booking window
+    // When: availability is checked for a date within range (10 days) and beyond range (20 days)
+    // Then: slots within the window should be available while slots beyond should be unavailable
     [Fact]
     public async Task Availability_AdvanceBookingDays_ShouldLimitFutureDates()
     {
@@ -1295,6 +1418,9 @@ public class TimeSlotAvailabilityTests
         slotsBeyond.All(s => !s.IsAvailable).Should().BeTrue();
     }
 
+    // Given: three consecutive dates blocked for a holiday period
+    // When: availability is checked for each blocked date
+    // Then: all dates should be marked as blocked with no available time slots
     [Fact]
     public async Task Availability_MultipleBlockedDates_ShouldAllBeUnavailable()
     {
@@ -1323,6 +1449,9 @@ public class TimeSlotAvailabilityTests
         }
     }
 
+    // Given: a date that was previously blocked with no available time slots
+    // When: the date is unblocked
+    // Then: time slots should become available again for reservations
     [Fact]
     public async Task Availability_UnblockDate_ShouldRestoreAvailability()
     {

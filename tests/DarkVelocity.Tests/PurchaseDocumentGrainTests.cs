@@ -22,6 +22,9 @@ public class PurchaseDocumentGrainTests
             GrainKeys.PurchaseDocument(orgId, siteId, documentId));
     }
 
+    // Given: a new purchase document grain
+    // When: an invoice is received via email
+    // Then: the document is initialized with Received status and defaults to unpaid
     [Fact]
     public async Task ReceiveAsync_Invoice_ShouldInitializeDocument()
     {
@@ -51,6 +54,9 @@ public class PurchaseDocumentGrainTests
         snapshot.IsPaid.Should().BeFalse(); // Invoices default to unpaid
     }
 
+    // Given: a new purchase document grain
+    // When: a receipt is received via photo capture
+    // Then: the document is initialized with Received status and defaults to paid
     [Fact]
     public async Task ReceiveAsync_Receipt_ShouldInitializeAsPaid()
     {
@@ -78,6 +84,9 @@ public class PurchaseDocumentGrainTests
         snapshot.IsPaid.Should().BeTrue(); // Receipts default to paid
     }
 
+    // Given: a purchase document that has already been received
+    // When: the same document is received again
+    // Then: the operation is rejected with a duplicate error
     [Fact]
     public async Task ReceiveAsync_AlreadyExists_ShouldThrow()
     {
@@ -111,6 +120,9 @@ public class PurchaseDocumentGrainTests
             .WithMessage("Document already exists");
     }
 
+    // Given: an invoice in processing status
+    // When: OCR extraction results are applied with vendor and line item data
+    // Then: the document moves to Extracted status with populated vendor, totals, and line items
     [Fact]
     public async Task ApplyExtractionResultAsync_ShouldPopulateExtractedData()
     {
@@ -172,6 +184,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Lines[0].Quantity.Should().Be(2);
     }
 
+    // Given: an extracted invoice with unmapped line items
+    // When: a line item is manually mapped to an inventory ingredient
+    // Then: the line records the ingredient mapping with manual source and full confidence
     [Fact]
     public async Task MapLineAsync_ShouldUpdateLineMapping()
     {
@@ -218,6 +233,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Lines[0].MappingConfidence.Should().Be(1.0m);
     }
 
+    // Given: an extracted invoice with reviewed line items
+    // When: a user confirms the document
+    // Then: the document moves to Confirmed status with a confirmation timestamp
     [Fact]
     public async Task ConfirmAsync_ShouldUpdateStatus()
     {
@@ -260,6 +278,9 @@ public class PurchaseDocumentGrainTests
         snapshot.ConfirmedAt.Should().NotBeNull();
     }
 
+    // Given: a received purchase document
+    // When: a user rejects the document as a duplicate
+    // Then: the document moves to Rejected status with the rejection reason and user recorded
     [Fact]
     public async Task RejectAsync_ShouldUpdateStatus()
     {
@@ -289,6 +310,9 @@ public class PurchaseDocumentGrainTests
         state.RejectionReason.Should().Be("Duplicate document");
     }
 
+    // Given: a receipt photo in processing status
+    // When: OCR extraction fails due to poor document quality
+    // Then: the document moves to Failed status with the error details recorded
     [Fact]
     public async Task MarkExtractionFailedAsync_ShouldRecordError()
     {
@@ -320,6 +344,9 @@ public class PurchaseDocumentGrainTests
         snapshot.ProcessingError.Should().Contain("OCR confidence too low");
     }
 
+    // Given: an extracted invoice with an OCR typo in a line item description
+    // When: the line description and quantity are manually corrected
+    // Then: the line item is updated and the line total is recalculated
     [Fact]
     public async Task UpdateLineAsync_ShouldCorrectExtractedValues()
     {
@@ -363,6 +390,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Lines[0].TotalPrice.Should().Be(90m); // 2 * 45
     }
 
+    // Given: a new purchase document grain with no prior state
+    // When: checking existence before and after receiving a document
+    // Then: existence returns false before receipt and true after
     [Fact]
     public async Task ExistsAsync_ShouldReturnCorrectValue()
     {
@@ -389,6 +419,9 @@ public class PurchaseDocumentGrainTests
         (await grain.ExistsAsync()).Should().BeTrue();
     }
 
+    // Given: an extracted invoice with a line item mapped to an ingredient
+    // When: the mapping is removed from the line
+    // Then: all mapping fields are cleared on the line item
     [Fact]
     public async Task UnmapLineAsync_ShouldUnmapLine()
     {
@@ -442,6 +475,9 @@ public class PurchaseDocumentGrainTests
         snapshotAfter.Lines[0].MappingConfidence.Should().Be(0);
     }
 
+    // Given: an extracted invoice with a single line item
+    // When: unmapping is attempted on an out-of-range line index
+    // Then: the operation is rejected with an out-of-range error
     [Fact]
     public async Task UnmapLineAsync_InvalidIndex_ShouldThrow()
     {
@@ -482,6 +518,9 @@ public class PurchaseDocumentGrainTests
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
     }
 
+    // Given: an extracted invoice with an ambiguous low-confidence line item
+    // When: ingredient mapping suggestions are set for the line
+    // Then: the suggestions are stored with their confidence scores and match reasons
     [Fact]
     public async Task SetLineSuggestionsAsync_ShouldSetSuggestions()
     {
@@ -532,6 +571,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Lines[0].Suggestions![1].Confidence.Should().Be(0.6m);
     }
 
+    // Given: a received invoice that transitions through processing to extracted
+    // When: processing is requested a second time after extraction completes
+    // Then: the second processing request is rejected because the document is already extracted
     [Fact]
     public async Task RequestProcessingAsync_WorkflowValidation()
     {
@@ -578,6 +620,9 @@ public class PurchaseDocumentGrainTests
             .WithMessage("*Cannot process document*");
     }
 
+    // Given: a received invoice that has not been processed or extracted
+    // When: mapping a line item to an ingredient is attempted
+    // Then: the operation is rejected because the document is not in extracted state
     [Fact]
     public async Task MapLineAsync_NonExtracted_ShouldThrow()
     {
@@ -607,6 +652,9 @@ public class PurchaseDocumentGrainTests
             .WithMessage("*not in extracted state*");
     }
 
+    // Given: a received invoice that has not been processed or extracted
+    // When: document confirmation is attempted
+    // Then: the operation is rejected because the document is not in extracted state
     [Fact]
     public async Task ConfirmAsync_NonExtracted_ShouldThrow()
     {
@@ -635,6 +683,9 @@ public class PurchaseDocumentGrainTests
             .WithMessage("*not in extracted state*");
     }
 
+    // Given: an extracted invoice with auto-detected vendor information
+    // When: the document is confirmed with vendor name, date, and currency overrides
+    // Then: the confirmed document uses the overridden values instead of the extracted ones
     [Fact]
     public async Task ConfirmAsync_WithVendorOverride_ShouldUseOverride()
     {
@@ -688,6 +739,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Currency.Should().Be("EUR");
     }
 
+    // Given: a new purchase document grain
+    // When: a purchase order document is received via email
+    // Then: the document is initialized as a purchase order type in Received status
     [Fact]
     public async Task ReceiveAsync_PurchaseOrderType_ShouldSucceed()
     {
@@ -716,6 +770,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Status.Should().Be(PurchaseDocumentStatus.Received);
     }
 
+    // Given: a new purchase document grain
+    // When: a credit note is received via supplier integration
+    // Then: the document is initialized as a credit note type in Received status
     [Fact]
     public async Task ReceiveAsync_CreditNoteType_ShouldSucceed()
     {
@@ -744,6 +801,9 @@ public class PurchaseDocumentGrainTests
         snapshot.Status.Should().Be(PurchaseDocumentStatus.Received);
     }
 
+    // Given: an extracted invoice with a single line item
+    // When: mapping is attempted on negative and out-of-range line indices
+    // Then: both operations are rejected with out-of-range errors
     [Fact]
     public async Task MapLineAsync_InvalidIndex_ShouldThrow()
     {
@@ -788,6 +848,9 @@ public class PurchaseDocumentGrainTests
         await actTooHigh.Should().ThrowAsync<ArgumentOutOfRangeException>();
     }
 
+    // Given: an invoice in processing status with no prior vendor mappings learned
+    // When: multi-line extraction results from a vendor invoice are applied
+    // Then: line items are extracted correctly but remain unmapped since no learned vendor mappings exist
     [Fact]
     public async Task AutoMapping_Integration_ShouldUseVendorMapping()
     {

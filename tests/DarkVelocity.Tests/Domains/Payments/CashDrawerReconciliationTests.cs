@@ -24,6 +24,9 @@ public class CashDrawerReconciliationTests
     // Variance Calculation Tests
     // ============================================================================
 
+    // Given: A cash drawer opened with $100 float and $200 in cash sales received
+    // When: The drawer is closed with an actual count of $305 against an expected $300
+    // Then: A positive variance of $5.00 is recorded indicating the drawer is over
     [Fact]
     public async Task CashDrawer_Reconciliation_PositiveVariance_OverByExactAmount()
     {
@@ -41,6 +44,9 @@ public class CashDrawerReconciliationTests
         result.Variance.Should().Be(5m); // $5 over
     }
 
+    // Given: A cash drawer opened with $500 float and $1,500 in cash sales received
+    // When: The drawer is closed with an actual count of $2,050 against an expected $2,000
+    // Then: A large positive variance of $50.00 is recorded
     [Fact]
     public async Task CashDrawer_Reconciliation_LargePositiveVariance()
     {
@@ -58,6 +64,9 @@ public class CashDrawerReconciliationTests
         result.Variance.Should().Be(50m);
     }
 
+    // Given: A cash drawer opened with $500 float and $1,500 in cash sales received
+    // When: The drawer is closed with an actual count of $1,900 against an expected $2,000
+    // Then: A large negative variance of -$100.00 is recorded indicating a cash shortage
     [Fact]
     public async Task CashDrawer_Reconciliation_LargeNegativeVariance()
     {
@@ -75,6 +84,9 @@ public class CashDrawerReconciliationTests
         result.Variance.Should().Be(-100m);
     }
 
+    // Given: A cash drawer with multiple small cash sales totaling $225.77 over the opening float
+    // When: The drawer is closed with an actual count off by 3 cents
+    // Then: A minor variance of -$0.03 is recorded as a rounding discrepancy
     [Fact]
     public async Task CashDrawer_Reconciliation_SmallVariance_Pennies()
     {
@@ -97,6 +109,9 @@ public class CashDrawerReconciliationTests
     // Complex Transaction Sequences
     // ============================================================================
 
+    // Given: A cash drawer opened with $200 float
+    // When: Multiple cash-in and cash-out transactions are recorded
+    // Then: The expected balance correctly reflects all inflows and outflows
     [Fact]
     public async Task CashDrawer_MultipleTransactions_CorrectBalance()
     {
@@ -115,6 +130,9 @@ public class CashDrawerReconciliationTests
         balance.Should().Be(375m); // 200 + 50 + 75 - 30 + 100 - 20 = 375
     }
 
+    // Given: A cash drawer with $500 float and $1,800 in cash sales
+    // When: Three separate cash drops totaling $1,200 are made to the safe
+    // Then: All three drops are tracked and the expected balance reflects the removals
     [Fact]
     public async Task CashDrawer_MultipleCashDrops_ShouldTrackAll()
     {
@@ -136,6 +154,9 @@ public class CashDrawerReconciliationTests
         state.ExpectedBalance.Should().Be(1100m); // 500 + 1000 + 800 - 1200 = 1100
     }
 
+    // Given: A cash drawer opened with $200 float
+    // When: A cash drop of $300 is attempted, exceeding the available balance
+    // Then: The drop is rejected due to insufficient funds in the drawer
     [Fact]
     public async Task CashDrawer_DropExceedingBalance_ShouldThrow()
     {
@@ -150,6 +171,9 @@ public class CashDrawerReconciliationTests
             .WithMessage("*Insufficient*");
     }
 
+    // Given: A cash drawer opened with $100 float
+    // When: A cash payout of $150 is attempted, exceeding the available balance
+    // Then: The payout is rejected due to insufficient funds in the drawer
     [Fact]
     public async Task CashDrawer_CashOutExceedingBalance_ShouldThrow()
     {
@@ -168,6 +192,9 @@ public class CashDrawerReconciliationTests
     // Drawer State Tests
     // ============================================================================
 
+    // Given: An open cash drawer with $200 float and $300 in cash sales
+    // When: The drawer is counted with an actual amount of $495
+    // Then: The drawer transitions to Counting status with the counted amount and timestamp recorded
     [Fact]
     public async Task CashDrawer_CountAsync_ShouldSetCountingStatus()
     {
@@ -187,6 +214,9 @@ public class CashDrawerReconciliationTests
         state.LastCountedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An open cash drawer that has been counted once at $195
+    // When: The drawer is recounted at $200
+    // Then: The actual balance is updated to the latest count
     [Fact]
     public async Task CashDrawer_MultipleCountsBeforeClose_ShouldUpdateActualBalance()
     {
@@ -205,6 +235,9 @@ public class CashDrawerReconciliationTests
         state.ActualBalance.Should().Be(200m);
     }
 
+    // Given: A cash drawer in Counting status with a matching count
+    // When: The drawer is closed
+    // Then: The drawer transitions to Closed status with zero variance
     [Fact]
     public async Task CashDrawer_CloseFromCountingStatus_ShouldWork()
     {
@@ -222,6 +255,9 @@ public class CashDrawerReconciliationTests
         state.Status.Should().Be(DrawerStatus.Closed);
     }
 
+    // Given: A cash drawer that has been closed
+    // When: Cash-in, cash-out, drop, no-sale, or count operations are attempted
+    // Then: All operations are rejected because the drawer is closed
     [Fact]
     public async Task CashDrawer_OperationOnClosedDrawer_ShouldThrow()
     {
@@ -246,6 +282,9 @@ public class CashDrawerReconciliationTests
             () => grain.CountAsync(new CountDrawerCommand(200m, userId)));
     }
 
+    // Given: A cash drawer that was closed with a $5 shortage
+    // When: The drawer is reopened with a new $250 float
+    // Then: All transaction totals and counts are reset to start a fresh session
     [Fact]
     public async Task CashDrawer_ReopenAfterClose_ShouldStartFresh()
     {
@@ -274,6 +313,9 @@ public class CashDrawerReconciliationTests
     // No-Sale Event Tests
     // ============================================================================
 
+    // Given: An open cash drawer with $200 float
+    // When: Three no-sale drawer opens are recorded with different reasons
+    // Then: All three no-sale events are tracked without affecting the expected balance
     [Fact]
     public async Task CashDrawer_MultipleNoSales_ShouldTrackAll()
     {
@@ -294,6 +336,9 @@ public class CashDrawerReconciliationTests
         state.ExpectedBalance.Should().Be(200m);
     }
 
+    // Given: An open cash drawer
+    // When: A no-sale drawer open is recorded without specifying a reason
+    // Then: The transaction is recorded with a default "No sale" description
     [Fact]
     public async Task CashDrawer_NoSale_WithoutReason_ShouldHaveDefaultDescription()
     {
@@ -313,6 +358,9 @@ public class CashDrawerReconciliationTests
     // Transaction Tracking Tests
     // ============================================================================
 
+    // Given: An open cash drawer with $500 float
+    // When: Cash-in, cash-out, drop, and no-sale transactions are all performed
+    // Then: All five transaction types (including the opening float) are tracked
     [Fact]
     public async Task CashDrawer_AllTransactionTypes_ShouldBeTracked()
     {
@@ -338,6 +386,9 @@ public class CashDrawerReconciliationTests
         state.Transactions.Should().HaveCount(5);
     }
 
+    // Given: An open cash drawer with sequential transactions
+    // When: Multiple cash-in and cash-out transactions are recorded over time
+    // Then: All transaction timestamps are in chronological order
     [Fact]
     public async Task CashDrawer_TransactionTimestamps_ShouldBeOrdered()
     {
@@ -365,6 +416,9 @@ public class CashDrawerReconciliationTests
     // Edge Cases
     // ============================================================================
 
+    // Given: A new cash drawer
+    // When: The drawer is opened with a $0 float
+    // Then: The drawer opens successfully with zero opening float and zero expected balance
     [Fact]
     public async Task CashDrawer_ZeroOpeningFloat_ShouldBeAllowed()
     {
@@ -388,6 +442,9 @@ public class CashDrawerReconciliationTests
         state.ExpectedBalance.Should().Be(0m);
     }
 
+    // Given: A new cash drawer
+    // When: The drawer is opened with a $10,000 float
+    // Then: The drawer opens successfully with the large float as expected balance
     [Fact]
     public async Task CashDrawer_LargeOpeningFloat_ShouldBeAllowed()
     {
@@ -400,6 +457,9 @@ public class CashDrawerReconciliationTests
         state.ExpectedBalance.Should().Be(10000m);
     }
 
+    // Given: A cash drawer that transitions through unopened, open, and closed states
+    // When: The open status is queried at each stage
+    // Then: The status correctly reflects false before opening, true after opening, and false after closing
     [Fact]
     public async Task CashDrawer_IsOpenAsync_ShouldReturnCorrectStatus()
     {
@@ -427,6 +487,9 @@ public class CashDrawerReconciliationTests
         isOpenClosed.Should().BeFalse();
     }
 
+    // Given: A new cash drawer identifier
+    // When: The existence is checked before and after opening
+    // Then: The drawer reports as not existing before opening and existing after
     [Fact]
     public async Task CashDrawer_ExistsAsync_ShouldReturnCorrectValue()
     {
@@ -449,6 +512,9 @@ public class CashDrawerReconciliationTests
         existsAfter.Should().BeTrue();
     }
 
+    // Given: An open cash drawer
+    // When: The drawer transitions through Open, Counting, and Closed statuses
+    // Then: The status query returns the correct status at each stage
     [Fact]
     public async Task CashDrawer_GetStatusAsync_ShouldReturnCorrectStatus()
     {

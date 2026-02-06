@@ -27,6 +27,9 @@ public class DailyInventorySnapshotGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDailyInventorySnapshotGrain>(key);
     }
 
+    // Given: A daily inventory snapshot grain has not been initialized for a site
+    // When: The snapshot is initialized for a specific business date and site
+    // Then: The snapshot records the correct date, site ID, and site name
     [Fact]
     public async Task InitializeAsync_CreatesInventorySnapshot()
     {
@@ -48,6 +51,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.SiteName.Should().Be("Warehouse A");
     }
 
+    // Given: A daily inventory snapshot has been initialized for a site
+    // When: A flour ingredient snapshot is recorded with on-hand quantity, cost, and value
+    // Then: The snapshot contains one ingredient with correct stock value and SKU count
     [Fact]
     public async Task RecordIngredientSnapshotAsync_RecordsIngredient()
     {
@@ -84,6 +90,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.TotalSkuCount.Should().Be(1);
     }
 
+    // Given: A daily inventory snapshot has been initialized for a site
+    // When: Three ingredients are recorded with normal, low-stock, and out-of-stock levels
+    // Then: The snapshot correctly counts low-stock and out-of-stock items separately
     [Fact]
     public async Task RecordIngredientSnapshotAsync_TracksLowStockCount()
     {
@@ -112,6 +121,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.TotalSkuCount.Should().Be(3);
     }
 
+    // Given: A daily inventory snapshot has been initialized for a site
+    // When: A dairy ingredient is recorded that is expiring within 3 days
+    // Then: The snapshot tracks the expiring-soon count and the value at risk
     [Fact]
     public async Task RecordIngredientSnapshotAsync_TracksExpiringSoon()
     {
@@ -131,6 +143,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.ExpiringSoonValue.Should().Be(30.00m);
     }
 
+    // Given: A daily inventory snapshot has one ingredient recorded with active batches
+    // When: The stock health metrics are retrieved
+    // Then: The metrics include total stock value, SKU count, and batch tracking
     [Fact]
     public async Task GetHealthMetricsAsync_ReturnsStockHealthMetrics()
     {
@@ -152,6 +167,9 @@ public class DailyInventorySnapshotGrainTests
         metrics.ActiveBatchCount.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: A daily inventory snapshot has been initialized for a site
+    // When: An ingredient is recorded that exceeds its par level
+    // Then: The health metrics track the over-par count and associated inventory value
     [Fact]
     public async Task RecordIngredientSnapshotAsync_OverPar_ShouldTrack()
     {
@@ -173,6 +191,9 @@ public class DailyInventorySnapshotGrainTests
         metrics.OverParValue.Should().Be(1000.00m);
     }
 
+    // Given: A daily inventory snapshot has been initialized for a site
+    // When: Multiple ingredients across dry goods and dairy are recorded, one expiring soon
+    // Then: The snapshot aggregates total stock value across all items and tracks expiring-soon count
     [Fact]
     public async Task RecordIngredientSnapshotAsync_MultipleIngredients_ShouldAggregate()
     {
@@ -204,6 +225,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.ExpiringSoonCount.Should().Be(1);
     }
 
+    // Given: A daily inventory snapshot has one ingredient recorded
+    // When: The inventory fact records are retrieved
+    // Then: The facts contain the ingredient details including quantity and value for downstream reporting
     [Fact]
     public async Task GetFactsAsync_ShouldReturnFacts()
     {
@@ -228,6 +252,9 @@ public class DailyInventorySnapshotGrainTests
         facts[0].TotalValue.Should().Be(500.00m);
     }
 
+    // Given: A daily inventory snapshot has ingredients recorded for the business day
+    // When: The snapshot is finalized at end of day
+    // Then: The snapshot is marked as finalized and remains readable with correct data
     [Fact]
     public async Task FinalizeAsync_ShouldFinalize()
     {
@@ -251,6 +278,9 @@ public class DailyInventorySnapshotGrainTests
         snapshot.TotalSkuCount.Should().Be(1);
     }
 
+    // Given: A daily inventory snapshot grain has not been initialized
+    // When: The snapshot is requested
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {
@@ -287,6 +317,9 @@ public class DailyConsumptionGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDailyConsumptionGrain>(key);
     }
 
+    // Given: A daily consumption grain has not been initialized for a site
+    // When: The consumption record is initialized for a business date
+    // Then: The snapshot records the correct date and site ID
     [Fact]
     public async Task InitializeAsync_CreatesConsumptionRecord()
     {
@@ -302,6 +335,9 @@ public class DailyConsumptionGrainTests
         snapshot.SiteId.Should().Be(siteId);
     }
 
+    // Given: A daily consumption grain has been initialized for a site
+    // When: Ground beef consumption is recorded with theoretical and actual quantities and costs
+    // Then: The snapshot tracks the theoretical cost, actual cost, and cost variance
     [Fact]
     public async Task RecordConsumptionAsync_RecordsTheoreticalAndActual()
     {
@@ -334,6 +370,9 @@ public class DailyConsumptionGrainTests
         snapshot.TotalVariance.Should().Be(22.50m);
     }
 
+    // Given: A daily consumption grain has been initialized for a site
+    // When: Multiple ingredient consumptions are recorded throughout the day
+    // Then: The snapshot aggregates total theoretical and actual costs across all ingredients
     [Fact]
     public async Task RecordConsumptionAsync_AggregatesMultipleConsumptions()
     {
@@ -359,6 +398,9 @@ public class DailyConsumptionGrainTests
         snapshot.TotalActualCost.Should().Be(82.00m);
     }
 
+    // Given: A daily consumption grain has recorded ingredients with high and low cost variances
+    // When: The variance breakdown is retrieved
+    // Then: The breakdown includes all ingredients with their individual variance details
     [Fact]
     public async Task GetVarianceBreakdownAsync_ReturnsTopVariances()
     {
@@ -385,6 +427,9 @@ public class DailyConsumptionGrainTests
         variances.Should().Contain(v => v.IngredientName == "High Variance Item");
     }
 
+    // Given: A daily consumption grain has been initialized for a site
+    // When: The same ingredient is consumed across multiple orders throughout the day
+    // Then: The variance breakdown aggregates quantities and costs into a single entry per ingredient
     [Fact]
     public async Task RecordConsumptionAsync_SameIngredient_ShouldAggregate()
     {
@@ -416,6 +461,9 @@ public class DailyConsumptionGrainTests
         beefVariance.ActualCost.Should().Be(87.00m); // 55 + 32
     }
 
+    // Given: A daily consumption grain has recorded ingredients with small, medium, and large cost variances
+    // When: The variance breakdown is retrieved
+    // Then: The ingredients are ordered by absolute cost variance descending for management attention
     [Fact]
     public async Task GetVarianceBreakdownAsync_ShouldOrderByAbsoluteVariance()
     {
@@ -450,6 +498,9 @@ public class DailyConsumptionGrainTests
         variances[2].IngredientName.Should().Be("Small Variance");
     }
 
+    // Given: A daily consumption grain has been initialized for a site
+    // When: An ingredient is consumed with actual usage less than theoretical (efficient portioning)
+    // Then: The variance is negative indicating cost savings, with a correct negative variance percent
     [Fact]
     public async Task RecordConsumptionAsync_NegativeVariance_ShouldHandle()
     {
@@ -474,6 +525,9 @@ public class DailyConsumptionGrainTests
         snapshot.VariancePercent.Should().Be(-10m); // -20/200 * 100
     }
 
+    // Given: A daily consumption grain has been initialized for a site
+    // When: An ingredient with zero theoretical cost is consumed (e.g., uncosted complimentary item)
+    // Then: The variance percent defaults to zero to avoid division by zero
     [Fact]
     public async Task RecordConsumptionAsync_ZeroTheoreticalCost_ShouldHandle()
     {
@@ -497,6 +551,9 @@ public class DailyConsumptionGrainTests
         snapshot.VariancePercent.Should().Be(0); // Avoid division by zero
     }
 
+    // Given: A daily consumption grain has one ingredient consumption recorded against an order
+    // When: The consumption fact records are retrieved
+    // Then: The facts contain the ingredient, order, and quantity details for downstream analysis
     [Fact]
     public async Task GetFactsAsync_ShouldReturnFacts()
     {
@@ -523,6 +580,9 @@ public class DailyConsumptionGrainTests
         facts[0].ActualQuantity.Should().Be(11.0m);
     }
 
+    // Given: A daily consumption grain has not been initialized
+    // When: The snapshot is requested
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {
@@ -559,6 +619,9 @@ public class DailyWasteGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDailyWasteGrain>(key);
     }
 
+    // Given: A daily waste grain has not been initialized for a site
+    // When: The waste record is initialized for a business date
+    // Then: The snapshot records the correct date and site ID
     [Fact]
     public async Task InitializeAsync_CreatesWasteRecord()
     {
@@ -574,6 +637,9 @@ public class DailyWasteGrainTests
         snapshot.SiteId.Should().Be(siteId);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: A spoilage waste event is recorded for lettuce due to refrigeration failure
+    // Then: The snapshot tracks the waste value, count, and categorizes it under Spoilage reason
     [Fact]
     public async Task RecordWasteAsync_RecordsSpoilage()
     {
@@ -608,6 +674,9 @@ public class DailyWasteGrainTests
         snapshot.WasteByReason.Should().ContainKey(WasteReason.Spoilage);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: Multiple waste events are recorded with Spoilage and Breakage reasons
+    // Then: The snapshot aggregates waste values by reason type
     [Fact]
     public async Task RecordWasteAsync_AggregatesWasteByReason()
     {
@@ -640,6 +709,9 @@ public class DailyWasteGrainTests
         snapshot.WasteByReason[WasteReason.Breakage].Should().Be(25.00m);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: Waste events are recorded across Produce and Proteins inventory categories
+    // Then: The snapshot aggregates waste values by inventory category
     [Fact]
     public async Task RecordWasteAsync_AggregatesWasteByCategory()
     {
@@ -667,6 +739,9 @@ public class DailyWasteGrainTests
         snapshot.WasteByCategory["Proteins"].Should().Be(30.00m);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: Waste events are recorded for all reason types (Expired, Breakage, LineCleaning, OverProduction, CustomerReturn, QualityRejection)
+    // Then: All six waste reason types are tracked with correct total value and count
     [Fact]
     public async Task RecordWasteAsync_AllReasonTypes()
     {
@@ -720,6 +795,9 @@ public class DailyWasteGrainTests
         snapshot.WasteByReason.Should().ContainKey(WasteReason.QualityRejection);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: A waste event is recorded with photographic evidence attached
+    // Then: The waste fact stores the photo URL for audit trail purposes
     [Fact]
     public async Task RecordWasteAsync_WithPhotoUrl_ShouldStore()
     {
@@ -743,6 +821,9 @@ public class DailyWasteGrainTests
         facts[0].PhotoUrl.Should().Be(photoUrl);
     }
 
+    // Given: A daily waste grain has been initialized for a site
+    // When: A high-value waste event is recorded with both recorder and manager approval
+    // Then: The waste fact tracks both the recording employee and the approving manager
     [Fact]
     public async Task RecordWasteAsync_ApprovalWorkflow_ShouldTrack()
     {
@@ -768,6 +849,9 @@ public class DailyWasteGrainTests
         facts[0].ApprovedBy.Should().Be(approvedBy);
     }
 
+    // Given: A daily waste grain has one waste event recorded
+    // When: The waste fact records are retrieved
+    // Then: The facts contain the waste ID, ingredient details, quantity, cost, and reason for downstream reporting
     [Fact]
     public async Task GetFactsAsync_ShouldReturnFacts()
     {
@@ -796,6 +880,9 @@ public class DailyWasteGrainTests
         facts[0].Reason.Should().Be(WasteReason.Spoilage);
     }
 
+    // Given: A daily waste grain has not been initialized
+    // When: The snapshot is requested
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {
@@ -832,6 +919,9 @@ public class PeriodAggregationGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IPeriodAggregationGrain>(key);
     }
 
+    // Given: A period aggregation grain has not been initialized
+    // When: A weekly period is initialized for fiscal week 5 of 2024
+    // Then: The summary reflects the correct weekly period type and period number
     [Fact]
     public async Task InitializeAsync_CreatesWeeklyPeriod()
     {
@@ -853,6 +943,9 @@ public class PeriodAggregationGrainTests
         summary.PeriodNumber.Should().Be(5);
     }
 
+    // Given: A period aggregation grain has not been initialized
+    // When: A four-week accounting period is initialized for period 3 of fiscal year 2024
+    // Then: The summary reflects the four-week period type and correct period number
     [Fact]
     public async Task InitializeAsync_CreatesFourWeekPeriod()
     {
@@ -874,6 +967,9 @@ public class PeriodAggregationGrainTests
         summary.PeriodNumber.Should().Be(3);
     }
 
+    // Given: A weekly period aggregation grain is initialized
+    // When: A day of sales, inventory, consumption, and waste data is aggregated into the period
+    // Then: The period summary includes the daily gross sales and waste totals
     [Fact]
     public async Task AggregateFromDailyAsync_AggregatesDailyData()
     {
@@ -944,6 +1040,9 @@ public class PeriodAggregationGrainTests
         summary.TotalWasteValue.Should().Be(75m);
     }
 
+    // Given: A period aggregation grain has not been initialized
+    // When: A monthly period is initialized for March 2024
+    // Then: The summary reflects the monthly period type with correct start and end dates
     [Fact]
     public async Task InitializeAsync_MonthlyPeriod_ShouldWork()
     {
@@ -967,6 +1066,9 @@ public class PeriodAggregationGrainTests
         summary.PeriodEnd.Should().Be(new DateTime(2024, 3, 31));
     }
 
+    // Given: A period aggregation grain has not been initialized
+    // When: A yearly period is initialized for fiscal year 2024
+    // Then: The summary reflects the yearly period type spanning January 1 to December 31
     [Fact]
     public async Task InitializeAsync_YearlyPeriod_ShouldWork()
     {
@@ -989,6 +1091,9 @@ public class PeriodAggregationGrainTests
         summary.PeriodEnd.Should().Be(new DateTime(2024, 12, 31));
     }
 
+    // Given: A weekly period has already aggregated data for a specific date
+    // When: The same date's data is aggregated a second time
+    // Then: The gross sales are at least the original amount (implementation may accumulate or deduplicate)
     [Fact]
     public async Task AggregateFromDailyAsync_DuplicateDate_ShouldPrevent()
     {
@@ -1032,6 +1137,9 @@ public class PeriodAggregationGrainTests
         summary.SalesMetrics.GrossSales.Should().BeGreaterThanOrEqualTo(1000m);
     }
 
+    // Given: A monthly period has aggregated daily data with COGS and closing stock values
+    // When: The period summary stock health metrics are retrieved
+    // Then: Stock turn is calculated as COGS divided by closing stock value
     [Fact]
     public async Task GetStockTurnAsync_ShouldCalculate()
     {
@@ -1073,6 +1181,9 @@ public class PeriodAggregationGrainTests
         summary.StockHealth.StockTurn.Should().BeApproximately(0.4m, 0.01m);
     }
 
+    // Given: A weekly period has aggregated one day of sales data
+    // When: The period sales metrics are retrieved
+    // Then: The metrics include gross sales, net sales, transaction count, and covers served
     [Fact]
     public async Task GetSalesMetricsAsync_ShouldReturnMetrics()
     {
@@ -1115,6 +1226,9 @@ public class PeriodAggregationGrainTests
         metrics.CoversServed.Should().Be(120);
     }
 
+    // Given: A weekly period has aggregated daily data with theoretical and actual COGS
+    // When: Gross profit metrics are retrieved for both FIFO and WAC costing methods
+    // Then: Both methods report the same net sales but may differ in costing method labels
     [Fact]
     public async Task GetGrossProfitMetricsAsync_FIFO_ShouldDifferFromWAC()
     {
@@ -1158,6 +1272,9 @@ public class PeriodAggregationGrainTests
         wacMetrics.NetSales.Should().Be(4500m);
     }
 
+    // Given: A weekly period aggregation has been initialized
+    // When: The period is finalized at the end of the reporting cycle
+    // Then: The period is marked as finalized and remains readable with correct period type
     [Fact]
     public async Task FinalizeAsync_ShouldFinalize()
     {
@@ -1180,6 +1297,9 @@ public class PeriodAggregationGrainTests
         summary.PeriodType.Should().Be(PeriodType.Weekly);
     }
 
+    // Given: A period aggregation grain has not been initialized
+    // When: The period summary is requested
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {
@@ -1215,6 +1335,9 @@ public class SiteDashboardGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ISiteDashboardGrain>(key);
     }
 
+    // Given: A site dashboard grain has not been initialized
+    // When: The dashboard is initialized for a specific organization and site location
+    // Then: The dashboard metrics are accessible without error
     [Fact]
     public async Task InitializeAsync_CreatesDashboard()
     {
@@ -1228,6 +1351,9 @@ public class SiteDashboardGrainTests
         metrics.Should().NotBeNull();
     }
 
+    // Given: A site dashboard has been initialized for a location
+    // When: The dashboard metrics are retrieved
+    // Then: The metrics include non-negative values for sales and stock alert counts
     [Fact]
     public async Task GetMetricsAsync_ReturnsDashboardMetrics()
     {
@@ -1243,6 +1369,9 @@ public class SiteDashboardGrainTests
         metrics.LowStockAlertCount.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: A site dashboard has been initialized for a location
+    // When: The dashboard data is refreshed
+    // Then: The metrics are recalculated and accessible
     [Fact]
     public async Task RefreshAsync_UpdatesDashboardData()
     {
@@ -1258,6 +1387,9 @@ public class SiteDashboardGrainTests
         metrics.Should().NotBeNull();
     }
 
+    // Given: A site dashboard has been initialized for a location
+    // When: The top 5 consumption variances are requested
+    // Then: The list is limited to at most 5 entries
     [Fact]
     public async Task GetTopVariancesAsync_ReturnsVarianceList()
     {
@@ -1273,6 +1405,9 @@ public class SiteDashboardGrainTests
         variances.Count.Should().BeLessThanOrEqualTo(5);
     }
 
+    // Given: A site has recorded a sale in today's daily sales grain
+    // When: Today's sales are retrieved through the site dashboard
+    // Then: The dashboard returns the aggregated gross and net sales from the daily sales grain
     [Fact]
     public async Task GetTodaySalesAsync_WhenGrainExists_ShouldReturn()
     {
@@ -1314,6 +1449,9 @@ public class SiteDashboardGrainTests
         todaySales.NetSales.Should().Be(18.40m);
     }
 
+    // Given: A site dashboard is initialized but no daily sales grain exists for today
+    // When: Today's sales are retrieved through the site dashboard
+    // Then: The dashboard returns an empty snapshot with zero values
     [Fact]
     public async Task GetTodaySalesAsync_WhenNotInitialized_ShouldReturnEmpty()
     {
@@ -1335,6 +1473,9 @@ public class SiteDashboardGrainTests
         todaySales.TransactionCount.Should().Be(0);
     }
 
+    // Given: A site has recorded ingredient snapshots in today's daily inventory grain
+    // When: The current inventory is retrieved through the site dashboard
+    // Then: The dashboard returns the aggregated stock value and SKU count from the inventory snapshot
     [Fact]
     public async Task GetCurrentInventoryAsync_WhenGrainExists_ShouldReturn()
     {
@@ -1363,6 +1504,9 @@ public class SiteDashboardGrainTests
         inventory.TotalSkuCount.Should().Be(1);
     }
 
+    // Given: A site dashboard is initialized but no daily inventory snapshot grain exists for today
+    // When: The current inventory is retrieved through the site dashboard
+    // Then: The dashboard returns an empty snapshot with zero stock value and no ingredients
     [Fact]
     public async Task GetCurrentInventoryAsync_WhenNotInitialized_ShouldReturnEmpty()
     {
@@ -1384,6 +1528,9 @@ public class SiteDashboardGrainTests
         inventory.Ingredients.Should().BeEmpty();
     }
 
+    // Given: A site has recorded consumption with varying cost variances in today's consumption grain
+    // When: The top variances are retrieved through the site dashboard
+    // Then: The dashboard returns variances ordered by absolute variance with the highest first
     [Fact]
     public async Task GetTopVariancesAsync_WhenGrainExists_ShouldReturn()
     {
@@ -1419,6 +1566,9 @@ public class SiteDashboardGrainTests
         variances[0].IngredientName.Should().Be("High Variance Ingredient");
     }
 
+    // Given: A site dashboard has been initialized for a location
+    // When: The dashboard metrics are retrieved
+    // Then: Alert counts for low stock, out of stock, expiry risk, and high variance are all non-negative
     [Fact]
     public async Task AlertCounts_ShouldTrack()
     {
@@ -1438,6 +1588,9 @@ public class SiteDashboardGrainTests
         metrics.HighVarianceCount.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: A site dashboard grain has not been initialized
+    // When: The dashboard metrics are requested
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task NotInitialized_ShouldThrow()
     {

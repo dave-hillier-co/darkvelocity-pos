@@ -22,6 +22,9 @@ public class PerformanceBoundaryTests
 
     #region Large Order Tests
 
+    // Given: A dine-in order for a large party of 20 guests
+    // When: Adding 100 line items to the order
+    // Then: All 100 lines are tracked and the grand total is positive
     [Fact]
     public async Task Order_ManyLines_ShouldHandleCorrectly()
     {
@@ -58,6 +61,9 @@ public class PerformanceBoundaryTests
         lines.Should().HaveCount(100);
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with 20 modifiers at $0.50 each on a $15 base price
+    // Then: The line total equals $25 (base price plus all modifier prices)
     [Fact]
     public async Task Order_ManyModifiersPerLine_ShouldCalculateCorrectly()
     {
@@ -96,6 +102,9 @@ public class PerformanceBoundaryTests
         result.LineTotal.Should().Be(25.00m);
     }
 
+    // Given: A sent order for 10 guests with 50 items totaling $550 (including 10% tax)
+    // When: Each of the 10 guests pays their share with a $5 tip
+    // Then: 10 payments are recorded, balance due is zero, and total tips are $50
     [Fact]
     public async Task Order_ManyPayments_ShouldTrackAll()
     {
@@ -153,6 +162,9 @@ public class PerformanceBoundaryTests
 
     #region Large Inventory Tests
 
+    // Given: An initialized inventory item with a par level of 100
+    // When: Receiving 30 batches of varying quantities (10 to 39 units each)
+    // Then: Total on-hand quantity is 735 across 30 active batches
     [Fact]
     public async Task Inventory_ManyBatches_ShouldTrackAllWithFIFO()
     {
@@ -192,6 +204,9 @@ public class PerformanceBoundaryTests
         batches.Should().HaveCount(30);
     }
 
+    // Given: An inventory item with 5 batches of 20 units each (100 total)
+    // When: Consuming 75 units in a single large-order consumption
+    // Then: 25 units remain, depleted using FIFO across the earliest batches first
     [Fact]
     public async Task Inventory_ConsumeThroughMultipleBatches_ShouldUseFIFO()
     {
@@ -241,6 +256,9 @@ public class PerformanceBoundaryTests
 
     #region Large Customer History Tests
 
+    // Given: A customer profile for a frequent visitor
+    // When: Recording 50 visits across different sites
+    // Then: The visit history is available and total visits equals 50
     [Fact]
     public async Task Customer_ManyVisits_ShouldTrackHistory()
     {
@@ -275,6 +293,9 @@ public class PerformanceBoundaryTests
         state.Stats.TotalVisits.Should().Be(50);
     }
 
+    // Given: A customer profile with no tags
+    // When: Adding 20 distinct tags (VIP, Regular, Wine Club, etc.)
+    // Then: All 20 tags are stored on the customer profile
     [Fact]
     public async Task Customer_ManyTags_ShouldHandleAll()
     {
@@ -310,6 +331,9 @@ public class PerformanceBoundaryTests
         state.Tags.Should().HaveCount(20);
     }
 
+    // Given: An initialized customer spend projection at Bronze tier
+    // When: Recording 100 transactions at $50 each over time
+    // Then: Lifetime spend is $5,000, tier is Platinum, and points include tier multipliers
     [Fact]
     public async Task CustomerSpend_HighVolumeSpending_ShouldAccumulateCorrectly()
     {
@@ -358,6 +382,9 @@ public class PerformanceBoundaryTests
 
     #region Large Kitchen Tests
 
+    // Given: A kitchen ticket for a large party of 15
+    // When: Adding 50 items distributed across 3 kitchen stations
+    // Then: All 50 items are tracked and 3 station assignments are recorded
     [Fact]
     public async Task KitchenTicket_ManyItems_ShouldTrackAll()
     {
@@ -393,6 +420,9 @@ public class PerformanceBoundaryTests
         state.AssignedStationIds.Should().HaveCount(3);
     }
 
+    // Given: An open grill station
+    // When: Receiving 30 kitchen tickets during a busy service
+    // Then: The station tracks all 30 active tickets
     [Fact]
     public async Task KitchenStation_ManyActiveTickets_ShouldTrackAll()
     {
@@ -434,6 +464,9 @@ public class PerformanceBoundaryTests
 
     #region Large Menu Tests
 
+    // Given: A menu item with a base price of $10
+    // When: Adding 15 size variations with incrementing prices
+    // Then: All 15 variations are stored with correct prices from $10 to $38
     [Fact]
     public async Task MenuItem_ManyVariations_ShouldHandleAll()
     {
@@ -473,6 +506,9 @@ public class PerformanceBoundaryTests
         variations.Last().Price.Should().Be(38.00m);
     }
 
+    // Given: A highly customizable menu item priced at $15
+    // When: Adding 10 modifier groups, each with 5 options (3 required, 7 optional)
+    // Then: All 10 modifier groups with 50 total options are stored
     [Fact]
     public async Task MenuItem_ManyModifierGroups_ShouldHandleAll()
     {
@@ -520,6 +556,9 @@ public class PerformanceBoundaryTests
         snapshot.Modifiers.SelectMany(m => m.Options).Should().HaveCount(50);
     }
 
+    // Given: A POS menu definition set as default
+    // When: Adding 10 screens with 24 buttons each (4 rows by 6 columns)
+    // Then: All 10 screens with 240 total buttons are stored
     [Fact]
     public async Task MenuDefinition_ManyScreensAndButtons_ShouldHandleAll()
     {
@@ -570,6 +609,9 @@ public class PerformanceBoundaryTests
 
     #region Large Booking Tests
 
+    // Given: An initialized booking settings grain for a site
+    // When: Blocking 30 dates (holidays, private events, etc.)
+    // Then: All 30 blocked dates are recorded
     [Fact]
     public async Task BookingSettings_ManyBlockedDates_ShouldHandleAll()
     {
@@ -596,6 +638,9 @@ public class PerformanceBoundaryTests
 
     #region Large Procurement Tests
 
+    // Given: A purchase order for a supplier with a 7-day expected delivery
+    // When: Adding 50 line items with varying quantities and prices
+    // Then: All 50 lines are stored and the total matches the expected sum
     [Fact]
     public async Task PurchaseOrder_ManyLines_ShouldCalculateCorrectly()
     {
@@ -639,6 +684,9 @@ public class PerformanceBoundaryTests
         total.Should().Be(expectedTotal);
     }
 
+    // Given: A registered supplier with 30-day payment terms
+    // When: Adding 100 ingredients to the supplier catalog
+    // Then: All 100 ingredients are stored in the supplier's catalog
     [Fact]
     public async Task Supplier_ManyIngredients_ShouldCatalogAll()
     {
@@ -682,6 +730,9 @@ public class PerformanceBoundaryTests
 
     #region Bulk Operation Tests
 
+    // Given: An initialized menu engineering grain with a 70% target margin
+    // When: Bulk-recording sales for 50 products across 5 categories and running analysis
+    // Then: All 50 items and 5 categories appear in the analysis results
     [Fact]
     public async Task MenuEngineering_BulkRecordSales_ShouldHandleLargeVolume()
     {

@@ -29,6 +29,9 @@ public class TerminalGrainTests
     // Terminal Registration (Pairing) Tests
     // =========================================================================
 
+    // Given: A new unregistered payment terminal with device type, serial number, and station metadata
+    // When: The terminal is registered at a site location
+    // Then: The terminal is created with Active status and all provided configuration details
     [Fact]
     public async Task RegisterTerminal_ValidCommand_ShouldCreateTerminal()
     {
@@ -58,6 +61,9 @@ public class TerminalGrainTests
         snapshot.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, precision: TimeSpan.FromSeconds(5));
     }
 
+    // Given: A new unregistered payment terminal with only a label and location
+    // When: The terminal is registered without optional device details
+    // Then: The terminal is created with Active status and the provided label
     [Fact]
     public async Task RegisterTerminal_MinimalCommand_ShouldCreateTerminal()
     {
@@ -83,6 +89,9 @@ public class TerminalGrainTests
         snapshot.Status.Should().Be(TerminalStatus.Active);
     }
 
+    // Given: A payment terminal that has already been registered at a location
+    // When: A second registration is attempted for the same terminal
+    // Then: The registration is rejected because the terminal already exists
     [Fact]
     public async Task RegisterTerminal_AlreadyExists_ShouldThrow()
     {
@@ -104,6 +113,9 @@ public class TerminalGrainTests
             .WithMessage("*already exists*");
     }
 
+    // Given: A terminal identifier that has never been registered
+    // When: Checking whether the terminal exists
+    // Then: The terminal is reported as not existing
     [Fact]
     public async Task ExistsAsync_NewTerminal_ShouldReturnFalse()
     {
@@ -119,6 +131,9 @@ public class TerminalGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: A payment terminal that has been registered
+    // When: Checking whether the terminal exists
+    // Then: The terminal is reported as existing
     [Fact]
     public async Task ExistsAsync_RegisteredTerminal_ShouldReturnTrue()
     {
@@ -141,6 +156,9 @@ public class TerminalGrainTests
     // Terminal Deactivation (Unpairing) Tests
     // =========================================================================
 
+    // Given: An active registered payment terminal
+    // When: The terminal is deactivated (unpaired)
+    // Then: The terminal status transitions to Inactive with an updated timestamp
     [Fact]
     public async Task DeactivateTerminal_ActiveTerminal_ShouldSetStatusToInactive()
     {
@@ -161,6 +179,9 @@ public class TerminalGrainTests
         snapshot.UpdatedAt.Should().NotBeNull();
     }
 
+    // Given: A terminal identifier that has never been registered
+    // When: A deactivation is attempted
+    // Then: The deactivation is rejected because the terminal is not found
     [Fact]
     public async Task DeactivateTerminal_NonExistent_ShouldThrow()
     {
@@ -177,6 +198,9 @@ public class TerminalGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: A payment terminal that has already been deactivated
+    // When: A second deactivation is attempted
+    // Then: The terminal remains in Inactive status
     [Fact]
     public async Task DeactivateTerminal_AlreadyInactive_ShouldRemainInactive()
     {
@@ -202,6 +226,9 @@ public class TerminalGrainTests
     // Terminal Update Tests
     // =========================================================================
 
+    // Given: A registered payment terminal with an original label
+    // When: The terminal label is updated
+    // Then: The terminal reflects the new label
     [Fact]
     public async Task UpdateTerminal_ChangeLabel_ShouldUpdateLabel()
     {
@@ -224,6 +251,9 @@ public class TerminalGrainTests
         snapshot.Label.Should().Be("New Label");
     }
 
+    // Given: A registered payment terminal assigned to an original location
+    // When: The terminal is reassigned to a different site location
+    // Then: The terminal reflects the new location
     [Fact]
     public async Task UpdateTerminal_ChangeLocation_ShouldUpdateLocation()
     {
@@ -248,6 +278,9 @@ public class TerminalGrainTests
         snapshot.LocationId.Should().Be(newLocationId);
     }
 
+    // Given: An active registered payment terminal
+    // When: The terminal status is changed to Offline
+    // Then: The terminal reflects the Offline status
     [Fact]
     public async Task UpdateTerminal_ChangeStatus_ShouldUpdateStatus()
     {
@@ -270,6 +303,9 @@ public class TerminalGrainTests
         snapshot.Status.Should().Be(TerminalStatus.Offline);
     }
 
+    // Given: A registered payment terminal with initial configuration
+    // When: Multiple terminal fields (label, location, status) are updated simultaneously
+    // Then: All fields are updated and the update timestamp is recorded
     [Fact]
     public async Task UpdateTerminal_MultipleFields_ShouldUpdateAll()
     {
@@ -300,6 +336,9 @@ public class TerminalGrainTests
     // Heartbeat Monitoring Tests
     // =========================================================================
 
+    // Given: A registered terminal that has not yet sent a heartbeat
+    // When: The terminal sends its first heartbeat with IP address and software version
+    // Then: The terminal records the heartbeat timestamp, IP, and version
     [Fact]
     public async Task Heartbeat_FirstCall_ShouldSetLastSeenAt()
     {
@@ -322,6 +361,9 @@ public class TerminalGrainTests
         snapshot.SoftwareVersion.Should().Be("1.0.0");
     }
 
+    // Given: A registered terminal that has already sent a heartbeat
+    // When: The terminal sends a subsequent heartbeat with an updated software version
+    // Then: The last-seen timestamp advances and the version is updated
     [Fact]
     public async Task Heartbeat_SubsequentCall_ShouldUpdateLastSeenAt()
     {
@@ -348,6 +390,9 @@ public class TerminalGrainTests
         secondSnapshot.SoftwareVersion.Should().Be("1.0.1");
     }
 
+    // Given: A registered terminal with Offline status
+    // When: The terminal sends a heartbeat
+    // Then: The terminal is automatically reactivated to Active status
     [Fact]
     public async Task Heartbeat_OfflineTerminal_ShouldReactivate()
     {
@@ -374,6 +419,9 @@ public class TerminalGrainTests
         reactivatedSnapshot.Status.Should().Be(TerminalStatus.Active);
     }
 
+    // Given: A registered terminal with no prior heartbeat
+    // When: The terminal sends a heartbeat without IP address or software version
+    // Then: The last-seen timestamp is set but IP and version remain null
     [Fact]
     public async Task Heartbeat_WithNullValues_ShouldStillUpdateLastSeenAt()
     {
@@ -399,6 +447,9 @@ public class TerminalGrainTests
     // Online/Offline Status Detection Tests
     // =========================================================================
 
+    // Given: A registered terminal that has never sent a heartbeat
+    // When: Checking whether the terminal is online
+    // Then: The terminal is reported as offline
     [Fact]
     public async Task IsOnline_NewTerminalNoHeartbeat_ShouldReturnFalse()
     {
@@ -417,6 +468,9 @@ public class TerminalGrainTests
         isOnline.Should().BeFalse("no heartbeat received yet");
     }
 
+    // Given: A registered terminal that just sent a heartbeat
+    // When: Checking whether the terminal is online
+    // Then: The terminal is reported as online
     [Fact]
     public async Task IsOnline_RecentHeartbeat_ShouldReturnTrue()
     {
@@ -437,6 +491,9 @@ public class TerminalGrainTests
         isOnline.Should().BeTrue("heartbeat was just received");
     }
 
+    // Given: A terminal that has sent a heartbeat but was subsequently deactivated
+    // When: Checking whether the terminal is online
+    // Then: The terminal is reported as offline because it is deactivated
     [Fact]
     public async Task IsOnline_InactiveTerminal_ShouldReturnFalse()
     {
@@ -458,6 +515,9 @@ public class TerminalGrainTests
         isOnline.Should().BeFalse("terminal is inactive/deactivated");
     }
 
+    // Given: A terminal that has sent a heartbeat but was set to Offline status
+    // When: Checking whether the terminal is online
+    // Then: The terminal is reported as offline
     [Fact]
     public async Task IsOnline_OfflineStatus_ShouldReturnFalse()
     {
@@ -484,6 +544,9 @@ public class TerminalGrainTests
     // GetSnapshot Tests
     // =========================================================================
 
+    // Given: A terminal identifier that has never been registered
+    // When: Retrieving the terminal snapshot
+    // Then: The request is rejected because the terminal is not found
     [Fact]
     public async Task GetSnapshot_NonExistent_ShouldThrow()
     {
@@ -500,6 +563,9 @@ public class TerminalGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: A registered terminal with full configuration and a recorded heartbeat
+    // When: Retrieving the terminal snapshot
+    // Then: All terminal details including device type, serial number, IP, and version are returned
     [Fact]
     public async Task GetSnapshot_ExistingTerminal_ShouldReturnAllFields()
     {
@@ -534,6 +600,9 @@ public class TerminalGrainTests
     // Multiple Terminals Per Location Tests
     // =========================================================================
 
+    // Given: Two terminals registered at the same site location
+    // When: One terminal receives a heartbeat and the other is deactivated
+    // Then: Each terminal maintains independent state while sharing the same location
     [Fact]
     public async Task MultipleTerminals_SameLocation_ShouldBeIndependent()
     {
@@ -572,6 +641,9 @@ public class TerminalGrainTests
         snapshot2.LocationId.Should().Be(locationId);
     }
 
+    // Given: Two terminals with the same ID registered under different organizations
+    // When: Both terminals are registered with different labels
+    // Then: Each organization's terminal is fully isolated with its own state
     [Fact]
     public async Task MultipleTerminals_DifferentOrgs_ShouldBeIsolated()
     {

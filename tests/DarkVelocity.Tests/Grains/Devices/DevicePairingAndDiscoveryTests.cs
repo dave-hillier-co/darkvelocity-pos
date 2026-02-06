@@ -36,6 +36,9 @@ public class DevicePairingWorkflowTests
 
     #region Complete Pairing Workflow Tests
 
+    // Given: A POS device initiating the device authorization flow (RFC 8628)
+    // When: A user authorizes the device from the browser and the device polls for tokens
+    // Then: The device receives access and refresh tokens with the correct organization and site assignment
     [Fact]
     public async Task CompletePairingWorkflow_FromInitiationToAuthorization_ShouldSucceed()
     {
@@ -76,6 +79,9 @@ public class DevicePairingWorkflowTests
         tokenResponse.SiteId.Should().Be(siteId);
     }
 
+    // Given: A device that has initiated the authorization flow
+    // When: A user denies the authorization request and the device polls for tokens
+    // Then: No tokens are returned and the authorization status is Denied
     [Fact]
     public async Task PairingWorkflow_WithDenial_ShouldReturnNullToken()
     {
@@ -100,6 +106,9 @@ public class DevicePairingWorkflowTests
         status.Should().Be(DeviceAuthStatus.Denied);
     }
 
+    // Given: A device that has initiated the authorization flow but no user has responded yet
+    // When: The device polls for tokens before authorization
+    // Then: No tokens are returned and the status remains Pending
     [Fact]
     public async Task PairingWorkflow_PollingBeforeAuthorization_ShouldReturnNull()
     {
@@ -124,6 +133,9 @@ public class DevicePairingWorkflowTests
 
     #region Multi-Device Pairing Tests
 
+    // Given: Two devices at the same site both initiating authorization
+    // When: Only the first device is authorized
+    // Then: The first device receives tokens while the second remains in Pending status
     [Fact]
     public async Task MultipleDevices_SameSite_ShouldPairIndependently()
     {
@@ -160,6 +172,9 @@ public class DevicePairingWorkflowTests
         status2.Should().Be(DeviceAuthStatus.Pending);
     }
 
+    // Given: A POS device and a KDS device both initiating authorization at the same site
+    // When: Both devices are authorized with their respective device types
+    // Then: Both receive tokens and are assigned unique device IDs
     [Fact]
     public async Task MultipleDevices_DifferentTypes_ShouldPairCorrectly()
     {
@@ -197,6 +212,9 @@ public class DevicePairingWorkflowTests
 
     #region Pairing Status Tests
 
+    // Given: A device authorization grain that has not been initiated
+    // When: The status is checked, then initiation occurs, then authorization occurs
+    // Then: The status transitions from Expired to Pending to Authorized
     [Fact]
     public async Task PairingStatus_TransitionsCorrectly_ThroughLifecycle()
     {
@@ -220,6 +238,9 @@ public class DevicePairingWorkflowTests
         authorizedStatus.Should().Be(DeviceAuthStatus.Authorized);
     }
 
+    // Given: A newly initiated device authorization request
+    // When: Checking whether the authorization has expired
+    // Then: The authorization is not expired
     [Fact]
     public async Task PairingStatus_Expiration_ShouldBeDetectable()
     {
@@ -235,6 +256,9 @@ public class DevicePairingWorkflowTests
         isExpired.Should().BeFalse();
     }
 
+    // Given: A device authorization grain that has never been initiated
+    // When: Checking whether the authorization has expired
+    // Then: The authorization is considered expired
     [Fact]
     public async Task PairingStatus_NotInitialized_ShouldBeExpired()
     {
@@ -253,6 +277,9 @@ public class DevicePairingWorkflowTests
 
     #region Device Code Validation Tests
 
+    // Given: An authorized device authorization request
+    // When: The device polls with an incorrect device code
+    // Then: No tokens are returned
     [Fact]
     public async Task PairingWorkflow_WrongDeviceCode_ShouldReturnNull()
     {
@@ -271,6 +298,9 @@ public class DevicePairingWorkflowTests
         tokenResponse.Should().BeNull();
     }
 
+    // Given: An authorized device authorization request
+    // When: The device polls with an empty device code
+    // Then: No tokens are returned
     [Fact]
     public async Task PairingWorkflow_EmptyDeviceCode_ShouldReturnNull()
     {
@@ -293,6 +323,9 @@ public class DevicePairingWorkflowTests
 
     #region Post-Authorization Device Setup Tests
 
+    // Given: A device that has completed the full authorization flow and received tokens
+    // When: The device grain is accessed using the assigned device ID
+    // Then: The device grain contains the correct organization, site, name, type, and authorized status
     [Fact]
     public async Task PostAuthorization_DeviceGrain_ShouldBeAccessible()
     {
@@ -350,6 +383,9 @@ public class DeviceDiscoveryTests
 
     #region Device Registration Discovery Tests
 
+    // Given: A newly initialized site location with no registered devices
+    // When: The device summary is requested
+    // Then: All device counts are zero and no alerts exist
     [Fact]
     public async Task DiscoverDevices_NewLocation_ShouldReturnEmptySummary()
     {
@@ -369,6 +405,9 @@ public class DeviceDiscoveryTests
         summary.Alerts.Should().BeEmpty();
     }
 
+    // Given: An initialized site location
+    // When: A POS device is registered at the location
+    // Then: The device appears in the site summary with a total POS count of one
     [Fact]
     public async Task DiscoverDevices_AfterRegistration_ShouldIncludeDevice()
     {
@@ -387,6 +426,9 @@ public class DeviceDiscoveryTests
         summary.TotalPosDevices.Should().Be(1);
     }
 
+    // Given: An initialized site location
+    // When: Multiple device types (POS, Printer, CashDrawer) are registered
+    // Then: Each device type is correctly categorized and counted in the summary
     [Fact]
     public async Task DiscoverDevices_MultipleTypes_ShouldCategorizeCorrectly()
     {
@@ -411,6 +453,9 @@ public class DeviceDiscoveryTests
         summary.TotalCashDrawers.Should().Be(1);
     }
 
+    // Given: A site with one registered POS device
+    // When: The device is unregistered from the site
+    // Then: The POS device count drops to zero
     [Fact]
     public async Task DiscoverDevices_AfterUnregister_ShouldRemoveDevice()
     {
@@ -434,6 +479,9 @@ public class DeviceDiscoveryTests
 
     #region Online/Offline Discovery Tests
 
+    // Given: A site with three registered POS devices
+    // When: Two devices are marked online and one is marked offline
+    // Then: The summary reports two online POS devices out of three total
     [Fact]
     public async Task DiscoverOnlineDevices_ShouldCountCorrectly()
     {
@@ -461,6 +509,9 @@ public class DeviceDiscoveryTests
         summary.OnlinePosDevices.Should().Be(2);
     }
 
+    // Given: A registered POS device at a site that has not sent a heartbeat
+    // When: The device sends its first heartbeat
+    // Then: The device health shows it as online
     [Fact]
     public async Task DiscoverDevices_WithHeartbeat_ShouldBeOnline()
     {
@@ -485,6 +536,9 @@ public class DeviceDiscoveryTests
 
     #region Health Summary Discovery Tests
 
+    // Given: A site with two POS devices and one printer, with partial heartbeat coverage
+    // When: The health summary is requested
+    // Then: The summary reports correct total, online, and offline device counts with per-device metrics
     [Fact]
     public async Task GetHealthSummary_ShouldProvideComprehensiveOverview()
     {
@@ -517,6 +571,9 @@ public class DeviceDiscoveryTests
         summary.DeviceMetrics.Should().HaveCount(3);
     }
 
+    // Given: A site with a registered printer that has a paper-out alert
+    // When: The health summary is requested
+    // Then: The summary reports one device with alerts and one active alert
     [Fact]
     public async Task GetHealthSummary_WithAlerts_ShouldIncludeAlertCount()
     {
@@ -578,6 +635,9 @@ public class OfflineModeTransitionTests
 
     #region Device Offline Transition Tests
 
+    // Given: A registered POS device that is currently online
+    // When: The device is set to offline mode
+    // Then: The device status changes to offline
     [Fact]
     public async Task DeviceGoesOffline_ShouldUpdateStatus()
     {
@@ -603,6 +663,9 @@ public class OfflineModeTransitionTests
         snapshot.IsOnline.Should().BeFalse();
     }
 
+    // Given: A POS device that is currently offline
+    // When: The device sends a heartbeat with updated app and OS versions
+    // Then: The device comes back online with updated version information
     [Fact]
     public async Task DeviceReconnects_WithHeartbeat_ShouldGoOnline()
     {
@@ -628,6 +691,9 @@ public class OfflineModeTransitionTests
         snapshot.OsVersion.Should().Be("17.1");
     }
 
+    // Given: A registered POS device with an initial last-seen timestamp
+    // When: The device sends a heartbeat after a brief delay
+    // Then: The last-seen timestamp is updated to a more recent time
     [Fact]
     public async Task OfflineDevice_Heartbeat_ShouldUpdateLastSeen()
     {
@@ -657,6 +723,9 @@ public class OfflineModeTransitionTests
 
     #region Offline Queue Management Tests
 
+    // Given: An initialized offline sync queue for a device
+    // When: Two operations (order creation and payment) are queued while the device is offline
+    // Then: The queue contains two pending operations
     [Fact]
     public async Task OfflineMode_OperationsQueued_ShouldPersist()
     {
@@ -680,6 +749,9 @@ public class OfflineModeTransitionTests
         (await grain.HasPendingOperationsAsync()).Should().BeTrue();
     }
 
+    // Given: An offline sync queue with two queued order operations
+    // When: The queue is processed upon device reconnection
+    // Then: Both operations are synced successfully
     [Fact]
     public async Task OfflineToOnline_ProcessQueue_ShouldSyncOperations()
     {
@@ -704,6 +776,9 @@ public class OfflineModeTransitionTests
         result.SyncedCount.Should().Be(2);
     }
 
+    // Given: An initialized offline sync queue
+    // When: Five operations are queued with sequential client sequence numbers
+    // Then: The operations maintain their original queuing order
     [Fact]
     public async Task OfflineMode_QueueFull_ShouldMaintainOrder()
     {
@@ -734,6 +809,9 @@ public class OfflineModeTransitionTests
 
     #region Multi-Device Offline Scenarios
 
+    // Given: Two POS devices registered at the same site location
+    // When: Only one device goes offline
+    // Then: The offline state is independent; the other device remains online
     [Fact]
     public async Task MultipleDevices_IndependentOfflineState()
     {
@@ -759,6 +837,9 @@ public class OfflineModeTransitionTests
         (await grain2.IsOnlineAsync()).Should().BeTrue();
     }
 
+    // Given: Two devices with independent offline sync queues
+    // When: Operations are queued only on the first device's sync queue
+    // Then: The second device's sync queue remains empty
     [Fact]
     public async Task MultipleDevices_IndependentSyncQueues()
     {
@@ -793,6 +874,9 @@ public class OfflineModeTransitionTests
 
     #region Health Check and Stale Detection Tests
 
+    // Given: A site with one device that has sent a heartbeat and one that has never heartbeated
+    // When: A health check is performed with a very short stale threshold
+    // Then: The fresh device remains online
     [Fact]
     public async Task HealthCheck_StaleDevices_ShouldBeDetected()
     {

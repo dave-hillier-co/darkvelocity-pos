@@ -25,6 +25,9 @@ public class SiteApiTests
         return json.RootElement.GetProperty("id").GetGuid();
     }
 
+    // Given: An existing organization and a valid site creation request with name, code, address, timezone, and currency
+    // When: The site is created via the API
+    // Then: A 201 Created response is returned with HAL+JSON containing self and organization links
     [Fact]
     public async Task CreateSite_ReturnsCreatedWithHalResponse()
     {
@@ -65,6 +68,9 @@ public class SiteApiTests
             .Should().Be($"/api/orgs/{orgId}");
     }
 
+    // Given: An existing site within an organization
+    // When: The site is retrieved by its ID
+    // Then: A 200 OK response is returned with HAL+JSON containing site details and orders link
     [Fact]
     public async Task GetSite_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -96,6 +102,9 @@ public class SiteApiTests
             .Should().Contain("/orders");
     }
 
+    // Given: An existing organization but a nonexistent site ID
+    // When: The site is retrieved by that ID
+    // Then: A 404 Not Found response is returned with a "not_found" error
     [Fact]
     public async Task GetSite_WhenNotExists_ReturnsNotFound()
     {
@@ -114,6 +123,9 @@ public class SiteApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: An organization with two registered sites
+    // When: The sites collection is listed for the organization
+    // Then: A 200 OK response is returned with a HAL collection containing 2 embedded items
     [Fact]
     public async Task ListSites_WhenOrganizationExists_ReturnsHalCollection()
     {
@@ -152,6 +164,9 @@ public class SiteApiTests
             .Should().Contain("/sites");
     }
 
+    // Given: A nonexistent organization ID
+    // When: The sites collection is listed for that organization
+    // Then: A 404 Not Found response is returned
     [Fact]
     public async Task ListSites_WhenOrganizationNotExists_ReturnsNotFound()
     {
@@ -165,6 +180,9 @@ public class SiteApiTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    // Given: An existing site within an organization
+    // When: The site name is updated via PATCH
+    // Then: A 200 OK response is returned with the updated site name
     [Fact]
     public async Task UpdateSite_WhenExists_ReturnsOkWithUpdatedData()
     {
@@ -194,6 +212,9 @@ public class SiteApiTests
         json.RootElement.GetProperty("name").GetString().Should().Be("Updated Site Name");
     }
 
+    // Given: An existing site that has not yet been opened for business
+    // When: The site is opened via the API
+    // Then: A 200 OK response is returned confirming the site is opened
     [Fact]
     public async Task OpenSite_WhenExists_ReturnsOk()
     {
@@ -221,6 +242,9 @@ public class SiteApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Site opened");
     }
 
+    // Given: An existing site that has been opened for business
+    // When: The site is closed via the API
+    // Then: A 200 OK response is returned confirming the site is closed
     [Fact]
     public async Task CloseSite_WhenExists_ReturnsOk()
     {

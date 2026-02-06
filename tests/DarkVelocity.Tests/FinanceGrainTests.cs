@@ -22,6 +22,9 @@ public class FinanceGrainTests
 
     #region Chart of Accounts Tests
 
+    // Given: A new, uninitialized chart of accounts for an organization
+    // When: The chart is initialized with default accounts and USD currency
+    // Then: The chart contains the standard default accounts with USD as the reporting currency
     [Fact]
     public async Task ChartOfAccounts_Initialize_ShouldCreateDefaultAccounts()
     {
@@ -44,6 +47,9 @@ public class FinanceGrainTests
         summary.Currency.Should().Be("USD");
     }
 
+    // Given: A chart of accounts that has already been initialized
+    // When: A second initialization is attempted
+    // Then: An error is thrown because the chart is already initialized
     [Fact]
     public async Task ChartOfAccounts_Initialize_AlreadyInitialized_ShouldThrow()
     {
@@ -64,6 +70,9 @@ public class FinanceGrainTests
             .WithMessage("*already initialized*");
     }
 
+    // Given: An initialized chart of accounts with default accounts
+    // When: A custom expense account (7000) is added under the expenses parent (6000)
+    // Then: The new account appears in the chart with the correct type, name, and active status
     [Fact]
     public async Task ChartOfAccounts_AddAccount_ShouldAddToChart()
     {
@@ -91,6 +100,9 @@ public class FinanceGrainTests
         account.IsActive.Should().BeTrue();
     }
 
+    // Given: An initialized chart of accounts with default account 1000 (Assets)
+    // When: An account with the duplicate number 1000 is added
+    // Then: An error is thrown because the account number already exists
     [Fact]
     public async Task ChartOfAccounts_AddAccount_DuplicateNumber_ShouldThrow()
     {
@@ -114,6 +126,9 @@ public class FinanceGrainTests
             .WithMessage("*already exists*");
     }
 
+    // Given: A chart of accounts with a custom account 8000 (Test Account)
+    // When: The custom account is deactivated with a reason
+    // Then: The account is marked as inactive in the chart
     [Fact]
     public async Task ChartOfAccounts_DeactivateAccount_ShouldDeactivate()
     {
@@ -137,6 +152,9 @@ public class FinanceGrainTests
         account!.IsActive.Should().BeFalse();
     }
 
+    // Given: An initialized chart of accounts with system account 1000 (Assets)
+    // When: Deactivation of the system account is attempted
+    // Then: An error is thrown because system accounts cannot be deactivated
     [Fact]
     public async Task ChartOfAccounts_DeactivateSystemAccount_ShouldThrow()
     {
@@ -157,6 +175,9 @@ public class FinanceGrainTests
             .WithMessage("*System accounts*");
     }
 
+    // Given: An initialized chart of accounts with parent and child accounts
+    // When: The account hierarchy is retrieved
+    // Then: The Assets account (1000) has child accounts nested under it
     [Fact]
     public async Task ChartOfAccounts_GetHierarchy_ShouldReturnNestedStructure()
     {
@@ -178,6 +199,9 @@ public class FinanceGrainTests
         assets!.Children.Should().NotBeEmpty();
     }
 
+    // Given: An initialized chart of accounts with various account types
+    // When: Accounts are filtered by the Revenue type
+    // Then: Only revenue accounts are returned
     [Fact]
     public async Task ChartOfAccounts_GetAccountsByType_ShouldFilterCorrectly()
     {
@@ -212,6 +236,9 @@ public class FinanceGrainTests
         return chartGrain;
     }
 
+    // Given: An initialized chart of accounts with cash (1110) and food sales (4100) accounts
+    // When: A balanced journal entry is created debiting cash $100 and crediting food sales $100
+    // Then: The entry is created in Draft status with equal debits and credits
     [Fact]
     public async Task JournalEntry_Create_BalancedEntry_ShouldSucceed()
     {
@@ -245,6 +272,9 @@ public class FinanceGrainTests
         entry.Status.Should().Be(JournalEntryEntryStatus.Draft);
     }
 
+    // Given: An initialized chart of accounts
+    // When: An unbalanced journal entry is created with $100 debit and only $50 credit
+    // Then: An error is thrown because debits must equal credits
     [Fact]
     public async Task JournalEntry_Create_UnbalancedEntry_ShouldThrow()
     {
@@ -275,6 +305,9 @@ public class FinanceGrainTests
             .WithMessage("*Debits*must equal*Credits*");
     }
 
+    // Given: An initialized chart of accounts
+    // When: A journal entry line has both a $100 debit and $50 credit on the same line
+    // Then: An error is thrown because a single line cannot have both debit and credit amounts
     [Fact]
     public async Task JournalEntry_Create_LineWithBothDebitAndCredit_ShouldThrow()
     {
@@ -304,6 +337,9 @@ public class FinanceGrainTests
             .WithMessage("*cannot have both debit and credit*");
     }
 
+    // Given: An initialized chart of accounts
+    // When: A journal entry line is created with both debit and credit set to zero
+    // Then: An error is thrown because at least one amount must be non-zero
     [Fact]
     public async Task JournalEntry_Create_ZeroAmounts_ShouldThrow()
     {
@@ -332,6 +368,9 @@ public class FinanceGrainTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    // Given: An initialized chart of accounts without account 9999
+    // When: A journal entry is created referencing non-existent account 9999
+    // Then: An error is thrown because the account is not found or inactive
     [Fact]
     public async Task JournalEntry_Create_InvalidAccount_ShouldThrow()
     {
@@ -362,6 +401,9 @@ public class FinanceGrainTests
             .WithMessage("*not found or inactive*");
     }
 
+    // Given: A balanced journal entry in Draft status
+    // When: The entry is approved by a reviewer
+    // Then: The status changes to Approved with the approval timestamp and approver recorded
     [Fact]
     public async Task JournalEntry_Approve_ShouldUpdateStatus()
     {
@@ -385,6 +427,9 @@ public class FinanceGrainTests
         entry.ApprovedBy.Should().NotBeEmpty();
     }
 
+    // Given: A balanced journal entry in Draft status
+    // When: The entry is rejected with reason "Incorrect amount"
+    // Then: The status changes to Rejected
     [Fact]
     public async Task JournalEntry_Reject_ShouldUpdateStatus()
     {
@@ -406,6 +451,9 @@ public class FinanceGrainTests
         entry.Status.Should().Be(JournalEntryEntryStatus.Rejected);
     }
 
+    // Given: A balanced journal entry in Draft status that has not been posted
+    // When: The entry is voided with reason "Entry made in error"
+    // Then: The entry status changes to Voided
     [Fact]
     public async Task JournalEntry_Void_UnpostedEntry_ShouldSucceed()
     {
@@ -455,6 +503,9 @@ public class FinanceGrainTests
 
     #region Accounting Period Tests
 
+    // Given: A new accounting period grain for a fiscal year
+    // When: The fiscal year is initialized with monthly period frequency
+    // Then: 12 monthly periods are created for the year
     [Fact]
     public async Task AccountingPeriod_Initialize_Monthly_ShouldCreate12Periods()
     {
@@ -478,6 +529,9 @@ public class FinanceGrainTests
         summary.Frequency.Should().Be(PeriodFrequency.Monthly);
     }
 
+    // Given: A new accounting period grain for a fiscal year
+    // When: The fiscal year is initialized with quarterly period frequency
+    // Then: 4 quarterly periods are created for the year
     [Fact]
     public async Task AccountingPeriod_Initialize_Quarterly_ShouldCreate4Periods()
     {
@@ -500,6 +554,9 @@ public class FinanceGrainTests
         summary.TotalPeriods.Should().Be(4);
     }
 
+    // Given: An initialized fiscal year with monthly periods, all in NotStarted status
+    // When: Period 1 (January) is opened
+    // Then: The period status changes to Open with an opening timestamp
     [Fact]
     public async Task AccountingPeriod_OpenPeriod_ShouldOpenPeriod()
     {
@@ -521,6 +578,9 @@ public class FinanceGrainTests
         period.OpenedAt.Should().NotBeNull();
     }
 
+    // Given: An initialized fiscal year with period 1 still not opened
+    // When: Period 2 is opened without first opening period 1
+    // Then: An error is thrown enforcing sequential period opening
     [Fact]
     public async Task AccountingPeriod_OpenPeriod_SkipPeriod_ShouldThrow()
     {
@@ -542,6 +602,9 @@ public class FinanceGrainTests
             .WithMessage("*before opening period 1*");
     }
 
+    // Given: An open accounting period 1 (January)
+    // When: The period is closed
+    // Then: The period status changes to Closed with a closing timestamp
     [Fact]
     public async Task AccountingPeriod_ClosePeriod_ShouldClosePeriod()
     {
@@ -565,6 +628,9 @@ public class FinanceGrainTests
         period.ClosedAt.Should().NotBeNull();
     }
 
+    // Given: A closed accounting period 1 that needs adjustment entries
+    // When: The period is reopened with reason "Need to add adjustment"
+    // Then: The period status returns to Open
     [Fact]
     public async Task AccountingPeriod_ReopenPeriod_ShouldReopenClosedPeriod()
     {
@@ -588,6 +654,9 @@ public class FinanceGrainTests
         period.Status.Should().Be(PeriodStatus.Open);
     }
 
+    // Given: A closed accounting period 1
+    // When: The period is permanently locked
+    // Then: The period status changes to Locked, preventing further modifications
     [Fact]
     public async Task AccountingPeriod_LockPeriod_ShouldPermanentlyLock()
     {
@@ -611,6 +680,9 @@ public class FinanceGrainTests
         period.Status.Should().Be(PeriodStatus.Locked);
     }
 
+    // Given: A permanently locked accounting period 1
+    // When: Reopening the locked period is attempted
+    // Then: An error is thrown because locked periods cannot be reopened
     [Fact]
     public async Task AccountingPeriod_ReopenLockedPeriod_ShouldFail()
     {
@@ -636,6 +708,9 @@ public class FinanceGrainTests
             .WithMessage("*not closed*"); // Because it's Locked, not Closed
     }
 
+    // Given: An open accounting period 1 covering January
+    // When: A posting eligibility check is performed for January 15
+    // Then: The check returns true since the period is open
     [Fact]
     public async Task AccountingPeriod_CanPostToDate_OpenPeriod_ShouldReturnTrue()
     {
@@ -657,6 +732,9 @@ public class FinanceGrainTests
         canPost.Should().BeTrue();
     }
 
+    // Given: A closed accounting period 1 covering January
+    // When: A posting eligibility check is performed for January 15
+    // Then: The check returns false since the period is closed
     [Fact]
     public async Task AccountingPeriod_CanPostToDate_ClosedPeriod_ShouldReturnFalse()
     {
@@ -687,6 +765,9 @@ public class FinanceGrainTests
 
     #region Bank Reconciliation Tests
 
+    // Given: A new bank reconciliation grain
+    // When: A reconciliation is started for checking account 1234-5678 with a $10,000 statement ending balance
+    // Then: The reconciliation is created in InProgress status with the bank account and balance details
     [Fact]
     public async Task BankReconciliation_Start_ShouldCreateReconciliation()
     {
@@ -713,6 +794,9 @@ public class FinanceGrainTests
         summary.Status.Should().Be(ReconciliationStatus.InProgress);
     }
 
+    // Given: An in-progress bank reconciliation
+    // When: Three bank transactions (deposit, check, fee) are imported from CSV
+    // Then: All three transactions are added as unmatched entries
     [Fact]
     public async Task BankReconciliation_ImportTransactions_ShouldAddTransactions()
     {
@@ -742,6 +826,9 @@ public class FinanceGrainTests
         summary.UnmatchedTransactions.Should().Be(3);
     }
 
+    // Given: A reconciliation with one imported unmatched bank transaction
+    // When: The transaction is matched to a journal entry
+    // Then: The matched count increases to 1 and unmatched count drops to 0
     [Fact]
     public async Task BankReconciliation_MatchTransaction_ShouldUpdateStatus()
     {
@@ -772,6 +859,9 @@ public class FinanceGrainTests
         summary.UnmatchedTransactions.Should().Be(0);
     }
 
+    // Given: A reconciliation with one matched bank transaction
+    // When: The transaction match is reverted with reason "Wrong match"
+    // Then: The matched count drops to 0 and unmatched count returns to 1
     [Fact]
     public async Task BankReconciliation_UnmatchTransaction_ShouldRevertMatch()
     {
@@ -805,6 +895,9 @@ public class FinanceGrainTests
         summary.UnmatchedTransactions.Should().Be(1);
     }
 
+    // Given: An in-progress reconciliation with unmatched transactions creating a discrepancy
+    // When: Completion is attempted without the force flag
+    // Then: An error is thrown because the reconciliation is not balanced
     [Fact]
     public async Task BankReconciliation_Complete_WithDiscrepancy_WithoutForce_ShouldThrow()
     {
@@ -829,6 +922,9 @@ public class FinanceGrainTests
             .WithMessage("*not balanced*");
     }
 
+    // Given: An in-progress reconciliation with unresolved discrepancies
+    // When: Completion is forced with an accepted discrepancy note
+    // Then: The reconciliation completes with CompletedWithDiscrepancies status
     [Fact]
     public async Task BankReconciliation_Complete_WithForce_ShouldSucceed()
     {
@@ -850,6 +946,9 @@ public class FinanceGrainTests
         summary.Status.Should().Be(ReconciliationStatus.CompletedWithDiscrepancies);
     }
 
+    // Given: An in-progress bank reconciliation started with the wrong statement
+    // When: The reconciliation is voided with reason "Started with wrong statement"
+    // Then: The reconciliation status changes to Voided
     [Fact]
     public async Task BankReconciliation_Void_ShouldVoidReconciliation()
     {
@@ -880,6 +979,9 @@ public class FinanceGrainTests
 
     #region Financial Reports Tests
 
+    // Given: An initialized chart of accounts for the organization
+    // When: A trial balance report is generated as of today
+    // Then: The report shows balanced debits and credits for the organization
     [Fact]
     public async Task FinancialReports_TrialBalance_ShouldGenerateReport()
     {
@@ -900,6 +1002,9 @@ public class FinanceGrainTests
         report.GeneratedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: An initialized chart of accounts for the organization
+    // When: An income statement is generated for the past month
+    // Then: The report includes revenue and operating expense sections for the date range
     [Fact]
     public async Task FinancialReports_IncomeStatement_ShouldGenerateReport()
     {
@@ -925,6 +1030,9 @@ public class FinanceGrainTests
         report.OperatingExpenses.Should().NotBeNull();
     }
 
+    // Given: An initialized chart of accounts for the organization
+    // When: A balance sheet is generated as of today
+    // Then: The report includes assets, liabilities, and equity sections
     [Fact]
     public async Task FinancialReports_BalanceSheet_ShouldGenerateReport()
     {
@@ -946,6 +1054,9 @@ public class FinanceGrainTests
         report.Equity.Should().NotBeNull();
     }
 
+    // Given: A financial reports grain for an organization
+    // When: A cash flow statement is generated for the past month
+    // Then: The report includes operating, investing, and financing activity sections
     [Fact]
     public async Task FinancialReports_CashFlowStatement_ShouldGenerateReport()
     {

@@ -20,6 +20,9 @@ public class EmailLookupGrainTests
 
     #region RegisterEmailAsync Tests
 
+    // Given: a global email lookup with no registrations
+    // When: an email address is registered for a user in an organization
+    // Then: the email should map to the correct organization and user
     [Fact]
     public async Task RegisterEmailAsync_ShouldRegisterEmail()
     {
@@ -39,6 +42,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a global email lookup
+    // When: an email is registered with mixed-case characters
+    // Then: the email should be findable using lowercase
     [Fact]
     public async Task RegisterEmailAsync_ShouldNormalizeEmail_CaseInsensitive()
     {
@@ -57,6 +63,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a global email lookup
+    // When: an email with leading and trailing whitespace is registered
+    // Then: the email should be findable without whitespace
     [Fact]
     public async Task RegisterEmailAsync_ShouldTrimWhitespace()
     {
@@ -76,6 +85,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: an email already registered for a user in an organization
+    // When: the same email is registered again for the same user and organization
+    // Then: only one mapping should exist (idempotent operation)
     [Fact]
     public async Task RegisterEmailAsync_SameUserSameOrg_ShouldBeIdempotent()
     {
@@ -94,6 +106,9 @@ public class EmailLookupGrainTests
         mappings.Should().ContainSingle();
     }
 
+    // Given: an email already registered to a user in an organization
+    // When: the same email is registered for a different user in the same organization
+    // Then: the operation should be rejected as already registered to a different user
     [Fact]
     public async Task RegisterEmailAsync_DifferentUserSameOrg_ShouldThrow()
     {
@@ -112,6 +127,9 @@ public class EmailLookupGrainTests
             .WithMessage("*already registered to a different user*");
     }
 
+    // Given: a global email lookup
+    // When: the same email is registered for different users in different organizations
+    // Then: both organization mappings should coexist
     [Fact]
     public async Task RegisterEmailAsync_SameEmailDifferentOrgs_ShouldAllowMultipleMappings()
     {
@@ -134,6 +152,9 @@ public class EmailLookupGrainTests
         mappings.Should().Contain(m => m.OrganizationId == org2Id && m.UserId == user2Id);
     }
 
+    // Given: a global email lookup
+    // When: a null, empty, or whitespace-only email is registered
+    // Then: the operation should be rejected with an argument error
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -154,6 +175,9 @@ public class EmailLookupGrainTests
 
     #region FindByEmailAsync Tests
 
+    // Given: a global email lookup with no matching registrations
+    // When: searching for an unregistered email address
+    // Then: an empty list should be returned
     [Fact]
     public async Task FindByEmailAsync_UnknownEmail_ShouldReturnEmptyList()
     {
@@ -168,6 +192,9 @@ public class EmailLookupGrainTests
         mappings.Should().BeEmpty();
     }
 
+    // Given: an email registered in lowercase
+    // When: searching with the uppercase version of the email
+    // Then: the mapping should be found regardless of case
     [Fact]
     public async Task FindByEmailAsync_ShouldBeCaseInsensitive()
     {
@@ -187,6 +214,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a registered email address
+    // When: searching with surrounding whitespace
+    // Then: the mapping should be found after trimming
     [Fact]
     public async Task FindByEmailAsync_ShouldTrimWhitespace()
     {
@@ -206,6 +236,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a global email lookup
+    // When: searching with a null, empty, or whitespace-only email
+    // Then: the operation should be rejected with an argument error
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -220,6 +253,9 @@ public class EmailLookupGrainTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    // Given: an email registered across three different organizations
+    // When: searching for that email
+    // Then: all three organization mappings should be returned
     [Fact]
     public async Task FindByEmailAsync_ShouldReturnAllOrgsForEmail()
     {
@@ -249,6 +285,9 @@ public class EmailLookupGrainTests
 
     #region UnregisterEmailAsync Tests
 
+    // Given: a registered email for a user in an organization
+    // When: the email is unregistered for that organization
+    // Then: the mapping should no longer exist
     [Fact]
     public async Task UnregisterEmailAsync_ShouldRemoveMapping()
     {
@@ -268,6 +307,9 @@ public class EmailLookupGrainTests
         mappings.Should().BeEmpty();
     }
 
+    // Given: a global email lookup with no matching email
+    // When: unregistering a nonexistent email
+    // Then: the operation should complete without error
     [Fact]
     public async Task UnregisterEmailAsync_NonexistentEmail_ShouldNotThrow()
     {
@@ -281,6 +323,9 @@ public class EmailLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: an email registered in two different organizations
+    // When: the email is unregistered for one organization
+    // Then: the other organization's mapping should remain intact
     [Fact]
     public async Task UnregisterEmailAsync_ShouldOnlyRemoveForSpecificOrg()
     {
@@ -305,6 +350,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(user2Id);
     }
 
+    // Given: an email registered in lowercase
+    // When: unregistering with the uppercase version of the email
+    // Then: the mapping should be removed regardless of case
     [Fact]
     public async Task UnregisterEmailAsync_ShouldBeCaseInsensitive()
     {
@@ -324,6 +372,9 @@ public class EmailLookupGrainTests
         mappings.Should().BeEmpty();
     }
 
+    // Given: a global email lookup
+    // When: unregistering a null, empty, or whitespace-only email
+    // Then: the operation should be rejected with an argument error
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -339,6 +390,9 @@ public class EmailLookupGrainTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    // Given: an email registered for one organization
+    // When: attempting to unregister with a different organization ID
+    // Then: the original mapping should remain unchanged
     [Fact]
     public async Task UnregisterEmailAsync_WrongOrg_ShouldNotAffectOtherOrgs()
     {
@@ -364,6 +418,9 @@ public class EmailLookupGrainTests
 
     #region UpdateEmailAsync Tests
 
+    // Given: a user with a registered email address
+    // When: the email is updated to a new address
+    // Then: the old email mapping should be removed and the new one registered
     [Fact]
     public async Task UpdateEmailAsync_ShouldRemoveOldAndAddNew()
     {
@@ -389,6 +446,9 @@ public class EmailLookupGrainTests
         newMappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a user without a previously registered email
+    // When: updating with a null old email and a new email address
+    // Then: the new email should be registered without removing anything
     [Fact]
     public async Task UpdateEmailAsync_WithNullOldEmail_ShouldOnlyAddNew()
     {
@@ -407,6 +467,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a user without a previously registered email
+    // When: updating with an empty old email and a new email address
+    // Then: the new email should be registered without removing anything
     [Fact]
     public async Task UpdateEmailAsync_WithEmptyOldEmail_ShouldOnlyAddNew()
     {
@@ -425,6 +488,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: a global email lookup
+    // When: updating to a null, empty, or whitespace-only new email
+    // Then: the operation should be rejected with an argument error
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -442,6 +508,9 @@ public class EmailLookupGrainTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    // Given: an email registered in two different organizations
+    // When: updating the email for one organization only
+    // Then: the other organization's mapping should remain unchanged
     [Fact]
     public async Task UpdateEmailAsync_ShouldPreserveOtherOrgMappings()
     {
@@ -470,6 +539,9 @@ public class EmailLookupGrainTests
         newMappings[0].OrganizationId.Should().Be(org1Id);
     }
 
+    // Given: an email registered with uppercase characters
+    // When: updating with the lowercase version of the old email
+    // Then: the old mapping should be removed and the new one created
     [Fact]
     public async Task UpdateEmailAsync_ShouldHandleCaseInsensitivity()
     {
@@ -493,6 +565,9 @@ public class EmailLookupGrainTests
         newMappings.Should().ContainSingle();
     }
 
+    // Given: a registered email for a user
+    // When: updating to the same email address
+    // Then: the single mapping should remain (idempotent operation)
     [Fact]
     public async Task UpdateEmailAsync_ToSameEmail_ShouldBeIdempotent()
     {
@@ -517,6 +592,9 @@ public class EmailLookupGrainTests
 
     #region EmailUserMapping Record Tests
 
+    // Given: two EmailUserMapping records with identical organization and user IDs
+    // When: comparing for equality
+    // Then: they should be equal with matching hash codes
     [Fact]
     public void EmailUserMapping_ShouldSupportValueEquality()
     {
@@ -532,6 +610,9 @@ public class EmailLookupGrainTests
         mapping1.GetHashCode().Should().Be(mapping2.GetHashCode());
     }
 
+    // Given: two EmailUserMapping records with different organization and user IDs
+    // When: comparing for equality
+    // Then: they should not be equal
     [Fact]
     public void EmailUserMapping_DifferentIds_ShouldNotBeEqual()
     {
@@ -547,6 +628,9 @@ public class EmailLookupGrainTests
 
     #region Concurrent Access Tests
 
+    // Given: a global email lookup
+    // When: 10 different emails are registered concurrently for the same organization
+    // Then: all registrations should succeed without error
     [Fact]
     public async Task RegisterEmailAsync_ConcurrentDifferentEmails_ShouldSucceed()
     {
@@ -563,6 +647,9 @@ public class EmailLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: a user with a registered email
+    // When: the email is updated multiple times sequentially
+    // Then: only the final email should be registered with all previous ones removed
     [Fact]
     public async Task RegisterEmailAsync_SequentialUpdates_ShouldMaintainConsistency()
     {

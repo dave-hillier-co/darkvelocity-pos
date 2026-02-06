@@ -25,6 +25,9 @@ public class AuditTrailVerificationTests
 
     #region Gift Card Event Audit Tests
 
+    // Given: A gift card stream subscriber and a new physical gift card
+    // When: The card goes through its full lifecycle (create, activate, redeem, expire)
+    // Then: Activated, Redeemed, and Expired events are emitted with correct card metadata
     [Fact]
     public async Task GiftCard_Lifecycle_ShouldEmitAllEvents()
     {
@@ -92,6 +95,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: An activated digital gift card with $75 balance and a stream subscriber
+    // When: Two redemptions of $25 and $30 are processed
+    // Then: Each redeem event reports the correct remaining balance ($50 then $20)
     [Fact]
     public async Task GiftCard_RedeemEvent_ShouldHaveCorrectBalanceTracking()
     {
@@ -166,6 +172,9 @@ public class AuditTrailVerificationTests
 
     #region Customer Spend Event Audit Tests
 
+    // Given: An initialized customer spend projection and a spend stream subscriber
+    // When: A $100 net spend is recorded for the customer
+    // Then: Both a CustomerSpendRecordedEvent and a LoyaltyPointsEarnedEvent (100 points) are emitted
     [Fact]
     public async Task CustomerSpend_RecordSpend_ShouldEmitSpendAndPointsEvents()
     {
@@ -224,6 +233,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: A Bronze-tier customer with zero spend and a spend stream subscriber
+    // When: A $550 spend is recorded, crossing the Silver tier threshold ($500)
+    // Then: A CustomerTierChangedEvent is emitted showing promotion from Bronze to Silver
     [Fact]
     public async Task CustomerSpend_TierPromotion_ShouldEmitTierChangedEvent()
     {
@@ -277,6 +289,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: A customer with 200 loyalty points earned from a $200 spend
+    // When: 50 points are redeemed for a discount
+    // Then: A LoyaltyPointsRedeemedEvent is emitted showing 50 points redeemed and 150 remaining
     [Fact]
     public async Task CustomerSpend_PointsRedemption_ShouldEmitRedemptionEvent()
     {
@@ -340,6 +355,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: A customer with $150 recorded spend and a spend stream subscriber
+    // When: The $150 spend is reversed due to a refund
+    // Then: A CustomerSpendReversedEvent is emitted with the reversed amount and refund reason
     [Fact]
     public async Task CustomerSpend_ReverseSpend_ShouldEmitReversalEvent()
     {
@@ -405,6 +423,9 @@ public class AuditTrailVerificationTests
 
     #region User Event Audit Tests
 
+    // Given: A user stream subscriber
+    // When: A new employee user is created with email and display name
+    // Then: A UserCreatedEvent is emitted with the correct user ID, email, and organization
     [Fact]
     public async Task User_Creation_ShouldEmitCreatedEvent()
     {
@@ -452,6 +473,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: An active user and a user stream subscriber
+    // When: The user account is locked
+    // Then: A UserStatusChangedEvent is emitted showing the new Locked status
     [Fact]
     public async Task User_StatusChange_ShouldEmitStatusChangedEvent()
     {
@@ -506,6 +530,9 @@ public class AuditTrailVerificationTests
 
     #region Event Metadata Tests
 
+    // Given: A customer spend projection and a spend stream subscriber
+    // When: A spend is recorded and the event timestamp is captured
+    // Then: The event timestamp falls within the expected time window of the operation
     [Fact]
     public async Task Events_ShouldHaveTimestamps()
     {
@@ -559,6 +586,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: A gift card in a specific organization and a gift card stream subscriber
+    // When: The gift card is activated
+    // Then: The activation event includes the correct organization ID for tenant context
     [Fact]
     public async Task Events_ShouldHaveOrganizationContext()
     {
@@ -612,6 +642,9 @@ public class AuditTrailVerificationTests
 
     #region Multi-Event Sequence Tests
 
+    // Given: A customer spend projection and a spend stream subscriber
+    // When: 5 sequential spend recordings are made
+    // Then: All 5 events arrive in chronological order by timestamp
     [Fact]
     public async Task Events_ShouldBeOrderedChronologically()
     {
@@ -668,6 +701,9 @@ public class AuditTrailVerificationTests
         }
     }
 
+    // Given: An activated $100 gift card and a gift card stream subscriber
+    // When: Four sequential redemptions of $10, $20, $30, and $15 are processed
+    // Then: Each redeem event tracks the declining balance ($90, $70, $40, $25)
     [Fact]
     public async Task GiftCard_MultipleRedemptions_ShouldTrackSequence()
     {

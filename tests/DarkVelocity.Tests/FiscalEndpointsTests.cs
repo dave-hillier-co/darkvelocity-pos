@@ -25,6 +25,9 @@ public class FiscalDeviceRegistryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalDeviceRegistryGrain>(key);
     }
 
+    // Given: An empty fiscal device registry for a site
+    // When: Registering a fiscal device with serial number "TSE-12345"
+    // Then: The device appears in the registry's device list
     [Fact]
     public async Task RegisterDeviceAsync_AddsDeviceToRegistry()
     {
@@ -39,6 +42,9 @@ public class FiscalDeviceRegistryGrainTests
         devices.Should().Contain(deviceId);
     }
 
+    // Given: A fiscal device registry with one registered device
+    // When: Unregistering the device
+    // Then: The device is removed from the registry's device list
     [Fact]
     public async Task UnregisterDeviceAsync_RemovesDeviceFromRegistry()
     {
@@ -54,6 +60,9 @@ public class FiscalDeviceRegistryGrainTests
         devices.Should().NotContain(deviceId);
     }
 
+    // Given: A fiscal device registry with a device registered under serial "UNIQUE-SERIAL-001"
+    // When: Looking up the device by its serial number
+    // Then: The correct device ID is returned
     [Fact]
     public async Task FindBySerialNumberAsync_ReturnsCorrectDevice()
     {
@@ -69,6 +78,9 @@ public class FiscalDeviceRegistryGrainTests
         foundId.Should().Be(deviceId);
     }
 
+    // Given: An empty fiscal device registry
+    // When: Looking up a non-existent serial number
+    // Then: Null is returned
     [Fact]
     public async Task FindBySerialNumberAsync_ReturnsNull_WhenNotFound()
     {
@@ -80,6 +92,9 @@ public class FiscalDeviceRegistryGrainTests
         foundId.Should().BeNull();
     }
 
+    // Given: A fiscal device registry with 3 registered devices
+    // When: Querying the device count
+    // Then: The count returns 3
     [Fact]
     public async Task GetDeviceCountAsync_ReturnsCorrectCount()
     {
@@ -117,6 +132,9 @@ public class FiscalTransactionRegistryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalTransactionRegistryGrain>(key);
     }
 
+    // Given: An empty fiscal transaction registry for a site
+    // When: Registering a transaction for today's date
+    // Then: The transaction appears when querying the registry by date range
     [Fact]
     public async Task RegisterTransactionAsync_AddsTransactionToRegistry()
     {
@@ -135,6 +153,9 @@ public class FiscalTransactionRegistryGrainTests
         transactions.Should().Contain(transactionId);
     }
 
+    // Given: A transaction registry with transactions on today, yesterday, and two days ago
+    // When: Querying transactions for yesterday through today
+    // Then: Only today's and yesterday's transactions are returned, not the older one
     [Fact]
     public async Task GetTransactionIdsAsync_FiltersbyDateRange()
     {
@@ -162,6 +183,9 @@ public class FiscalTransactionRegistryGrainTests
         transactions.Should().NotContain(txTwoDaysAgo);
     }
 
+    // Given: A transaction registry with transactions from two different fiscal devices
+    // When: Querying transactions filtered by device 1
+    // Then: Only device 1's transaction is returned, not device 2's
     [Fact]
     public async Task GetTransactionIdsAsync_FiltersByDeviceId()
     {
@@ -187,6 +211,9 @@ public class FiscalTransactionRegistryGrainTests
         transactions.Should().NotContain(txDevice2);
     }
 
+    // Given: A transaction registry with 3 registered fiscal transactions
+    // When: Querying the transaction count
+    // Then: The count returns 3
     [Fact]
     public async Task GetTransactionCountAsync_ReturnsCorrectCount()
     {
@@ -226,6 +253,9 @@ public class FiscalDeviceLifecycleTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalDeviceGrain>(key);
     }
 
+    // Given: A registered but inactive fiscal device
+    // When: Activating the device with a tax registration number
+    // Then: The device status transitions to Active
     [Fact]
     public async Task ActivateAsync_SetsDeviceToActive()
     {
@@ -247,6 +277,9 @@ public class FiscalDeviceLifecycleTests
         snapshot.Status.Should().Be(FiscalDeviceStatus.Active);
     }
 
+    // Given: A registered active fiscal device
+    // When: Deactivating the device with reason "Device maintenance"
+    // Then: The device status transitions to Inactive
     [Fact]
     public async Task DeactivateWithReasonAsync_SetsDeviceToInactive()
     {
@@ -265,6 +298,9 @@ public class FiscalDeviceLifecycleTests
         snapshot.Status.Should().Be(FiscalDeviceStatus.Inactive);
     }
 
+    // Given: A registered fiscal device with a certificate expiring in 30 days
+    // When: Checking the device health status
+    // Then: The device is online, certificate is valid, and days until expiry is approximately 30
     [Fact]
     public async Task GetHealthStatusAsync_ReturnsCorrectStatus()
     {
@@ -284,6 +320,9 @@ public class FiscalDeviceLifecycleTests
         health.DaysUntilCertificateExpiry.Should().BeInRange(29, 31);
     }
 
+    // Given: A registered fiscal device with a certificate that expired 10 days ago
+    // When: Checking the device health status
+    // Then: The certificate is invalid and days until expiry is negative
     [Fact]
     public async Task GetHealthStatusAsync_ExpiredCertificate_ReturnsInvalid()
     {
@@ -301,6 +340,9 @@ public class FiscalDeviceLifecycleTests
         health.DaysUntilCertificateExpiry.Should().BeNegative();
     }
 
+    // Given: An active fiscal device with a valid certificate expiring in 1 year
+    // When: Performing a self-test
+    // Then: The self-test passes with no error message
     [Fact]
     public async Task PerformSelfTestAsync_ActiveDevice_Passes()
     {
@@ -318,6 +360,9 @@ public class FiscalDeviceLifecycleTests
         result.ErrorMessage.Should().BeNull();
     }
 
+    // Given: A fiscal device with an expired certificate
+    // When: Performing a self-test
+    // Then: The self-test fails with an "expired" error message
     [Fact]
     public async Task PerformSelfTestAsync_ExpiredCertificate_Fails()
     {
@@ -335,6 +380,9 @@ public class FiscalDeviceLifecycleTests
         result.ErrorMessage.Should().Contain("expired");
     }
 
+    // Given: A fiscal device that has been deactivated
+    // When: Performing a self-test on the inactive device
+    // Then: The self-test fails with a "not active" error message
     [Fact]
     public async Task PerformSelfTestAsync_InactiveDevice_Fails()
     {
@@ -354,6 +402,9 @@ public class FiscalDeviceLifecycleTests
         result.ErrorMessage.Should().Contain("not active");
     }
 
+    // Given: A registered fiscal device with an existing last sync timestamp
+    // When: Refreshing the device certificate
+    // Then: The LastSyncAt timestamp is updated to a more recent time
     [Fact]
     public async Task RefreshCertificateAsync_UpdatesLastSyncAt()
     {
@@ -396,6 +447,9 @@ public class DSFinVKExportGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDSFinVKExportGrain>(key);
     }
 
+    // Given: A new DSFinV-K export request for the last 30 days
+    // When: Creating the export
+    // Then: The export is created with Pending status and correct date range
     [Fact]
     public async Task CreateAsync_CreatesExportWithPendingStatus()
     {
@@ -415,6 +469,9 @@ public class DSFinVKExportGrainTests
         state.Status.Should().Be(DSFinVKExportStatus.Pending);
     }
 
+    // Given: A pending DSFinV-K export
+    // When: Marking the export as processing
+    // Then: The export status transitions to Processing
     [Fact]
     public async Task SetProcessingAsync_UpdatesStatus()
     {
@@ -435,6 +492,9 @@ public class DSFinVKExportGrainTests
         state.Status.Should().Be(DSFinVKExportStatus.Processing);
     }
 
+    // Given: A pending DSFinV-K export
+    // When: Completing the export with 100 transactions, file path, and download URL
+    // Then: The export status is Completed with correct transaction count, paths, and timestamp
     [Fact]
     public async Task SetCompletedAsync_UpdatesStatusAndMetadata()
     {
@@ -459,6 +519,9 @@ public class DSFinVKExportGrainTests
         state.CompletedAt.Should().NotBeNull();
     }
 
+    // Given: A pending DSFinV-K export
+    // When: The export fails with error "Export failed: no transactions"
+    // Then: The export status is Failed with the error message and a completion timestamp
     [Fact]
     public async Task SetFailedAsync_UpdatesStatusAndError()
     {
@@ -503,6 +566,9 @@ public class DSFinVKExportRegistryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDSFinVKExportRegistryGrain>(key);
     }
 
+    // Given: An empty DSFinV-K export registry for a site
+    // When: Registering a new export
+    // Then: The export ID appears in the registry
     [Fact]
     public async Task RegisterExportAsync_AddsExportToRegistry()
     {
@@ -517,6 +583,9 @@ public class DSFinVKExportRegistryGrainTests
         exports.Should().Contain(exportId);
     }
 
+    // Given: Three exports registered sequentially in the registry
+    // When: Retrieving all export IDs
+    // Then: Exports are returned in reverse chronological order (most recent first)
     [Fact]
     public async Task GetExportIdsAsync_ReturnsInReverseChronologicalOrder()
     {

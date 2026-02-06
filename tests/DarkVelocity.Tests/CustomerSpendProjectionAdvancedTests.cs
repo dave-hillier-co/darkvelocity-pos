@@ -33,6 +33,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== TIER BOUNDARY TRANSITION TESTS ====================
 
+    // Given: a customer at Bronze tier with no prior spend
+    // When: a transaction of exactly $500 is recorded (the Silver tier threshold)
+    // Then: the customer is promoted to Silver tier
     [Fact]
     public async Task RecordSpendAsync_AtExactTierBoundary_ShouldPromote()
     {
@@ -52,6 +55,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal("Silver", result.CurrentTier);
     }
 
+    // Given: a customer at Bronze tier with no prior spend
+    // When: a transaction of $499.99 is recorded (one cent below the Silver threshold)
+    // Then: the customer remains at Bronze tier
     [Fact]
     public async Task RecordSpendAsync_JustBelowTierBoundary_ShouldNotPromote()
     {
@@ -70,6 +76,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal("Bronze", result.CurrentTier);
     }
 
+    // Given: a customer at Bronze tier with no prior spend
+    // When: a single $2000 transaction is recorded (skipping Silver, landing in the Gold range)
+    // Then: the customer is promoted directly to Gold tier
     [Fact]
     public async Task RecordSpendAsync_CrossingMultipleTiers_ShouldEndAtCorrectTier()
     {
@@ -88,6 +97,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal("Gold", result.CurrentTier);
     }
 
+    // Given: a customer at Bronze tier with no prior spend
+    // When: a $5500 transaction is recorded (above the Platinum threshold)
+    // Then: the customer reaches Platinum with no further tier to advance to
     [Fact]
     public async Task RecordSpendAsync_ReachingMaxTier_ShouldHaveNoNextTier()
     {
@@ -110,6 +122,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== TIER DEMOTION TESTS ====================
 
+    // Given: a customer at Gold tier with $2000 in lifetime spend
+    // When: an $1800 refund drops lifetime spend to $200
+    // Then: the customer is demoted from Gold back to Bronze tier
     [Fact]
     public async Task ReverseSpendAsync_DemotingMultipleTiers_ShouldEndAtCorrectTier()
     {
@@ -136,6 +151,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(200m, stateAfter.LifetimeSpend);
     }
 
+    // Given: a customer at Silver tier with $600 in lifetime spend
+    // When: a $101 refund drops lifetime spend to $499 (one dollar below the Silver threshold)
+    // Then: the customer is demoted to Bronze tier
     [Fact]
     public async Task ReverseSpendAsync_ToExactlyAtLowerTierMin_ShouldBeAtLowerTier()
     {
@@ -167,6 +185,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== POINTS CALCULATION AT TIER TRANSITIONS ====================
 
+    // Given: a customer recently promoted to Silver tier (1.25x multiplier)
+    // When: a new $100 transaction is recorded at the Silver tier
+    // Then: points are earned using the Silver multiplier (125 points)
     [Fact]
     public async Task RecordSpendAsync_FirstTransactionAtNewTier_ShouldUseNewTierMultiplier()
     {
@@ -192,6 +213,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(125, result.PointsEarned);
     }
 
+    // Given: a customer at Bronze tier with $400 in lifetime spend
+    // When: a $150 transaction triggers promotion to Silver
+    // Then: points for that transaction are calculated at the Bronze rate before the promotion applies
     [Fact]
     public async Task RecordSpendAsync_TransactionThatPromotes_ShouldUseMultiplierAtTimeOfTransaction()
     {
@@ -218,6 +242,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== COMPLEX SPEND/REVERSE SCENARIOS ====================
 
+    // Given: an initialized customer spend projection
+    // When: multiple spend-and-refund cycles are processed (300-100+400-200+150)
+    // Then: lifetime spend accurately reflects the net total of $550 and tier is Silver
     [Fact]
     public async Task SpendAndReverse_MultipleCycles_ShouldMaintainAccuracy()
     {
@@ -252,6 +279,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal("Silver", state.CurrentTier); // 550 >= 500
     }
 
+    // Given: a customer with $100 in lifetime spend
+    // When: a $500 refund is processed (exceeding lifetime spend)
+    // Then: lifetime spend floors at $0 rather than going negative
     [Fact]
     public async Task ReverseSpendAsync_MoreThanLifetimeSpend_ShouldNotGoNegative()
     {
@@ -276,6 +306,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== POINTS REDEMPTION EDGE CASES ====================
 
+    // Given: a customer with exactly 200 available loyalty points
+    // When: all 200 points are redeemed
+    // Then: the available points balance is reduced to exactly zero
     [Fact]
     public async Task RedeemPointsAsync_ExactBalance_ShouldZeroOut()
     {
@@ -300,6 +333,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(0, pointsAfter);
     }
 
+    // Given: a customer with 500 available loyalty points
+    // When: four small redemptions are made (50, 75, 25, and 100 points)
+    // Then: the remaining balance is 250 and total redeemed is tracked accurately
     [Fact]
     public async Task RedeemPointsAsync_MultipleSmallRedemptions_ShouldTrackCorrectly()
     {
@@ -324,6 +360,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(250, state.TotalPointsRedeemed);
     }
 
+    // Given: a customer who earned 300 points from a $300 order
+    // When: a $100 partial refund claws back the points from that order
+    // Then: the available points are zero and further redemption is not possible
     [Fact]
     public async Task RedeemPointsAsync_AfterPointsExpiredFromReversal_ShouldReflectCorrectBalance()
     {
@@ -354,6 +393,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== CUSTOM TIER CONFIGURATION TESTS ====================
 
+    // Given: a customer at Bronze tier with $300 spend under default tier thresholds
+    // When: custom tiers are configured with a VIP threshold at $250
+    // Then: the customer is automatically promoted to VIP tier
     [Fact]
     public async Task ConfigureTiersAsync_NewTiersCausePromotion_ShouldUpdateTier()
     {
@@ -383,6 +425,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(2.0m, stateAfter.CurrentTierMultiplier);
     }
 
+    // Given: a customer at Silver tier with $600 spend under default tier thresholds
+    // When: custom tiers are configured with a higher Premium threshold at $1000
+    // Then: the customer is demoted to Basic tier since $600 is below the new threshold
     [Fact]
     public async Task ConfigureTiersAsync_NewTiersCauseDemotion_ShouldUpdateTier()
     {
@@ -413,6 +458,9 @@ public class CustomerSpendProjectionAdvancedTests
 
     // ==================== SNAPSHOT ACCURACY TESTS ====================
 
+    // Given: a customer who has recorded multiple transactions, earned tier promotions, and redeemed points
+    // When: the spend projection snapshot is retrieved
+    // Then: all figures (lifetime spend, tier, available points, transaction count) are accurate
     [Fact]
     public async Task GetSnapshotAsync_AfterMultipleOperations_ShouldBeAccurate()
     {
@@ -452,6 +500,9 @@ public class CustomerSpendProjectionAdvancedTests
         Assert.Equal(1500, snapshot.AvailablePoints);
     }
 
+    // Given: a customer at Silver tier with $1250 in lifetime spend
+    // When: the spend projection snapshot is retrieved
+    // Then: the snapshot shows $250 remaining to reach the Gold tier ($1500 threshold)
     [Fact]
     public async Task GetSnapshotAsync_SpendToNextTier_ShouldBeAccurate()
     {

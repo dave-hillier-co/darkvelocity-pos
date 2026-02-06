@@ -60,6 +60,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Zero Amount Tests
 
+    // Given: An open dine-in order
+    // When: Adding a line item with zero quantity
+    // Then: The order rejects the line item
     [Fact]
     public async Task AddLineAsync_ZeroQuantity_ShouldHandleGracefully()
     {
@@ -81,6 +84,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a complimentary line item priced at zero
+    // Then: The line is added with a zero total
     [Fact]
     public async Task AddLineAsync_ZeroPrice_ShouldCreateZeroTotalLine()
     {
@@ -101,6 +107,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineTotal.Should().Be(0m);
     }
 
+    // Given: A sent order with an outstanding balance
+    // When: Recording a payment of zero amount
+    // Then: The payment is rejected
     [Fact]
     public async Task RecordPaymentAsync_ZeroAmount_ShouldReject()
     {
@@ -119,6 +128,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A new menu item definition
+    // When: Creating the item with a price of zero (e.g., free sample)
+    // Then: The menu item is created with zero price
     [Fact]
     public async Task CreateMenuItem_ZeroPrice_ShouldBeAllowed()
     {
@@ -148,6 +160,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Negative Value Tests
 
+    // Given: An open dine-in order
+    // When: Adding a line item with a negative quantity
+    // Then: The order rejects the line item
     [Fact]
     public async Task AddLineAsync_NegativeQuantity_ShouldReject()
     {
@@ -167,6 +182,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with a negative unit price
+    // Then: The order rejects the line item
     [Fact]
     public async Task AddLineAsync_NegativePrice_ShouldReject()
     {
@@ -186,6 +204,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A sent order with items totaling a positive balance
+    // When: Recording a payment with a negative amount
+    // Then: The payment is rejected
     [Fact]
     public async Task RecordPaymentAsync_NegativeAmount_ShouldReject()
     {
@@ -204,6 +225,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A sent order with an outstanding balance
+    // When: Recording a payment with a negative tip amount
+    // Then: The payment is rejected
     [Fact]
     public async Task RecordPaymentAsync_NegativeTip_ShouldReject()
     {
@@ -222,6 +246,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A new menu item definition
+    // When: Creating the item with a negative price
+    // Then: The menu item creation is rejected
     [Fact]
     public async Task CreateMenuItem_NegativePrice_ShouldReject()
     {
@@ -250,6 +277,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Large Value Tests
 
+    // Given: An open dine-in order
+    // When: Adding a bulk line item with a quantity of 10,000
+    // Then: The line total is calculated correctly as quantity times unit price
     [Fact]
     public async Task AddLineAsync_LargeQuantity_ShouldCalculateCorrectly()
     {
@@ -270,6 +300,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineTotal.Should().Be(10000m);
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with a high-precision unit price (e.g., 9.999)
+    // Then: The line total handles decimal precision correctly
     [Fact]
     public async Task AddLineAsync_HighPrecisionPrice_ShouldRoundAppropriately()
     {
@@ -290,6 +323,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineTotal.Should().BeApproximately(29.997m, 0.001m);
     }
 
+    // Given: A new order for a large party of 50 guests
+    // When: Creating the dine-in order
+    // Then: The order is created with the full guest count recorded
     [Fact]
     public async Task CreateOrder_LargeGuestCount_ShouldAccept()
     {
@@ -316,6 +352,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Empty Collection Tests
 
+    // Given: A newly created dine-in order with no items added
+    // When: Retrieving the order lines
+    // Then: An empty list is returned
     [Fact]
     public async Task GetLinesAsync_EmptyOrder_ShouldReturnEmptyList()
     {
@@ -332,6 +371,9 @@ public class BoundaryAndEdgeCaseTests
         lines.Should().BeEmpty();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with an explicitly empty modifiers list
+    // Then: The line is added successfully without modifiers
     [Fact]
     public async Task AddLineAsync_EmptyModifiersList_ShouldAccept()
     {
@@ -353,6 +395,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineId.Should().NotBeEmpty();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with a null modifiers list
+    // Then: The line is added successfully, treating null as no modifiers
     [Fact]
     public async Task AddLineAsync_NullModifiersList_ShouldAccept()
     {
@@ -378,6 +423,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region String Boundary Tests
 
+    // Given: An open dine-in order
+    // When: Adding a line item with an empty string name
+    // Then: The line item is rejected
     [Fact]
     public async Task AddLineAsync_EmptyName_ShouldReject()
     {
@@ -397,6 +445,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A new menu item definition
+    // When: Creating the item with an empty string name
+    // Then: The menu item creation is rejected
     [Fact]
     public async Task CreateMenuItem_EmptyName_ShouldReject()
     {
@@ -421,6 +472,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with a 1000-character name
+    // Then: The line is accepted gracefully without error
     [Fact]
     public async Task AddLineAsync_VeryLongName_ShouldHandleGracefully()
     {
@@ -442,6 +496,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineId.Should().NotBeEmpty();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with special characters in the name (accents, dashes, symbols)
+    // Then: The line is added successfully preserving the special characters
     [Fact]
     public async Task AddLineAsync_SpecialCharactersInName_ShouldAccept()
     {
@@ -462,6 +519,9 @@ public class BoundaryAndEdgeCaseTests
         result.LineId.Should().NotBeEmpty();
     }
 
+    // Given: An open dine-in order
+    // When: Adding a line item with Unicode characters (Japanese, emoji) in the name
+    // Then: The line is added successfully preserving the Unicode content
     [Fact]
     public async Task AddLineAsync_UnicodeCharactersInName_ShouldAccept()
     {
@@ -486,6 +546,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Category Count Edge Cases
 
+    // Given: A menu category with zero items
+    // When: Decrementing the item count multiple times below zero
+    // Then: The item count remains clamped at zero
     [Fact]
     public async Task DecrementItemCountAsync_BelowZero_ShouldRemainAtZero()
     {
@@ -510,6 +573,9 @@ public class BoundaryAndEdgeCaseTests
         snapshot.ItemCount.Should().Be(0);
     }
 
+    // Given: A menu category with zero items
+    // When: Incrementing the item count 100 times
+    // Then: The item count accurately reflects 100 items
     [Fact]
     public async Task IncrementItemCountAsync_ManyTimes_ShouldAccumulate()
     {
@@ -539,6 +605,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Display Order Edge Cases
 
+    // Given: A new menu category definition
+    // When: Creating the category with a negative display order
+    // Then: The category is created preserving the negative display order value
     [Fact]
     public async Task CreateCategory_NegativeDisplayOrder_ShouldAccept()
     {
@@ -559,6 +628,9 @@ public class BoundaryAndEdgeCaseTests
         result.DisplayOrder.Should().Be(-1);
     }
 
+    // Given: A new menu category definition
+    // When: Creating the category with display order of zero
+    // Then: The category is created with display order zero
     [Fact]
     public async Task CreateCategory_ZeroDisplayOrder_ShouldAccept()
     {
@@ -579,6 +651,9 @@ public class BoundaryAndEdgeCaseTests
         result.DisplayOrder.Should().Be(0);
     }
 
+    // Given: A new menu category definition
+    // When: Creating the category with display order set to int.MaxValue
+    // Then: The category is created preserving the maximum display order value
     [Fact]
     public async Task CreateCategory_LargeDisplayOrder_ShouldAccept()
     {
@@ -603,6 +678,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Existence Check Edge Cases
 
+    // Given: A grain key referencing a non-existent order
+    // When: Checking if the order exists
+    // Then: The existence check returns false
     [Fact]
     public async Task ExistsAsync_NonExistentOrder_ShouldReturnFalse()
     {
@@ -619,6 +697,9 @@ public class BoundaryAndEdgeCaseTests
         exists.Should().BeFalse();
     }
 
+    // Given: A previously created dine-in order
+    // When: Checking if the order exists
+    // Then: The existence check returns true
     [Fact]
     public async Task ExistsAsync_ExistingOrder_ShouldReturnTrue()
     {
@@ -639,6 +720,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Guest Count Edge Cases
 
+    // Given: A new order creation request with zero guests
+    // When: Attempting to create the dine-in order
+    // Then: The order creation is rejected
     [Fact]
     public async Task CreateOrder_ZeroGuestCount_ShouldReject()
     {
@@ -659,6 +743,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A new order creation request with a negative guest count
+    // When: Attempting to create the dine-in order
+    // Then: The order creation is rejected
     [Fact]
     public async Task CreateOrder_NegativeGuestCount_ShouldReject()
     {
@@ -679,6 +766,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: A new order creation request without specifying guest count
+    // When: Creating the dine-in order with the default guest count
+    // Then: The guest count defaults to one
     [Fact]
     public async Task CreateOrder_DefaultGuestCount_ShouldBeOne()
     {
@@ -704,6 +794,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Modifier Edge Cases
 
+    // Given: An existing menu item
+    // When: Adding a modifier group with an empty options list
+    // Then: The modifier is rejected because options are required
     [Fact]
     public async Task AddModifierAsync_EmptyOptions_ShouldReject()
     {
@@ -736,6 +829,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: An existing menu item
+    // When: Adding a modifier group where minimum selections exceed maximum selections
+    // Then: The modifier is rejected due to invalid selection range
     [Fact]
     public async Task AddModifierAsync_MinGreaterThanMax_ShouldReject()
     {
@@ -771,6 +867,9 @@ public class BoundaryAndEdgeCaseTests
         await act.Should().ThrowAsync<Exception>();
     }
 
+    // Given: An existing menu item with no modifiers
+    // When: Attempting to remove a non-existent modifier by ID
+    // Then: The operation completes as a no-op without error
     [Fact]
     public async Task RemoveModifierAsync_NonExistentModifier_ShouldHandleGracefully()
     {
@@ -802,6 +901,9 @@ public class BoundaryAndEdgeCaseTests
 
     #region Update With Null Values
 
+    // Given: An existing menu item with a name, description, price, and SKU
+    // When: Updating the item with all null values (no changes specified)
+    // Then: All original values are preserved unchanged
     [Fact]
     public async Task UpdateAsync_AllNullValues_ShouldNotChangeAnything()
     {
@@ -843,6 +945,9 @@ public class BoundaryAndEdgeCaseTests
         snapshot.TrackInventory.Should().BeTrue();
     }
 
+    // Given: An existing menu category with name, description, display order, and color
+    // When: Updating only the name while leaving other fields null
+    // Then: Only the name changes; description, display order, and color remain unchanged
     [Fact]
     public async Task UpdateCategoryAsync_PartialUpdate_ShouldOnlyUpdateProvided()
     {

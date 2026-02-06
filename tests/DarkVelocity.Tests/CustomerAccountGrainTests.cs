@@ -16,6 +16,9 @@ public class CustomerAccountGrainTests
         _fixture = fixture;
     }
 
+    // Given: A new customer with no existing house account
+    // When: A house account is opened with a $500 credit limit and 30-day payment terms
+    // Then: The account is created in Active status with zero balance and the specified credit terms
     [Fact]
     public async Task OpenAsync_ShouldCreateAccount()
     {
@@ -41,6 +44,9 @@ public class CustomerAccountGrainTests
         state.PaymentTermsDays.Should().Be(30);
     }
 
+    // Given: An active customer house account with a $500 credit limit and zero balance
+    // When: A $100 dinner charge is posted to the account
+    // Then: The balance increases to $100 and available credit decreases to $400
     [Fact]
     public async Task ChargeAsync_ShouldIncreaseBalance()
     {
@@ -66,6 +72,9 @@ public class CustomerAccountGrainTests
         state.TotalCharges.Should().Be(100m);
     }
 
+    // Given: An active customer house account with a $100 credit limit
+    // When: A $150 charge is attempted that would exceed the credit limit
+    // Then: The charge is rejected to prevent exceeding the customer's approved credit
     [Fact]
     public async Task ChargeAsync_ExceedsCreditLimit_ShouldThrow()
     {
@@ -86,6 +95,9 @@ public class CustomerAccountGrainTests
             .WithMessage("*exceed credit limit*");
     }
 
+    // Given: A customer house account with a $200 outstanding balance
+    // When: A $150 credit card payment is applied to the account
+    // Then: The balance decreases to $50 and total payments reflect the $150 received
     [Fact]
     public async Task ApplyPaymentAsync_ShouldDecreaseBalance()
     {
@@ -111,6 +123,9 @@ public class CustomerAccountGrainTests
         state.TotalPayments.Should().Be(150m);
     }
 
+    // Given: A customer house account with a $100 outstanding balance
+    // When: A $25 goodwill credit adjustment is applied
+    // Then: The balance decreases to $75
     [Fact]
     public async Task ApplyCreditAsync_ShouldDecreaseBalance()
     {
@@ -132,6 +147,9 @@ public class CustomerAccountGrainTests
         balance.Should().Be(75m);
     }
 
+    // Given: A customer house account with a $500 credit limit
+    // When: The credit limit is increased to $1000 due to good payment history
+    // Then: The account reflects the new $1000 credit limit
     [Fact]
     public async Task ChangeCreditLimitAsync_ShouldUpdateLimit()
     {
@@ -152,6 +170,9 @@ public class CustomerAccountGrainTests
         state.CreditLimit.Should().Be(1000m);
     }
 
+    // Given: A customer house account with a $300 outstanding balance and $500 credit limit
+    // When: The credit limit is reduced to $200, below the current balance
+    // Then: The reduction is rejected to prevent the balance from exceeding the limit
     [Fact]
     public async Task ChangeCreditLimitAsync_BelowBalance_ShouldThrow()
     {
@@ -173,6 +194,9 @@ public class CustomerAccountGrainTests
             .WithMessage("*less than current balance*");
     }
 
+    // Given: An active customer house account
+    // When: The account is suspended due to overdue payments
+    // Then: The account status changes to Suspended with the reason recorded
     [Fact]
     public async Task SuspendAsync_ShouldSuspendAccount()
     {
@@ -194,6 +218,9 @@ public class CustomerAccountGrainTests
         state.SuspensionReason.Should().Be("Overdue payments");
     }
 
+    // Given: A customer house account that has been suspended for overdue payments
+    // When: A new charge is attempted against the suspended account
+    // Then: The charge is rejected since the account is not active
     [Fact]
     public async Task ChargeAsync_SuspendedAccount_ShouldThrow()
     {
@@ -215,6 +242,9 @@ public class CustomerAccountGrainTests
             .WithMessage("*not active*");
     }
 
+    // Given: A suspended customer house account
+    // When: The account is reactivated by an operator
+    // Then: The account status returns to Active
     [Fact]
     public async Task ReactivateAsync_ShouldReactivateAccount()
     {
@@ -236,6 +266,9 @@ public class CustomerAccountGrainTests
         state.Status.Should().Be(CustomerAccountStatus.Active);
     }
 
+    // Given: A customer house account with a $100 outstanding balance
+    // When: An attempt is made to close the account
+    // Then: Closure is rejected because the account has an outstanding balance
     [Fact]
     public async Task CloseAsync_WithBalance_ShouldThrow()
     {
@@ -257,6 +290,9 @@ public class CustomerAccountGrainTests
             .WithMessage("*outstanding balance*");
     }
 
+    // Given: A customer house account with zero balance
+    // When: The account is closed at the customer's request
+    // Then: The account status changes to Closed
     [Fact]
     public async Task CloseAsync_ZeroBalance_ShouldCloseAccount()
     {
@@ -277,6 +313,9 @@ public class CustomerAccountGrainTests
         state.Status.Should().Be(CustomerAccountStatus.Closed);
     }
 
+    // Given: A customer house account with two charges ($100 and $75) and one $50 payment
+    // When: A statement is generated for the transaction period
+    // Then: The statement shows $175 in charges, $50 in payments, and a $125 closing balance
     [Fact]
     public async Task GenerateStatementAsync_ShouldGenerateStatement()
     {
@@ -306,6 +345,9 @@ public class CustomerAccountGrainTests
         statement.ClosingBalance.Should().Be(125m);
     }
 
+    // Given: A customer house account with two charges and one payment
+    // When: The recent transaction history is retrieved
+    // Then: Three transactions are returned with the most recent (payment) listed first
     [Fact]
     public async Task GetTransactionsAsync_ShouldReturnRecentTransactions()
     {
@@ -329,6 +371,9 @@ public class CustomerAccountGrainTests
         transactions[0].Type.Should().Be(AccountTransactionType.Payment); // Most recent first
     }
 
+    // Given: A customer house account with $200 charged against a $500 credit limit
+    // When: A $100 charge eligibility check is performed
+    // Then: The check confirms the charge is allowed within available credit
     [Fact]
     public async Task CanChargeAsync_WithAvailableCredit_ShouldReturnTrue()
     {
@@ -349,6 +394,9 @@ public class CustomerAccountGrainTests
         canCharge.Should().BeTrue();
     }
 
+    // Given: A customer house account with $450 charged against a $500 credit limit
+    // When: A $100 charge eligibility check is performed
+    // Then: The check denies the charge as it would exceed available credit
     [Fact]
     public async Task CanChargeAsync_ExceedingCredit_ShouldReturnFalse()
     {
@@ -369,6 +417,9 @@ public class CustomerAccountGrainTests
         canCharge.Should().BeFalse();
     }
 
+    // Given: A customer house account with $250 in charges and $100 in payments against a $1000 limit
+    // When: The account summary is retrieved
+    // Then: The summary shows $150 balance, $850 available credit, and accurate charge/payment totals
     [Fact]
     public async Task GetSummaryAsync_ShouldReturnAccountSummary()
     {

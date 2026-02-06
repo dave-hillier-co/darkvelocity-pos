@@ -18,6 +18,9 @@ public class IngredientGrainTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: A new ingredient definition for all-purpose flour with SKU, base unit, and cost
+    // When: The ingredient is created in the catalog
+    // Then: The ingredient is registered with the correct properties and is not archived
     [Fact]
     public async Task CreateIngredient_WithBasicInfo_CreatesSuccessfully()
     {
@@ -46,6 +49,9 @@ public class IngredientGrainTests
         Assert.False(snapshot.IsArchived);
     }
 
+    // Given: A new wheat bread ingredient with gluten (contains) and soy (may contain) allergen declarations
+    // When: The ingredient is created with allergen information
+    // Then: Both allergens are recorded with their respective declaration types and notes
     [Fact]
     public async Task CreateIngredient_WithAllergens_TracksAllergensProperly()
     {
@@ -80,6 +86,9 @@ public class IngredientGrainTests
         Assert.Contains("shared equipment", soyAllergen.Notes);
     }
 
+    // Given: A new flour ingredient with nutritional data (calories, protein, carbohydrates, fat, fiber per 100g)
+    // When: The ingredient is created with its nutritional profile
+    // Then: The nutritional information is stored and retrievable per 100g
     [Fact]
     public async Task CreateIngredient_WithNutrition_TracksNutritionData()
     {
@@ -111,6 +120,9 @@ public class IngredientGrainTests
         Assert.Equal(76m, snapshot.Nutrition.CarbohydratesPer100g);
     }
 
+    // Given: An existing olive oil ingredient at $0.01 per ml
+    // When: The cost is updated to $0.015 per ml due to new supplier pricing
+    // Then: The current cost reflects the update and cost history records both the initial and updated entries
     [Fact]
     public async Task UpdateIngredientCost_UpdatesCostAndTracksHistory()
     {
@@ -141,6 +153,9 @@ public class IngredientGrainTests
         Assert.Equal("New supplier pricing", history[0].Source);
     }
 
+    // Given: Soy sauce with a single soy allergen declaration
+    // When: The allergen list is updated to include both soy and gluten
+    // Then: The allergen list is fully replaced with the two new declarations
     [Fact]
     public async Task UpdateAllergens_ReplacesAllAllergens()
     {
@@ -171,6 +186,9 @@ public class IngredientGrainTests
         Assert.Contains(allergens, a => a.Allergen == StandardAllergens.Gluten);
     }
 
+    // Given: A tomatoes ingredient without any supplier associations
+    // When: A supplier is linked with SKU, price per case, and base unit conversion factor
+    // Then: The supplier is associated as the preferred vendor with the correct pricing and unit mapping
     [Fact]
     public async Task LinkSupplier_AssociatesSupplierWithIngredient()
     {
@@ -206,6 +224,9 @@ public class IngredientGrainTests
         Assert.True(suppliers[0].IsPreferred);
     }
 
+    // Given: A house marinara sauce ingredient in the catalog
+    // When: The ingredient is linked to a sub-recipe as its production output
+    // Then: The ingredient is marked as a sub-recipe output with the producing recipe identified
     [Fact]
     public async Task LinkToSubRecipe_MarksAsSubRecipeOutput()
     {
@@ -231,6 +252,9 @@ public class IngredientGrainTests
         Assert.Equal("marinara-sauce-recipe", snapshot.ProducedByRecipeId);
     }
 
+    // Given: An active ingredient in the catalog
+    // When: The ingredient is archived because the supplier discontinued it
+    // Then: The ingredient is marked as archived
     [Fact]
     public async Task ArchiveIngredient_SetsArchivedStatus()
     {
@@ -255,6 +279,9 @@ public class IngredientGrainTests
         Assert.True(snapshot.IsArchived);
     }
 
+    // Given: A previously archived seasonal ingredient
+    // When: The ingredient is restored to active status
+    // Then: The ingredient's archived flag is removed, making it available again
     [Fact]
     public async Task RestoreIngredient_RemovesArchivedStatus()
     {
@@ -281,6 +308,9 @@ public class IngredientGrainTests
         Assert.False(snapshot.IsArchived);
     }
 
+    // Given: A peanut butter ingredient with a peanuts allergen declaration
+    // When: Allergen checks are performed for peanuts and dairy
+    // Then: The peanut check returns true and the dairy check returns false
     [Fact]
     public async Task ContainsAllergen_ReturnsCorrectResult()
     {
@@ -316,6 +346,9 @@ public class IngredientRegistryGrainTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: An empty ingredient registry for an organization
+    // When: An ingredient summary is registered in the catalog
+    // Then: The ingredient appears in the registry listing
     [Fact]
     public async Task RegisterIngredient_AddsToRegistry()
     {
@@ -344,6 +377,9 @@ public class IngredientRegistryGrainTests
         Assert.Contains(ingredients, i => i.Name == "Test Ingredient");
     }
 
+    // Given: A registry containing tomato paste, tomato sauce, and olive oil
+    // When: A search for "tomato" is performed
+    // Then: Both tomato ingredients are returned while olive oil is excluded
     [Fact]
     public async Task SearchIngredients_FindsByName()
     {
@@ -372,6 +408,9 @@ public class IngredientRegistryGrainTests
         Assert.All(results, r => Assert.Contains("Tomato", r.Name, StringComparison.OrdinalIgnoreCase));
     }
 
+    // Given: A registry with wheat flour (gluten), almond flour (tree nuts), and rice flour (no allergens)
+    // When: Filtering ingredients by gluten allergen
+    // Then: Only wheat flour is returned
     [Fact]
     public async Task GetIngredientsByAllergen_FiltersCorrectly()
     {
@@ -400,6 +439,9 @@ public class IngredientRegistryGrainTests
         Assert.Equal("Wheat Flour", glutenIngredients[0].Name);
     }
 
+    // Given: A registry with house sauce (sub-recipe output) and raw tomatoes (regular ingredient)
+    // When: Querying for sub-recipe output ingredients
+    // Then: Only the house sauce is returned
     [Fact]
     public async Task GetSubRecipeOutputs_ReturnsOnlySubRecipeOutputs()
     {

@@ -51,6 +51,9 @@ public class PaymentApiTests
         return (orgId, siteId, orderId);
     }
 
+    // Given: An open order with a line item totaling $25.00
+    // When: A cash payment of $25.00 is initiated for the order
+    // Then: A 201 Created response is returned with HAL+JSON containing links for completing by cash or card
     [Fact]
     public async Task InitiatePayment_ReturnsCreatedWithHalResponse()
     {
@@ -83,6 +86,9 @@ public class PaymentApiTests
             .Should().EndWith("/complete-card");
     }
 
+    // Given: A previously initiated payment for an order
+    // When: The payment is retrieved by its ID
+    // Then: A 200 OK response is returned with HAL+JSON containing the payment details and self link
     [Fact]
     public async Task GetPayment_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -108,6 +114,9 @@ public class PaymentApiTests
             .Should().Contain($"/payments/{paymentId}");
     }
 
+    // Given: A nonexistent payment ID for a valid site
+    // When: The payment is retrieved by that ID
+    // Then: A 404 Not Found response is returned with a "not_found" error
     [Fact]
     public async Task GetPayment_WhenNotExists_ReturnsNotFound()
     {
@@ -126,6 +135,9 @@ public class PaymentApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: An initiated cash payment of $25.00 for an order
+    // When: The cash payment is completed with $30.00 tendered and a $5.00 tip
+    // Then: A 200 OK response is returned with a HAL link back to the payment
     [Fact]
     public async Task CompleteCashPayment_ReturnsOkWithHalResponse()
     {
@@ -152,6 +164,9 @@ public class PaymentApiTests
             .Should().Contain($"/payments/{paymentId}");
     }
 
+    // Given: An initiated card payment of $25.00 for an order
+    // When: The card payment is completed with gateway reference, authorization code, and Visa card info
+    // Then: A 200 OK response is returned with a HAL link back to the payment
     [Fact]
     public async Task CompleteCardPayment_ReturnsOkWithHalResponse()
     {
@@ -185,6 +200,9 @@ public class PaymentApiTests
             .Should().Contain($"/payments/{paymentId}");
     }
 
+    // Given: An initiated payment for an order
+    // When: The payment is voided with a reason of "Customer request"
+    // Then: A 200 OK response is returned confirming the payment was voided
     [Fact]
     public async Task VoidPayment_ReturnsOk()
     {
@@ -209,6 +227,9 @@ public class PaymentApiTests
         json.RootElement.GetProperty("message").GetString().Should().Be("Payment voided");
     }
 
+    // Given: A completed cash payment of $25.00 for an order
+    // When: A partial refund of $10.00 is issued
+    // Then: A 200 OK response is returned with a HAL link back to the original payment
     [Fact]
     public async Task RefundPayment_ReturnsOkWithHalResponse()
     {

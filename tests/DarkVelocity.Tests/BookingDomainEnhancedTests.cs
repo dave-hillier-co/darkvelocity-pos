@@ -27,6 +27,9 @@ public class BookingCalendarEnhancedTests
         return grain;
     }
 
+    // Given: an initialized booking calendar with no reservations for the day
+    // When: the day view is requested
+    // Then: the view should show zero bookings, zero covers, and all time slots empty
     [Fact]
     public async Task GetDayViewAsync_EmptyCalendar_ShouldReturnEmptySlots()
     {
@@ -47,6 +50,9 @@ public class BookingCalendarEnhancedTests
         dayView.Slots.All(s => s.BookingCount == 0).Should().BeTrue();
     }
 
+    // Given: a booking calendar with reservations at noon (4 covers), 12:30 PM (2 covers), and 7 PM (6 covers)
+    // When: the day view is requested with 1-hour slot intervals
+    // Then: the lunch slot should group 2 bookings with 6 covers, and the dinner slot should have 1 booking with 6 covers
     [Fact]
     public async Task GetDayViewAsync_WithBookings_ShouldGroupBySlot()
     {
@@ -84,6 +90,9 @@ public class BookingCalendarEnhancedTests
         dinnerSlot.CoverCount.Should().Be(6);
     }
 
+    // Given: three bookings allocated to two tables (T1 has 2 bookings, T2 has 1 booking)
+    // When: table allocations are retrieved for the day
+    // Then: allocations should be grouped by table with correct booking counts per table
     [Fact]
     public async Task GetTableAllocationsAsync_ShouldGroupBookingsByTable()
     {
@@ -148,6 +157,9 @@ public class TableAssignmentOptimizerTests
         return grain;
     }
 
+    // Given: a table assignment optimizer with no tables registered
+    // When: a recommendation is requested for a party of 4
+    // Then: the result should indicate failure with no recommendations and a suitable message
     [Fact]
     public async Task GetRecommendationsAsync_NoTables_ShouldReturnNoRecommendations()
     {
@@ -168,6 +180,9 @@ public class TableAssignmentOptimizerTests
         result.Message.Should().Be("No suitable tables available");
     }
 
+    // Given: a table assignment optimizer with one 4-top table registered
+    // When: a recommendation is requested for a party of 4
+    // Then: the optimizer should recommend that table with its number
     [Fact]
     public async Task GetRecommendationsAsync_WithSuitableTable_ShouldReturnRecommendation()
     {
@@ -192,6 +207,9 @@ public class TableAssignmentOptimizerTests
         result.Recommendations[0].TableNumber.Should().Be("T1");
     }
 
+    // Given: a table assignment optimizer with a 2-top, 4-top, and 8-top table
+    // When: a recommendation is requested for a party of 4
+    // Then: the optimizer should rank the 4-top as the top recommendation (perfect capacity match)
     [Fact]
     public async Task GetRecommendationsAsync_ShouldPreferPerfectCapacityMatch()
     {
@@ -219,6 +237,9 @@ public class TableAssignmentOptimizerTests
         result.Recommendations[0].TableId.Should().Be(perfectTableId); // Perfect match scores highest
     }
 
+    // Given: a table assignment optimizer with a normal 4-top and a VIP-tagged 4-top
+    // When: a recommendation is requested for a VIP party of 4
+    // Then: the optimizer should prefer the VIP-tagged table over the regular one
     [Fact]
     public async Task GetRecommendationsAsync_WithVipPreference_ShouldPreferVipTable()
     {
@@ -244,6 +265,9 @@ public class TableAssignmentOptimizerTests
         result.Recommendations[0].TableId.Should().Be(vipTableId);
     }
 
+    // Given: a table assignment optimizer with one registered table assigned to a server section
+    // When: the table is recorded as occupied by a party
+    // Then: the table should no longer be recommended for new parties
     [Fact]
     public async Task RecordTableUsageAsync_ShouldMarkTableOccupied()
     {
@@ -269,6 +293,9 @@ public class TableAssignmentOptimizerTests
         result.Success.Should().BeFalse();
     }
 
+    // Given: an occupied table that has been cleared after the guests departed
+    // When: the table usage is cleared in the optimizer
+    // Then: the table should be available for recommendation again
     [Fact]
     public async Task ClearTableUsageAsync_ShouldMakeTableAvailable()
     {
@@ -296,6 +323,9 @@ public class TableAssignmentOptimizerTests
         result.Recommendations[0].TableId.Should().Be(tableId);
     }
 
+    // Given: a server section with 2 tables (max 20 covers) where 1 table is occupied with 4 guests
+    // When: server workloads are retrieved
+    // Then: the workload should show 4 current covers, 20% load, 1 occupied out of 2 total tables
     [Fact]
     public async Task GetServerWorkloadsAsync_ShouldReturnWorkloadStats()
     {
@@ -351,6 +381,9 @@ public class TurnTimeAnalyticsTests
         return grain;
     }
 
+    // Given: a turn time analytics grain with no recorded turn times
+    // When: overall statistics are requested
+    // Then: the stats should show zero samples and a default 90-minute average turn time
     [Fact]
     public async Task GetOverallStatsAsync_NoRecords_ShouldReturnDefaults()
     {
@@ -367,6 +400,9 @@ public class TurnTimeAnalyticsTests
         stats.AverageTurnTime.Should().Be(TimeSpan.FromMinutes(90));
     }
 
+    // Given: a turn time analytics grain with no prior data
+    // When: three table turn times are recorded for different party sizes
+    // Then: the overall stats should show 3 samples with a positive average turn time
     [Fact]
     public async Task RecordTurnTimeAsync_ShouldRecordAndCalculateStats()
     {
@@ -393,6 +429,9 @@ public class TurnTimeAnalyticsTests
         stats.AverageTurnTime.TotalMinutes.Should().BeGreaterThan(0);
     }
 
+    // Given: recorded turn times for parties of 2 (60 min each), 4 (90 min), and 6 (120 min)
+    // When: statistics are retrieved grouped by party size
+    // Then: three groups should be returned with correct sample counts per party size
     [Fact]
     public async Task GetStatsByPartySizeAsync_ShouldGroupByPartySize()
     {
@@ -423,6 +462,9 @@ public class TurnTimeAnalyticsTests
         statsByPartySize.Should().Contain(s => s.PartySize == 6 && s.Stats.SampleCount == 1);
     }
 
+    // Given: five recorded Saturday evening turn times of 90 minutes each for parties of 4
+    // When: an estimated turn time is requested for a party of 4 on Saturday at 7 PM
+    // Then: the estimate should be approximately 90 minutes based on historical data
     [Fact]
     public async Task GetEstimatedTurnTimeAsync_ShouldEstimateBasedOnHistory()
     {
@@ -451,6 +493,9 @@ public class TurnTimeAnalyticsTests
         estimate.TotalMinutes.Should().BeInRange(80, 100); // Should be around 90 minutes
     }
 
+    // Given: a turn time analytics grain tracking active seatings
+    // When: a party of 4 is registered as seated at table T1
+    // Then: the active seatings should contain the booking with correct table and party size
     [Fact]
     public async Task RegisterSeatingAsync_ShouldTrackActiveSeating()
     {
@@ -472,6 +517,9 @@ public class TurnTimeAnalyticsTests
         activeSeatings[0].PartySize.Should().Be(4);
     }
 
+    // Given: a table seating that started 3 hours ago (well past typical turn time)
+    // When: long-running tables are queried with a 30-minute overdue threshold
+    // Then: the table should be flagged as overdue with a positive overdue duration
     [Fact]
     public async Task GetLongRunningTablesAsync_ShouldIdentifyOverdueTables()
     {
@@ -516,6 +564,9 @@ public class NoShowDetectionTests
         return grain;
     }
 
+    // Given: a no-show detection grain for a site
+    // When: a booking scheduled for 2 hours from now is registered for no-show monitoring
+    // Then: the booking should appear in the pending checks with the correct booking time
     [Fact]
     public async Task RegisterBookingAsync_ShouldAddToPendingChecks()
     {
@@ -538,6 +589,9 @@ public class NoShowDetectionTests
         pending[0].BookingTime.Should().Be(bookingTime);
     }
 
+    // Given: a booking registered for no-show monitoring
+    // When: the booking is unregistered (e.g., guest arrived)
+    // Then: the pending checks list should be empty
     [Fact]
     public async Task UnregisterBookingAsync_ShouldRemoveFromPendingChecks()
     {
@@ -558,6 +612,9 @@ public class NoShowDetectionTests
         pending.Should().BeEmpty();
     }
 
+    // Given: a freshly initialized no-show detection grain
+    // When: the default settings are retrieved
+    // Then: settings should include a 15-minute grace period with auto-mark, notify, and deposit forfeit enabled
     [Fact]
     public async Task GetSettingsAsync_ShouldReturnDefaultSettings()
     {
@@ -576,6 +633,9 @@ public class NoShowDetectionTests
         settings.ForfeitDepositOnNoShow.Should().BeTrue();
     }
 
+    // Given: a no-show detection grain with default settings
+    // When: the grace period is updated to 30 minutes and auto-mark is disabled
+    // Then: the updated settings should reflect the new grace period and disabled auto-mark
     [Fact]
     public async Task UpdateSettingsAsync_ShouldUpdateSettings()
     {
@@ -626,6 +686,9 @@ public class EnhancedWaitlistTests
         return grain;
     }
 
+    // Given: an empty waitlist for the day
+    // When: a party of 4 is added to the waitlist
+    // Then: the entry should be created at position 1 with a wait time estimate
     [Fact]
     public async Task AddEntryAsync_ShouldAddWithEstimate()
     {
@@ -646,6 +709,9 @@ public class EnhancedWaitlistTests
         result.Estimate.Position.Should().Be(1);
     }
 
+    // Given: a waitlist with two parties already waiting (party of 2 and party of 4)
+    // When: a wait estimate is requested for a new party of 4
+    // Then: the estimate should show position 3, 2 parties ahead, with a positive estimated wait
     [Fact]
     public async Task GetWaitEstimateAsync_ShouldCalculateEstimate()
     {
@@ -668,6 +734,9 @@ public class EnhancedWaitlistTests
         estimate.EstimatedWait.TotalMinutes.Should().BeGreaterThan(0);
     }
 
+    // Given: a waitlist with 4 parties already waiting
+    // When: a returning customer with 10 prior visits is added to the waitlist
+    // Then: the returning customer should receive a priority boost and be placed ahead of some regular guests
     [Fact]
     public async Task AddEntryAsync_ReturningCustomer_ShouldGetPriorityBoost()
     {
@@ -694,6 +763,9 @@ public class EnhancedWaitlistTests
         result.Position.Should().BeLessThan(5);
     }
 
+    // Given: a guest on the waitlist with a party of 4
+    // When: the guest is seated at table T1
+    // Then: the entry should be marked as seated with the table assignment and timestamp recorded
     [Fact]
     public async Task SeatEntryAsync_ShouldMarkSeatedAndRecordWaitTime()
     {
@@ -722,6 +794,9 @@ public class EnhancedWaitlistTests
         entry!.Status.Should().Be(WaitlistStatus.Seated);
     }
 
+    // Given: a waitlist with parties of 6, 2, and 4 guests
+    // When: a 4-top table becomes available and the next suitable entry is sought
+    // Then: a party that fits the table capacity (between 2 and 4 guests) should be returned
     [Fact]
     public async Task FindNextSuitableEntryAsync_ShouldMatchTableCapacity()
     {
@@ -744,6 +819,9 @@ public class EnhancedWaitlistTests
         suitable.PartySize.Should().BeGreaterThanOrEqualTo(2); // Capacity - 2
     }
 
+    // Given: a waitlist with three guests in positions 1, 2, and 3
+    // When: the third guest is moved to position 1
+    // Then: the queue should be reordered with the moved guest at the front
     [Fact]
     public async Task UpdatePositionAsync_ShouldReorderQueue()
     {
@@ -790,6 +868,9 @@ public class BookingNotificationSchedulerTests
         return grain;
     }
 
+    // Given: a booking notification scheduler for a site
+    // When: notifications are scheduled for a booking 2 days in the future
+    // Then: at least 2 reminder notifications (24-hour and 2-hour) should be queued
     [Fact]
     public async Task ScheduleBookingNotificationsAsync_ShouldScheduleReminders()
     {
@@ -817,6 +898,9 @@ public class BookingNotificationSchedulerTests
         pending.Should().HaveCountGreaterThanOrEqualTo(2); // 24h and 2h reminders
     }
 
+    // Given: a booking with scheduled notification reminders
+    // When: the booking notifications are cancelled
+    // Then: no pending notifications should remain for that booking
     [Fact]
     public async Task CancelBookingNotificationsAsync_ShouldRemoveAllPending()
     {
@@ -843,6 +927,9 @@ public class BookingNotificationSchedulerTests
         pending.Should().BeEmpty();
     }
 
+    // Given: a freshly initialized booking notification scheduler
+    // When: the default notification settings are retrieved
+    // Then: confirmation, 24-hour reminder, 2-hour reminder, and follow-up notifications should all be enabled
     [Fact]
     public async Task GetSettingsAsync_ShouldReturnDefaultSettings()
     {
@@ -861,6 +948,9 @@ public class BookingNotificationSchedulerTests
         settings.SendFollowUp.Should().BeTrue();
     }
 
+    // Given: a booking notification scheduler with default settings
+    // When: the 24-hour reminder is disabled and the default channel is changed to SMS
+    // Then: the updated settings should reflect the disabled reminder and SMS channel
     [Fact]
     public async Task UpdateSettingsAsync_ShouldUpdateSettings()
     {

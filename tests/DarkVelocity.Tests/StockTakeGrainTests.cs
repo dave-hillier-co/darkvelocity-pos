@@ -23,6 +23,9 @@ public class StockTakeGrainTests
         return grain;
     }
 
+    // Given: An ingredient with 100 units on hand at a site
+    // When: A monthly stock take is started for that ingredient with blind count disabled
+    // Then: The stock take is initialized as InProgress with the theoretical quantity of 100
     [Fact]
     public async Task StartAsync_ShouldInitializeStockTake()
     {
@@ -55,6 +58,9 @@ public class StockTakeGrainTests
         state.LineItems[0].TheoreticalQuantity.Should().Be(100);
     }
 
+    // Given: An in-progress stock take for an ingredient with 100 units at $5.00 each
+    // When: A physical count of 95 units is recorded
+    // Then: The variance is calculated as -5 units worth -$25 with medium severity
     [Fact]
     public async Task RecordCountAsync_ShouldCalculateVariance()
     {
@@ -84,6 +90,9 @@ public class StockTakeGrainTests
         lineItems[0].Severity.Should().Be(VarianceSeverity.Medium); // 5% variance
     }
 
+    // Given: A stock take started in blind count mode for an ingredient with 100 units
+    // When: Line items are retrieved without revealing theoretical quantities
+    // Then: The theoretical quantity is hidden (shown as 0) to prevent counting bias
     [Fact]
     public async Task BlindCount_ShouldHideTheoreticalQuantities()
     {
@@ -112,6 +121,9 @@ public class StockTakeGrainTests
         lineItems[0].TheoreticalQuantity.Should().Be(0); // Hidden in blind mode
     }
 
+    // Given: A submitted stock take showing a physical count of 85 against a theoretical 100
+    // When: The stock take is finalized with adjustments applied
+    // Then: The stock take status transitions to Finalized and inventory is adjusted to 85 units
     [Fact]
     public async Task FinalizeAsync_ShouldApplyAdjustments()
     {
@@ -144,6 +156,9 @@ public class StockTakeGrainTests
         inventoryState.QuantityOnHand.Should().Be(85);
     }
 
+    // Given: A stock take with two ingredients counted: Item 1 at 90/100 and Item 2 at 55/50
+    // When: The variance report is generated
+    // Then: The report shows 2 items with variance, $100 positive variance, and $100 negative variance
     [Fact]
     public async Task GetVarianceReportAsync_ShouldReturnCorrectStatistics()
     {
@@ -180,6 +195,9 @@ public class StockTakeGrainTests
         report.TotalNegativeVariance.Should().Be(100); // -10 * 10
     }
 
+    // Given: An in-progress stock take for an ingredient at a site
+    // When: The stock take is cancelled
+    // Then: The status transitions to Cancelled and subsequent count recordings are rejected
     [Fact]
     public async Task CancelAsync_ShouldPreventFurtherOperations()
     {

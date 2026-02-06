@@ -45,6 +45,9 @@ public class PlatformPayoutGrainTests
     // ReceiveAsync Tests
     // ============================================================================
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A delivery platform payout is received with gross amount, fees, and net amount
+    // Then: The payout is created in Pending status with all financial details preserved
     [Fact]
     public async Task ReceiveAsync_ShouldCreatePayout()
     {
@@ -69,6 +72,9 @@ public class PlatformPayoutGrainTests
         result.ProcessedAt.Should().BeNull();
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received for a specific weekly settlement period
+    // Then: The payout period start and end dates are stored correctly
     [Fact]
     public async Task ReceiveAsync_ShouldStorePayoutPeriod()
     {
@@ -88,6 +94,9 @@ public class PlatformPayoutGrainTests
         result.PeriodEnd.Should().Be(periodEnd);
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received with an external platform reference number
+    // Then: The platform payout reference is stored for reconciliation
     [Fact]
     public async Task ReceiveAsync_ShouldStorePayoutReference()
     {
@@ -104,6 +113,9 @@ public class PlatformPayoutGrainTests
         result.PayoutReference.Should().Be("UBER-PAY-2024-001");
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received without an external reference number
+    // Then: The payout reference is stored as null
     [Fact]
     public async Task ReceiveAsync_WithNullPayoutReference_ShouldStoreNull()
     {
@@ -120,6 +132,9 @@ public class PlatformPayoutGrainTests
         result.PayoutReference.Should().BeNull();
     }
 
+    // Given: A platform payout has already been received for this grain
+    // When: A second payout is received for the same payout ID
+    // Then: An error is thrown indicating the payout already exists
     [Fact]
     public async Task ReceiveAsync_ShouldThrowIfPayoutAlreadyExists()
     {
@@ -137,6 +152,9 @@ public class PlatformPayoutGrainTests
             .WithMessage("Payout already exists");
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received in GBP currency
+    // Then: The payout currency is stored correctly as GBP
     [Fact]
     public async Task ReceiveAsync_ShouldHandleDifferentCurrencies()
     {
@@ -157,6 +175,9 @@ public class PlatformPayoutGrainTests
     // Fee Calculation and Amount Tests
     // ============================================================================
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received with a 15% platform commission on gross sales
+    // Then: The gross amount, platform fees, and net amount are all tracked accurately
     [Fact]
     public async Task ReceiveAsync_ShouldTrackFees_TypicalScenario()
     {
@@ -178,6 +199,9 @@ public class PlatformPayoutGrainTests
         result.NetAmount.Should().Be(4250m);
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received with zero platform fees (e.g., promotional period)
+    // Then: The net amount equals the gross amount with zero fees recorded
     [Fact]
     public async Task ReceiveAsync_ShouldHandleZeroPlatformFees()
     {
@@ -199,6 +223,9 @@ public class PlatformPayoutGrainTests
         result.NetAmount.Should().Be(1000m);
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received with small fractional amounts typical of low-volume periods
+    // Then: The decimal precision is maintained for all financial amounts
     [Fact]
     public async Task ReceiveAsync_ShouldHandleSmallAmounts()
     {
@@ -220,6 +247,9 @@ public class PlatformPayoutGrainTests
         result.NetAmount.Should().Be(8.92m);
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: A payout is received with large amounts typical of high-volume multi-location operations
+    // Then: The large financial amounts are stored without precision loss
     [Fact]
     public async Task ReceiveAsync_ShouldHandleLargeAmounts()
     {
@@ -245,6 +275,9 @@ public class PlatformPayoutGrainTests
     // Status Transition Tests
     // ============================================================================
 
+    // Given: A platform payout has been received and is in Pending status
+    // When: The payout is marked as processing
+    // Then: The payout status transitions to Processing
     [Fact]
     public async Task SetProcessingAsync_ShouldTransitionFromPending()
     {
@@ -262,6 +295,9 @@ public class PlatformPayoutGrainTests
         snapshot.Status.Should().Be(PayoutStatus.Processing);
     }
 
+    // Given: A platform payout is currently in Processing status
+    // When: The payout is marked as completed with a settlement timestamp
+    // Then: The payout status transitions to Completed with the processed-at time recorded
     [Fact]
     public async Task CompleteAsync_ShouldTransitionFromProcessing()
     {
@@ -282,6 +318,9 @@ public class PlatformPayoutGrainTests
         snapshot.ProcessedAt.Should().BeCloseTo(processedAt, TimeSpan.FromSeconds(1));
     }
 
+    // Given: A platform payout has been received and is in Pending status
+    // When: The payout is completed directly without first transitioning to Processing
+    // Then: The payout status transitions to Completed with the processed-at time recorded
     [Fact]
     public async Task CompleteAsync_ShouldTransitionDirectlyFromPending()
     {
@@ -301,6 +340,9 @@ public class PlatformPayoutGrainTests
         snapshot.ProcessedAt.Should().BeCloseTo(processedAt, TimeSpan.FromSeconds(1));
     }
 
+    // Given: A platform payout is currently in Processing status
+    // When: The payout fails due to a bank rejection
+    // Then: The payout status transitions to Failed
     [Fact]
     public async Task FailAsync_ShouldTransitionFromProcessing()
     {
@@ -319,6 +361,9 @@ public class PlatformPayoutGrainTests
         snapshot.Status.Should().Be(PayoutStatus.Failed);
     }
 
+    // Given: A platform payout has been received and is in Pending status
+    // When: The payout fails directly due to invalid account details
+    // Then: The payout status transitions to Failed
     [Fact]
     public async Task FailAsync_ShouldTransitionDirectlyFromPending()
     {
@@ -336,6 +381,9 @@ public class PlatformPayoutGrainTests
         snapshot.Status.Should().Be(PayoutStatus.Failed);
     }
 
+    // Given: A delivery platform payout is received with gross sales, commission, and settlement reference
+    // When: The payout progresses through the full lifecycle from Pending to Processing to Completed
+    // Then: The final state shows Completed status with all original financial details and settlement timestamp preserved
     [Fact]
     public async Task FullLifecycle_PendingToProcessingToCompleted()
     {
@@ -377,6 +425,9 @@ public class PlatformPayoutGrainTests
         completed.PayoutReference.Should().Be("DRO-2024-Q1-001");
     }
 
+    // Given: A platform payout has been received and moved to Processing status
+    // When: The payout fails due to insufficient funds in the platform account
+    // Then: The final state shows Failed status with no processed-at timestamp
     [Fact]
     public async Task FullLifecycle_PendingToProcessingToFailed()
     {
@@ -404,6 +455,9 @@ public class PlatformPayoutGrainTests
     // GetSnapshotAsync Tests
     // ============================================================================
 
+    // Given: A platform payout has been received with full details including period, amounts, and reference
+    // When: The payout snapshot is retrieved
+    // Then: All payout details are returned accurately including platform ID, location, period, amounts, and currency
     [Fact]
     public async Task GetSnapshotAsync_ShouldReturnCurrentState()
     {
@@ -449,6 +503,9 @@ public class PlatformPayoutGrainTests
     // Operations on Uninitialized Grain Tests
     // ============================================================================
 
+    // Given: A platform payout grain has not received any payout data
+    // When: The payout is marked as processing before any payout is received
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task SetProcessingAsync_OnUninitializedGrain_ShouldThrow()
     {
@@ -463,6 +520,9 @@ public class PlatformPayoutGrainTests
             .WithMessage("Platform payout grain not initialized");
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: The payout is completed before any payout is received
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task CompleteAsync_OnUninitializedGrain_ShouldThrow()
     {
@@ -477,6 +537,9 @@ public class PlatformPayoutGrainTests
             .WithMessage("Platform payout grain not initialized");
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: The payout is failed before any payout is received
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task FailAsync_OnUninitializedGrain_ShouldThrow()
     {
@@ -491,6 +554,9 @@ public class PlatformPayoutGrainTests
             .WithMessage("Platform payout grain not initialized");
     }
 
+    // Given: A platform payout grain has not received any payout data
+    // When: The payout snapshot is requested before any payout is received
+    // Then: An error is thrown indicating the grain is not initialized
     [Fact]
     public async Task GetSnapshotAsync_OnUninitializedGrain_ShouldThrow()
     {
@@ -509,6 +575,9 @@ public class PlatformPayoutGrainTests
     // Multiple Payouts Tests (Isolation)
     // ============================================================================
 
+    // Given: Two separate platform payouts are received within the same organization
+    // When: One payout is completed while the other remains pending
+    // Then: Each payout grain maintains independent status and financial data
     [Fact]
     public async Task MultiplePayouts_ShouldBeIsolated()
     {
@@ -536,6 +605,9 @@ public class PlatformPayoutGrainTests
         snapshot2.GrossAmount.Should().Be(2000m);
     }
 
+    // Given: Two different organizations receive payouts with the same payout ID but different currencies
+    // When: Both payouts are received and their snapshots are retrieved
+    // Then: Each organization's payout has independent financial data and currency
     [Fact]
     public async Task PayoutsAcrossOrganizations_ShouldBeIsolated()
     {
@@ -564,6 +636,9 @@ public class PlatformPayoutGrainTests
     // Edge Cases and Special Scenarios
     // ============================================================================
 
+    // Given: A delivery platform reports a single-day payout period
+    // When: A payout is received where the period start and end dates are the same
+    // Then: The single-day payout period is stored correctly
     [Fact]
     public async Task ReceiveAsync_WithSamePeriodDates_ShouldWork()
     {
@@ -584,6 +659,9 @@ public class PlatformPayoutGrainTests
         result.PeriodEnd.Should().Be(sameDate);
     }
 
+    // Given: A delivery platform sends a payout with an empty reference string
+    // When: The payout is received with an empty payout reference
+    // Then: The empty reference string is stored as-is
     [Fact]
     public async Task ReceiveAsync_WithEmptyPayoutReference_ShouldWork()
     {
@@ -600,6 +678,9 @@ public class PlatformPayoutGrainTests
         result.PayoutReference.Should().BeEmpty();
     }
 
+    // Given: A platform payout has been received and is pending
+    // When: The payout is completed with a specific settlement timestamp
+    // Then: The processed-at timestamp matches the exact settlement time provided
     [Fact]
     public async Task CompleteAsync_ShouldSetProcessedAtCorrectly()
     {
@@ -618,6 +699,9 @@ public class PlatformPayoutGrainTests
         snapshot.ProcessedAt.Should().Be(specificTime);
     }
 
+    // Given: A platform payout has been received and is pending
+    // When: The payout transfer fails
+    // Then: The payout status is Failed and no processed-at timestamp is set
     [Fact]
     public async Task FailAsync_ShouldNotSetProcessedAt()
     {
@@ -636,6 +720,9 @@ public class PlatformPayoutGrainTests
         snapshot.ProcessedAt.Should().BeNull();
     }
 
+    // Given: A platform payout has been received and is pending
+    // When: The payout is marked as processing multiple times
+    // Then: The payout remains in Processing status without error
     [Fact]
     public async Task SetProcessingAsync_ShouldBeIdempotent()
     {
@@ -654,6 +741,9 @@ public class PlatformPayoutGrainTests
         snapshot.Status.Should().Be(PayoutStatus.Processing);
     }
 
+    // Given: A delivery platform reports payout amounts with high decimal precision
+    // When: A payout is received with four-decimal-place amounts
+    // Then: The full decimal precision is preserved for all financial amounts
     [Fact]
     public async Task ReceiveAsync_WithHighPrecisionDecimals_ShouldWork()
     {
@@ -675,6 +765,9 @@ public class PlatformPayoutGrainTests
         result.NetAmount.Should().Be(1049.3878m);
     }
 
+    // Given: A delivery platform generates verbose payout reference strings
+    // When: A payout is received with a long multi-segment reference code
+    // Then: The full reference string is stored without truncation
     [Fact]
     public async Task ReceiveAsync_WithLongPayoutReference_ShouldWork()
     {
@@ -696,6 +789,9 @@ public class PlatformPayoutGrainTests
     // Platform Integration Scenarios
     // ============================================================================
 
+    // Given: An UberEats weekly payout is received with 30% platform commission for a specific location
+    // When: The payout progresses through the full settlement lifecycle with a 2-day processing delay
+    // Then: The payout is completed with the correct gross, fee, and net amounts and settlement timestamp
     [Fact]
     public async Task Scenario_UberEatsWeeklyPayout()
     {
@@ -734,6 +830,9 @@ public class PlatformPayoutGrainTests
         snapshot.ProcessedAt.Should().NotBeNull();
     }
 
+    // Given: A Deliveroo monthly payout is received in GBP with a 20% platform commission
+    // When: The payout is received covering a full calendar month
+    // Then: The monthly period dates and GBP currency are stored correctly
     [Fact]
     public async Task Scenario_DeliverooMonthlyPayout()
     {
@@ -767,6 +866,9 @@ public class PlatformPayoutGrainTests
         result.Currency.Should().Be("GBP");
     }
 
+    // Given: A platform payout has been received and is being processed
+    // When: The bank rejects the transfer due to invalid IBAN
+    // Then: The payout fails with no settlement timestamp and original amounts are preserved for retry
     [Fact]
     public async Task Scenario_FailedPayoutDueToBankIssue()
     {

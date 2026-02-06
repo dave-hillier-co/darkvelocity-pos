@@ -15,6 +15,9 @@ public class ApiKeyGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new secret API key in test mode with admin role
+    // When: the API key is created for an organization
+    // Then: the key has an "sk_test_" prefix, an assigned ID, and a creation timestamp
     [Fact]
     public async Task CreateAsync_ShouldCreateApiKey()
     {
@@ -49,6 +52,9 @@ public class ApiKeyGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a new publishable API key in live mode
+    // When: the API key is created
+    // Then: the key has a "pk_live_" prefix
     [Fact]
     public async Task CreateAsync_PublishableKey_ShouldHavePkPrefix()
     {
@@ -80,6 +86,9 @@ public class ApiKeyGrainTests
         result.ApiKey.Should().StartWith("pk_live_");
     }
 
+    // Given: a secret API key in test mode with admin and manager roles and a rate limit
+    // When: the key state is retrieved
+    // Then: all configuration including ID, organization, name, type, roles, and rate limit are returned
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -109,6 +118,9 @@ public class ApiKeyGrainTests
         state.RateLimitPerMinute.Should().Be(100);
     }
 
+    // Given: an active secret API key in test mode
+    // When: the key is validated with the correct key value
+    // Then: validation succeeds and returns the key's identity (ID, user, org, type, and test mode)
     [Fact]
     public async Task ValidateAsync_ValidKey_ShouldReturnSuccess()
     {
@@ -134,6 +146,9 @@ public class ApiKeyGrainTests
         result.IsTestMode.Should().BeTrue();
     }
 
+    // Given: an active API key
+    // When: the key is validated with an incorrect key value
+    // Then: validation fails with "Invalid API key" error
     [Fact]
     public async Task ValidateAsync_InvalidKey_ShouldReturnFailure()
     {
@@ -155,6 +170,9 @@ public class ApiKeyGrainTests
         result.Error.Should().Be("Invalid API key");
     }
 
+    // Given: an API key that has been revoked
+    // When: the key is validated with the correct key value
+    // Then: validation fails with "API key has been revoked" error
     [Fact]
     public async Task ValidateAsync_RevokedKey_ShouldReturnFailure()
     {
@@ -178,6 +196,9 @@ public class ApiKeyGrainTests
         result.Error.Should().Be("API key has been revoked");
     }
 
+    // Given: an API key created with an already-passed expiration date
+    // When: the key is validated
+    // Then: validation fails with "API key has expired" error
     [Fact]
     public async Task ValidateAsync_ExpiredKey_ShouldReturnFailure()
     {
@@ -200,6 +221,9 @@ public class ApiKeyGrainTests
         result.Error.Should().Be("API key has expired");
     }
 
+    // Given: an existing API key with original name
+    // When: the key is updated with a new name, description, custom claims, roles, and rate limit
+    // Then: all updated fields are persisted and the version increments
     [Fact]
     public async Task UpdateAsync_ShouldUpdateKey()
     {
@@ -236,6 +260,9 @@ public class ApiKeyGrainTests
         state.Version.Should().Be(2);
     }
 
+    // Given: an active API key
+    // When: the key is revoked with a reason
+    // Then: the key status changes to Revoked with the reason, revoker, and timestamp recorded
     [Fact]
     public async Task RevokeAsync_ShouldRevokeKey()
     {
@@ -260,6 +287,9 @@ public class ApiKeyGrainTests
         state.RevokedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an active API key with no prior usage
+    // When: the key is used three times from different IP addresses
+    // Then: the usage count is 3, the last IP is recorded, and the last-used timestamp is set
     [Fact]
     public async Task RecordUsageAsync_ShouldTrackUsage()
     {
@@ -285,6 +315,9 @@ public class ApiKeyGrainTests
         state.LastUsedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a secret API key in live mode with orders and customers scopes and an expiry date
+    // When: the key summary is retrieved
+    // Then: the summary includes ID, name, description, type, test mode, status, and scope resource names
     [Fact]
     public async Task GetSummaryAsync_ShouldReturnSummary()
     {
@@ -318,6 +351,9 @@ public class ApiKeyGrainTests
         summary.Scopes.Should().Contain("customers");
     }
 
+    // Given: a new API key with three custom claims (tenant tier, feature flags, max requests)
+    // When: the key is created
+    // Then: all three custom claims are stored with their correct values
     [Fact]
     public async Task CreateAsync_WithCustomClaims_ShouldStoreClaims()
     {
@@ -347,6 +383,9 @@ public class ApiKeyGrainTests
         state.CustomClaims["max_requests"].Should().Be("10000");
     }
 
+    // Given: a new API key with scopes for orders (read/write/delete), menu (read), and inventory (read/write)
+    // When: the key is created
+    // Then: all three scopes are stored with their respective actions
     [Fact]
     public async Task CreateAsync_WithScopes_ShouldStoreScopes()
     {
@@ -375,6 +414,9 @@ public class ApiKeyGrainTests
         state.Scopes.Should().Contain(s => s.Resource == "menu" && s.Actions.Count == 1);
     }
 
+    // Given: a new API key restricted to two specific sites
+    // When: the key is created
+    // Then: both allowed site IDs are stored in the key configuration
     [Fact]
     public async Task CreateAsync_WithSiteRestrictions_ShouldStoreSites()
     {
@@ -398,6 +440,9 @@ public class ApiKeyGrainTests
         state.AllowedSiteIds.Should().Contain(siteId2);
     }
 
+    // Given: an API key grain that has never been created
+    // When: checking if the key exists
+    // Then: the key does not exist
     [Fact]
     public async Task ExistsAsync_NonExistentKey_ShouldReturnFalse()
     {
@@ -413,6 +458,9 @@ public class ApiKeyGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: an API key that has been created
+    // When: checking if the key exists
+    // Then: the key exists
     [Fact]
     public async Task ExistsAsync_ExistingKey_ShouldReturnTrue()
     {
@@ -444,6 +492,9 @@ public class ApiKeyRegistryGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new API key registry for an organization user
+    // When: the registry is initialized
+    // Then: the registry exists
     [Fact]
     public async Task InitializeAsync_ShouldInitializeRegistry()
     {
@@ -461,6 +512,9 @@ public class ApiKeyRegistryGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: an initialized API key registry with no keys
+    // When: a key is registered with its hash
+    // Then: the key ID appears in the registry's key list
     [Fact]
     public async Task RegisterKeyAsync_ShouldAddKeyToRegistry()
     {
@@ -481,6 +535,9 @@ public class ApiKeyRegistryGrainTests
         keyIds.Should().Contain(keyId);
     }
 
+    // Given: an API key registry with a registered key
+    // When: the key is unregistered
+    // Then: the key ID no longer appears in the registry's key list
     [Fact]
     public async Task UnregisterKeyAsync_ShouldRemoveKeyFromRegistry()
     {
@@ -502,6 +559,9 @@ public class ApiKeyRegistryGrainTests
         keyIds.Should().NotContain(keyId);
     }
 
+    // Given: an API key registry with a key registered under a specific hash
+    // When: the registry is searched by that hash
+    // Then: the correct key ID is returned
     [Fact]
     public async Task FindKeyIdByHashAsync_ShouldFindKey()
     {
@@ -523,6 +583,9 @@ public class ApiKeyRegistryGrainTests
         foundKeyId.Should().Be(keyId);
     }
 
+    // Given: an initialized API key registry with no matching hashes
+    // When: the registry is searched by a nonexistent hash
+    // Then: null is returned
     [Fact]
     public async Task FindKeyIdByHashAsync_NotFound_ShouldReturnNull()
     {
@@ -552,6 +615,9 @@ public class ApiKeyLookupGrainTests
         _fixture = fixture;
     }
 
+    // Given: a key hash registered in the global API key lookup
+    // When: the hash is looked up
+    // Then: the correct organization ID and key ID are returned
     [Fact]
     public async Task RegisterAndLookup_ShouldFindKey()
     {
@@ -571,6 +637,9 @@ public class ApiKeyLookupGrainTests
         result!.Value.KeyId.Should().Be(keyId);
     }
 
+    // Given: a key hash registered in the global API key lookup
+    // When: the hash is unregistered and then looked up
+    // Then: the lookup returns null
     [Fact]
     public async Task UnregisterAsync_ShouldRemoveKey()
     {
@@ -590,6 +659,9 @@ public class ApiKeyLookupGrainTests
         result.Should().BeNull();
     }
 
+    // Given: the global API key lookup with no matching hashes
+    // When: a nonexistent hash is looked up
+    // Then: null is returned
     [Fact]
     public async Task LookupAsync_NotFound_ShouldReturnNull()
     {

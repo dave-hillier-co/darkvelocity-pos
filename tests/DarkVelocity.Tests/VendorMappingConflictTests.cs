@@ -34,6 +34,9 @@ public class VendorMappingConflictTests
     // Duplicate Description Handling Tests
     // ============================================================================
 
+    // Given: a vendor mapping with "Chicken Breast 5LB" mapped to one ingredient
+    // When: the same description is remapped to a different ingredient
+    // Then: the mapping is overwritten and the total mapping count remains one
     [Fact]
     public async Task SetMapping_SameDescription_ShouldOverwriteExisting()
     {
@@ -82,6 +85,9 @@ public class VendorMappingConflictTests
         allMappings.Should().HaveCount(1);
     }
 
+    // Given: an initialized vendor mapping for a supplier
+    // When: three different vendor descriptions are mapped to the same ground beef ingredient
+    // Then: all three descriptions resolve to the same ingredient independently
     [Fact]
     public async Task SetMapping_SameIngredientDifferentDescriptions_ShouldCreateMultipleMappings()
     {
@@ -132,6 +138,9 @@ public class VendorMappingConflictTests
     // Product Code Conflict Tests
     // ============================================================================
 
+    // Given: a vendor mapping with product code "OIL-OLV-001" linked to olive oil
+    // When: a completely different description is looked up with the same product code
+    // Then: the mapping is found via product code regardless of the description mismatch
     [Fact]
     public async Task ProductCodeLookup_SameCode_DifferentDescriptions_ShouldReturnByCode()
     {
@@ -163,6 +172,9 @@ public class VendorMappingConflictTests
         result.Mapping!.IngredientId.Should().Be(ingredientId);
     }
 
+    // Given: a vendor mapping with an exact description but no product code
+    // When: the description is looked up with a non-existent product code
+    // Then: the lookup falls back to exact description match
     [Fact]
     public async Task ProductCodeLookup_CodeNotFound_ShouldFallbackToDescription()
     {
@@ -196,6 +208,9 @@ public class VendorMappingConflictTests
     // Pattern Collision Tests
     // ============================================================================
 
+    // Given: learned vendor mappings for both chicken breast and chicken thigh with overlapping tokens
+    // When: each exact description is looked up
+    // Then: each resolves to its correct ingredient despite the shared "boneless skinless" pattern
     [Fact]
     public async Task LearnMapping_SimilarPatterns_ShouldHandleGracefully()
     {
@@ -233,6 +248,9 @@ public class VendorMappingConflictTests
         thighResult.Mapping!.IngredientId.Should().Be(chickenThighId);
     }
 
+    // Given: learned vendor mappings for beef patty, ground beef, and beef strip with overlapping tokens
+    // When: suggestions are requested for "Beef Patty Fresh 6oz"
+    // Then: beef patty ranks highest despite overlapping beef-related patterns
     [Fact]
     public async Task Suggestions_OverlappingPatterns_ShouldReturnMostRelevant()
     {
@@ -282,6 +300,9 @@ public class VendorMappingConflictTests
     // Mapping Update/Delete Conflict Tests
     // ============================================================================
 
+    // Given: three vendor descriptions mapped to the same ingredient
+    // When: the middle mapping is deleted
+    // Then: the other two mappings remain functional and the total count decreases by one
     [Fact]
     public async Task DeleteMapping_ShouldNotAffectOtherMappings()
     {
@@ -311,6 +332,9 @@ public class VendorMappingConflictTests
         allMappings.Should().HaveCount(2);
     }
 
+    // Given: a vendor mapping with one registered description
+    // When: deleting a non-existent description is attempted
+    // Then: the operation completes without error
     [Fact]
     public async Task DeleteMapping_NonExistent_ShouldNotThrow()
     {
@@ -335,6 +359,9 @@ public class VendorMappingConflictTests
     // Source Priority Tests
     // ============================================================================
 
+    // Given: an initialized vendor mapping for a supplier
+    // When: a mapping is learned with manual source from a user confirmation
+    // Then: the mapping is stored with full confidence (1.0) reflecting human certainty
     [Fact]
     public async Task LearnMapping_ManualSource_ShouldHaveHighConfidence()
     {
@@ -361,6 +388,9 @@ public class VendorMappingConflictTests
         result.Mapping.Confidence.Should().Be(1.0m);
     }
 
+    // Given: an initialized vendor mapping for a supplier
+    // When: a mapping is learned with inferred source from automated matching
+    // Then: the confidence reflects the lower certainty of automated identification
     [Fact]
     public async Task LearnMapping_AutoSource_ShouldHaveLowerConfidence()
     {
@@ -391,6 +421,9 @@ public class VendorMappingConflictTests
     // Multi-Vendor Tests
     // ============================================================================
 
+    // Given: two different supplier vendor mapping grains for the same organization
+    // When: both map "Chicken Breast" to different ingredients
+    // Then: each vendor's mapping is isolated and returns its own ingredient
     [Fact]
     public async Task DifferentVendors_SameMappings_ShouldBeIsolated()
     {
@@ -435,6 +468,9 @@ public class VendorMappingConflictTests
     // Case Sensitivity Tests
     // ============================================================================
 
+    // Given: a vendor mapping registered with an uppercase product description
+    // When: the description is looked up in upper, lower, mixed, and alternating case
+    // Then: all case variants resolve to the same mapping
     [Fact]
     public async Task Mapping_CaseInsensitive_ShouldMatchDifferentCases()
     {
@@ -470,6 +506,9 @@ public class VendorMappingConflictTests
     // Whitespace and Special Character Tests
     // ============================================================================
 
+    // Given: a vendor mapping for "Ground Beef 80/20" with standard spacing
+    // When: the description is looked up with extra internal whitespace
+    // Then: the mapping is found after whitespace normalization
     [Fact]
     public async Task Mapping_WhitespaceVariations_ShouldHandleGracefully()
     {
@@ -495,6 +534,9 @@ public class VendorMappingConflictTests
         result.Found.Should().BeTrue();
     }
 
+    // Given: a vendor mapping with ampersands and parentheses in the description
+    // When: the exact same special-character description is looked up
+    // Then: the mapping is found correctly despite special characters
     [Fact]
     public async Task Mapping_SpecialCharacters_ShouldHandle()
     {

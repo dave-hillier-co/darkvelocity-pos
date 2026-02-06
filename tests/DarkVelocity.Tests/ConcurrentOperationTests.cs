@@ -23,6 +23,9 @@ public class ConcurrentOperationTests
 
     #region Order Concurrent Tests
 
+    // Given: An open dine-in order for a party of 4
+    // When: Adding 10 line items concurrently to the same order
+    // Then: All 10 lines are serialized correctly with unique IDs and correct state
     [Fact]
     public async Task Order_ConcurrentLineAdds_ShouldSerializeCorrectly()
     {
@@ -56,6 +59,9 @@ public class ConcurrentOperationTests
         results.Select(r => r.LineId).Distinct().Should().HaveCount(10);
     }
 
+    // Given: A sent order with 10 items totaling $110 (including 10% tax)
+    // When: Four concurrent partial cash payments of $27.50 each are recorded
+    // Then: All payments are tracked, paid amount equals $110, and balance due is zero
     [Fact]
     public async Task Order_ConcurrentPayments_ShouldTrackCorrectBalance()
     {
@@ -105,6 +111,9 @@ public class ConcurrentOperationTests
         state.PaidAmount.Should().Be(110m);
     }
 
+    // Given: An open order with a single line item
+    // When: A line update and an order void are attempted concurrently
+    // Then: The order reaches a consistent state (either voided or updated, not both invalid)
     [Fact]
     public async Task Order_ConcurrentUpdateAndVoid_ShouldHandleCorrectly()
     {
@@ -160,6 +169,9 @@ public class ConcurrentOperationTests
 
     #region Inventory Concurrent Tests
 
+    // Given: An inventory item with 100 burger patties on hand
+    // When: 10 concurrent consumptions of 5 units each are processed
+    // Then: The stock level reflects exactly 50 units remaining
     [Fact]
     public async Task Inventory_ConcurrentConsumptions_ShouldMaintainCorrectLevel()
     {
@@ -203,6 +215,9 @@ public class ConcurrentOperationTests
         levelInfo.QuantityOnHand.Should().Be(50);
     }
 
+    // Given: An inventory item with 20 wine bottles from an initial batch
+    // When: 3 batch receives of 12 each and 5 consumptions of 3 each happen concurrently
+    // Then: The stock level is 41 (20 + 36 received - 15 consumed)
     [Fact]
     public async Task Inventory_ConcurrentReceiveAndConsume_ShouldTrackBatchesCorrectly()
     {
@@ -257,6 +272,9 @@ public class ConcurrentOperationTests
 
     #region Customer Concurrent Tests
 
+    // Given: An initialized customer spend projection with zero lifetime spend
+    // When: 10 concurrent spend recordings of $50 each are processed
+    // Then: Lifetime spend totals $500 and available loyalty points equal 500
     [Fact]
     public async Task Customer_ConcurrentPointsEarning_ShouldAccumulateCorrectly()
     {
@@ -288,6 +306,9 @@ public class ConcurrentOperationTests
         snapshot.AvailablePoints.Should().Be(500);
     }
 
+    // Given: A customer profile with no tags
+    // When: The same "VIP" tag is added 5 times concurrently
+    // Then: The customer has exactly one "VIP" tag (no duplicates)
     [Fact]
     public async Task Customer_ConcurrentTagOperations_ShouldNotDuplicateTags()
     {
@@ -318,6 +339,9 @@ public class ConcurrentOperationTests
 
     #region Booking Concurrent Tests
 
+    // Given: A confirmed booking for a party of 4
+    // When: 5 concurrent party size modifications are submitted
+    // Then: The booking reaches a consistent final state with a valid party size
     [Fact]
     public async Task Booking_ConcurrentModifications_ShouldSerialize()
     {
@@ -360,6 +384,9 @@ public class ConcurrentOperationTests
 
     #region Kitchen Concurrent Tests
 
+    // Given: An open grill station and 10 created kitchen tickets
+    // When: All 10 tickets are added to the station concurrently
+    // Then: The station tracks all 10 tickets
     [Fact]
     public async Task KitchenStation_ConcurrentTicketOperations_ShouldTrackAll()
     {
@@ -395,6 +422,9 @@ public class ConcurrentOperationTests
         currentTickets.Should().HaveCount(10);
     }
 
+    // Given: A kitchen ticket for a dine-in order
+    // When: 10 items are added to the ticket concurrently
+    // Then: All 10 items appear on the ticket
     [Fact]
     public async Task KitchenTicket_ConcurrentItemAdds_ShouldAddAll()
     {
@@ -428,6 +458,9 @@ public class ConcurrentOperationTests
 
     #region Menu Concurrent Tests
 
+    // Given: A menu item (Coffee) priced at $4.00
+    // When: 5 modifier groups are added concurrently, each with 2 options
+    // Then: All 5 modifier groups are present on the menu item
     [Fact]
     public async Task MenuItem_ConcurrentModifierOperations_ShouldHandleCorrectly()
     {
@@ -471,6 +504,9 @@ public class ConcurrentOperationTests
         snapshot.Modifiers.Should().HaveCount(5);
     }
 
+    // Given: A menu category (Appetizers) with zero items
+    // When: 20 concurrent increments and then 5 concurrent decrements are applied
+    // Then: The item count is exactly 15
     [Fact]
     public async Task MenuCategory_ConcurrentItemCountUpdates_ShouldBeAccurate()
     {
@@ -506,6 +542,9 @@ public class ConcurrentOperationTests
 
     #region Payment Concurrent Tests
 
+    // Given: A sent order with a $100 item
+    // When: 4 separate payment grains are initiated concurrently for $25 each
+    // Then: All 4 payment grains exist independently with the correct amount
     [Fact]
     public async Task Payment_ConcurrentInitiations_ShouldCreateSeparatePayments()
     {
@@ -558,6 +597,9 @@ public class ConcurrentOperationTests
 
     #region Multi-Grain Concurrent Tests
 
+    // Given: A table at a site
+    // When: 5 separate orders are created concurrently for the same table
+    // Then: All 5 orders are created successfully and exist independently
     [Fact]
     public async Task MultiGrain_ConcurrentOrdersToSameTable_ShouldAllSucceed()
     {
@@ -593,6 +635,9 @@ public class ConcurrentOperationTests
         }
     }
 
+    // Given: An open dine-in order
+    // When: 50 line items at $5.00 each with 10% tax are added in rapid succession
+    // Then: The order has 50 lines, $250 subtotal, $25 tax, and $275 grand total
     [Fact]
     public async Task MultiGrain_RapidFireOperations_ShouldMaintainConsistency()
     {

@@ -63,6 +63,9 @@ public class KitchenTicketRoutingTests
 
     #region Multi-Station Routing Tests
 
+    // Given: A kitchen ticket for a dine-in order
+    // When: Items are added targeting grill, fry, and salad stations
+    // Then: The ticket tracks all three assigned station IDs
     [Fact]
     public async Task AddItemAsync_WithDifferentStations_ShouldTrackAllStations()
     {
@@ -98,6 +101,9 @@ public class KitchenTicketRoutingTests
         state.AssignedStationIds.Should().Contain(saladStationId);
     }
 
+    // Given: A kitchen ticket for a dine-in order
+    // When: Three different items are all routed to the same grill station
+    // Then: The grill station appears only once in the assigned stations list
     [Fact]
     public async Task AddItemAsync_SameStationMultipleTimes_ShouldNotDuplicateStation()
     {
@@ -129,6 +135,9 @@ public class KitchenTicketRoutingTests
         state.AssignedStationIds.Should().Contain(grillStationId);
     }
 
+    // Given: A kitchen ticket for a dine-in order
+    // When: An item is added without a station assignment (e.g., a drink)
+    // Then: The item is added with a null station ID
     [Fact]
     public async Task AddItemAsync_NoStationAssigned_ShouldStillAddItem()
     {
@@ -154,6 +163,9 @@ public class KitchenTicketRoutingTests
 
     #region Station Receiving Tests
 
+    // Given: An open grill station with no active tickets
+    // When: A kitchen ticket is routed to the station
+    // Then: The station's active ticket queue contains the new ticket
     [Fact]
     public async Task ReceiveTicketAsync_ShouldAddTicketToStation()
     {
@@ -174,6 +186,9 @@ public class KitchenTicketRoutingTests
         tickets.Should().Contain(ticketId);
     }
 
+    // Given: An open grill station
+    // When: Three different tickets are routed to the station
+    // Then: All three tickets appear in the station's active queue
     [Fact]
     public async Task ReceiveTicketAsync_MultipleTickets_ShouldTrackAll()
     {
@@ -203,6 +218,9 @@ public class KitchenTicketRoutingTests
         tickets.Should().Contain(ticket3Id);
     }
 
+    // Given: An open grill station with one active ticket
+    // When: The ticket is completed at the station
+    // Then: The ticket is removed from the station's active queue
     [Fact]
     public async Task CompleteTicketAsync_ShouldRemoveFromStation()
     {
@@ -224,6 +242,9 @@ public class KitchenTicketRoutingTests
         tickets.Should().NotContain(ticketId);
     }
 
+    // Given: An open grill station with one active ticket
+    // When: The ticket is removed from the station without completion (e.g., rerouted)
+    // Then: The ticket is no longer in the station's active queue
     [Fact]
     public async Task RemoveTicketAsync_ShouldRemoveWithoutCompletion()
     {
@@ -249,6 +270,9 @@ public class KitchenTicketRoutingTests
 
     #region Station Pause/Resume Tests
 
+    // Given: An open grill station
+    // When: The station is paused
+    // Then: The station status changes to paused
     [Fact]
     public async Task PauseAsync_ShouldPauseStation()
     {
@@ -266,6 +290,9 @@ public class KitchenTicketRoutingTests
         state.Status.Should().Be(StationStatus.Paused);
     }
 
+    // Given: An open grill station with one active ticket
+    // When: The station is paused during service
+    // Then: The station is paused but retains its active tickets
     [Fact]
     public async Task PauseAsync_WithActiveTickets_ShouldKeepTickets()
     {
@@ -288,6 +315,9 @@ public class KitchenTicketRoutingTests
         state.CurrentTicketIds.Should().Contain(ticketId);
     }
 
+    // Given: A paused grill station
+    // When: The station is resumed
+    // Then: The station status returns to open
     [Fact]
     public async Task ResumeAsync_ShouldResumeStation()
     {
@@ -306,6 +336,9 @@ public class KitchenTicketRoutingTests
         state.Status.Should().Be(StationStatus.Open);
     }
 
+    // Given: A paused grill station with one active ticket
+    // When: The station is resumed
+    // Then: The station returns to open and its active tickets are preserved
     [Fact]
     public async Task ResumeAsync_AfterPause_ShouldRetainTickets()
     {
@@ -332,6 +365,9 @@ public class KitchenTicketRoutingTests
 
     #region Station Close Tests
 
+    // Given: An open grill station
+    // When: The station is closed at end of shift
+    // Then: The station status changes to closed with timestamp recorded
     [Fact]
     public async Task CloseAsync_ShouldCloseStation()
     {
@@ -351,6 +387,9 @@ public class KitchenTicketRoutingTests
         state.ClosedAt.Should().NotBeNull();
     }
 
+    // Given: An open grill station with one active ticket
+    // When: The station is closed
+    // Then: All active tickets are cleared from the station
     [Fact]
     public async Task CloseAsync_WithActiveTickets_ShouldClearTickets()
     {
@@ -372,6 +411,9 @@ public class KitchenTicketRoutingTests
         state.CurrentTicketIds.Should().BeEmpty();
     }
 
+    // Given: A paused grill station
+    // When: The station's open status is checked
+    // Then: The check confirms the station is not open
     [Fact]
     public async Task IsOpenAsync_WhenPaused_ShouldReturnFalse()
     {
@@ -393,6 +435,9 @@ public class KitchenTicketRoutingTests
 
     #region Item Assignment Tests
 
+    // Given: An open grill station with no item assignments
+    // When: Two menu categories are assigned to the station
+    // Then: The station tracks both category assignments for ticket routing
     [Fact]
     public async Task AssignItemsAsync_Categories_ShouldAssignCategories()
     {
@@ -415,6 +460,9 @@ public class KitchenTicketRoutingTests
         state.AssignedMenuItemCategories.Should().Contain(category2);
     }
 
+    // Given: An open prep station with no item assignments
+    // When: Two specific menu items are assigned to the station
+    // Then: The station tracks both item-level assignments for ticket routing
     [Fact]
     public async Task AssignItemsAsync_SpecificItems_ShouldAssignItems()
     {
@@ -437,6 +485,9 @@ public class KitchenTicketRoutingTests
         state.AssignedMenuItemIds.Should().Contain(item2);
     }
 
+    // Given: An open salad station with no item assignments
+    // When: Both a category and a specific menu item are assigned
+    // Then: The station tracks both category-level and item-level assignments
     [Fact]
     public async Task AssignItemsAsync_CategoriesAndItems_ShouldAssignBoth()
     {
@@ -463,6 +514,9 @@ public class KitchenTicketRoutingTests
 
     #region Priority and Rush Tests
 
+    // Given: A kitchen ticket with normal priority
+    // When: The ticket priority is upgraded to VIP
+    // Then: The ticket reflects VIP priority
     [Fact]
     public async Task SetPriorityAsync_ShouldUpdateTicketPriority()
     {
@@ -480,6 +534,9 @@ public class KitchenTicketRoutingTests
         state.Priority.Should().Be(TicketPriority.VIP);
     }
 
+    // Given: A kitchen ticket with normal priority
+    // When: The ticket is marked as rush for expediting
+    // Then: The ticket priority changes to rush
     [Fact]
     public async Task MarkRushAsync_ShouldSetRushPriority()
     {
@@ -497,6 +554,9 @@ public class KitchenTicketRoutingTests
         state.Priority.Should().Be(TicketPriority.Rush);
     }
 
+    // Given: A kitchen ticket with normal priority
+    // When: The ticket is marked as VIP
+    // Then: The ticket priority changes to VIP
     [Fact]
     public async Task MarkVipAsync_ShouldSetVipPriority()
     {
@@ -514,6 +574,9 @@ public class KitchenTicketRoutingTests
         state.Priority.Should().Be(TicketPriority.VIP);
     }
 
+    // Given: A kitchen ticket with normal priority
+    // When: Fire-all is triggered to expedite all items simultaneously
+    // Then: The ticket is flagged as fire-all with AllDay priority
     [Fact]
     public async Task FireAllAsync_ShouldSetFireAllAndAllDayPriority()
     {
@@ -536,6 +599,9 @@ public class KitchenTicketRoutingTests
 
     #region Course Management Tests
 
+    // Given: A kitchen ticket for a multi-course dine-in order
+    // When: Items are added for courses 1 (soup), 2 (steak), and 3 (dessert)
+    // Then: Each item tracks its assigned course number
     [Fact]
     public async Task AddItemAsync_WithCourseNumber_ShouldTrackCourse()
     {
@@ -566,6 +632,9 @@ public class KitchenTicketRoutingTests
         state.Items[2].CourseNumber.Should().Be(3);
     }
 
+    // Given: No existing kitchen ticket
+    // When: A ticket is created with a default course number of 2
+    // Then: The ticket records the default course number
     [Fact]
     public async Task CreateAsync_WithCourseNumber_ShouldSetDefaultCourse()
     {
@@ -590,6 +659,9 @@ public class KitchenTicketRoutingTests
 
     #region Ticket Void Tests
 
+    // Given: An active kitchen ticket
+    // When: The ticket is voided due to customer cancellation
+    // Then: The ticket status changes to voided
     [Fact]
     public async Task VoidAsync_ShouldVoidTicket()
     {
@@ -607,6 +679,9 @@ public class KitchenTicketRoutingTests
         state.Status.Should().Be(TicketStatus.Voided);
     }
 
+    // Given: A kitchen ticket with a burger and fries
+    // When: Only the burger item is voided
+    // Then: The burger is voided while the fries remain pending
     [Fact]
     public async Task VoidItemAsync_SingleItem_ShouldVoidItem()
     {
@@ -632,6 +707,9 @@ public class KitchenTicketRoutingTests
         state.Items.First(i => i.Name == "Fries").Status.Should().Be(TicketItemStatus.Pending);
     }
 
+    // Given: A kitchen ticket with a burger and fries
+    // When: The entire ticket is voided because the table left
+    // Then: The ticket status changes to voided
     [Fact]
     public async Task VoidAsync_AllItems_ShouldVoidAllItems()
     {
@@ -657,6 +735,9 @@ public class KitchenTicketRoutingTests
 
     #region Printer and Display Tests
 
+    // Given: An open grill station without a printer
+    // When: A printer is assigned to the station
+    // Then: The station records the printer ID for ticket printing
     [Fact]
     public async Task SetPrinterAsync_ShouldAssignPrinter()
     {
@@ -675,6 +756,9 @@ public class KitchenTicketRoutingTests
         state.PrinterId.Should().Be(printerId);
     }
 
+    // Given: An open grill station without a display
+    // When: A kitchen display screen is assigned to the station
+    // Then: The station records the display ID for KDS routing
     [Fact]
     public async Task SetDisplayAsync_ShouldAssignDisplay()
     {
@@ -693,6 +777,9 @@ public class KitchenTicketRoutingTests
         state.DisplayId.Should().Be(displayId);
     }
 
+    // Given: An open grill station
+    // When: Both a printer and a display are assigned to the station
+    // Then: The station records both output device IDs
     [Fact]
     public async Task SetPrinterAsync_ThenSetDisplay_ShouldHaveBoth()
     {
@@ -718,6 +805,9 @@ public class KitchenTicketRoutingTests
 
     #region Station Type Tests
 
+    // Given: A site requiring multiple kitchen station types
+    // When: Grill, salad, prep, and expo stations are created
+    // Then: Each station records its correct station type
     [Fact]
     public async Task CreateStation_DifferentTypes_ShouldSetCorrectType()
     {

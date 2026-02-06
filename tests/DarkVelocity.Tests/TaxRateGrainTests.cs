@@ -26,6 +26,9 @@ public class TaxRateGrainTests
 
     #region CreateAsync Tests
 
+    // Given: A new tax rate grain for Germany with fiscal code NORMAL
+    // When: A 19% standard VAT rate is created effective from January 2024
+    // Then: The tax rate is stored with the correct country, rate, fiscal code, and active status
     [Fact]
     public async Task CreateAsync_WithStandardVatRate_CreatesRate()
     {
@@ -53,6 +56,9 @@ public class TaxRateGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A new tax rate grain for Germany with fiscal code REDUCED
+    // When: A 7% reduced VAT rate for food and books is created
+    // Then: The reduced rate is stored correctly
     [Fact]
     public async Task CreateAsync_WithReducedVatRate_CreatesRate()
     {
@@ -76,6 +82,9 @@ public class TaxRateGrainTests
         snapshot.FiscalCode.Should().Be("REDUCED");
     }
 
+    // Given: A new tax rate grain for Germany with fiscal code EXEMPT
+    // When: A 0% tax-exempt rate is created
+    // Then: The zero rate is stored and marked as active
     [Fact]
     public async Task CreateAsync_WithZeroRate_CreatesRate()
     {
@@ -100,6 +109,9 @@ public class TaxRateGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A new tax rate grain for Germany's temporary COVID relief rate
+    // When: A 16% rate is created with a limited effective period (Jul 1 - Dec 31, 2020)
+    // Then: Both effective-from and effective-to dates are stored correctly
     [Fact]
     public async Task CreateAsync_WithEffectiveDateRange_CreatesRate()
     {
@@ -125,6 +137,9 @@ public class TaxRateGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A new tax rate grain for the United Kingdom
+    // When: A 20% UK standard VAT rate is created
+    // Then: The rate is stored with country code GB and the correct percentage
     [Fact]
     public async Task CreateAsync_ForUK_CreatesRate()
     {
@@ -148,6 +163,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(20.00m);
     }
 
+    // Given: A new tax rate grain for France
+    // When: A 20% French standard TVA rate is created
+    // Then: The rate is stored with country code FR and the correct percentage
     [Fact]
     public async Task CreateAsync_ForFrance_CreatesRate()
     {
@@ -171,6 +189,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(20.00m);
     }
 
+    // Given: A new tax rate grain for California state sales tax
+    // When: A 7.25% state sales tax rate is created with code US-CA
+    // Then: The rate is stored with the state-level country code and correct percentage
     [Fact]
     public async Task CreateAsync_ForUS_SalesTax_CreatesRate()
     {
@@ -194,6 +215,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(7.25m);
     }
 
+    // Given: A new tax rate grain for Switzerland
+    // When: An 8.1% Swiss standard MWST rate is created
+    // Then: The rate is stored with the correct decimal precision
     [Fact]
     public async Task CreateAsync_ForSwitzerland_CreatesRate()
     {
@@ -217,6 +241,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(8.1m);
     }
 
+    // Given: A tax rate grain that already has a 19% rate created for DE:DUPLICATE
+    // When: A second tax rate with the same fiscal code is created
+    // Then: An error is thrown because the tax rate already exists
     [Fact]
     public async Task CreateAsync_AlreadyExists_ShouldThrow()
     {
@@ -250,6 +277,9 @@ public class TaxRateGrainTests
 
     #region GetSnapshotAsync Tests
 
+    // Given: An Austrian 20% standard VAT rate that has been created
+    // When: The tax rate snapshot is retrieved
+    // Then: The snapshot contains the correct country code, rate, and fiscal code
     [Fact]
     public async Task GetSnapshotAsync_ReturnsCurrentState()
     {
@@ -274,6 +304,9 @@ public class TaxRateGrainTests
         snapshot.FiscalCode.Should().Be("NORMAL");
     }
 
+    // Given: A tax rate grain that has never been initialized
+    // When: The snapshot is requested
+    // Then: An error is thrown because the grain is not initialized
     [Fact]
     public async Task GetSnapshotAsync_OnUninitialized_ShouldThrow()
     {
@@ -293,6 +326,9 @@ public class TaxRateGrainTests
 
     #region GetCurrentRateAsync Tests
 
+    // Given: A Spanish 21% standard IVA rate effective from 30 days ago
+    // When: The current rate is queried
+    // Then: The rate returns 21%
     [Fact]
     public async Task GetCurrentRateAsync_ReturnsCorrectRate()
     {
@@ -315,6 +351,9 @@ public class TaxRateGrainTests
         rate.Should().Be(21.00m);
     }
 
+    // Given: A Spanish zero-rated tax for exempt supplies
+    // When: The current rate is queried
+    // Then: The rate returns 0%
     [Fact]
     public async Task GetCurrentRateAsync_WithZeroRate_ReturnsZero()
     {
@@ -337,6 +376,9 @@ public class TaxRateGrainTests
         rate.Should().Be(0.00m);
     }
 
+    // Given: A tax rate grain that has never been initialized
+    // When: The current rate is queried
+    // Then: An error is thrown because the grain is not initialized
     [Fact]
     public async Task GetCurrentRateAsync_OnUninitialized_ShouldThrow()
     {
@@ -356,6 +398,9 @@ public class TaxRateGrainTests
 
     #region DeactivateAsync Tests
 
+    // Given: An active Italian 22% standard IVA rate
+    // When: The rate is deactivated with the current date as effective-to
+    // Then: The rate is marked inactive and the effective-to date is set
     [Fact]
     public async Task DeactivateAsync_SetsIsActiveToFalse()
     {
@@ -382,6 +427,9 @@ public class TaxRateGrainTests
         snapshot.EffectiveTo.Should().BeCloseTo(effectiveTo, TimeSpan.FromSeconds(1));
     }
 
+    // Given: An active Dutch 21% standard BTW rate
+    // When: The rate is deactivated with a future effective-to date 3 months from now
+    // Then: The rate is marked inactive with the future date stored
     [Fact]
     public async Task DeactivateAsync_WithFutureEffectiveDate_SetsDate()
     {
@@ -408,6 +456,9 @@ public class TaxRateGrainTests
         snapshot.EffectiveTo.Should().BeCloseTo(futureDate, TimeSpan.FromSeconds(1));
     }
 
+    // Given: A tax rate grain that has never been initialized
+    // When: Deactivation is attempted
+    // Then: An error is thrown because the grain is not initialized
     [Fact]
     public async Task DeactivateAsync_OnUninitialized_ShouldThrow()
     {
@@ -427,6 +478,9 @@ public class TaxRateGrainTests
 
     #region IsActiveOnDateAsync Tests
 
+    // Given: A Belgian 21% BTW rate effective from Jan 1 to Dec 31, 2024
+    // When: The active status is checked for June 15, 2024 (within range)
+    // Then: The rate is active on that date
     [Fact]
     public async Task IsActiveOnDateAsync_WithinRange_ReturnsTrue()
     {
@@ -452,6 +506,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A Portuguese 23% IVA rate effective from January 1, 2024
+    // When: The active status is checked for June 15, 2023 (before effective date)
+    // Then: The rate is not active on that date
     [Fact]
     public async Task IsActiveOnDateAsync_BeforeEffectiveFrom_ReturnsFalse()
     {
@@ -476,6 +533,9 @@ public class TaxRateGrainTests
         isActive.Should().BeFalse();
     }
 
+    // Given: A Greek temporary 13% rate effective from Jan 1 to June 30, 2024
+    // When: The active status is checked for July 15, 2024 (after expiry)
+    // Then: The rate is not active on that date
     [Fact]
     public async Task IsActiveOnDateAsync_AfterEffectiveTo_ReturnsFalse()
     {
@@ -501,6 +561,9 @@ public class TaxRateGrainTests
         isActive.Should().BeFalse();
     }
 
+    // Given: An Irish 23% VAT rate with effective-from of January 1, 2024
+    // When: The active status is checked for exactly the effective-from date
+    // Then: The rate is active on the boundary date (inclusive)
     [Fact]
     public async Task IsActiveOnDateAsync_ExactlyOnEffectiveFrom_ReturnsTrue()
     {
@@ -525,6 +588,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A Finnish temporary 10% rate with effective-to of June 30, 2024
+    // When: The active status is checked for exactly the effective-to date
+    // Then: The rate is active on the boundary date (inclusive)
     [Fact]
     public async Task IsActiveOnDateAsync_ExactlyOnEffectiveTo_ReturnsTrue()
     {
@@ -550,6 +616,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A Swedish 25% MOMS rate with no effective-to date (open-ended)
+    // When: The active status is checked for a date far in the future (2050)
+    // Then: The rate is active because there is no expiry date
     [Fact]
     public async Task IsActiveOnDateAsync_NoEffectiveTo_ReturnsTrue_AfterEffectiveFrom()
     {
@@ -574,6 +643,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A tax rate grain that has never been initialized
+    // When: An active-on-date check is attempted
+    // Then: An error is thrown because the grain is not initialized
     [Fact]
     public async Task IsActiveOnDateAsync_OnUninitialized_ShouldThrow()
     {
@@ -593,6 +665,9 @@ public class TaxRateGrainTests
 
     #region Edge Cases and Special Scenarios
 
+    // Given: A new tax rate grain for Quebec provincial sales tax
+    // When: A 9.975% PST rate is created with three decimal places
+    // Then: The full decimal precision is preserved
     [Fact]
     public async Task CreateAsync_WithHighPrecisionRate_PreservesDecimals()
     {
@@ -615,6 +690,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(9.975m);
     }
 
+    // Given: A new tax rate grain for Japan's reduced consumption tax
+    // When: A very small 0.08% rate is created
+    // Then: The small rate value is preserved without rounding
     [Fact]
     public async Task CreateAsync_WithVerySmallRate_PreservesRate()
     {
@@ -637,6 +715,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(0.08m);
     }
 
+    // Given: Tax rate grains for Poland with three different fiscal codes (NORMAL, REDUCED, SUPER_REDUCED)
+    // When: Three rates (23%, 8%, 5%) are created for the same country
+    // Then: Each fiscal code stores its own independent rate
     [Fact]
     public async Task CreateAsync_MultipleTaxRatesForSameCountry_DifferentFiscalCodes()
     {
@@ -677,6 +758,9 @@ public class TaxRateGrainTests
         superReducedRate.Rate.Should().Be(5.00m);
     }
 
+    // Given: A Hungarian 27% AFA rate effective from 2020, deactivated on January 1, 2024
+    // When: Active status is checked for dates before and after deactivation
+    // Then: The rate is active before the deactivation date and inactive after
     [Fact]
     public async Task DeactivateAsync_ThenCheckIsActiveOnDate_BeforeDeactivation_ReturnsTrue()
     {
@@ -710,6 +794,9 @@ public class TaxRateGrainTests
         isActiveAfterDeactivation.Should().BeFalse();
     }
 
+    // Given: A new tax rate grain for Czech Republic
+    // When: A 21% rate is created with an empty description
+    // Then: The rate is stored with an empty description (no validation error)
     [Fact]
     public async Task CreateAsync_WithEmptyDescription_CreatesRate()
     {
@@ -733,6 +820,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(21.00m);
     }
 
+    // Given: A new tax rate grain for Denmark
+    // When: A 25% rate is created with a 500-character description
+    // Then: The full long description is preserved
     [Fact]
     public async Task CreateAsync_WithLongDescription_CreatesRate()
     {
@@ -757,6 +847,9 @@ public class TaxRateGrainTests
         snapshot.Description.Should().Be(longDescription);
     }
 
+    // Given: An old Luxembourg rate expiring end of 2023 and a new rate starting January 2024
+    // When: Active status is checked for dates in 2023 and 2024 for both rates
+    // Then: Each rate is only active within its own effective period (no overlap)
     [Fact]
     public async Task IsActiveOnDateAsync_WithHistoricalRateChange()
     {
@@ -800,6 +893,9 @@ public class TaxRateGrainTests
         newRateActive2024.Should().BeTrue();
     }
 
+    // Given: A Slovak 20% DPH rate that has been deactivated
+    // When: The current rate is queried after deactivation
+    // Then: The rate value of 20% is still returned (deactivation does not erase the rate)
     [Fact]
     public async Task GetCurrentRateAsync_AfterDeactivation_StillReturnsRate()
     {
@@ -828,6 +924,9 @@ public class TaxRateGrainTests
 
     #region Multiple Organization Isolation Tests
 
+    // Given: Two different organizations both needing Romanian standard TVA rates
+    // When: A 19% rate is created for each organization with the same country and fiscal code
+    // Then: Each organization gets an independent tax rate with unique IDs (tenant isolation)
     [Fact]
     public async Task CreateAsync_DifferentOrganizations_AreIsolated()
     {
@@ -865,6 +964,9 @@ public class TaxRateGrainTests
 
     #region Real-World Country Tax Rate Scenarios
 
+    // Given: A new tax rate grain for Germany's hospitality-specific fiscal code GASTRO
+    // When: A 7% reduced rate for in-restaurant food consumption is created
+    // Then: The hospitality-specific rate is stored with the GASTRO fiscal code
     [Fact]
     public async Task CreateAsync_GermanHospitalityReducedRate_CreatesRate()
     {
@@ -888,6 +990,9 @@ public class TaxRateGrainTests
         snapshot.FiscalCode.Should().Be("GASTRO");
     }
 
+    // Given: A new tax rate grain for Switzerland's accommodation services
+    // When: A special 3.8% MWST rate for accommodation is created
+    // Then: The accommodation-specific rate is stored correctly
     [Fact]
     public async Task CreateAsync_SwissAccommodationRate_CreatesRate()
     {
@@ -910,6 +1015,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(3.8m);
     }
 
+    // Given: A new tax rate grain for Ireland's tourism/hospitality sector
+    // When: A 9% tourism VAT rate is created
+    // Then: The tourism-specific rate is stored correctly
     [Fact]
     public async Task CreateAsync_IrishTourismRate_CreatesRate()
     {

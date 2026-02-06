@@ -21,6 +21,9 @@ public class LaborExtendedGrainTests
     // Employee Availability Grain Tests
     // ============================================================================
 
+    // Given: a new employee availability grain that has not been initialized
+    // When: the grain is initialized for an employee
+    // Then: the availability snapshot should show the employee with no availability entries
     [Fact]
     public async Task EmployeeAvailabilityGrain_Initialize_CreatesEmptyAvailability()
     {
@@ -39,6 +42,9 @@ public class LaborExtendedGrainTests
         snapshot.Availabilities.Should().BeEmpty();
     }
 
+    // Given: an initialized employee availability grain
+    // When: availability is set for Monday 9 AM to 5 PM as a preferred shift
+    // Then: the entry should reflect the correct day, time range, availability, and preference
     [Fact]
     public async Task EmployeeAvailabilityGrain_SetAvailability_AddsEntry()
     {
@@ -70,6 +76,9 @@ public class LaborExtendedGrainTests
         entry.IsPreferred.Should().BeTrue();
     }
 
+    // Given: an employee available on Monday from 9 AM to 5 PM
+    // When: availability is checked at 10 AM Monday, 8 AM Monday, and 10 AM Tuesday
+    // Then: only the 10 AM Monday check should return available
     [Fact]
     public async Task EmployeeAvailabilityGrain_IsAvailableOn_ReturnsCorrectValue()
     {
@@ -105,6 +114,9 @@ public class LaborExtendedGrainTests
     // Shift Swap Grain Tests
     // ============================================================================
 
+    // Given: a shift swap grain ready to receive a new request
+    // When: a swap request is created between two employees citing a doctor's appointment
+    // Then: the request should be in pending status with the swap type and reason recorded
     [Fact]
     public async Task ShiftSwapGrain_Create_CreatesRequestSuccessfully()
     {
@@ -132,6 +144,9 @@ public class LaborExtendedGrainTests
         snapshot.Reason.Should().Be("Need to attend a doctor's appointment");
     }
 
+    // Given: a pending shift drop request from an employee
+    // When: a manager approves the shift swap request with notes
+    // Then: the request status should change to approved with the response timestamp and notes recorded
     [Fact]
     public async Task ShiftSwapGrain_Approve_UpdatesStatusToApproved()
     {
@@ -160,6 +175,9 @@ public class LaborExtendedGrainTests
         snapshot.RespondedAt.Should().NotBeNull();
     }
 
+    // Given: a pending shift pickup request
+    // When: the requesting employee cancels the request
+    // Then: the request status should change to cancelled
     [Fact]
     public async Task ShiftSwapGrain_Cancel_AllowsCancellationWhenPending()
     {
@@ -188,6 +206,9 @@ public class LaborExtendedGrainTests
     // Time Off Grain Tests
     // ============================================================================
 
+    // Given: a time off grain ready to receive a new request
+    // When: a 7-day vacation request is created starting next week
+    // Then: the request should be pending, calculated as 8 total days (inclusive), and marked as paid leave
     [Fact]
     public async Task TimeOffGrain_Create_CreatesRequestSuccessfully()
     {
@@ -215,6 +236,9 @@ public class LaborExtendedGrainTests
         snapshot.IsPaid.Should().BeTrue(); // Vacation is paid
     }
 
+    // Given: a time off grain ready to receive a new request
+    // When: an unpaid leave request is created for a personal matter
+    // Then: the request should be marked as unpaid leave
     [Fact]
     public async Task TimeOffGrain_CreateUnpaidLeave_MarksAsUnpaid()
     {
@@ -238,6 +262,9 @@ public class LaborExtendedGrainTests
         snapshot.IsPaid.Should().BeFalse();
     }
 
+    // Given: a pending sick leave request from an employee
+    // When: a manager approves the time off request with well-wishes
+    // Then: the request status should change to approved with the review timestamp and notes recorded
     [Fact]
     public async Task TimeOffGrain_Approve_UpdatesStatus()
     {
@@ -265,6 +292,9 @@ public class LaborExtendedGrainTests
         snapshot.Notes.Should().Be("Get well soon!");
     }
 
+    // Given: a pending personal day request from an employee
+    // When: a manager rejects the time off request citing insufficient notice
+    // Then: the request status should change to rejected with the rejection reason recorded
     [Fact]
     public async Task TimeOffGrain_Reject_UpdatesStatus()
     {

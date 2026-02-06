@@ -68,6 +68,9 @@ public class MenuDomainExtendedTests
     // MenuDefinition Versioning and Screen Management Tests
     // ============================================================================
 
+    // Given: a POS menu definition with a main screen and two sub-screens (Drinks, Desserts)
+    // When: navigation buttons linking to the sub-screens are added to the main screen
+    // Then: the menu has 3 screens, and the main screen has 2 navigation buttons pointing to the sub-screens
     [Fact]
     public async Task MenuDefinition_MultipleScreensWithNavigation_ShouldManageScreenHierarchy()
     {
@@ -134,6 +137,9 @@ public class MenuDomainExtendedTests
         mainScreen.Buttons.Should().Contain(b => b.SubScreenId == dessertsScreenId);
     }
 
+    // Given: a menu definition with a screen named "Original Screen" (3x4 grid, black)
+    // When: the screen is updated to "Updated Screen" with a red color and 5x8 grid
+    // Then: the screen reflects the new name, color, and dimensions
     [Fact]
     public async Task MenuDefinition_UpdateScreenProperties_ShouldModifyNameAndDimensions()
     {
@@ -164,6 +170,9 @@ public class MenuDomainExtendedTests
         screen.Columns.Should().Be(8);
     }
 
+    // Given: three screens added out of position order (C=3, A=1, B=2) to a menu definition
+    // When: the screens are retrieved and sorted by position
+    // Then: the screens appear in correct order: Screen A, Screen B, Screen C
     [Fact]
     public async Task MenuDefinition_ScreensAddedInSequence_ShouldMaintainPositionOrder()
     {
@@ -198,6 +207,9 @@ public class MenuDomainExtendedTests
         orderedScreens[2].Name.Should().Be("Screen C");
     }
 
+    // Given: a 4x6 grid screen on a POS menu definition
+    // When: five item buttons are placed at specific grid positions (corners and center)
+    // Then: each button retains its assigned row and column position in the grid
     [Fact]
     public async Task MenuDefinition_ButtonGridLayout_ShouldRespectRowColumnPositions()
     {
@@ -251,6 +263,9 @@ public class MenuDomainExtendedTests
         screen.Buttons.Should().Contain(b => b.Row == 1 && b.Column == 2 && b.Label == "Middle");
     }
 
+    // Given: a POS menu button placed at position (0,0) on a screen
+    // When: the button is removed and re-added at position (2,3)
+    // Then: the button's new position is (2,3)
     [Fact]
     public async Task MenuDefinition_UpdateButtonPosition_ShouldMoveButton()
     {
@@ -290,6 +305,9 @@ public class MenuDomainExtendedTests
     // ModifierBlock Selection Rules Validation Tests
     // ============================================================================
 
+    // Given: a new modifier block for steak temperature with ChooseOne selection rule
+    // When: the block is created with 5 options (Rare through Well Done), min=1, max=1, required
+    // Then: the published block enforces single selection with exactly one default option
     [Fact]
     public async Task ModifierBlock_ChooseOne_ShouldEnforceMinMaxOfOne()
     {
@@ -325,6 +343,9 @@ public class MenuDomainExtendedTests
         result.Published.Options.Count(o => o.IsDefault).Should().Be(1);
     }
 
+    // Given: a new modifier block for extra toppings with ChooseMany selection rule
+    // When: the block is created with 6 priced options, min=0, max=10, not required
+    // Then: the published block allows multiple optional selections with individual price adjustments
     [Fact]
     public async Task ModifierBlock_ChooseMany_ShouldAllowMultipleSelections()
     {
@@ -360,6 +381,9 @@ public class MenuDomainExtendedTests
         result.Published.Options.Should().HaveCount(6);
     }
 
+    // Given: a "Choose Your Sides" modifier block requiring at least 2 selections (max 3)
+    // When: the block is created with 5 side options and 2 defaults pre-selected
+    // Then: the published block enforces min=2, max=3 with 2 default options to meet the minimum
     [Fact]
     public async Task ModifierBlock_RequiredWithMinimum_ShouldEnforceMinSelections()
     {
@@ -394,6 +418,9 @@ public class MenuDomainExtendedTests
         result.Published.Options.Count(o => o.IsDefault).Should().Be(2);
     }
 
+    // Given: a "Size Options" modifier block with price adjustments (-$2 Small, $0 Regular, +$1.50 Large, +$3 XL)
+    // When: the block is created and published
+    // Then: each option stores its correct price adjustment including negative discounts
     [Fact]
     public async Task ModifierBlock_OptionsWithPriceAdjustments_ShouldStoreCorrectPrices()
     {
@@ -426,6 +453,9 @@ public class MenuDomainExtendedTests
         options.First(o => o.Name == "Extra Large").PriceAdjustment.Should().Be(3.00m);
     }
 
+    // Given: a published modifier block with 2 options (A, B)
+    // When: a draft is created adding a third option (C) at version 2
+    // Then: the draft has 3 options at version 2, while the published version still has 2 options
     [Fact]
     public async Task ModifierBlock_UpdateDraftWithNewOptions_ShouldPreserveVersionHistory()
     {
@@ -471,6 +501,9 @@ public class MenuDomainExtendedTests
     // SiteMenuOverrides Cascade Logic Tests
     // ============================================================================
 
+    // Given: site-level price overrides set for three different menu items
+    // When: the price override for each item (and a non-overridden item) is queried
+    // Then: overridden items return their site-specific prices; non-overridden items return null
     [Fact]
     public async Task SiteMenuOverrides_MultiplePriceOverrides_ShouldReturnCorrectPrices()
     {
@@ -507,6 +540,9 @@ public class MenuDomainExtendedTests
         price4.Should().BeNull();
     }
 
+    // Given: two items hidden and two items snoozed (one timed, one indefinite) at the site level
+    // When: the site override snapshot is inspected
+    // Then: hidden and snoozed items are tracked independently with correct states
     [Fact]
     public async Task SiteMenuOverrides_HiddenAndSnoozedItems_ShouldTrackBothStates()
     {
@@ -536,6 +572,9 @@ public class MenuDomainExtendedTests
         isSnoozed2.Should().BeTrue();
     }
 
+    // Given: a site price override of $10.00 for an item
+    // When: the price override is updated to $12.99
+    // Then: only the latest price override is stored (no duplicate entries)
     [Fact]
     public async Task SiteMenuOverrides_UpdatePriceOverride_ShouldReplaceExisting()
     {
@@ -564,6 +603,9 @@ public class MenuDomainExtendedTests
         snapshot.PriceOverrides.Count(p => p.ItemDocumentId == "item-1").Should().Be(1);
     }
 
+    // Given: a site with no hidden categories
+    // When: "seasonal-category" and "lunch-only-category" are hidden at the site level
+    // Then: both category IDs appear in the hidden categories list
     [Fact]
     public async Task SiteMenuOverrides_HiddenCategory_ShouldTrackCategoryVisibility()
     {
@@ -583,6 +625,9 @@ public class MenuDomainExtendedTests
         snapshot.HiddenCategoryIds.Should().Contain("lunch-only-category");
     }
 
+    // Given: two categories hidden at the site level
+    // When: one category is unhidden
+    // Then: only the still-hidden category remains in the hidden list
     [Fact]
     public async Task SiteMenuOverrides_UnhideCategory_ShouldRemoveFromHiddenList()
     {
@@ -607,6 +652,9 @@ public class MenuDomainExtendedTests
     // Availability Window Edge Cases Tests
     // ============================================================================
 
+    // Given: a site needing a late night menu
+    // When: an availability window is created from 10 PM to 2 AM on Friday and Saturday
+    // Then: the window stores the overnight time span crossing midnight with the correct days
     [Fact]
     public async Task AvailabilityWindow_OvernightWindow_ShouldSpanMidnight()
     {
@@ -634,6 +682,9 @@ public class MenuDomainExtendedTests
         window.IsActive.Should().BeTrue();
     }
 
+    // Given: an "eggs-benedict" item that should be available during breakfast and brunch
+    // When: two overlapping availability windows are created for the same item
+    // Then: both windows are tracked independently for the item
     [Fact]
     public async Task AvailabilityWindow_MultipleWindowsSameItem_ShouldTrackAll()
     {
@@ -664,6 +715,9 @@ public class MenuDomainExtendedTests
         windows.Should().Contain(w => w.Name == "Brunch Window");
     }
 
+    // Given: a happy hour promotion running every day of the week
+    // When: an availability window is created for all 7 days (4 PM - 7 PM) with 2 items
+    // Then: the window includes all 7 days and both item document IDs
     [Fact]
     public async Task AvailabilityWindow_AllWeekWindow_ShouldIncludeAllDays()
     {
@@ -694,6 +748,9 @@ public class MenuDomainExtendedTests
         window.ItemDocumentIds.Should().HaveCount(2);
     }
 
+    // Given: two availability windows configured for a site
+    // When: the first window is removed
+    // Then: only the second window remains
     [Fact]
     public async Task AvailabilityWindow_RemoveWindow_ShouldDeleteCorrectly()
     {
@@ -723,6 +780,9 @@ public class MenuDomainExtendedTests
         windows[0].Name.Should().Be("Window 2");
     }
 
+    // Given: a weekday lunch specials window
+    // When: the window is created with both specific item IDs and a category ID
+    // Then: the window tracks both individual items and the category for availability filtering
     [Fact]
     public async Task AvailabilityWindow_CategoryAndItemsCombined_ShouldTrackBoth()
     {
@@ -757,6 +817,9 @@ public class MenuDomainExtendedTests
     // MenuItem Variation Pricing Tests
     // ============================================================================
 
+    // Given: a "Draft Beer" menu item with inventory tracking enabled
+    // When: three variations (Half Pint $4, Pint $6, Pitcher $18) are added with different SKUs
+    // Then: all three variations are stored with their distinct prices and display order
     [Fact]
     public async Task MenuItem_MultipleVariationsWithDifferentPrices_ShouldTrackAll()
     {
@@ -808,6 +871,9 @@ public class MenuDomainExtendedTests
         variations.Should().Contain(v => v.Name == "Pitcher" && v.Price == 18.00m);
     }
 
+    // Given: an "Open Food Item" where the price is entered at time of sale
+    // When: a "Market Price" variation is added with Variable pricing type and no fixed price
+    // Then: the variation stores PricingType.Variable with a null price
     [Fact]
     public async Task MenuItem_VariationWithVariablePricing_ShouldAllowOpenPrice()
     {
@@ -841,6 +907,9 @@ public class MenuDomainExtendedTests
         openPrice.Price.Should().BeNull();
     }
 
+    // Given: a "Coffee" item with Small, Medium, and Large variations
+    // When: the Medium variation is deactivated
+    // Then: Medium is marked inactive while Small and Large remain active (2 active variations)
     [Fact]
     public async Task MenuItem_DeactivateVariation_ShouldMarkAsInactive()
     {
@@ -885,6 +954,9 @@ public class MenuDomainExtendedTests
     // Draft/Published State Transition Tests
     // ============================================================================
 
+    // Given: a menu item document created as a draft (not published immediately)
+    // When: the draft is published, a new draft is created with updated content, and then published again
+    // Then: the document transitions through draft->v1->draft->v2 with correct version numbers at each step
     [Fact]
     public async Task MenuItemDocument_FullPublishWorkflow_ShouldTransitionCorrectly()
     {
@@ -934,6 +1006,9 @@ public class MenuDomainExtendedTests
         finalState.Published.Price.Should().Be(12.00m);
     }
 
+    // Given: a published menu item "Original" at $10.00 with an unpublished draft "Bad Draft" at $999.99
+    // When: the draft is discarded
+    // Then: the draft is removed and the published version remains unchanged at "Original" $10.00
     [Fact]
     public async Task MenuItemDocument_DiscardDraft_ShouldRevertToPreviousPublished()
     {
@@ -965,6 +1040,9 @@ public class MenuDomainExtendedTests
         snapshot.TotalVersions.Should().Be(1); // Draft was removed
     }
 
+    // Given: a menu item document with 3 published versions (Original $10, Updated $15, Final $20)
+    // When: the document is reverted to version 1 due to a customer complaint
+    // Then: a new version 4 is created with version 1's content, preserving full version history
     [Fact]
     public async Task MenuItemDocument_RevertToOlderVersion_ShouldCreateNewVersion()
     {
@@ -1004,6 +1082,9 @@ public class MenuDomainExtendedTests
         history.Should().HaveCount(4);
     }
 
+    // Given: a published category with items A, B, C in their original order
+    // When: the items are reordered to C, A, B
+    // Then: the published category reflects the new item display order
     [Fact]
     public async Task MenuCategoryDocument_DraftWithItemReordering_ShouldPreserveOrder()
     {
@@ -1032,6 +1113,9 @@ public class MenuDomainExtendedTests
         published.ItemDocumentIds[2].Should().Be("item-b");
     }
 
+    // Given: a published menu item with version 2 containing holiday pricing
+    // When: version 2 is scheduled to activate 7 days in the future as "Holiday Sale"
+    // Then: a schedule entry is created with the activation date, version, and name
     [Fact]
     public async Task MenuItemDocument_ScheduledPublish_ShouldCreateScheduleEntry()
     {
@@ -1069,6 +1153,9 @@ public class MenuDomainExtendedTests
         schedules.Should().ContainSingle();
     }
 
+    // Given: a menu item with a scheduled version activation
+    // When: the schedule is cancelled
+    // Then: the schedule entry is removed and no pending schedules remain
     [Fact]
     public async Task MenuItemDocument_CancelSchedule_ShouldRemoveScheduleEntry()
     {
@@ -1095,6 +1182,9 @@ public class MenuDomainExtendedTests
         schedules.Should().BeEmpty();
     }
 
+    // Given: a published modifier block with no pending draft
+    // When: an attempt is made to publish a draft
+    // Then: an InvalidOperationException is thrown indicating there is no draft to publish
     [Fact]
     public async Task ModifierBlock_PublishDraftWithoutDraft_ShouldThrowException()
     {
@@ -1118,6 +1208,9 @@ public class MenuDomainExtendedTests
             .WithMessage("*No draft to publish*");
     }
 
+    // Given: a published menu item
+    // When: the item is archived as "Discontinued product" and then restored
+    // Then: the item transitions from archived=true back to archived=false
     [Fact]
     public async Task MenuItemDocument_ArchiveAndRestore_ShouldToggleArchiveState()
     {

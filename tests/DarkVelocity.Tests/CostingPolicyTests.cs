@@ -47,6 +47,9 @@ public class CostingPolicyTests
         ];
     }
 
+    // Given: Three stock batches received on different dates ($5, $7, $8 per unit)
+    // When: 150 units are consumed using FIFO costing
+    // Then: All 100 units of the oldest batch ($5) are consumed first, then 50 from the next ($7), totaling $850
     [Fact]
     public void FifoCostingPolicy_ShouldConsumeOldestFirst()
     {
@@ -76,6 +79,9 @@ public class CostingPolicyTests
         result.TotalCost.Should().Be(850m);
     }
 
+    // Given: Three stock batches received on different dates ($5, $7, $8 per unit)
+    // When: 150 units are consumed using LIFO costing
+    // Then: All 50 units of the newest batch ($8) are consumed first, then 100 from the next ($7), totaling $1,100
     [Fact]
     public void LifoCostingPolicy_ShouldConsumeNewestFirst()
     {
@@ -105,6 +111,9 @@ public class CostingPolicyTests
         result.TotalCost.Should().Be(1100m);
     }
 
+    // Given: Three stock batches totaling 250 units with a weighted average cost of $6.40
+    // When: 150 units are consumed using weighted average costing
+    // Then: The unit cost is $6.40 and total cost is $960
     [Fact]
     public void WeightedAverageCostingPolicy_ShouldUseWeightedAverage()
     {
@@ -124,6 +133,9 @@ public class CostingPolicyTests
         result.TotalCost.Should().Be(150 * 6.40m);
     }
 
+    // Given: Three stock batches with the most recent batch at $8 per unit
+    // When: 150 units are consumed using standard costing
+    // Then: The unit cost is $8 (most recent) and total cost is $1,200
     [Fact]
     public void StandardCostingPolicy_ShouldUseMostRecentCost()
     {
@@ -143,6 +155,9 @@ public class CostingPolicyTests
         result.TotalCost.Should().Be(1200m);
     }
 
+    // Given: A standard costing policy configured with a custom cost lookup returning $6.50
+    // When: 100 units are consumed using the custom lookup
+    // Then: The unit cost is $6.50 (from lookup) and total cost is $650
     [Fact]
     public void StandardCostingPolicy_WithLookup_ShouldUseCustomLookup()
     {
@@ -159,6 +174,9 @@ public class CostingPolicyTests
         result.TotalCost.Should().Be(650m);
     }
 
+    // Given: Three stock batches totaling 250 units
+    // When: 300 units are requested for FIFO consumption (exceeding available stock)
+    // Then: Only 250 units are consumed across all 3 batches (partial fulfillment)
     [Fact]
     public void FifoCostingPolicy_WithInsufficientStock_ShouldReturnPartial()
     {
@@ -174,6 +192,9 @@ public class CostingPolicyTests
         result.BatchBreakdown.Should().HaveCount(3); // All batches consumed
     }
 
+    // Given: An existing stock of 100 units at $5.00 WAC and a new delivery of 50 units at $8.00
+    // When: The new weighted average cost is calculated after receiving the delivery
+    // Then: The WAC is $6.00 based on the combined weighted total: (100*$5 + 50*$8) / 150
     [Fact]
     public void WeightedAverageCostingPolicy_CalculateNewWAC_ShouldBeCorrect()
     {
@@ -192,6 +213,9 @@ public class CostingPolicyTests
         newWAC.Should().Be(6.00m);
     }
 
+    // Given: A costing policy factory supporting FIFO, LIFO, WAC, and Standard methods
+    // When: A policy is created for each costing method
+    // Then: The factory returns the correct policy implementation type for each method
     [Fact]
     public void CostingPolicyFactory_ShouldCreateCorrectPolicy()
     {
@@ -202,6 +226,9 @@ public class CostingPolicyTests
         CostingPolicyFactory.Create(CostingMethod.Standard).Should().BeOfType<StandardCostingPolicy>();
     }
 
+    // Given: Two stock batches where the oldest (BATCH001) is fully exhausted and the second (BATCH002) has 100 units at $7
+    // When: 50 units are consumed using FIFO costing
+    // Then: The exhausted batch is skipped and all 50 units are drawn from BATCH002 at $7 per unit
     [Fact]
     public void FifoCostingPolicy_WithExhaustedBatches_ShouldSkipThem()
     {
@@ -242,6 +269,9 @@ public class CostingPolicyTests
         result.UnitCost.Should().Be(7.00m);
     }
 
+    // Given: Three stock batches and a specific as-of date for cost calculation
+    // When: 50 units are costed using each policy (FIFO, LIFO, WAC, Standard)
+    // Then: Every costing result records the exact as-of date for audit traceability
     [Fact]
     public void AllPolicies_ShouldIncludeAsOfDate()
     {
