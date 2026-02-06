@@ -42,6 +42,9 @@ public class InventoryAdvancedTests
     // Ledger Consistency Tests
     // ============================================================================
 
+    // Given: an empty ingredient inventory
+    // When: multiple receipts, consumptions, and waste events occur in sequence
+    // Then: the final stock of 80 units accurately reflects all operations
     [Fact]
     public async Task LedgerConsistency_MultipleOperations_ShouldMaintainAccuracy()
     {
@@ -70,6 +73,9 @@ public class InventoryAdvancedTests
         (await inventory.HasSufficientStockAsync(81)).Should().BeFalse();
     }
 
+    // Given: 100 units in stock with 30 consumed for an order
+    // When: the order consumption is reversed (voided)
+    // Then: stock returns to 100 units and the ledger accurately reflects the reversal
     [Fact]
     public async Task LedgerConsistency_AfterReversal_ShouldMatchInventory()
     {
@@ -100,6 +106,9 @@ public class InventoryAdvancedTests
         (await inventory.HasSufficientStockAsync(101)).Should().BeFalse();
     }
 
+    // Given: 50 units in stock
+    // When: 80 units are consumed during high demand
+    // Then: stock goes to -30 units and sufficiency checks correctly report no available stock
     [Fact]
     public async Task LedgerConsistency_NegativeStock_LedgerAllowsNegative()
     {
@@ -122,6 +131,9 @@ public class InventoryAdvancedTests
         (await inventory.HasSufficientStockAsync(1)).Should().BeFalse();
     }
 
+    // Given: system shows 80 units after receiving 100 and consuming 20
+    // When: a physical count finds only 75 units
+    // Then: both inventory and ledger are adjusted to 75 units
     [Fact]
     public async Task LedgerConsistency_PhysicalCount_ShouldAdjustBothInventoryAndLedger()
     {
@@ -155,6 +167,9 @@ public class InventoryAdvancedTests
     // Negative Stock Edge Cases
     // ============================================================================
 
+    // Given: stock at -80 units after a large oversell
+    // When: a partial replenishment of 50 units arrives
+    // Then: stock remains at -30 units and is still classified as OutOfStock
     [Fact]
     public async Task NegativeStock_DeepNegative_ThenReceivePartial_ShouldRemainNegative()
     {
@@ -180,6 +195,9 @@ public class InventoryAdvancedTests
         levelAfter.Level.Should().Be(StockLevel.OutOfStock);
     }
 
+    // Given: 100 burger patties in stock depleted to -20 by three large orders
+    // When: a physical count finds 10 patties from an unrecorded transfer
+    // Then: stock is adjusted to 10 units, flagged as Low
     [Fact]
     public async Task NegativeStock_MultipleOversells_ThenReconcile()
     {
@@ -209,6 +227,9 @@ public class InventoryAdvancedTests
         levelAfter.Level.Should().Be(StockLevel.Low); // Below reorder point
     }
 
+    // Given: stock already at -10 units from a previous oversell
+    // When: another 15 units are consumed
+    // Then: stock drops further to -25 units
     [Fact]
     public async Task NegativeStock_ConsumeWhenAlreadyNegative_ShouldGoMoreNegative()
     {
@@ -232,6 +253,9 @@ public class InventoryAdvancedTests
         levelSecond.QuantityOnHand.Should().Be(-25);
     }
 
+    // Given: 50 units in stock at $10.00/unit
+    // When: 80 units are consumed exceeding available stock
+    // Then: the 30 excess units are costed at the last known WAC of $10.00, totaling $800
     [Fact]
     public async Task NegativeStock_WAC_ShouldEstimateCostFromLastKnownWAC()
     {
@@ -259,6 +283,9 @@ public class InventoryAdvancedTests
     // FIFO Consumption Edge Cases
     // ============================================================================
 
+    // Given: four batches received at $4, $5, $6, and $7 per unit totaling 90 units
+    // When: 50 units are consumed for production
+    // Then: FIFO exhausts the first two batches completely, costing $220
     [Fact]
     public async Task FIFO_ExhaustMultipleBatches_ShouldConsumeInOrder()
     {
@@ -292,6 +319,9 @@ public class InventoryAdvancedTests
         batches[1].BatchNumber.Should().Be("BATCH004");
     }
 
+    // Given: a single batch of 100 units at $5.00/unit
+    // When: 35 units are consumed for production
+    // Then: the batch retains 65 units
     [Fact]
     public async Task FIFO_PartialBatchConsumption_ShouldLeaveRemainder()
     {

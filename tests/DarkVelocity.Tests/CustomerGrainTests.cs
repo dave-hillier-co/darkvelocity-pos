@@ -723,6 +723,9 @@ public class CustomerGrainTests
         state.Preferences.SeatingPreference.Should().Be("Quiet corner booth");
     }
 
+    // Given: a customer with a "Window seat" seating preference
+    // When: the seating preference is changed to "Bar seating"
+    // Then: the new preference replaces the old one
     [Fact]
     public async Task SetSeatingPreferenceAsync_ShouldOverwriteExisting()
     {
@@ -743,6 +746,9 @@ public class CustomerGrainTests
 
     // ==================== Tag Tests ====================
 
+    // Given: a customer tagged with "VIP" and "Regular"
+    // When: the "VIP" tag is removed
+    // Then: only the "Regular" tag remains
     [Fact]
     public async Task RemoveTagAsync_ShouldRemoveTag()
     {
@@ -763,6 +769,9 @@ public class CustomerGrainTests
         state.Tags.Should().Contain("Regular");
     }
 
+    // Given: a customer already tagged as "VIP"
+    // When: the "VIP" tag is added again
+    // Then: only one "VIP" tag exists on the profile
     [Fact]
     public async Task AddTagAsync_ShouldNotDuplicate()
     {
@@ -782,6 +791,9 @@ public class CustomerGrainTests
 
     // ==================== Referral Tests ====================
 
+    // Given: a customer without a referral code
+    // When: the referral code "JOHN2024" is assigned
+    // Then: the referral code is stored on the customer profile
     [Fact]
     public async Task SetReferralCodeAsync_ShouldSetCode()
     {
@@ -798,6 +810,9 @@ public class CustomerGrainTests
         state.ReferralCode.Should().Be("JOHN2024");
     }
 
+    // Given: a customer who was not referred by anyone
+    // When: a referrer is recorded
+    // Then: the referrer's ID is stored on the customer profile
     [Fact]
     public async Task SetReferredByAsync_ShouldSetReferrer()
     {
@@ -815,6 +830,9 @@ public class CustomerGrainTests
         state.ReferredBy.Should().Be(referrerId);
     }
 
+    // Given: a customer with zero successful referrals
+    // When: the referral count is incremented three times
+    // Then: the successful referrals count is 3
     [Fact]
     public async Task IncrementReferralCountAsync_ShouldIncrementCount()
     {
@@ -835,6 +853,9 @@ public class CustomerGrainTests
 
     // ==================== Merge Tests ====================
 
+    // Given: a primary customer profile
+    // When: two duplicate customer profiles are merged into it
+    // Then: both source customer IDs are tracked in the merge history
     [Fact]
     public async Task MergeFromAsync_ShouldTrackMergedCustomers()
     {
@@ -858,6 +879,9 @@ public class CustomerGrainTests
 
     // ==================== Delete Tests ====================
 
+    // Given: an active customer profile
+    // When: the customer is deleted
+    // Then: the customer status is set to inactive
     [Fact]
     public async Task DeleteAsync_ShouldMarkAsInactive()
     {
@@ -876,6 +900,9 @@ public class CustomerGrainTests
 
     // ==================== Loyalty Points Error Tests ====================
 
+    // Given: a customer who is not enrolled in the loyalty program
+    // When: attempting to earn points
+    // Then: the operation is rejected because the customer is not a loyalty member
     [Fact]
     public async Task EarnPointsAsync_WithoutLoyaltyEnrollment_ShouldThrow()
     {
@@ -893,6 +920,9 @@ public class CustomerGrainTests
             .WithMessage("*not enrolled in loyalty*");
     }
 
+    // Given: a customer who is not enrolled in the loyalty program
+    // When: attempting to redeem points
+    // Then: the operation is rejected because the customer is not a loyalty member
     [Fact]
     public async Task RedeemPointsAsync_WithoutEnrollment_ShouldThrow()
     {
@@ -912,6 +942,9 @@ public class CustomerGrainTests
 
     // ==================== Reward Redemption Error Tests ====================
 
+    // Given: a loyalty member with an issued reward that expired yesterday
+    // When: attempting to redeem the expired reward
+    // Then: the redemption is rejected because the reward has expired
     [Fact]
     public async Task RedeemRewardAsync_ExpiredReward_ShouldThrow()
     {
@@ -937,6 +970,9 @@ public class CustomerGrainTests
             .WithMessage("*expired*");
     }
 
+    // Given: a loyalty member whose reward has already been redeemed
+    // When: attempting to redeem the same reward a second time
+    // Then: the redemption is rejected because the reward is no longer available
     [Fact]
     public async Task RedeemRewardAsync_AlreadyRedeemed_ShouldThrow()
     {
@@ -963,6 +999,9 @@ public class CustomerGrainTests
             .WithMessage("*not available*");
     }
 
+    // Given: a customer with no issued rewards
+    // When: attempting to redeem a non-existent reward ID
+    // Then: the redemption is rejected because the reward is not found
     [Fact]
     public async Task RedeemRewardAsync_NotFound_ShouldThrow()
     {
@@ -981,6 +1020,9 @@ public class CustomerGrainTests
 
     // ==================== Points Adjustment Tests ====================
 
+    // Given: a loyalty member with 100 points
+    // When: a positive goodwill adjustment of 50 points is applied
+    // Then: the balance increases to 150 and lifetime points also increases
     [Fact]
     public async Task AdjustPointsAsync_Positive_ShouldIncreaseBalance()
     {
@@ -999,6 +1041,9 @@ public class CustomerGrainTests
         result.LifetimePoints.Should().Be(150); // Positive adjustments add to lifetime
     }
 
+    // Given: a loyalty member with 100 points
+    // When: a negative correction of 30 points is applied
+    // Then: the balance drops to 70 but lifetime points remain at 100
     [Fact]
     public async Task AdjustPointsAsync_Negative_ShouldDecreaseBalance()
     {
@@ -1017,6 +1062,9 @@ public class CustomerGrainTests
         result.LifetimePoints.Should().Be(100); // Negative adjustments don't reduce lifetime
     }
 
+    // Given: a loyalty member with 50 points
+    // When: a negative adjustment of 100 points is attempted
+    // Then: the adjustment is rejected because it would result in a negative balance
     [Fact]
     public async Task AdjustPointsAsync_NegativeResultingBalance_ShouldThrow()
     {
@@ -1037,6 +1085,9 @@ public class CustomerGrainTests
 
     // ==================== Points and Rewards Expiry Tests ====================
 
+    // Given: a loyalty member with 100 points
+    // When: 30 points are expired
+    // Then: the points balance drops to 70
     [Fact]
     public async Task ExpirePointsAsync_ShouldReduceBalance()
     {

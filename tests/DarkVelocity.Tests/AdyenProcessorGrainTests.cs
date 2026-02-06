@@ -424,6 +424,9 @@ public class AdyenProcessorGrainTests
     // Notification Handling Tests
     // =========================================================================
 
+    // Given: an Adyen payment that has been captured
+    // When: an AUTHORISATION notification is received from Adyen
+    // Then: the notification event is recorded in the processor event history
     [Fact]
     public async Task HandleAdyenNotificationAsync_AuthorizationSuccess_ShouldUpdateState()
     {
@@ -453,6 +456,9 @@ public class AdyenProcessorGrainTests
         state.Events.Should().Contain(e => e.EventType.Contains("notification"));
     }
 
+    // Given: an Adyen payment that has been captured
+    // When: a CHARGEBACK webhook notification is received from Adyen
+    // Then: the payment status transitions to disputed
     [Fact]
     public async Task HandleWebhookAsync_ChargebackNotification_ShouldUpdateStatus()
     {
@@ -482,6 +488,9 @@ public class AdyenProcessorGrainTests
     // State and Event Tracking Tests
     // =========================================================================
 
+    // Given: an Adyen payment that has been authorized and captured
+    // When: the processor state is queried
+    // Then: the state reflects the Adyen processor name, payment intent ID, captured status, and amount
     [Fact]
     public async Task GetStateAsync_ShouldReturnCorrectProcessorInfo()
     {
@@ -509,6 +518,9 @@ public class AdyenProcessorGrainTests
         state.CapturedAmount.Should().Be(6000);
     }
 
+    // Given: an Adyen payment that goes through authorization, capture, and partial refund
+    // When: the processor event history is queried
+    // Then: all payment lifecycle events are recorded in the event log
     [Fact]
     public async Task Events_ShouldBeTracked()
     {
@@ -539,6 +551,9 @@ public class AdyenProcessorGrainTests
     // Currency Handling Tests
     // =========================================================================
 
+    // Given: an Adyen payment authorization request with a lowercase currency code
+    // When: the payment is authorized through the Adyen processor
+    // Then: the authorization succeeds and the currency is normalized internally
     [Fact]
     public async Task AuthorizeAsync_WithDifferentCurrencies_ShouldNormalizeCurrency()
     {

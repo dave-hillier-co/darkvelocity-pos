@@ -28,6 +28,9 @@ public class MerchantGrainTests
     // Merchant Creation Tests
     // =========================================================================
 
+    // Given: a complete merchant registration with business details, address, and statement descriptor
+    // When: the merchant account is created
+    // Then: the merchant is active with charges enabled, payouts disabled, and all details persisted
     [Fact]
     public async Task CreateMerchant_ValidCommand_ShouldCreateMerchant()
     {
@@ -69,6 +72,9 @@ public class MerchantGrainTests
         snapshot.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, precision: TimeSpan.FromSeconds(5));
     }
 
+    // Given: a minimal merchant registration with only required fields
+    // When: the merchant account is created
+    // Then: the merchant is created with active status and default settings
     [Fact]
     public async Task CreateMerchant_MinimalCommand_ShouldCreateMerchant()
     {
@@ -100,6 +106,9 @@ public class MerchantGrainTests
         snapshot.Status.Should().Be("active");
     }
 
+    // Given: a merchant account that already exists
+    // When: a second creation is attempted for the same merchant
+    // Then: the operation is rejected to prevent duplicate merchant accounts
     [Fact]
     public async Task CreateMerchant_AlreadyExists_ShouldThrow()
     {
@@ -122,6 +131,9 @@ public class MerchantGrainTests
             .WithMessage("*already exists*");
     }
 
+    // Given: a merchant grain that has never been registered
+    // When: the existence check is performed
+    // Then: the merchant does not exist
     [Fact]
     public async Task ExistsAsync_NewMerchant_ShouldReturnFalse()
     {
@@ -137,6 +149,9 @@ public class MerchantGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: a merchant account that has been created
+    // When: the existence check is performed
+    // Then: the merchant exists
     [Fact]
     public async Task ExistsAsync_CreatedMerchant_ShouldReturnTrue()
     {
@@ -160,6 +175,9 @@ public class MerchantGrainTests
     // Merchant Update Tests
     // =========================================================================
 
+    // Given: an existing merchant account with an original name
+    // When: the merchant name is updated
+    // Then: the merchant snapshot reflects the new name and records the update timestamp
     [Fact]
     public async Task UpdateMerchant_ChangeName_ShouldUpdateName()
     {
@@ -190,6 +208,9 @@ public class MerchantGrainTests
         snapshot.UpdatedAt.Should().NotBeNull();
     }
 
+    // Given: an existing merchant with a registered address
+    // When: the merchant address is updated to a new location
+    // Then: all address fields reflect the new location details
     [Fact]
     public async Task UpdateMerchant_ChangeAddress_ShouldUpdateAddress()
     {
@@ -223,6 +244,9 @@ public class MerchantGrainTests
         snapshot.PostalCode.Should().Be("90210");
     }
 
+    // Given: a merchant grain that has never been created
+    // When: an update is attempted on the non-existent merchant
+    // Then: the operation fails because the merchant was not found
     [Fact]
     public async Task UpdateMerchant_NonExistent_ShouldThrow()
     {
@@ -244,6 +268,9 @@ public class MerchantGrainTests
     // API Key Management Tests - Creation
     // =========================================================================
 
+    // Given: an active merchant account
+    // When: a secret test API key is created
+    // Then: the key has the sk_test_ prefix and is active in test mode
     [Fact]
     public async Task CreateApiKey_SecretTestKey_ShouldHaveCorrectPrefix()
     {
@@ -268,6 +295,9 @@ public class MerchantGrainTests
         apiKey.IsActive.Should().BeTrue();
     }
 
+    // Given: an active merchant account
+    // When: a secret live API key is created
+    // Then: the key has the sk_live_ prefix and is active in live mode
     [Fact]
     public async Task CreateApiKey_SecretLiveKey_ShouldHaveCorrectPrefix()
     {
@@ -289,6 +319,9 @@ public class MerchantGrainTests
         apiKey.IsLive.Should().BeTrue();
     }
 
+    // Given: an active merchant account
+    // When: a publishable test API key is created
+    // Then: the key has the pk_test_ prefix for client-side use in test mode
     [Fact]
     public async Task CreateApiKey_PublishableTestKey_ShouldHaveCorrectPrefix()
     {

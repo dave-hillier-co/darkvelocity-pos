@@ -25,6 +25,9 @@ public class MenuApiTests
         return json.RootElement.GetProperty("id").GetGuid();
     }
 
+    // Given: an organization setting up its menu
+    // When: a new menu category is created with name, description, and display order
+    // Then: the category is created with HAL links to its items
     [Fact]
     public async Task CreateMenuCategory_ReturnsCreatedWithHalResponse()
     {
@@ -56,6 +59,9 @@ public class MenuApiTests
             .Should().EndWith("/items");
     }
 
+    // Given: a menu category that has been created
+    // When: the category is retrieved by identifier
+    // Then: the category details are returned with a self HAL link
     [Fact]
     public async Task GetMenuCategory_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -88,6 +94,9 @@ public class MenuApiTests
             .Should().Contain($"/categories/{categoryId}");
     }
 
+    // Given: a menu category that exists in the organization's menu
+    // When: a new menu item is added to the category with name, price, and SKU
+    // Then: the item is created with HAL links to itself and its parent category
     [Fact]
     public async Task CreateMenuItem_ReturnsCreatedWithHalResponse()
     {
@@ -135,6 +144,9 @@ public class MenuApiTests
             .Should().Contain($"/categories/{categoryId}");
     }
 
+    // Given: a menu item that has been added to a category
+    // When: the menu item is retrieved by identifier
+    // Then: the item details including name and price are returned with a HAL link to its category
     [Fact]
     public async Task GetMenuItem_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -170,6 +182,9 @@ public class MenuApiTests
             .Should().Contain($"/categories/{categoryId}");
     }
 
+    // Given: an existing menu item
+    // When: the item's name and price are updated
+    // Then: the updated item is returned with a self HAL link
     [Fact]
     public async Task UpdateMenuItem_ReturnsOkWithUpdatedData()
     {

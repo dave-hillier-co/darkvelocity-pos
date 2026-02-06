@@ -726,6 +726,9 @@ public class LaborGrainTests
     // TimeEntryGrain Tests
     // ============================================================================
 
+    // Given: an employee arriving for their shift
+    // When: the employee clocks in using their PIN
+    // Then: an active time entry is created with the correct location, role, and clock-in time
     [Fact]
     public async Task TimeEntryGrain_ClockIn_CreatesTimeEntry()
     {
@@ -760,6 +763,9 @@ public class LaborGrainTests
         snapshot.Notes.Should().Be("Clocking in for shift");
     }
 
+    // Given: an employee who already has an active time entry
+    // When: a second clock-in is attempted for the same entry
+    // Then: the system rejects the duplicate clock-in
     [Fact]
     public async Task TimeEntryGrain_ClockIn_ThrowsIfAlreadyExists()
     {
@@ -790,6 +796,9 @@ public class LaborGrainTests
             .WithMessage("Time entry already exists");
     }
 
+    // Given: an employee who is currently clocked in
+    // When: the employee clocks out at the end of their shift
+    // Then: the time entry is completed with a clock-out timestamp and method recorded
     [Fact]
     public async Task TimeEntryGrain_ClockOut_CompletesEntry()
     {
@@ -819,6 +828,9 @@ public class LaborGrainTests
         snapshot.Status.Should().Be(TimeEntryStatus.Completed);
     }
 
+    // Given: an employee who has already clocked out
+    // When: a second clock-out is attempted
+    // Then: the system rejects the duplicate clock-out
     [Fact]
     public async Task TimeEntryGrain_ClockOut_ThrowsIfAlreadyClockedOut()
     {
@@ -849,6 +861,9 @@ public class LaborGrainTests
             .WithMessage("Already clocked out");
     }
 
+    // Given: an employee who is currently on the clock
+    // When: they take a 30-minute unpaid meal break
+    // Then: the break minutes are tracked and will reduce paid hours
     [Fact]
     public async Task TimeEntryGrain_AddBreak_TracksUnpaidBreak()
     {
@@ -878,6 +893,9 @@ public class LaborGrainTests
         snapshot.BreakMinutes.Should().Be(30);
     }
 
+    // Given: an employee who is currently on the clock
+    // When: they take a 15-minute paid rest break
+    // Then: the unpaid break minutes remain zero since paid breaks do not reduce worked hours
     [Fact]
     public async Task TimeEntryGrain_AddBreak_TracksPaidBreak()
     {
@@ -907,6 +925,9 @@ public class LaborGrainTests
         snapshot.BreakMinutes.Should().Be(0); // Paid breaks don't reduce worked hours
     }
 
+    // Given: a completed time entry for an employee who forgot to clock in on time
+    // When: a manager adjusts the clock-in time back 8 hours with a 30-minute break
+    // Then: the corrected times are saved with the adjusting manager and reason as an audit trail
     [Fact]
     public async Task TimeEntryGrain_Adjust_AdjustsTimesWithAuditTrail()
     {
@@ -949,6 +970,9 @@ public class LaborGrainTests
         snapshot.Status.Should().Be(TimeEntryStatus.Adjusted);
     }
 
+    // Given: a completed time entry awaiting manager review
+    // When: a manager approves the time entry
+    // Then: the approval is recorded with the approver and approval timestamp
     [Fact]
     public async Task TimeEntryGrain_Approve_ApprovesEntry()
     {
@@ -981,6 +1005,9 @@ public class LaborGrainTests
         snapshot.ApprovedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an employee who clocks in and then clocks out
+    // When: the active status is checked before and after clock-out
+    // Then: the entry is active while working and inactive after clocking out
     [Fact]
     public async Task TimeEntryGrain_IsActive_ReturnsCorrectStatus()
     {
@@ -1015,6 +1042,9 @@ public class LaborGrainTests
     // TipPoolGrain Tests
     // ============================================================================
 
+    // Given: a dinner service that needs a tip pool for tonight
+    // When: an equal-distribution tip pool is created for eligible roles
+    // Then: the pool is created with zero tips and no distributions yet
     [Fact]
     public async Task TipPoolGrain_Create_CreatesPoolForDate()
     {
@@ -1046,6 +1076,9 @@ public class LaborGrainTests
         snapshot.Distributions.Should().BeEmpty();
     }
 
+    // Given: an open lunch tip pool
+    // When: tips from Table 5 ($100), Table 10 ($50), and the Bar ($75) are added
+    // Then: the pool total equals $225
     [Fact]
     public async Task TipPoolGrain_AddTips_AddsTipsToPool()
     {
@@ -1074,6 +1107,9 @@ public class LaborGrainTests
         snapshot.TotalTips.Should().Be(225.00m);
     }
 
+    // Given: an evening tip pool using hours-worked distribution
+    // When: two staff members are added with their hours and tip points
+    // Then: the pool tracks both participants alongside the accumulated tips
     [Fact]
     public async Task TipPoolGrain_AddParticipant_AddsParticipantWithHoursAndPoints()
     {
@@ -1106,6 +1142,9 @@ public class LaborGrainTests
         snapshot.TotalTips.Should().Be(280.00m);
     }
 
+    // Given: a tip pool where the same employee worked both lunch and dinner (4 hours each)
+    // When: tips are distributed
+    // Then: the employee's hours are combined to 8 and they receive the full $200 pool
     [Fact]
     public async Task TipPoolGrain_AddParticipant_AccumulatesHoursForSameEmployee()
     {
@@ -1140,6 +1179,9 @@ public class LaborGrainTests
         snapshot.Distributions[0].TipAmount.Should().Be(200.00m);
     }
 
+    // Given: a $300 tip pool with three staff members using equal distribution
+    // When: tips are distributed
+    // Then: each staff member receives exactly $100 regardless of hours worked
     [Fact]
     public async Task TipPoolGrain_DistributeEqual_DistributesEqually()
     {
@@ -1178,6 +1220,9 @@ public class LaborGrainTests
         snapshot.Distributions.Should().OnlyContain(d => d.TipAmount == 100.00m);
     }
 
+    // Given: a $100 tip pool with one employee working 8 hours (80%) and another 2 hours (20%)
+    // When: tips are distributed by hours worked
+    // Then: the 8-hour employee gets $80 and the 2-hour employee gets $20
     [Fact]
     public async Task TipPoolGrain_DistributeByHoursWorked_DistributesProportionally()
     {
@@ -1216,6 +1261,9 @@ public class LaborGrainTests
         dist2.TipAmount.Should().Be(20.00m);
     }
 
+    // Given: a $200 tip pool with staff earning 10, 5, and 5 tip points (50%, 25%, 25%)
+    // When: tips are distributed by points
+    // Then: the employees receive $100, $50, and $50 respectively
     [Fact]
     public async Task TipPoolGrain_DistributeByPoints_DistributesProportionally()
     {
@@ -1258,6 +1306,9 @@ public class LaborGrainTests
         dist3.TipAmount.Should().Be(50.00m);
     }
 
+    // Given: a tip pool that has already been distributed to staff
+    // When: a late tip is added after distribution
+    // Then: the system rejects the addition because the pool is closed
     [Fact]
     public async Task TipPoolGrain_AddTips_ThrowsAfterDistribution()
     {

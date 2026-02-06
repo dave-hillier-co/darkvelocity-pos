@@ -45,6 +45,9 @@ public class OrganizationDomainExtendedTests
 
     #region External Identity Provider Integration Tests
 
+    // Given: a user account in an organization
+    // When: linking a Google OAuth identity to the user
+    // Then: the external identity mapping should be stored on the user
     [Fact]
     public async Task LinkExternalIdentityAsync_ShouldLinkOAuthIdentity()
     {
@@ -61,6 +64,9 @@ public class OrganizationDomainExtendedTests
         externalIds["google"].Should().Be("google-123456");
     }
 
+    // Given: a user account in an organization
+    // When: linking identities from both Google and Microsoft
+    // Then: both external identity providers should be stored on the user
     [Fact]
     public async Task LinkExternalIdentityAsync_MultipleProviders_ShouldLinkAll()
     {
@@ -79,6 +85,9 @@ public class OrganizationDomainExtendedTests
         externalIds.Should().ContainKey("microsoft");
     }
 
+    // Given: a user linking a Google identity
+    // When: the identity is linked
+    // Then: the OAuth lookup should resolve the external identity to the correct user
     [Fact]
     public async Task LinkExternalIdentityAsync_ShouldRegisterWithLookupGrain()
     {
@@ -95,6 +104,9 @@ public class OrganizationDomainExtendedTests
         foundUserId.Should().Be(userId);
     }
 
+    // Given: a user with a linked Google identity
+    // When: unlinking the Google identity
+    // Then: the Google provider should no longer appear in the user's external identities
     [Fact]
     public async Task UnlinkExternalIdentityAsync_ShouldRemoveIdentity()
     {
@@ -111,6 +123,9 @@ public class OrganizationDomainExtendedTests
         externalIds.Should().NotContainKey("google");
     }
 
+    // Given: a user with a linked Google identity registered in the OAuth lookup
+    // When: unlinking the Google identity
+    // Then: the OAuth lookup should no longer resolve that external identity
     [Fact]
     public async Task UnlinkExternalIdentityAsync_ShouldUnregisterFromLookupGrain()
     {
@@ -128,6 +143,9 @@ public class OrganizationDomainExtendedTests
         foundUserId.Should().BeNull();
     }
 
+    // Given: a Google identity already linked to one user
+    // When: a different user attempts to link the same Google identity
+    // Then: it should reject the duplicate link with an error
     [Fact]
     public async Task LinkExternalIdentityAsync_SameIdentityDifferentUser_ShouldThrow()
     {
@@ -150,6 +168,9 @@ public class OrganizationDomainExtendedTests
             .WithMessage("*already linked to a different user*");
     }
 
+    // Given: a user linking a Google identity with an uppercase provider name
+    // When: the identity is stored and looked up
+    // Then: the provider name should be normalized to lowercase
     [Fact]
     public async Task LinkExternalIdentityAsync_ProviderCaseInsensitive_ShouldNormalize()
     {
@@ -170,6 +191,9 @@ public class OrganizationDomainExtendedTests
         foundUserId.Should().Be(userId);
     }
 
+    // Given: a user with an OAuth provider
+    // When: recording a login via Google OAuth
+    // Then: the last login timestamp should be updated and failed attempts reset
     [Fact]
     public async Task RecordLoginAsync_WithOAuthProvider_ShouldRecordOAuthLogin()
     {

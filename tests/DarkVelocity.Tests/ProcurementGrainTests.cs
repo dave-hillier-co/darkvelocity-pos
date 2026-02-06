@@ -1047,6 +1047,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*submitted*");
     }
 
+    // Given: a purchase order still in draft status (not yet submitted)
+    // When: an attempt is made to receive goods against the draft order
+    // Then: the operation fails because goods cannot be received on an unsubmitted order
     [Fact]
     public async Task ReceiveLineAsync_DraftStatus_ShouldThrow()
     {
@@ -1069,6 +1072,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*Cannot receive*");
     }
 
+    // Given: a purchase order that was submitted and then cancelled
+    // When: an attempt is made to receive goods against the cancelled order
+    // Then: the operation fails because goods cannot be received on a cancelled order
     [Fact]
     public async Task ReceiveLineAsync_CancelledStatus_ShouldThrow()
     {
@@ -1093,6 +1099,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*Cannot receive*");
     }
 
+    // Given: a purchase order that has been fully received
+    // When: an attempt is made to cancel the received order
+    // Then: the operation fails because a fully received order cannot be cancelled
     [Fact]
     public async Task CancelAsync_ReceivedPO_ShouldThrow()
     {
@@ -1121,6 +1130,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*Cannot cancel*");
     }
 
+    // Given: a purchase order that has already been cancelled
+    // When: a second cancellation is attempted
+    // Then: the operation fails because the order is already cancelled
     [Fact]
     public async Task CancelAsync_AlreadyCancelled_ShouldThrow()
     {
@@ -1144,6 +1156,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*Cannot cancel*");
     }
 
+    // Given: a draft purchase order with one line item
+    // When: an update is attempted on a line ID that does not exist on the order
+    // Then: the operation fails because the line is not found
     [Fact]
     public async Task UpdateLineAsync_NonExistentLine_ShouldThrow()
     {
@@ -1167,6 +1182,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: a submitted purchase order with one line item
+    // When: goods are received against a line ID that does not exist on the order
+    // Then: the operation fails because the line is not found
     [Fact]
     public async Task ReceiveLineAsync_NonExistentLine_ShouldThrow()
     {
@@ -1190,6 +1208,9 @@ public class PurchaseOrderGrainTests
             .WithMessage("*not found*");
     }
 
+    // Given: a submitted purchase order for 10 units of an item
+    // When: 15 units are received (over-delivery)
+    // Then: the over-delivery is accepted and tracked, reflecting the negative stock philosophy
     [Fact]
     public async Task ReceiveLineAsync_OverDelivery_ShouldHandle()
     {
@@ -1233,6 +1254,9 @@ public class DeliveryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IDeliveryGrain>(key);
     }
 
+    // Given: no delivery record exists
+    // When: a delivery is created linked to a supplier, purchase order, and location
+    // Then: the delivery is in pending status with a generated delivery number and no lines or discrepancies
     [Fact]
     public async Task CreateAsync_ShouldCreateDelivery()
     {
@@ -1266,6 +1290,9 @@ public class DeliveryGrainTests
         result.HasDiscrepancies.Should().BeFalse();
     }
 
+    // Given: no delivery record exists and no prior purchase order was placed
+    // When: a walk-in delivery is created without a linked purchase order
+    // Then: the delivery is created in pending status with no purchase order reference
     [Fact]
     public async Task CreateAsync_WithoutPurchaseOrder_ShouldAllowDirectDelivery()
     {
@@ -1288,6 +1315,9 @@ public class DeliveryGrainTests
         result.Status.Should().Be(DeliveryStatus.Pending);
     }
 
+    // Given: a pending delivery with no line items
+    // When: 5 units of fresh basil at $3.00 each are received with a batch number
+    // Then: the delivery has one line totaling $15.00 with batch tracking information
     [Fact]
     public async Task AddLineAsync_ShouldAddDeliveryLine()
     {
@@ -1322,6 +1352,9 @@ public class DeliveryGrainTests
         snapshot.TotalValue.Should().Be(15.00m);
     }
 
+    // Given: a pending delivery with no line items
+    // When: tomatoes, peppers, and onions are each received as separate lines
+    // Then: the delivery has three lines and the total value sums all line totals
     [Fact]
     public async Task AddLineAsync_MultipleLines_ShouldAccumulateTotal()
     {
@@ -1350,6 +1383,9 @@ public class DeliveryGrainTests
         snapshot.TotalValue.Should().Be(100.00m + 90.00m + 40.00m);
     }
 
+    // Given: a delivery with 80 chicken wings received against an expected 100
+    // When: a short delivery discrepancy of 20 units is recorded
+    // Then: the delivery is flagged with a short delivery discrepancy showing expected vs actual quantities
     [Fact]
     public async Task RecordDiscrepancyAsync_ShortDelivery_ShouldRecordDiscrepancy()
     {
@@ -1383,6 +1419,9 @@ public class DeliveryGrainTests
         snapshot.Discrepancies[0].ActualQuantity.Should().Be(80);
     }
 
+    // Given: a delivery with 48 glass bottles received, 6 of which are broken
+    // When: a damaged goods discrepancy is recorded
+    // Then: the delivery is flagged as having discrepancies
     [Fact]
     public async Task RecordDiscrepancyAsync_DamagedGoods_ShouldRecordDiscrepancy()
     {
@@ -1412,6 +1451,9 @@ public class DeliveryGrainTests
         hasDiscrepancies.Should().BeTrue();
     }
 
+    // Given: a delivery with milk (4 short) and eggs (2 cracked) both having issues
+    // When: a short delivery discrepancy is recorded for milk and a quality issue for eggs
+    // Then: the delivery has two separate discrepancies recorded
     [Fact]
     public async Task RecordDiscrepancyAsync_MultipleDiscrepancies_ShouldRecordAll()
     {
@@ -1440,6 +1482,9 @@ public class DeliveryGrainTests
         snapshot.Discrepancies.Should().HaveCount(2);
     }
 
+    // Given: a pending delivery with bread items and batch tracking
+    // When: the delivery is accepted by a staff member
+    // Then: the delivery status changes to accepted with a recorded acceptance timestamp
     [Fact]
     public async Task AcceptAsync_ShouldAcceptDelivery()
     {
@@ -1463,6 +1508,9 @@ public class DeliveryGrainTests
         result.AcceptedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a pending delivery of cheese with a recorded short delivery discrepancy of 5 units
+    // When: the delivery is accepted despite the discrepancy
+    // Then: the delivery is accepted but still flagged as having discrepancies
     [Fact]
     public async Task AcceptAsync_WithDiscrepancies_ShouldStillAccept()
     {
@@ -1487,6 +1535,9 @@ public class DeliveryGrainTests
         result.HasDiscrepancies.Should().BeTrue();
     }
 
+    // Given: a pending delivery of fish with an expiry date that has already passed
+    // When: the delivery is rejected because the product expired on arrival
+    // Then: the delivery status changes to rejected with a timestamp and the rejection reason
     [Fact]
     public async Task RejectAsync_ShouldRejectDelivery()
     {

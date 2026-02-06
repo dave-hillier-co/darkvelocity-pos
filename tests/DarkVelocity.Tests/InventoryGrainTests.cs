@@ -525,6 +525,9 @@ public class InventoryGrainTests
         levelAfter.WeightedAverageCost.Should().Be(6.00m);
     }
 
+    // Given: 25 lbs in an expired batch and 25 lbs in a valid batch
+    // When: expired batches are written off
+    // Then: only the 25 lbs from the valid batch remain in stock
     [Fact]
     public async Task WriteOffExpiredBatches_ExpiresExactlyNow_ShouldWriteOff()
     {
@@ -553,6 +556,9 @@ public class InventoryGrainTests
         batches[0].BatchNumber.Should().Be("VALID");
     }
 
+    // Given: an older expired batch of 30 lbs at $4.00/lb and a newer valid batch of 30 lbs at $6.00/lb
+    // When: 20 lbs are consumed using FIFO
+    // Then: consumption draws from the oldest batch first regardless of expiry status
     [Fact]
     public async Task ConsumeFifo_ExpiredBatchPresent_ShouldConsumeFromNonExpired()
     {
@@ -577,6 +583,9 @@ public class InventoryGrainTests
         result.BatchBreakdown[0].UnitCost.Should().Be(4.00m);
     }
 
+    // Given: 5 lbs of Ground Beef in stock, below the reorder point of 10 lbs
+    // When: a delivery of 20 lbs arrives
+    // Then: stock level transitions from Low to Normal
     [Fact]
     public async Task ReceiveBatch_FromLow_ShouldTransitionToNormal()
     {
@@ -599,6 +608,9 @@ public class InventoryGrainTests
         levelAfter.Should().Be(StockLevel.Normal);
     }
 
+    // Given: 30 lbs of Ground Beef in stock, within normal range
+    // When: a delivery of 30 lbs arrives bringing total to 60 lbs
+    // Then: stock level transitions to AbovePar, exceeding the par level of 50 lbs
     [Fact]
     public async Task ReceiveBatch_AbovePar_ShouldTransitionToAbovePar()
     {
@@ -624,6 +636,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(60); // Above par level of 50
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: 25 lbs are transferred out to another site
+    // Then: the movement history records a -25 transfer with the transfer ID and user who performed it
     [Fact]
     public async Task TransferOut_ShouldRecordMovementWithTransferId()
     {
@@ -651,6 +666,9 @@ public class InventoryGrainTests
         transferMovement.PerformedBy.Should().Be(transferredBy);
     }
 
+    // Given: an empty inventory at the destination site
+    // When: 40 lbs at $5.50/lb are received via inter-site transfer
+    // Then: stock shows 40 lbs, a transfer batch is created, and the source site is recorded
     [Fact]
     public async Task ReceiveTransfer_ShouldRecordSourceSite()
     {

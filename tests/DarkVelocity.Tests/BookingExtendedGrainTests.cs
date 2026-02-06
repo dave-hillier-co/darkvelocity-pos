@@ -22,6 +22,9 @@ public class BookingExtendedGrainTests
     // Table Grain Tests
     // ============================================================================
 
+    // Given: no tables exist in the venue
+    // When: a new rectangular table T1 is created with capacity 2-4
+    // Then: the table is created with the correct number, capacity, and Available status
     [Fact]
     public async Task TableGrain_Create_CreatesTableSuccessfully()
     {
@@ -55,6 +58,9 @@ public class BookingExtendedGrainTests
         state.Status.Should().Be(TableStatus.Available);
     }
 
+    // Given: an available round 2-top table
+    // When: the table status is set to Occupied
+    // Then: the table status changes to Occupied
     [Fact]
     public async Task TableGrain_SetStatus_ChangesStatusCorrectly()
     {
@@ -83,6 +89,9 @@ public class BookingExtendedGrainTests
         state.Status.Should().Be(TableStatus.Occupied);
     }
 
+    // Given: a newly created available 4-top table
+    // When: the table status changes to Occupied
+    // Then: availability check returns true before occupation and false after
     [Fact]
     public async Task TableGrain_IsAvailable_ReturnsFalseWhenOccupied()
     {
@@ -113,6 +122,9 @@ public class BookingExtendedGrainTests
         availableAfterOccupied.Should().BeFalse();
     }
 
+    // Given: an existing 6-top table on the floor plan
+    // When: the table's position is updated to coordinates (200, 300) with 45-degree rotation
+    // Then: the table position reflects the new coordinates and rotation
     [Fact]
     public async Task TableGrain_UpdatePosition_UpdatesCoordinates()
     {
@@ -147,6 +159,9 @@ public class BookingExtendedGrainTests
     // Floor Plan Grain Tests
     // ============================================================================
 
+    // Given: a venue with no floor plans
+    // When: a new "Main Dining Room" floor plan is created with specific dimensions
+    // Then: the floor plan is created with correct name, dimensions, active status, and no tables
     [Fact]
     public async Task FloorPlanGrain_Create_CreatesFloorPlanSuccessfully()
     {
@@ -179,6 +194,9 @@ public class BookingExtendedGrainTests
         state.TableIds.Should().BeEmpty();
     }
 
+    // Given: an empty floor plan
+    // When: three tables are added to the floor plan
+    // Then: all three table IDs are tracked on the floor plan
     [Fact]
     public async Task FloorPlanGrain_AddTable_TracksTableIds()
     {
@@ -215,6 +233,9 @@ public class BookingExtendedGrainTests
         tableIds.Should().Contain(tableId3);
     }
 
+    // Given: a floor plan with two tables
+    // When: one table is removed
+    // Then: the table count decreases and only the remaining table is tracked
     [Fact]
     public async Task FloorPlanGrain_RemoveTable_DecreasesCount()
     {
@@ -249,6 +270,9 @@ public class BookingExtendedGrainTests
         tableIds.Should().Contain(tableId2);
     }
 
+    // Given: a floor plan with original name and dimensions
+    // When: the name, width, and background image are updated
+    // Then: updated properties are changed and unchanged properties are preserved
     [Fact]
     public async Task FloorPlanGrain_Update_UpdatesProperties()
     {
@@ -288,6 +312,9 @@ public class BookingExtendedGrainTests
     // Booking Settings Grain Tests
     // ============================================================================
 
+    // Given: a venue with no booking settings
+    // When: booking settings are initialized
+    // Then: default values are applied (90-minute duration, 30-day advance, max party 8)
     [Fact]
     public async Task BookingSettingsGrain_Initialize_SetsDefaultValues()
     {
@@ -309,6 +336,9 @@ public class BookingExtendedGrainTests
         settings.MaxPartySizeOnline.Should().Be(8);
     }
 
+    // Given: a venue with default booking settings
+    // When: the duration, party size, advance days, and deposit settings are updated
+    // Then: all updated booking settings are persisted correctly
     [Fact]
     public async Task BookingSettingsGrain_Update_UpdatesSettings()
     {
@@ -342,6 +372,9 @@ public class BookingExtendedGrainTests
         settings.AdvanceBookingDays.Should().Be(45);
     }
 
+    // Given: a venue with booking settings initialized
+    // When: a $50 deposit requirement is enabled
+    // Then: the deposit requirement and amount are persisted
     [Fact]
     public async Task BookingSettingsGrain_Update_SetsDepositAmount()
     {
@@ -371,6 +404,9 @@ public class BookingExtendedGrainTests
         settings.DepositAmount.Should().Be(50.00m);
     }
 
+    // Given: a venue with booking settings
+    // When: a specific date is blocked for reservations
+    // Then: the date is blocked and adjacent dates remain unblocked
     [Fact]
     public async Task BookingSettingsGrain_BlockDate_BlocksDate()
     {
@@ -393,6 +429,9 @@ public class BookingExtendedGrainTests
         isNotBlocked.Should().BeFalse();
     }
 
+    // Given: a venue open from 11am to 10pm
+    // When: a 6pm slot availability is checked for a party of 4
+    // Then: the slot is available because it falls within operating hours and party size limits
     [Fact]
     public async Task BookingSettingsGrain_IsSlotAvailable_ValidatesCorrectly()
     {

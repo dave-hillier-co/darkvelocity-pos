@@ -709,6 +709,9 @@ public class AccountGrainTests
             .WithMessage("Cannot close period*");
     }
 
+    // Given: an account with two consecutive periods already closed
+    // When: a period close is attempted on the first (already closed) period
+    // Then: the operation is rejected because the period has already been finalized
     [Fact]
     public async Task ClosePeriodAsync_AlreadyClosed_ShouldThrow()
     {
@@ -746,6 +749,9 @@ public class AccountGrainTests
 
     #region Lifecycle Tests
 
+    // Given: an account that has never been created
+    // When: checking whether the account exists
+    // Then: the account does not exist
     [Fact]
     public async Task ExistsAsync_NewGrain_ShouldReturnFalse()
     {
@@ -761,6 +767,9 @@ public class AccountGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: an asset account that has been created
+    // When: checking whether the account exists
+    // Then: the account exists
     [Fact]
     public async Task ExistsAsync_CreatedGrain_ShouldReturnTrue()
     {
@@ -776,6 +785,9 @@ public class AccountGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: an active asset account
+    // When: the account is deactivated
+    // Then: the account is marked inactive and no further postings can be made
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateAccount()
     {
@@ -792,6 +804,9 @@ public class AccountGrainTests
         summary.IsActive.Should().BeFalse();
     }
 
+    // Given: an asset account that was previously deactivated
+    // When: the account is reactivated
+    // Then: the account becomes active again and can receive postings
     [Fact]
     public async Task ActivateAsync_ShouldReactivateAccount()
     {
@@ -809,6 +824,9 @@ public class AccountGrainTests
         summary.IsActive.Should().BeTrue();
     }
 
+    // Given: a system-designated cash account that cannot be disabled
+    // When: deactivation is attempted on the system account
+    // Then: the operation is rejected because system accounts are protected from deactivation
     [Fact]
     public async Task DeactivateAsync_SystemAccount_ShouldThrow()
     {
@@ -834,6 +852,9 @@ public class AccountGrainTests
             .WithMessage("System accounts cannot be deactivated");
     }
 
+    // Given: an existing asset account
+    // When: the account name, description, and tax code are updated
+    // Then: the account reflects the new details and records a last-modified timestamp
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAccountDetails()
     {
@@ -861,6 +882,9 @@ public class AccountGrainTests
 
     #region All Account Types Tests
 
+    // Given: a debit-normal account (asset or expense) with zero balance
+    // When: a debit of 100 is posted
+    // Then: the balance increases to 100 following double-entry debit-normal rules
     [Theory]
     [InlineData(AccountType.Asset)]
     [InlineData(AccountType.Expense)]
@@ -889,6 +913,9 @@ public class AccountGrainTests
         result.NewBalance.Should().Be(100m);
     }
 
+    // Given: a credit-normal account (liability, equity, or revenue) with zero balance
+    // When: a credit of 100 is posted
+    // Then: the balance increases to 100 following double-entry credit-normal rules
     [Theory]
     [InlineData(AccountType.Liability)]
     [InlineData(AccountType.Equity)]

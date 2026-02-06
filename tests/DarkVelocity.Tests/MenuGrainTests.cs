@@ -1094,6 +1094,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Buttons[0].Label.Should().Be("Item 2");
     }
 
+    // Given: a non-default "Secondary Menu" definition
+    // When: the menu is promoted to the default menu
+    // Then: the menu is marked as the default POS menu
     [Fact]
     public async Task SetAsDefaultAsync_ShouldSetAsDefault()
     {
@@ -1133,6 +1136,9 @@ public class AccountingGroupGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IAccountingGroupGrain>(key);
     }
 
+    // Given: no existing accounting group
+    // When: a "Food Sales" accounting group is created with revenue and COGS account codes
+    // Then: the group is active with correct name, code, accounts, and zero item count
     [Fact]
     public async Task CreateAsync_ShouldCreateAccountingGroup()
     {
@@ -1162,6 +1168,9 @@ public class AccountingGroupGrainTests
         result.ItemCount.Should().Be(0);
     }
 
+    // Given: an existing "Beverages" accounting group with code 4200
+    // When: the group name and description are updated
+    // Then: the name is "Beverage Sales", description is updated, and the code remains unchanged
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAccountingGroup()
     {
@@ -1192,6 +1201,9 @@ public class AccountingGroupGrainTests
         result.Code.Should().Be("4200"); // Unchanged
     }
 
+    // Given: a "Merchandise" accounting group with zero items
+    // When: two menu items are assigned to the group
+    // Then: the group item count is 2
     [Fact]
     public async Task IncrementItemCountAsync_ShouldIncreaseCount()
     {
@@ -1216,6 +1228,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(2);
     }
 
+    // Given: an "Alcohol" accounting group with 3 assigned items
+    // When: one item is removed from the group
+    // Then: the group item count decreases to 2
     [Fact]
     public async Task DecrementItemCountAsync_ShouldDecreaseCount()
     {
@@ -1242,6 +1257,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(2);
     }
 
+    // Given: an active "Discontinued" accounting group
+    // When: the group is deactivated via update
+    // Then: the group is marked as inactive
     [Fact]
     public async Task UpdateAsync_Deactivate_ShouldDeactivateGroup()
     {

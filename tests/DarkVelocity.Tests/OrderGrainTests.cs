@@ -410,6 +410,9 @@ public class OrderGrainTests
         state.VoidReason.Should().Be("Customer left");
     }
 
+    // Given: a dine-in order at table T1
+    // When: the order is transferred to table T10
+    // Then: the order reflects the new table assignment
     [Fact]
     public async Task TransferTableAsync_ShouldUpdateTable()
     {
@@ -432,6 +435,9 @@ public class OrderGrainTests
         state.TableNumber.Should().Be("T10");
     }
 
+    // Given: an open dine-in order
+    // When: server John Smith is assigned to the order
+    // Then: the order records the server's ID and name
     [Fact]
     public async Task AssignServerAsync_ShouldAssignServer()
     {
@@ -454,6 +460,9 @@ public class OrderGrainTests
         state.ServerName.Should().Be("John Smith");
     }
 
+    // Given: an open dine-in order
+    // When: customer Jane Doe is assigned to the order
+    // Then: the order records the customer's ID and name
     [Fact]
     public async Task AssignCustomerAsync_ShouldAssignCustomer()
     {
@@ -478,6 +487,9 @@ public class OrderGrainTests
 
     // Bill Splitting Tests
 
+    // Given: an order with Burger, Fries, and Soda at table T1
+    // When: Fries and Soda are split to a new order
+    // Then: the original order retains only the Burger and the new order contains the moved items
     [Fact]
     public async Task SplitByItemsAsync_ShouldCreateNewOrderWithMovedItems()
     {
@@ -519,6 +531,9 @@ public class OrderGrainTests
         newOrderState.TableNumber.Should().Be("T1");
     }
 
+    // Given: an order with a Burger
+    // When: a bill split is attempted with no lines specified
+    // Then: an error is raised requiring at least one line
     [Fact]
     public async Task SplitByItemsAsync_ShouldFailWhenNoLinesSpecified()
     {
@@ -540,6 +555,9 @@ public class OrderGrainTests
             .WithMessage("*At least one line must be specified*");
     }
 
+    // Given: an order with a single Burger
+    // When: all lines are selected for a split
+    // Then: an error is raised because at least one line must remain on the original order
     [Fact]
     public async Task SplitByItemsAsync_ShouldFailWhenAllLinesSelected()
     {
@@ -563,6 +581,9 @@ public class OrderGrainTests
             .WithMessage("*at least one line must remain*");
     }
 
+    // Given: a closed and fully paid dine-in order
+    // When: a bill split is attempted
+    // Then: an error is raised because closed orders cannot be split
     [Fact]
     public async Task SplitByItemsAsync_ShouldFailForClosedOrder()
     {
@@ -590,6 +611,9 @@ public class OrderGrainTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: an order split into two separate checks
+    // When: each check is paid and closed independently
+    // Then: both orders reach Closed status with zero balance
     [Fact]
     public async Task SplitByItemsAsync_BothOrdersShouldBeIndependentlyPayable()
     {
@@ -627,6 +651,9 @@ public class OrderGrainTests
         newState.Status.Should().Be(OrderStatus.Closed);
     }
 
+    // Given: an order with a $100 meal
+    // When: a 4-way even split is calculated
+    // Then: four equal guest shares summing to the balance due are returned
     [Fact]
     public async Task CalculateSplitByPeopleAsync_ShouldCalculateEqualShares()
     {
@@ -650,6 +677,9 @@ public class OrderGrainTests
         result.Shares.All(s => s.Label!.StartsWith("Guest")).Should().BeTrue();
     }
 
+    // Given: an order with a $100 meal that does not divide evenly by 3
+    // When: a 3-way split is calculated
+    // Then: shares sum exactly to the balance due with remainder distributed
     [Fact]
     public async Task CalculateSplitByPeopleAsync_ShouldHandleRemainderCorrectly()
     {
@@ -676,6 +706,9 @@ public class OrderGrainTests
         result.Shares.Sum(s => s.Total).Should().Be(result.BalanceDue);
     }
 
+    // Given: an order with a $100 meal
+    // When: a split among zero people is requested
+    // Then: an error is raised because the number of people must be greater than zero
     [Fact]
     public async Task CalculateSplitByPeopleAsync_ShouldFailWithZeroPeople()
     {
@@ -697,6 +730,9 @@ public class OrderGrainTests
             .WithMessage("*greater than zero*");
     }
 
+    // Given: a fully paid order with zero balance due
+    // When: a 2-way split is calculated
+    // Then: the split is marked invalid with no shares returned
     [Fact]
     public async Task CalculateSplitByPeopleAsync_ShouldReturnInvalidWhenFullyPaid()
     {
@@ -721,6 +757,9 @@ public class OrderGrainTests
         result.Shares.Should().BeEmpty();
     }
 
+    // Given: an order with a $100 meal
+    // When: custom split amounts that sum to the balance due are provided
+    // Then: the split is marked valid with correct shares
     [Fact]
     public async Task CalculateSplitByAmountsAsync_ShouldValidateAmountsMatchBalance()
     {
@@ -748,6 +787,9 @@ public class OrderGrainTests
         result.Shares.Sum(s => s.Total).Should().BeApproximately(totals.BalanceDue, 0.01m);
     }
 
+    // Given: an order with a $100 meal
+    // When: custom split amounts that do not sum to the balance due are provided
+    // Then: the split is marked invalid
     [Fact]
     public async Task CalculateSplitByAmountsAsync_ShouldReturnInvalidWhenAmountsDontMatch()
     {
@@ -769,6 +811,9 @@ public class OrderGrainTests
         result.Shares.Should().HaveCount(2);
     }
 
+    // Given: an order with a $100 meal
+    // When: a split with a negative amount is requested
+    // Then: an error is raised because amounts cannot be negative
     [Fact]
     public async Task CalculateSplitByAmountsAsync_ShouldFailWithNegativeAmounts()
     {
@@ -790,6 +835,9 @@ public class OrderGrainTests
             .WithMessage("*cannot be negative*");
     }
 
+    // Given: an order with a $100 meal
+    // When: a split with an empty list of amounts is requested
+    // Then: an error is raised because at least one amount is required
     [Fact]
     public async Task CalculateSplitByAmountsAsync_ShouldFailWithEmptyList()
     {
@@ -813,6 +861,9 @@ public class OrderGrainTests
 
     // Per-Item Tax Rate Tests
 
+    // Given: an open dine-in order
+    // When: items with different tax rates (food at 10%, alcohol at 20%, zero-rated gift card) are added
+    // Then: tax is calculated per item and order totals reflect the correct combined tax
     [Fact]
     public async Task AddLineAsync_WithDifferentTaxRates_ShouldCalculateCorrectTax()
     {
