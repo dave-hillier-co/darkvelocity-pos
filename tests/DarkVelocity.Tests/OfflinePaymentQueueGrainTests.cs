@@ -16,6 +16,9 @@ public class OfflinePaymentQueueGrainTests
         _fixture = fixture;
     }
 
+    // Given: an initialized offline payment queue for a site
+    // When: a credit card payment of $100 is queued due to a gateway timeout
+    // Then: a queue entry is created with a future retry time and the queue statistics show one pending payment
     [Fact]
     public async Task QueuePaymentAsync_ShouldQueuePayment()
     {
@@ -46,6 +49,9 @@ public class OfflinePaymentQueueGrainTests
         stats.TotalQueued.Should().Be(1);
     }
 
+    // Given: a queued offline payment that has been picked up for processing
+    // When: the payment processing succeeds with a gateway reference
+    // Then: the entry status becomes Processed with the gateway reference and the processed count increments
     [Fact]
     public async Task RecordSuccessAsync_ShouldMarkPaymentAsProcessed()
     {
@@ -81,6 +87,9 @@ public class OfflinePaymentQueueGrainTests
         stats.TotalProcessed.Should().Be(1);
     }
 
+    // Given: a queued offline payment that has been picked up for processing
+    // When: the payment processing fails with a TIMEOUT error
+    // Then: the entry is re-queued for retry with an incremented attempt count and a future retry time
     [Fact]
     public async Task RecordFailureAsync_ShouldScheduleRetry()
     {
@@ -115,6 +124,9 @@ public class OfflinePaymentQueueGrainTests
         entry.LastErrorCode.Should().Be("TIMEOUT");
     }
 
+    // Given: an offline payment queue configured for a maximum of 2 retries
+    // When: the queued payment fails processing twice
+    // Then: the entry status becomes Failed and the failed count increments in the queue statistics
     [Fact]
     public async Task RecordFailureAsync_AfterMaxRetries_ShouldMarkAsFailed()
     {
@@ -153,6 +165,9 @@ public class OfflinePaymentQueueGrainTests
         stats.TotalFailed.Should().Be(1);
     }
 
+    // Given: a payment queued in the offline queue due to a gateway timeout
+    // When: the queued payment is cancelled by a user with a reason
+    // Then: the entry status becomes Cancelled
     [Fact]
     public async Task CancelPaymentAsync_ShouldCancelQueuedPayment()
     {
@@ -183,6 +198,9 @@ public class OfflinePaymentQueueGrainTests
         entry!.Status.Should().Be(OfflinePaymentStatus.Cancelled);
     }
 
+    // Given: two queued offline payments, one of which has been successfully processed
+    // When: the pending payments are retrieved
+    // Then: only the unprocessed payment is returned
     [Fact]
     public async Task GetPendingPaymentsAsync_ShouldReturnPendingOnly()
     {

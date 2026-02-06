@@ -24,6 +24,9 @@ public class SiteGrainTests
         return orgId;
     }
 
+    // Given: an organization with no venues
+    // When: a new site is created with name, code, and address
+    // Then: the site is created with a unique ID, the correct code, and a creation timestamp
     [Fact]
     public async Task CreateAsync_ShouldCreateSite()
     {
@@ -47,6 +50,9 @@ public class SiteGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an organization
+    // When: a new site is created
+    // Then: the site is automatically registered with the parent organization
     [Fact]
     public async Task CreateAsync_ShouldRegisterWithOrganization()
     {
@@ -70,6 +76,9 @@ public class SiteGrainTests
         siteIds.Should().Contain(siteId);
     }
 
+    // Given: a site created with timezone, currency, and address details
+    // When: the site state is retrieved
+    // Then: all configured properties including timezone, currency, status, and address are returned
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -103,6 +112,9 @@ public class SiteGrainTests
         state.Address.City.Should().Be("New York");
     }
 
+    // Given: an existing site named "Downtown Store"
+    // When: the site name is updated to "Updated Store Name"
+    // Then: the site name changes and the version number increments
     [Fact]
     public async Task UpdateAsync_ShouldUpdateSite()
     {
@@ -124,6 +136,9 @@ public class SiteGrainTests
         state.Name.Should().Be("Updated Store Name");
     }
 
+    // Given: a closed site
+    // When: the site is reopened
+    // Then: the site status changes to Open
     [Fact]
     public async Task OpenAsync_ShouldSetStatusToOpen()
     {
@@ -145,6 +160,9 @@ public class SiteGrainTests
         state.Status.Should().Be(SiteStatus.Open);
     }
 
+    // Given: an open site
+    // When: the site is closed
+    // Then: the site status changes to Closed
     [Fact]
     public async Task CloseAsync_ShouldSetStatusToClosed()
     {
@@ -165,6 +183,9 @@ public class SiteGrainTests
         state.Status.Should().Be(SiteStatus.Closed);
     }
 
+    // Given: an open site
+    // When: the site is temporarily closed for maintenance
+    // Then: the site status changes to TemporarilyClosed
     [Fact]
     public async Task CloseTemporarilyAsync_ShouldSetStatusToTemporarilyClosed()
     {
@@ -185,6 +206,9 @@ public class SiteGrainTests
         state.Status.Should().Be(SiteStatus.TemporarilyClosed);
     }
 
+    // Given: a site with no active menu
+    // When: a menu is set as the active menu for the site
+    // Then: the site settings reflect the newly active menu
     [Fact]
     public async Task SetActiveMenuAsync_ShouldUpdateActiveMenu()
     {
@@ -206,6 +230,9 @@ public class SiteGrainTests
         state.Settings.ActiveMenuId.Should().Be(menuId);
     }
 
+    // Given: a site with no floor plans
+    // When: a floor plan is added to the site
+    // Then: the floor plan ID appears in the site's floor plan list
     [Fact]
     public async Task AddFloorAsync_ShouldAddFloorId()
     {
@@ -227,6 +254,9 @@ public class SiteGrainTests
         state.FloorIds.Should().Contain(floorId);
     }
 
+    // Given: a site with no kitchen stations
+    // When: a kitchen station is added to the site
+    // Then: the station ID appears in the site's station list
     [Fact]
     public async Task AddStationAsync_ShouldAddStationId()
     {
@@ -248,6 +278,9 @@ public class SiteGrainTests
         state.StationIds.Should().Contain(stationId);
     }
 
+    // Given: a newly created site (defaults to Open status)
+    // When: the open status is checked
+    // Then: the site reports as open
     [Fact]
     public async Task IsOpenAsync_WhenOpen_ShouldReturnTrue()
     {
@@ -267,6 +300,9 @@ public class SiteGrainTests
         isOpen.Should().BeTrue();
     }
 
+    // Given: a site that has been closed
+    // When: the open status is checked
+    // Then: the site reports as not open
     [Fact]
     public async Task IsOpenAsync_WhenClosed_ShouldReturnFalse()
     {
@@ -287,6 +323,9 @@ public class SiteGrainTests
         isOpen.Should().BeFalse();
     }
 
+    // Given: a site that has been created
+    // When: the existence check is performed
+    // Then: the site reports as existing
     [Fact]
     public async Task ExistsAsync_WhenCreated_ShouldReturnTrue()
     {
@@ -306,6 +345,9 @@ public class SiteGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: a site ID that has never been created
+    // When: the existence check is performed
+    // Then: the site reports as not existing
     [Fact]
     public async Task ExistsAsync_WhenNotCreated_ShouldReturnFalse()
     {

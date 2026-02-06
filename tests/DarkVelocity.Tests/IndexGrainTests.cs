@@ -55,6 +55,9 @@ public class IndexGrainTests
             ClosedAt: null);
     }
 
+    // Given: An empty order index for a site
+    // When: An order summary is registered in the index
+    // Then: The index count is 1 and the order exists in the index
     [Fact]
     public async Task RegisterAsync_ShouldAddEntryToIndex()
     {
@@ -77,6 +80,9 @@ public class IndexGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: An order index containing an open order
+    // When: The same order is re-registered with a Closed status
+    // Then: The index count remains 1 and the order status is updated to Closed
     [Fact]
     public async Task RegisterAsync_ShouldUpdateExistingEntry()
     {
@@ -102,6 +108,9 @@ public class IndexGrainTests
         retrieved!.Status.Should().Be(OrderStatus.Closed);
     }
 
+    // Given: An order index containing an open order
+    // When: The order is updated to Paid status via the update operation
+    // Then: The retrieved order reflects the Paid status
     [Fact]
     public async Task UpdateAsync_ShouldUpdateExistingEntry()
     {
@@ -124,6 +133,9 @@ public class IndexGrainTests
         retrieved!.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: An order index containing one registered order
+    // When: The order is removed from the index
+    // Then: The index count is 0 and the order no longer exists in the index
     [Fact]
     public async Task RemoveAsync_ShouldRemoveEntryFromIndex()
     {
@@ -147,6 +159,9 @@ public class IndexGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: An empty order index for a site
+    // When: A nonexistent order ID is removed
+    // Then: No error is raised and the operation is a no-op
     [Fact]
     public async Task RemoveAsync_NonExistentEntry_ShouldBeNoOp()
     {
@@ -159,6 +174,9 @@ public class IndexGrainTests
         await index.RemoveAsync(Guid.NewGuid());
     }
 
+    // Given: An order index containing four orders with mixed statuses (Open, Closed, Paid)
+    // When: All entries are retrieved and filtered client-side for open orders
+    // Then: Only the two open orders are returned
     [Fact]
     public async Task GetAllAsync_ShouldAllowClientSideFiltering()
     {
@@ -186,6 +204,9 @@ public class IndexGrainTests
         openOrders.Should().AllSatisfy(o => o.Summary.Status.Should().Be(OrderStatus.Open));
     }
 
+    // Given: An order index containing four orders with varying totals (50, 75, 150, 250)
+    // When: All entries are retrieved and filtered client-side for orders with total >= 100
+    // Then: Only the two high-value orders are returned
     [Fact]
     public async Task GetAllAsync_ShouldAllowClientSideFilteringByTotal()
     {
@@ -212,6 +233,9 @@ public class IndexGrainTests
         highValueOrders.Should().AllSatisfy(o => o.Summary.GrandTotal.Should().BeGreaterThanOrEqualTo(100m));
     }
 
+    // Given: An order index with three orders created at different times
+    // When: The most recent entries are retrieved
+    // Then: Orders are returned in reverse chronological order (newest first)
     [Fact]
     public async Task GetRecentAsync_ShouldReturnMostRecentFirst()
     {
@@ -239,6 +263,9 @@ public class IndexGrainTests
         recent[2].Status.Should().Be(OrderStatus.Open); // Oldest last
     }
 
+    // Given: An order index with 20 registered orders
+    // When: The 5 most recent entries are requested
+    // Then: Exactly 5 entries are returned
     [Fact]
     public async Task GetRecentAsync_ShouldRespectLimit()
     {
@@ -260,6 +287,9 @@ public class IndexGrainTests
         recent.Should().HaveCount(5);
     }
 
+    // Given: An order index with two registered orders
+    // When: All entries are retrieved
+    // Then: Both orders are present in the results
     [Fact]
     public async Task GetAllAsync_ShouldReturnAllEntries()
     {
@@ -283,6 +313,9 @@ public class IndexGrainTests
         all.Select(e => e.EntityId).Should().Contain(orderId2);
     }
 
+    // Given: An order index containing an order for customer "Jane Doe"
+    // When: The order is retrieved by its ID
+    // Then: The full order summary is returned including order ID, status, and customer name
     [Fact]
     public async Task GetByIdAsync_ExistingEntry_ShouldReturnSummary()
     {
@@ -305,6 +338,9 @@ public class IndexGrainTests
         retrieved.CustomerName.Should().Be("Jane Doe");
     }
 
+    // Given: An empty order index for a site
+    // When: A nonexistent order ID is looked up
+    // Then: Null is returned indicating the order is not in the index
     [Fact]
     public async Task GetByIdAsync_NonExistentEntry_ShouldReturnNull()
     {
@@ -320,6 +356,9 @@ public class IndexGrainTests
         retrieved.Should().BeNull();
     }
 
+    // Given: An order index containing a registered order
+    // When: The existence of that order is checked
+    // Then: The check returns true
     [Fact]
     public async Task ExistsAsync_ExistingEntry_ShouldReturnTrue()
     {
@@ -338,6 +377,9 @@ public class IndexGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: An empty order index for a site
+    // When: The existence of a random order ID is checked
+    // Then: The check returns false
     [Fact]
     public async Task ExistsAsync_NonExistentEntry_ShouldReturnFalse()
     {
@@ -353,6 +395,9 @@ public class IndexGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: An order index with two registered orders
+    // When: The index is cleared
+    // Then: The index count drops to 0 and all entries are removed
     [Fact]
     public async Task ClearAsync_ShouldRemoveAllEntries()
     {
@@ -377,6 +422,9 @@ public class IndexGrainTests
         countAfter.Should().Be(0);
     }
 
+    // Given: Two order indexes scoped to different sites within the same organization
+    // When: An order is registered in each site's index
+    // Then: Each index contains only its own orders and does not see the other site's entries
     [Fact]
     public async Task DifferentScopes_ShouldMaintainSeparateIndexes()
     {
@@ -409,6 +457,9 @@ public class IndexGrainTests
         exists1InIndex2.Should().BeFalse();
     }
 
+    // Given: An expense index scoped to a specific month (January 2024)
+    // When: An entry is registered in the monthly index
+    // Then: The entry is stored and the index count is 1
     [Fact]
     public async Task MonthlyScope_ShouldWork()
     {
@@ -427,6 +478,9 @@ public class IndexGrainTests
         count.Should().Be(1);
     }
 
+    // Given: Known organization and site IDs
+    // When: Index grain keys are generated for site-scoped, monthly, and custom-scoped indexes
+    // Then: Each key follows the format "org:{orgId}:index:{type}:{scope}"
     [Fact]
     public void GrainKeysIndex_ShouldGenerateCorrectFormat()
     {
@@ -445,6 +499,9 @@ public class IndexGrainTests
         stringKey.Should().Be("org:12345678-1234-1234-1234-123456789012:index:custom:my-scope");
     }
 
+    // Given: A well-formed index grain key string
+    // When: The key is parsed
+    // Then: The organization ID, index type, and scope are correctly extracted
     [Fact]
     public void GrainKeysParseIndex_ShouldParseCorrectly()
     {
@@ -461,6 +518,9 @@ public class IndexGrainTests
         scope.Should().Be("site-456");
     }
 
+    // Given: An index grain key with colons embedded in the scope portion
+    // When: The key is parsed
+    // Then: The scope is preserved intact including the embedded colons
     [Fact]
     public void GrainKeysParseIndex_WithColonsInScope_ShouldPreserveScope()
     {
@@ -474,6 +534,9 @@ public class IndexGrainTests
         scope.Should().Be("scope:with:colons");
     }
 
+    // Given: A malformed index grain key that does not follow the expected format
+    // When: The key is parsed
+    // Then: An argument exception is thrown
     [Fact]
     public void GrainKeysParseIndex_InvalidFormat_ShouldThrow()
     {
@@ -487,6 +550,9 @@ public class IndexGrainTests
         act.Should().Throw<ArgumentException>();
     }
 
+    // Given: An order index with four orders for different customers with varying statuses and totals
+    // When: All entries are retrieved and filtered client-side for open orders with total >= 100
+    // Then: Only Bob's order (Open, 150) matches the combined filter criteria
     [Fact]
     public async Task GetAllAsync_ComplexClientSideFiltering_ShouldWork()
     {

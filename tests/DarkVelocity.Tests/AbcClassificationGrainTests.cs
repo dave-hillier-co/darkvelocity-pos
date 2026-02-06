@@ -34,6 +34,9 @@ public class AbcClassificationGrainTests
         return grain;
     }
 
+    // Given: a new ABC classification grain for a site
+    // When: the grain is initialized
+    // Then: default settings are applied (80/95 thresholds, AnnualConsumptionValue method)
     [Fact]
     public async Task InitializeAsync_ShouldSetupClassification()
     {
@@ -53,6 +56,9 @@ public class AbcClassificationGrainTests
         settings.Method.Should().Be(ClassificationMethod.AnnualConsumptionValue);
     }
 
+    // Given: a new ABC classification grain for a site
+    // When: the grain is initialized
+    // Then: default reorder policies are set for all three classes (A requires approval with 14-day safety stock, C has 30-day safety stock)
     [Fact]
     public async Task InitializeAsync_ShouldSetDefaultReorderPolicies()
     {
@@ -82,6 +88,9 @@ public class AbcClassificationGrainTests
         policyC!.SafetyStockDays.Should().Be(30);
     }
 
+    // Given: an initialized ABC classification grain
+    // When: a new ingredient is registered
+    // Then: the ingredient is added with an Unclassified status pending the next classification run
     [Fact]
     public async Task RegisterIngredientAsync_ShouldAddIngredientAsUnclassified()
     {
@@ -102,6 +111,9 @@ public class AbcClassificationGrainTests
         classification.IngredientName.Should().Be("Test Item");
     }
 
+    // Given: three inventory items with high ($50/unit), medium ($10/unit), and low ($2/unit) consumption values
+    // When: the Pareto-based ABC classification is run
+    // Then: the highest-value item is ranked first and at least one item falls into Class A
     [Fact]
     public async Task ClassifyAsync_ShouldApplyParetoClassification()
     {
@@ -142,6 +154,9 @@ public class AbcClassificationGrainTests
         highValueClassification!.Rank.Should().Be(1);
     }
 
+    // Given: an ingredient classified algorithmically, then manually overridden to a different ABC class
+    // When: the classification is re-run
+    // Then: the item retains its overridden classification
     [Fact]
     public async Task ClassifyAsync_ShouldDetectReclassifiedItems()
     {
@@ -174,6 +189,9 @@ public class AbcClassificationGrainTests
         currentClassification!.Classification.Should().Be(targetClass);
     }
 
+    // Given: three ingredients with high, medium, and low consumption values after classification
+    // When: items are queried by each ABC class (A, B, C)
+    // Then: all three items are distributed across the three classes with no unclassified items
     [Fact]
     public async Task GetItemsByClassAsync_ShouldReturnCorrectItems()
     {
@@ -209,6 +227,9 @@ public class AbcClassificationGrainTests
         totalItems.Should().Be(3);
     }
 
+    // Given: an ingredient that has been algorithmically classified
+    // When: the classification is manually overridden to Class A for strategic importance
+    // Then: the ingredient's classification changes to Class A regardless of its consumption value
     [Fact]
     public async Task OverrideClassificationAsync_ShouldApplyManualClassification()
     {
@@ -232,6 +253,9 @@ public class AbcClassificationGrainTests
         classification!.Classification.Should().Be(AbcClass.A);
     }
 
+    // Given: an ingredient with a manual Class A override
+    // When: the override is cleared and classification is re-run
+    // Then: the ingredient is reclassified algorithmically based on its actual consumption value
     [Fact]
     public async Task ClearOverrideAsync_ShouldRemoveManualOverride()
     {
@@ -261,6 +285,9 @@ public class AbcClassificationGrainTests
         classification.Should().NotBeNull();
     }
 
+    // Given: an initialized ABC classification with default reorder policies
+    // When: the Class A reorder policy is updated to 21-day safety stock and 3-day review frequency
+    // Then: the updated policy values are persisted for Class A
     [Fact]
     public async Task SetReorderPolicyAsync_ShouldUpdatePolicy()
     {
@@ -290,6 +317,9 @@ public class AbcClassificationGrainTests
         policy.ReviewFrequencyDays.Should().Be(3);
     }
 
+    // Given: an initialized ABC classification with default settings
+    // When: the settings are updated to 70/90 thresholds, Velocity method, 180-day period, no auto-reclassify
+    // Then: the new configuration values are persisted
     [Fact]
     public async Task ConfigureAsync_ShouldUpdateSettings()
     {
@@ -318,6 +348,9 @@ public class AbcClassificationGrainTests
         settings.AnalysisPeriodDays.Should().Be(180);
     }
 
+    // Given: a registered ingredient in the ABC classification grain
+    // When: the ingredient is unregistered
+    // Then: the ingredient's classification is removed and querying it returns null
     [Fact]
     public async Task UnregisterIngredientAsync_ShouldRemoveIngredient()
     {
@@ -338,6 +371,9 @@ public class AbcClassificationGrainTests
         classification.Should().BeNull();
     }
 
+    // Given: two registered ingredients with different consumption values
+    // When: the ABC classification report is generated
+    // Then: the report shows correct totals, site ID, timestamp, and class value breakdown summing to total
     [Fact]
     public async Task GetReportAsync_ShouldReturnClassificationSummary()
     {

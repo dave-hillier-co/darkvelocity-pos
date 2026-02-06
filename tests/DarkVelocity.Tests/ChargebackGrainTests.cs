@@ -16,6 +16,9 @@ public class ChargebackGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new chargeback grain with no prior state
+    // When: a $100 chargeback is received from the payment processor with a 14-day dispute deadline
+    // Then: the chargeback is created in pending status with the reason code and amount recorded
     [Fact]
     public async Task ReceiveAsync_ShouldCreateChargeback()
     {
@@ -48,6 +51,9 @@ public class ChargebackGrainTests
         state.ReasonCode.Should().Be("CB001");
     }
 
+    // Given: a pending chargeback received from the processor
+    // When: a manager acknowledges the chargeback with a review note
+    // Then: the chargeback status changes to acknowledged with the reviewer recorded
     [Fact]
     public async Task AcknowledgeAsync_ShouldAcknowledgeChargeback()
     {
@@ -71,6 +77,9 @@ public class ChargebackGrainTests
         state.AcknowledgedBy.Should().Be(userId);
     }
 
+    // Given: an acknowledged chargeback in the evidence-gathering phase
+    // When: a signed receipt is uploaded as evidence
+    // Then: the evidence is stored with its type, description, and file reference
     [Fact]
     public async Task UploadEvidenceAsync_ShouldAddEvidence()
     {
@@ -100,6 +109,9 @@ public class ChargebackGrainTests
         evidence[0].EvidenceType.Should().Be("receipt");
     }
 
+    // Given: an acknowledged chargeback with evidence attached
+    // When: the merchant submits a formal dispute with supporting argument
+    // Then: the chargeback status changes to disputed and a dispute reference is generated
     [Fact]
     public async Task DisputeAsync_ShouldDisputeChargeback()
     {

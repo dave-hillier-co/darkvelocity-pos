@@ -30,6 +30,9 @@ public class PrinterGrainTests
 
     #region Registration Tests
 
+    // Given: A new network receipt printer with IP address, port, and 80mm paper width
+    // When: The printer is registered as the site default
+    // Then: The printer is created as active with all network properties set and starts offline
     [Fact]
     public async Task RegisterAsync_NetworkPrinter_ShouldRegisterWithCorrectProperties()
     {
@@ -70,6 +73,9 @@ public class PrinterGrainTests
         result.UsbProductId.Should().BeNull();
     }
 
+    // Given: A new USB receipt printer with vendor and product IDs
+    // When: The printer is registered with USB connection type
+    // Then: The USB identifiers are stored and network properties remain null
     [Fact]
     public async Task RegisterAsync_UsbPrinter_ShouldRegisterWithUsbDetails()
     {
@@ -100,6 +106,9 @@ public class PrinterGrainTests
         result.Port.Should().BeNull();
     }
 
+    // Given: A new Bluetooth receipt printer with a MAC address
+    // When: The printer is registered with Bluetooth connection type
+    // Then: The MAC address is stored correctly
     [Fact]
     public async Task RegisterAsync_BluetoothPrinter_ShouldRegisterWithMacAddress()
     {
@@ -127,6 +136,9 @@ public class PrinterGrainTests
         result.MacAddress.Should().Be("AA:BB:CC:DD:EE:FF");
     }
 
+    // Given: A new network kitchen printer for the hot line
+    // When: The printer is registered as Kitchen type
+    // Then: The printer type is set to Kitchen
     [Fact]
     public async Task RegisterAsync_KitchenPrinter_ShouldRegisterKitchenType()
     {
@@ -154,6 +166,9 @@ public class PrinterGrainTests
         result.Name.Should().Be("Hot Line Printer");
     }
 
+    // Given: A new USB label printer with 50mm paper width
+    // When: The printer is registered as Label type
+    // Then: The printer type is set to Label with the correct paper width
     [Fact]
     public async Task RegisterAsync_LabelPrinter_ShouldRegisterLabelType()
     {
@@ -181,6 +196,9 @@ public class PrinterGrainTests
         result.PaperWidth.Should().Be(50);
     }
 
+    // Given: A printer that has already been registered
+    // When: A second registration is attempted on the same printer grain
+    // Then: An exception is thrown indicating the printer is already registered
     [Fact]
     public async Task RegisterAsync_AlreadyRegistered_ShouldThrowException()
     {
@@ -204,6 +222,9 @@ public class PrinterGrainTests
             .WithMessage("*already registered*");
     }
 
+    // Given: A new receipt printer
+    // When: The printer is registered with IsDefault set to false
+    // Then: The printer is not marked as the site default
     [Fact]
     public async Task RegisterAsync_NonDefaultPrinter_ShouldSetIsDefaultFalse()
     {
@@ -230,6 +251,9 @@ public class PrinterGrainTests
         result.IsDefault.Should().BeFalse();
     }
 
+    // Given: Two receipt printers with different paper widths (80mm and 58mm)
+    // When: Both printers are registered
+    // Then: Each printer preserves its respective paper width
     [Fact]
     public async Task RegisterAsync_WithDifferentPaperWidths_ShouldPreserveWidth()
     {
@@ -261,6 +285,9 @@ public class PrinterGrainTests
 
     #region Update Tests
 
+    // Given: A registered network receipt printer
+    // When: All configurable properties are updated including name, IP, port, character set, and capabilities
+    // Then: All updated properties reflect the new values
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAllProperties()
     {
@@ -296,6 +323,9 @@ public class PrinterGrainTests
         result.SupportsCashDrawer.Should().BeTrue();
     }
 
+    // Given: A registered network receipt printer with specific IP and port
+    // When: Only the name is updated with all other fields set to null
+    // Then: The name changes while IP, port, and default status remain unchanged
     [Fact]
     public async Task UpdateAsync_PartialUpdate_ShouldOnlyChangeSpecifiedProperties()
     {
@@ -328,6 +358,9 @@ public class PrinterGrainTests
         result.IsDefault.Should().BeTrue(); // Unchanged
     }
 
+    // Given: A registered receipt printer without cash drawer support
+    // When: Paper cut and cash drawer support capabilities are enabled via update
+    // Then: Both capabilities are set to true
     [Fact]
     public async Task UpdateAsync_SetCashDrawerSupport_ShouldEnableCashDrawer()
     {
@@ -353,6 +386,9 @@ public class PrinterGrainTests
         result.SupportsCashDrawer.Should().BeTrue();
     }
 
+    // Given: A printer grain that has never been registered
+    // When: An update is attempted
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task UpdateAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -373,6 +409,9 @@ public class PrinterGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered receipt printer with default character set
+    // When: The character set is updated to ISO-8859-1
+    // Then: The character set reflects the new value
     [Fact]
     public async Task UpdateAsync_ChangeCharacterSet_ShouldUpdateCharacterSet()
     {
@@ -396,6 +435,9 @@ public class PrinterGrainTests
         result.CharacterSet.Should().Be("ISO-8859-1");
     }
 
+    // Given: A registered active printer
+    // When: The IsActive flag is set to false via update
+    // Then: The printer becomes inactive
     [Fact]
     public async Task UpdateAsync_Deactivate_ShouldSetInactive()
     {
@@ -423,6 +465,9 @@ public class PrinterGrainTests
 
     #region Deactivation Tests
 
+    // Given: A registered printer that has been set online
+    // When: The printer is deactivated
+    // Then: The printer becomes both inactive and offline
     [Fact]
     public async Task DeactivateAsync_ShouldSetInactiveAndOffline()
     {
@@ -445,6 +490,9 @@ public class PrinterGrainTests
         snapshot.IsOnline.Should().BeFalse();
     }
 
+    // Given: A printer grain that has never been registered
+    // When: Deactivation is attempted
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task DeactivateAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -461,6 +509,9 @@ public class PrinterGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered printer that has already been deactivated
+    // When: Deactivation is called a second time
+    // Then: The operation is idempotent and no exception is thrown
     [Fact]
     public async Task DeactivateAsync_MultipleTimes_ShouldBeIdempotent()
     {
@@ -486,6 +537,9 @@ public class PrinterGrainTests
 
     #region Print Recording Tests
 
+    // Given: A registered receipt printer that starts offline
+    // When: A print is recorded
+    // Then: The last-print timestamp is set and the printer is marked online
     [Fact]
     public async Task RecordPrintAsync_ShouldUpdateLastPrintAndSetOnline()
     {
@@ -508,6 +562,9 @@ public class PrinterGrainTests
         snapshot.LastPrintAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered receipt printer that has already printed once
+    // When: A second print is recorded after a brief delay
+    // Then: The last-print timestamp advances to the more recent print time
     [Fact]
     public async Task RecordPrintAsync_MultipleTimes_ShouldUpdateLastPrintEachTime()
     {
@@ -532,6 +589,9 @@ public class PrinterGrainTests
         secondPrintTime.Should().BeAfter(firstPrintTime!.Value);
     }
 
+    // Given: A printer grain that has never been registered
+    // When: A print recording is attempted
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task RecordPrintAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -548,6 +608,9 @@ public class PrinterGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered receipt printer that is currently offline
+    // When: A print is successfully recorded
+    // Then: The printer is automatically set to online
     [Fact]
     public async Task RecordPrintAsync_WhenOffline_ShouldSetOnline()
     {
@@ -576,6 +639,9 @@ public class PrinterGrainTests
 
     #region Online Status Tests
 
+    // Given: A registered printer that starts offline
+    // When: The printer is set to online
+    // Then: The printer reports as online
     [Fact]
     public async Task SetOnlineAsync_True_ShouldSetOnline()
     {
@@ -596,6 +662,9 @@ public class PrinterGrainTests
         isOnline.Should().BeTrue();
     }
 
+    // Given: A registered printer that has been set online
+    // When: The printer is set to offline
+    // Then: The printer reports as offline
     [Fact]
     public async Task SetOnlineAsync_False_ShouldSetOffline()
     {
@@ -617,6 +686,9 @@ public class PrinterGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: A registered receipt printer
+    // When: The online status is toggled between online and offline multiple times
+    // Then: The printer correctly tracks each status change
     [Fact]
     public async Task SetOnlineAsync_Toggle_ShouldTrackStateCorrectly()
     {
@@ -640,6 +712,9 @@ public class PrinterGrainTests
         (await grain.IsOnlineAsync()).Should().BeTrue();
     }
 
+    // Given: A printer grain that has never been registered
+    // When: Setting the printer online is attempted
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task SetOnlineAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -656,6 +731,9 @@ public class PrinterGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A newly registered receipt printer
+    // When: The online status is checked immediately after registration
+    // Then: The printer is offline (printers start offline until first print or ping)
     [Fact]
     public async Task IsOnlineAsync_WhenNewlyRegistered_ShouldReturnFalse()
     {
@@ -675,6 +753,9 @@ public class PrinterGrainTests
         isOnline.Should().BeFalse();
     }
 
+    // Given: A printer grain that has never been registered
+    // When: The online status is checked
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task IsOnlineAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -695,6 +776,9 @@ public class PrinterGrainTests
 
     #region GetSnapshot Tests
 
+    // Given: A registered kitchen printer that has been updated with capabilities and has recorded a print
+    // When: The snapshot is retrieved
+    // Then: The snapshot contains all registration, update, and runtime state including last-print timestamp
     [Fact]
     public async Task GetSnapshotAsync_ShouldReturnCompleteSnapshot()
     {
@@ -746,6 +830,9 @@ public class PrinterGrainTests
         snapshot.LastPrintAt.Should().NotBeNull();
     }
 
+    // Given: A printer grain that has never been registered
+    // When: A snapshot is requested
+    // Then: An exception is thrown indicating the printer is not initialized
     [Fact]
     public async Task GetSnapshotAsync_BeforeRegistration_ShouldThrowException()
     {
@@ -762,6 +849,9 @@ public class PrinterGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered receipt printer that has been updated multiple times
+    // When: The snapshot is retrieved after the final update
+    // Then: The snapshot reflects all accumulated changes from the sequence of updates
     [Fact]
     public async Task GetSnapshotAsync_AfterMultipleUpdates_ShouldReflectLatestState()
     {
@@ -802,6 +892,9 @@ public class PrinterGrainTests
 
     #region Edge Cases
 
+    // Given: A new USB receipt printer with only required fields
+    // When: The printer is registered without optional connection details
+    // Then: The registration succeeds with the minimal configuration
     [Fact]
     public async Task RegisterAsync_WithMinimalRequiredFields_ShouldSucceed()
     {
@@ -829,6 +922,9 @@ public class PrinterGrainTests
         result.Name.Should().Be("Minimal Printer");
     }
 
+    // Given: A new printer
+    // When: The printer is registered with a name containing special characters
+    // Then: The special characters are preserved in the name
     [Fact]
     public async Task RegisterAsync_WithSpecialCharactersInName_ShouldPreserveName()
     {
@@ -855,6 +951,9 @@ public class PrinterGrainTests
         result.Name.Should().Be("Printer #1 (Kitchen-Hot) @ Bar");
     }
 
+    // Given: A new printer
+    // When: The printer is registered with a Unicode name containing accented characters
+    // Then: The Unicode characters are preserved in the name
     [Fact]
     public async Task RegisterAsync_WithUnicodeInName_ShouldPreserveName()
     {
@@ -881,6 +980,9 @@ public class PrinterGrainTests
         result.Name.Should().Be("Imprimante principale");
     }
 
+    // Given: Two different organizations each with the same printer ID
+    // When: Each organization registers its printer with different configurations
+    // Then: The printers are isolated by tenant boundary and maintain independent state
     [Fact]
     public async Task Grain_WithDifferentOrganizations_ShouldBeIsolated()
     {
@@ -914,6 +1016,9 @@ public class PrinterGrainTests
         snapshot2.PrinterType.Should().Be(PrinterType.Kitchen);
     }
 
+    // Given: A new network receipt printer
+    // When: The printer is registered with a non-standard LPD port (515)
+    // Then: The custom port number is preserved
     [Fact]
     public async Task RegisterAsync_WithCustomPort_ShouldPreservePort()
     {
@@ -944,6 +1049,9 @@ public class PrinterGrainTests
 
     #region State Persistence Tests
 
+    // Given: A registered printer that has been updated, set online, and recorded a print
+    // When: A new grain reference is obtained for the same printer
+    // Then: All state including name, character set, capabilities, and online status is persisted
     [Fact]
     public async Task Printer_StatePersistedAcrossGrainRetrieval()
     {
@@ -984,6 +1092,9 @@ public class PrinterGrainTests
 
     #region Connection Type Specific Tests
 
+    // Given: A new network printer
+    // When: The printer is registered with an IPv6 address
+    // Then: The IPv6 address is stored correctly
     [Fact]
     public async Task RegisterAsync_NetworkPrinter_WithIPv6_ShouldSucceed()
     {
@@ -1010,6 +1121,9 @@ public class PrinterGrainTests
         result.IpAddress.Should().Be("fe80::1");
     }
 
+    // Given: A registered network printer with a known IP address and port
+    // When: Both the IP address and port are updated
+    // Then: The new network address is stored
     [Fact]
     public async Task UpdateAsync_ChangeNetworkAddress_ShouldUpdateAddress()
     {
@@ -1036,6 +1150,9 @@ public class PrinterGrainTests
         result.Port.Should().Be(9200);
     }
 
+    // Given: A registered Bluetooth printer with a known MAC address
+    // When: The MAC address is updated to a new value
+    // Then: The new MAC address is stored
     [Fact]
     public async Task UpdateAsync_ChangeMacAddress_ShouldUpdateAddress()
     {

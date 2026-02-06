@@ -24,6 +24,9 @@ public class RefundErrorScenarioTests
     // Refund Amount Validation
     // ============================================================================
 
+    // Given: a completed $100 cash payment
+    // When: a $150 refund is attempted, exceeding the original payment amount
+    // Then: the refund is rejected because it exceeds the available balance
     [Fact]
     public async Task Payment_Refund_ExceedsTotalAmount_ShouldThrow()
     {
@@ -38,6 +41,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*exceeds available balance*");
     }
 
+    // Given: a completed $100 payment that has already been partially refunded $60
+    // When: a $50 refund is attempted against the remaining $40 balance
+    // Then: the refund is rejected because it exceeds the remaining refundable amount
     [Fact]
     public async Task Payment_Refund_ExceedsRemainingAfterPartialRefund_ShouldThrow()
     {
@@ -55,6 +61,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*exceeds available balance*");
     }
 
+    // Given: a completed $100 payment
+    // When: a zero-amount refund is attempted
+    // Then: the refund is rejected as invalid
     [Fact]
     public async Task Payment_Refund_ZeroAmount_ShouldThrow()
     {
@@ -68,6 +77,9 @@ public class RefundErrorScenarioTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    // Given: a completed $100 payment
+    // When: a negative-amount refund is attempted
+    // Then: the refund is rejected as invalid
     [Fact]
     public async Task Payment_Refund_NegativeAmount_ShouldThrow()
     {
@@ -85,6 +97,9 @@ public class RefundErrorScenarioTests
     // Refund Status Validation
     // ============================================================================
 
+    // Given: a payment that has been initiated but not yet completed
+    // When: a refund is attempted against the pending payment
+    // Then: the refund is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_Refund_WhenPending_ShouldThrow()
     {
@@ -99,6 +114,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*only refund completed payments*");
     }
 
+    // Given: a payment that has been voided
+    // When: a refund is attempted against the voided payment
+    // Then: the refund is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_Refund_WhenVoided_ShouldThrow()
     {
@@ -114,6 +132,9 @@ public class RefundErrorScenarioTests
             .WithMessage("*only refund completed payments*");
     }
 
+    // Given: a completed $100 payment that has already been fully refunded
+    // When: an additional $10 refund is attempted
+    // Then: the refund is rejected because the payment is already in refunded status
     [Fact]
     public async Task Payment_Refund_WhenAlreadyFullyRefunded_ShouldThrow()
     {
@@ -137,6 +158,9 @@ public class RefundErrorScenarioTests
     // Partial Refund Scenarios
     // ============================================================================
 
+    // Given: a completed $100 payment
+    // When: a $30 partial refund is issued
+    // Then: the payment status changes to partially refunded with $30 tracked
     [Fact]
     public async Task Payment_PartialRefund_ShouldSetPartiallyRefundedStatus()
     {
@@ -152,6 +176,9 @@ public class RefundErrorScenarioTests
         state.RefundedAmount.Should().Be(30.00m);
     }
 
+    // Given: a completed $100 payment
+    // When: three partial refunds of $20, $30, and $25 are issued sequentially
+    // Then: the refunded amount accumulates to $75 with partially refunded status
     [Fact]
     public async Task Payment_MultiplePartialRefunds_ShouldAccumulate()
     {
@@ -169,6 +196,9 @@ public class RefundErrorScenarioTests
         state.RefundedAmount.Should().Be(75.00m);
     }
 
+    // Given: a completed $100 payment
+    // When: a $60 partial refund is followed by a $40 refund for the remainder
+    // Then: the payment status changes to fully refunded with $100 total refunded
     [Fact]
     public async Task Payment_PartialRefunds_ThenFullRefund_ShouldChangeToRefundedStatus()
     {
@@ -185,6 +215,9 @@ public class RefundErrorScenarioTests
         state.RefundedAmount.Should().Be(100.00m);
     }
 
+    // Given: a completed $100 payment with a $70 partial refund already applied
+    // When: a refund for exactly the remaining $30 is issued
+    // Then: the payment becomes fully refunded with $100 total refunded
     [Fact]
     public async Task Payment_PartialRefund_ExactRemainingAmount_ShouldSucceed()
     {
@@ -205,6 +238,9 @@ public class RefundErrorScenarioTests
     // Void After Refund Scenarios
     // ============================================================================
 
+    // Given: a completed $100 payment that has been partially refunded $30
+    // When: the payment is voided
+    // Then: the payment status changes to voided
     [Fact]
     public async Task Payment_Void_WhenPartiallyRefunded_ShouldSucceed()
     {
@@ -220,6 +256,9 @@ public class RefundErrorScenarioTests
         state.Status.Should().Be(PaymentStatus.Voided);
     }
 
+    // Given: a completed $100 payment that has been fully refunded
+    // When: a void is attempted on the fully refunded payment
+    // Then: the void is rejected because the payment is already refunded
     [Fact]
     public async Task Payment_Void_WhenFullyRefunded_ShouldThrow()
     {
@@ -239,6 +278,9 @@ public class RefundErrorScenarioTests
     // Tip Adjustment After Refund
     // ============================================================================
 
+    // Given: a completed $100 payment that has been partially refunded $30
+    // When: a tip adjustment is attempted on the partially refunded payment
+    // Then: the tip adjustment is rejected because tips can only be adjusted on completed payments
     [Fact]
     public async Task Payment_AdjustTip_WhenPartiallyRefunded_ShouldThrow()
     {
@@ -258,6 +300,9 @@ public class RefundErrorScenarioTests
     // Refund Tracking
     // ============================================================================
 
+    // Given: a completed $100 payment
+    // When: a $40 refund is issued with a reason and issuer recorded
+    // Then: the refund details including amount, reason, issuer, and timestamp are tracked
     [Fact]
     public async Task Payment_Refund_ShouldTrackRefundDetails()
     {
@@ -279,6 +324,9 @@ public class RefundErrorScenarioTests
         state.Refunds[0].IssuedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a completed $100 payment
+    // When: three separate refunds are issued for returned items ($25, $15, $10)
+    // Then: all three refund records are tracked with a cumulative $50 refunded total
     [Fact]
     public async Task Payment_MultipleRefunds_ShouldTrackAllDetails()
     {
@@ -301,6 +349,9 @@ public class RefundErrorScenarioTests
     // Edge Cases
     // ============================================================================
 
+    // Given: a completed $100 payment
+    // When: a 1-cent refund is issued as a rounding correction
+    // Then: the payment is partially refunded with $0.01 tracked
     [Fact]
     public async Task Payment_Refund_SmallAmount_ShouldSucceed()
     {
@@ -316,6 +367,9 @@ public class RefundErrorScenarioTests
         state.RefundedAmount.Should().Be(0.01m);
     }
 
+    // Given: a completed $100 payment
+    // When: ten separate $5 refunds are issued against the payment
+    // Then: all ten refund records are tracked with a $50 cumulative total
     [Fact]
     public async Task Payment_Refund_LargeNumberOfRefunds_ShouldAllBeTracked()
     {
@@ -339,6 +393,9 @@ public class RefundErrorScenarioTests
     // Cash vs Card Refund Scenarios
     // ============================================================================
 
+    // Given: a completed $50 cash payment
+    // When: a $25 refund is issued
+    // Then: the cash payment is partially refunded with $25 tracked
     [Fact]
     public async Task CashPayment_Refund_ShouldWork()
     {
@@ -354,6 +411,9 @@ public class RefundErrorScenarioTests
         state.RefundedAmount.Should().Be(25.00m);
     }
 
+    // Given: a completed $75 credit card payment
+    // When: a $30 refund is issued
+    // Then: the card payment is partially refunded with $30 tracked
     [Fact]
     public async Task CardPayment_Refund_ShouldWork()
     {
@@ -373,6 +433,9 @@ public class RefundErrorScenarioTests
     // Gift Card Refund Scenarios
     // ============================================================================
 
+    // Given: a completed $100 gift card payment
+    // When: a $40 refund is issued against the gift card payment
+    // Then: the payment is partially refunded with $40 tracked
     [Fact]
     public async Task GiftCardPayment_Refund_ShouldWork()
     {
@@ -405,6 +468,9 @@ public class RefundErrorScenarioTests
     // Refund with Tips
     // ============================================================================
 
+    // Given: a completed $100 cash payment with a $15 tip
+    // When: a $30 refund is issued for a returned item
+    // Then: the tip remains unchanged at $15 while the refund is tracked separately
     [Fact]
     public async Task Payment_Refund_ShouldNotAffectTip()
     {

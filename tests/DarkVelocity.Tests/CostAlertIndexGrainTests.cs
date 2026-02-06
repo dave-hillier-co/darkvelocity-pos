@@ -44,6 +44,9 @@ public class CostAlertIndexGrainTests
             null);
     }
 
+    // Given: An empty cost alert index for an organization
+    // When: A new ingredient price alert for "Salmon" is registered
+    // Then: The alert is retrievable by ID and contains the correct ingredient name
     [Fact]
     public async Task RegisterAsync_ShouldAddAlertToIndex()
     {
@@ -63,6 +66,9 @@ public class CostAlertIndexGrainTests
         result!.IngredientName.Should().Be("Salmon");
     }
 
+    // Given: A cost alert registered with a 10% price change
+    // When: The same alert ID is re-registered with a 25% price change
+    // Then: The alert is updated in-place and reflects the new 25% change percentage
     [Fact]
     public async Task RegisterAsync_ShouldUpdateExistingAlert()
     {
@@ -84,6 +90,9 @@ public class CostAlertIndexGrainTests
         result!.ChangePercent.Should().Be(25m);
     }
 
+    // Given: An unacknowledged cost alert in the index
+    // When: The alert is acknowledged with a "PriceAdjusted" action
+    // Then: The alert status changes to acknowledged with the action recorded and a timestamp set
     [Fact]
     public async Task UpdateStatusAsync_ShouldUpdateAlertStatus()
     {
@@ -107,6 +116,9 @@ public class CostAlertIndexGrainTests
         result.AcknowledgedAt.Should().NotBeNull();
     }
 
+    // Given: A cost alert registered in the index
+    // When: The alert is removed by its ID
+    // Then: The alert is no longer retrievable and returns null on lookup
     [Fact]
     public async Task RemoveAsync_ShouldRemoveAlertFromIndex()
     {
@@ -126,6 +138,9 @@ public class CostAlertIndexGrainTests
         result.Should().BeNull();
     }
 
+    // Given: One active (unacknowledged) and one acknowledged cost alert in the index
+    // When: Querying the index filtered by Active status
+    // Then: Only the unacknowledged alert is returned
     [Fact]
     public async Task QueryAsync_ShouldFilterByStatus_Active()
     {
@@ -151,6 +166,9 @@ public class CostAlertIndexGrainTests
         result.Alerts[0].IsAcknowledged.Should().BeFalse();
     }
 
+    // Given: One active and one acknowledged cost alert in the index
+    // When: Querying the index filtered by Acknowledged status
+    // Then: Only the acknowledged alert is returned
     [Fact]
     public async Task QueryAsync_ShouldFilterByStatus_Acknowledged()
     {
@@ -176,6 +194,9 @@ public class CostAlertIndexGrainTests
         result.Alerts[0].IsAcknowledged.Should().BeTrue();
     }
 
+    // Given: Two cost alerts -- one for ingredient price increase and one for margin below threshold
+    // When: Querying the index filtered by IngredientPriceIncrease alert type
+    // Then: Only the ingredient price increase alert is returned
     [Fact]
     public async Task QueryAsync_ShouldFilterByAlertType()
     {
@@ -201,6 +222,9 @@ public class CostAlertIndexGrainTests
         result.Alerts[0].AlertType.Should().Be(CostAlertType.IngredientPriceIncrease);
     }
 
+    // Given: 10 cost alerts registered in the index
+    // When: Querying with Skip=3 and Take=4 for pagination
+    // Then: 4 alerts are returned in the page and TotalCount reflects all 10 alerts
     [Fact]
     public async Task QueryAsync_ShouldReturnPaginatedResults()
     {
@@ -229,6 +253,9 @@ public class CostAlertIndexGrainTests
         result.TotalCount.Should().Be(10);
     }
 
+    // Given: 3 active and 2 acknowledged cost alerts in the index
+    // When: Querying with Status=All to retrieve all alerts
+    // Then: TotalCount is 5, ActiveCount is 3, and AcknowledgedCount is 2
     [Fact]
     public async Task QueryAsync_ShouldReturnCounts()
     {
@@ -261,6 +288,9 @@ public class CostAlertIndexGrainTests
         result.AcknowledgedCount.Should().Be(2);
     }
 
+    // Given: 2 active (unacknowledged) alerts and 1 acknowledged alert in the index
+    // When: The active alert count is requested
+    // Then: The count returns 2, excluding the acknowledged alert
     [Fact]
     public async Task GetActiveCountAsync_ShouldReturnCorrectCount()
     {
@@ -283,6 +313,9 @@ public class CostAlertIndexGrainTests
         count.Should().Be(2);
     }
 
+    // Given: Two cost alerts registered in the index with known IDs
+    // When: All alert IDs are retrieved from the index
+    // Then: Both alert IDs are present in the returned collection
     [Fact]
     public async Task GetAllAlertIdsAsync_ShouldReturnAllIds()
     {
@@ -305,6 +338,9 @@ public class CostAlertIndexGrainTests
         ids.Should().Contain(alertId2);
     }
 
+    // Given: 5 active cost alerts registered in the index
+    // When: The index is cleared
+    // Then: All alerts are removed and the alert ID list is empty
     [Fact]
     public async Task ClearAsync_ShouldRemoveAllAlerts()
     {
@@ -329,6 +365,9 @@ public class CostAlertIndexGrainTests
         ids.Should().BeEmpty();
     }
 
+    // Given: An empty cost alert index with no registered alerts
+    // When: Looking up an alert by a non-existent ID
+    // Then: The result is null indicating the alert does not exist
     [Fact]
     public async Task GetByIdAsync_NonExistentAlert_ShouldReturnNull()
     {
@@ -343,6 +382,9 @@ public class CostAlertIndexGrainTests
         result.Should().BeNull();
     }
 
+    // Given: An empty cost alert index with no registered alerts
+    // When: Attempting to acknowledge a non-existent alert ID
+    // Then: The operation completes silently without throwing an error
     [Fact]
     public async Task UpdateStatusAsync_NonExistentAlert_ShouldBeNoOp()
     {

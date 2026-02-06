@@ -40,6 +40,9 @@ public class OrderApiTests
         return (orgId, siteId);
     }
 
+    // Given: a site ready to take orders
+    // When: a new dine-in order is opened for a table with guest count
+    // Then: the order is created with an order number and HAL links to add line items
     [Fact]
     public async Task CreateOrder_ReturnsCreatedWithHalResponse()
     {
@@ -71,6 +74,9 @@ public class OrderApiTests
             .Should().EndWith("/lines");
     }
 
+    // Given: an order that has been opened at a site
+    // When: the order is retrieved by identifier
+    // Then: the order details are returned with HAL links to send and close
     [Fact]
     public async Task GetOrder_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -98,6 +104,9 @@ public class OrderApiTests
             .Should().EndWith("/close");
     }
 
+    // Given: a site with no matching order
+    // When: a non-existent order identifier is looked up
+    // Then: a not-found error is returned
     [Fact]
     public async Task GetOrder_WhenNotExists_ReturnsNotFound()
     {
@@ -116,6 +125,9 @@ public class OrderApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: an open order
+    // When: a menu item is added as a line item with quantity and special notes
+    // Then: the line item is created and a HAL link back to the order is returned
     [Fact]
     public async Task AddLineToOrder_ReturnsCreatedWithHalResponse()
     {
@@ -150,6 +162,9 @@ public class OrderApiTests
             .Should().Contain($"/orders/{orderId}");
     }
 
+    // Given: an order with multiple line items added
+    // When: the order's line items are retrieved
+    // Then: a HAL collection is returned containing all line items with a count
     [Fact]
     public async Task GetOrderLines_ReturnsHalCollection()
     {

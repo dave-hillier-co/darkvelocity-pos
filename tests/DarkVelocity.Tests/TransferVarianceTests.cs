@@ -46,6 +46,9 @@ public class TransferVarianceTests
     // Basic Variance Calculation Tests
     // ============================================================================
 
+    // Given: A shipped inter-site transfer of 50 units of ground beef
+    // When: The destination site receives only 45 units (5 damaged in transit)
+    // Then: A negative variance of -5 is recorded against the shipped quantity
     [Fact]
     public async Task ReceiveWithVariance_ShortDelivery_ShouldCalculateNegativeVariance()
     {
@@ -90,6 +93,9 @@ public class TransferVarianceTests
         variances[0].Variance.Should().Be(-5);
     }
 
+    // Given: A shipped inter-site transfer of 60 units of chicken wings
+    // When: The destination site receives 65 units (extra units included)
+    // Then: A positive variance of +5 is recorded against the shipped quantity
     [Fact]
     public async Task ReceiveWithVariance_OverDelivery_ShouldCalculatePositiveVariance()
     {
@@ -125,6 +131,9 @@ public class TransferVarianceTests
         variances[0].Variance.Should().Be(5);
     }
 
+    // Given: A shipped inter-site transfer of 30 units
+    // When: The destination site receives exactly 30 units
+    // Then: Zero variance is recorded for the transfer line
     [Fact]
     public async Task ReceiveWithVariance_ExactQuantity_ShouldHaveZeroVariance()
     {
@@ -162,6 +171,9 @@ public class TransferVarianceTests
     // Multi-Item Transfer Variance Tests
     // ============================================================================
 
+    // Given: A shipped transfer containing three items (A: 30, B: 20, C: 25 units)
+    // When: Items are received with mixed results (A: 28 short, B: 20 exact, C: 27 over)
+    // Then: Variances are tracked per item: A at -2, B at 0, C at +2
     [Fact]
     public async Task MultiItemTransfer_MixedVariances_ShouldTrackEachItemSeparately()
     {
@@ -225,6 +237,9 @@ public class TransferVarianceTests
     // Transfer Completion with Variance Tests
     // ============================================================================
 
+    // Given: A shipped two-item transfer with all items received (some with variance)
+    // When: The transfer receipt is finalized
+    // Then: The transfer status transitions to Received with a receipt timestamp
     [Fact]
     public async Task CompleteTransfer_AllItemsReceived_ShouldTransitionToReceived()
     {
@@ -272,6 +287,9 @@ public class TransferVarianceTests
         state.ReceivedAt.Should().NotBeNull();
     }
 
+    // Given: A shipped transfer with an expensive item ($50/unit) and a cheap item ($5/unit)
+    // When: Both items are received 2 units short
+    // Then: Variance values reflect unit cost: -$100 for the expensive item and -$10 for the cheap item
     [Fact]
     public async Task CompleteTransfer_WithVariances_ShouldCalculateTotalVarianceValue()
     {
@@ -329,6 +347,9 @@ public class TransferVarianceTests
     // Variance Percentage Tests
     // ============================================================================
 
+    // Given: A shipped transfer of 100 units between two sites
+    // When: 90 units are received at the destination (10% shortage)
+    // Then: The variance percentage is calculated as -10%
     [Fact]
     public async Task Variance_ShouldCalculatePercentageCorrectly()
     {
@@ -367,6 +388,9 @@ public class TransferVarianceTests
     // Edge Cases
     // ============================================================================
 
+    // Given: A shipped bulk transfer of 50,000 units at $0.10 each
+    // When: 49,500 units are received (500 units short in transit)
+    // Then: The variance of -500 is correctly calculated for the large quantity
     [Fact]
     public async Task Variance_LargeQuantity_ShouldCalculateCorrectly()
     {
@@ -400,6 +424,9 @@ public class TransferVarianceTests
         variances[0].Variance.Should().Be(-500);
     }
 
+    // Given: A shipped transfer that deducted 25 units from source inventory (100 to 75)
+    // When: The transfer is cancelled with stock return to source enabled
+    // Then: Source inventory is restored to 100 units and the transfer is marked Cancelled
     [Fact]
     public async Task Transfer_CancelAfterShipped_ShouldReturnStockToSource()
     {
@@ -440,6 +467,9 @@ public class TransferVarianceTests
         levelAfterCancel.QuantityOnHand.Should().Be(100); // Back to original
     }
 
+    // Given: A shipped transfer of 30 units with 28 received (2 unit shortage)
+    // When: The transfer summary is retrieved
+    // Then: The summary reports a total variance of -2
     [Fact]
     public async Task GetSummary_ShouldIncludeTotalVariance()
     {

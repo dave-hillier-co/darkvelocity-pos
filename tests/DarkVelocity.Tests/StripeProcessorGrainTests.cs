@@ -22,6 +22,9 @@ public class StripeProcessorGrainTests
     // Authorization Tests
     // =========================================================================
 
+    // Given: a valid Stripe payment authorization request with automatic capture
+    // When: the payment is authorized through the Stripe processor
+    // Then: the authorization succeeds and returns a Stripe payment intent ID
     [Fact]
     public async Task AuthorizeAsync_WithValidRequest_ShouldSucceed()
     {
@@ -48,6 +51,9 @@ public class StripeProcessorGrainTests
         result.TransactionId.Should().StartWith("pi_");
     }
 
+    // Given: a Stripe payment authorization request with manual capture disabled
+    // When: the payment is authorized through the Stripe processor
+    // Then: the payment status is set to authorized with the full amount held but not yet captured
     [Fact]
     public async Task AuthorizeAsync_WithManualCapture_ShouldSetStatusToAuthorized()
     {
@@ -77,6 +83,9 @@ public class StripeProcessorGrainTests
         state.CapturedAmount.Should().Be(0);
     }
 
+    // Given: a Stripe payment authorization request with automatic capture enabled
+    // When: the payment is authorized through the Stripe processor
+    // Then: the payment is immediately captured and the full amount is settled
     [Fact]
     public async Task AuthorizeAsync_WithAutomaticCapture_ShouldSetStatusToCaptured()
     {
@@ -109,6 +118,9 @@ public class StripeProcessorGrainTests
     // Capture Tests
     // =========================================================================
 
+    // Given: a Stripe payment that has been authorized but not yet captured
+    // When: the full authorized amount is captured
+    // Then: the capture succeeds and the payment status transitions to captured
     [Fact]
     public async Task CaptureAsync_WithAuthorizedPayment_ShouldSucceed()
     {
@@ -140,6 +152,9 @@ public class StripeProcessorGrainTests
         state.Status.Should().Be("captured");
     }
 
+    // Given: a Stripe payment authorized for a larger amount
+    // When: a partial capture is requested for less than the authorized amount
+    // Then: the partial capture succeeds with only the requested amount settled
     [Fact]
     public async Task CaptureAsync_WithPartialAmount_ShouldSucceed()
     {
@@ -165,6 +180,9 @@ public class StripeProcessorGrainTests
         captureResult.CapturedAmount.Should().Be(7500);
     }
 
+    // Given: a Stripe payment authorized for a specific amount
+    // When: a capture is attempted for more than the authorized amount
+    // Then: the capture fails with an amount_too_large error
     [Fact]
     public async Task CaptureAsync_ExceedsAuthorizedAmount_ShouldFail()
     {
@@ -190,6 +208,9 @@ public class StripeProcessorGrainTests
         captureResult.ErrorCode.Should().Be("amount_too_large");
     }
 
+    // Given: a Stripe processor grain with no prior authorization
+    // When: a capture is attempted with an invalid transaction ID
+    // Then: the capture fails with an invalid_transaction error
     [Fact]
     public async Task CaptureAsync_WithInvalidTransactionId_ShouldFail()
     {
@@ -210,6 +231,9 @@ public class StripeProcessorGrainTests
     // Refund Tests
     // =========================================================================
 
+    // Given: a Stripe payment that has been captured
+    // When: a partial refund is issued to the customer
+    // Then: the refund succeeds and the refunded amount is recorded on the payment
     [Fact]
     public async Task RefundAsync_WithCapturedPayment_ShouldSucceed()
     {
@@ -239,6 +263,9 @@ public class StripeProcessorGrainTests
         state.RefundedAmount.Should().Be(2000);
     }
 
+    // Given: a Stripe payment that has been captured for the full amount
+    // When: a full refund is issued for the entire captured amount
+    // Then: the payment status transitions to refunded
     [Fact]
     public async Task RefundAsync_FullAmount_ShouldChangeStatusToRefunded()
     {
@@ -265,6 +292,9 @@ public class StripeProcessorGrainTests
         state.RefundedAmount.Should().Be(3000);
     }
 
+    // Given: a Stripe payment that has been captured for a specific amount
+    // When: a refund is attempted for more than the captured amount
+    // Then: the refund fails with an amount_too_large error
     [Fact]
     public async Task RefundAsync_ExceedsAvailableBalance_ShouldFail()
     {
@@ -290,6 +320,9 @@ public class StripeProcessorGrainTests
         refundResult.ErrorCode.Should().Be("amount_too_large");
     }
 
+    // Given: a Stripe payment that is authorized but not yet captured
+    // When: a refund is attempted before capture
+    // Then: the refund fails because refunds require a captured payment
     [Fact]
     public async Task RefundAsync_OnAuthorizedPayment_ShouldFail()
     {
@@ -319,6 +352,9 @@ public class StripeProcessorGrainTests
     // Void Tests
     // =========================================================================
 
+    // Given: a Stripe payment that is authorized but not yet captured
+    // When: the authorization is voided due to customer cancellation
+    // Then: the void succeeds and the payment status transitions to voided
     [Fact]
     public async Task VoidAsync_OnAuthorizedPayment_ShouldSucceed()
     {
@@ -347,6 +383,9 @@ public class StripeProcessorGrainTests
         state.Status.Should().Be("voided");
     }
 
+    // Given: a Stripe payment that has already been captured
+    // When: a void is attempted on the captured payment
+    // Then: the void fails because captured payments cannot be voided, only refunded
     [Fact]
     public async Task VoidAsync_OnCapturedPayment_ShouldFail()
     {
@@ -376,6 +415,9 @@ public class StripeProcessorGrainTests
     // State and Event Tracking Tests
     // =========================================================================
 
+    // Given: a Stripe payment that has been authorized and captured
+    // When: the processor state is queried
+    // Then: the state reflects the Stripe processor name, payment intent ID, captured status, and amount
     [Fact]
     public async Task GetStateAsync_ShouldReturnCorrectProcessorInfo()
     {
@@ -403,6 +445,9 @@ public class StripeProcessorGrainTests
         state.CapturedAmount.Should().Be(6000);
     }
 
+    // Given: a Stripe payment that goes through authorization, capture, and partial refund
+    // When: the processor event history is queried
+    // Then: all payment lifecycle events are recorded in the event log
     [Fact]
     public async Task Events_ShouldBeTracked()
     {
@@ -434,6 +479,9 @@ public class StripeProcessorGrainTests
     // Stripe-Specific Operation Tests
     // =========================================================================
 
+    // Given: an initialized Stripe processor with a completed payment
+    // When: a setup intent is created for a customer to save payment details
+    // Then: a client secret is returned for the frontend to complete the setup flow
     [Fact]
     public async Task CreateSetupIntentAsync_ShouldReturnClientSecret()
     {
@@ -460,6 +508,9 @@ public class StripeProcessorGrainTests
         clientSecret.Should().Contain("_secret_");
     }
 
+    // Given: a Stripe Connect platform payment request with an application fee
+    // When: the payment is authorized on behalf of a connected merchant account
+    // Then: the authorization succeeds with the platform fee and connected account details recorded
     [Fact]
     public async Task AuthorizeOnBehalfOfAsync_ShouldStoreConnectDetails()
     {
@@ -491,6 +542,9 @@ public class StripeProcessorGrainTests
     // Webhook Handling Tests
     // =========================================================================
 
+    // Given: a Stripe payment that has been captured
+    // When: a payment_intent.succeeded webhook is received from Stripe
+    // Then: the webhook event is recorded in the processor event history
     [Fact]
     public async Task HandleStripeWebhookAsync_PaymentSucceeded_ShouldBeRecorded()
     {
@@ -523,6 +577,9 @@ public class StripeProcessorGrainTests
     // Idempotency Tests
     // =========================================================================
 
+    // Given: a Stripe payment authorization request
+    // When: the authorization is submitted and a retry count is tracked
+    // Then: the idempotency key mechanism ensures safe retry handling
     [Fact]
     public async Task MultipleAuthorizeAttempts_ShouldUseIdempotencyKeys()
     {

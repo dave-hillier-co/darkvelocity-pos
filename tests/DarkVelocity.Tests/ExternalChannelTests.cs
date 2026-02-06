@@ -26,6 +26,9 @@ public class ExternalOrderGrainTests
     private IExternalOrderGrain GetExternalOrderGrain(Guid orgId, Guid orderId)
         => _fixture.Cluster.GrainFactory.GetGrain<IExternalOrderGrain>(GrainKeys.ExternalOrder(orgId, orderId));
 
+    // Given: a new delivery order received from an external platform
+    // When: the order is ingested into the system
+    // Then: the external order is created with pending status and all customer and item details preserved
     [Fact]
     public async Task ReceiveAsync_ShouldCreateExternalOrder()
     {
@@ -52,6 +55,9 @@ public class ExternalOrderGrainTests
         result.Items.Should().HaveCount(2);
     }
 
+    // Given: a pending external delivery order
+    // When: the restaurant accepts the order with an estimated pickup time
+    // Then: the order status transitions to accepted with the pickup time recorded
     [Fact]
     public async Task AcceptAsync_ShouldTransitionToAccepted()
     {
@@ -74,6 +80,9 @@ public class ExternalOrderGrainTests
         result.EstimatedPickupAt.Should().Be(estimatedPickup);
     }
 
+    // Given: a pending external delivery order
+    // When: the restaurant rejects the order with a reason
+    // Then: the order status transitions to rejected with the rejection reason stored
     [Fact]
     public async Task RejectAsync_ShouldTransitionToRejected()
     {
@@ -94,6 +103,9 @@ public class ExternalOrderGrainTests
         result.ErrorMessage.Should().Be("Kitchen too busy");
     }
 
+    // Given: an accepted external delivery order
+    // When: the order progresses through preparing, ready, picked up, and delivered stages
+    // Then: each status transition is recorded in sequence following the delivery workflow
     [Fact]
     public async Task OrderStatusProgression_ShouldFollowWorkflow()
     {
@@ -126,6 +138,9 @@ public class ExternalOrderGrainTests
         delivered.Status.Should().Be(ExternalOrderStatus.Delivered);
     }
 
+    // Given: an accepted external delivery order
+    // When: the order is cancelled with a reason
+    // Then: the order status transitions to cancelled with the cancellation reason stored
     [Fact]
     public async Task CancelAsync_ShouldTransitionToCancelled()
     {
@@ -148,6 +163,9 @@ public class ExternalOrderGrainTests
         snapshot.ErrorMessage.Should().Be("Customer cancelled");
     }
 
+    // Given: a received external delivery order
+    // When: the external order is linked to an internal POS order
+    // Then: the internal order ID is stored on the external order for cross-referencing
     [Fact]
     public async Task LinkInternalOrderAsync_ShouldSetInternalOrderId()
     {
@@ -169,6 +187,9 @@ public class ExternalOrderGrainTests
         snapshot.InternalOrderId.Should().Be(internalOrderId);
     }
 
+    // Given: a received external delivery order
+    // When: platform communication retries occur multiple times
+    // Then: the retry count accumulates to track delivery platform sync attempts
     [Fact]
     public async Task IncrementRetryAsync_ShouldIncreaseRetryCount()
     {
@@ -190,6 +211,9 @@ public class ExternalOrderGrainTests
         snapshot.RetryCount.Should().Be(2);
     }
 
+    // Given: a received external delivery order
+    // When: the delivery platform sends courier assignment details
+    // Then: the courier information is stored on the order for tracking
     [Fact]
     public async Task UpdateCourierAsync_ShouldUpdateCourierInfo()
     {
@@ -280,6 +304,9 @@ public class MenuSyncGrainTests
     private IMenuSyncGrain GetMenuSyncGrain(Guid orgId, Guid syncId)
         => _fixture.Cluster.GrainFactory.GetGrain<IMenuSyncGrain>(GrainKeys.MenuSync(orgId, syncId));
 
+    // Given: a delivery platform channel ready for menu synchronization
+    // When: a menu sync operation is started
+    // Then: the sync is initialized in progress with zero items synced or failed
     [Fact]
     public async Task StartAsync_ShouldInitializeSync()
     {
@@ -303,6 +330,9 @@ public class MenuSyncGrainTests
         result.ItemsFailed.Should().Be(0);
     }
 
+    // Given: an in-progress menu sync to a delivery platform
+    // When: menu items are successfully synced with their platform PLU mappings
+    // Then: the synced item count is incremented for each successful item
     [Fact]
     public async Task RecordItemSyncedAsync_ShouldTrackSyncedItems()
     {
@@ -331,6 +361,9 @@ public class MenuSyncGrainTests
         snapshot.ItemsSynced.Should().Be(2);
     }
 
+    // Given: an in-progress menu sync to a delivery platform
+    // When: menu items fail to sync due to validation errors
+    // Then: the failed item count and error messages are tracked
     [Fact]
     public async Task RecordItemFailedAsync_ShouldTrackFailures()
     {
@@ -353,6 +386,9 @@ public class MenuSyncGrainTests
         snapshot.Errors.Should().Contain("Invalid PLU format");
     }
 
+    // Given: an in-progress menu sync with items already synced
+    // When: the sync operation is completed
+    // Then: the sync status transitions to completed with a completion timestamp
     [Fact]
     public async Task CompleteAsync_ShouldFinalizeSync()
     {
@@ -375,6 +411,9 @@ public class MenuSyncGrainTests
         snapshot.CompletedAt.Should().NotBeNull();
     }
 
+    // Given: an in-progress menu sync to a delivery platform
+    // When: the sync fails due to a platform connection error
+    // Then: the sync status transitions to failed with the error message recorded
     [Fact]
     public async Task FailAsync_ShouldMarkSyncAsFailed()
     {
@@ -402,6 +441,9 @@ public class MenuSyncGrainTests
 
 public class DeliverectWebhookParsingTests
 {
+    // Given: a raw Deliverect webhook JSON payload for a new order
+    // When: the payload is deserialized
+    // Then: all order fields including customer, items, and pricing are correctly mapped
     [Fact]
     public void ParseDeliverectOrder_ShouldMapFieldsCorrectly()
     {
@@ -468,6 +510,9 @@ public class DeliverectWebhookParsingTests
 
 public class WebhookSignatureValidationTests
 {
+    // Given: a webhook payload with a valid HMAC-SHA256 signature
+    // When: the signature is validated against the webhook secret
+    // Then: the validation succeeds confirming the payload is authentic
     [Fact]
     public void ValidateHmacSignature_WithValidSignature_ShouldReturnTrue()
     {
@@ -487,6 +532,9 @@ public class WebhookSignatureValidationTests
         isValid.Should().BeTrue();
     }
 
+    // Given: a webhook payload with a "sha256=" prefixed HMAC signature
+    // When: the signature is validated against the webhook secret
+    // Then: the validation succeeds after stripping the algorithm prefix
     [Fact]
     public void ValidateHmacSignature_WithPrefixedSignature_ShouldReturnTrue()
     {
@@ -505,6 +553,9 @@ public class WebhookSignatureValidationTests
         isValid.Should().BeTrue();
     }
 
+    // Given: a webhook payload with a tampered or invalid signature
+    // When: the signature is validated against the webhook secret
+    // Then: the validation fails indicating the payload may have been tampered with
     [Fact]
     public void ValidateHmacSignature_WithInvalidSignature_ShouldReturnFalse()
     {
@@ -552,6 +603,9 @@ public class WebhookSignatureValidationTests
 
 public class DeliverectAdapterTests
 {
+    // Given: Deliverect numeric order type codes (1=Delivery, 2=Pickup, 3=DineIn)
+    // When: each code is mapped to the internal order type
+    // Then: known codes map correctly and unknown codes default to Delivery
     [Fact]
     public void MapOrderType_ShouldMapCorrectly()
     {
@@ -563,6 +617,9 @@ public class DeliverectAdapterTests
         MapOrderType(null).Should().Be(ExternalOrderType.Delivery); // Default
     }
 
+    // Given: internal order statuses across the delivery workflow
+    // When: each internal status is mapped to a Deliverect numeric status code
+    // Then: all statuses map to their correct Deliverect equivalents
     [Fact]
     public void MapToDeliverectStatus_ShouldMapCorrectly()
     {
@@ -578,6 +635,9 @@ public class DeliverectAdapterTests
         MapToDeliverectStatus(ExternalOrderStatus.Rejected).Should().Be(120);
     }
 
+    // Given: a Deliverect price in cents (integer format)
+    // When: the price is converted to the internal decimal format
+    // Then: the cents value is correctly converted to dollars
     [Fact]
     public void PriceConversion_ShouldConvertFromCents()
     {

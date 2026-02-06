@@ -24,6 +24,9 @@ public class PaymentSplitScenarioTests
     // Multiple Payment Methods on Single Order
     // ============================================================================
 
+    // Given: an open order with a $100 total
+    // When: $60 is paid in cash and $40 is paid by card with a $5 tip
+    // Then: the order is fully paid with both payments tracked and tips accumulated
     [Fact]
     public async Task Order_MultiplePayments_CashAndCard_ShouldTrackBoth()
     {
@@ -45,6 +48,9 @@ public class PaymentSplitScenarioTests
         state.Payments.Should().HaveCount(2);
     }
 
+    // Given: an open order with a $150 total
+    // When: three guests each pay $50 using cash, credit card, and debit card
+    // Then: the order is fully paid with all three payments and combined tips recorded
     [Fact]
     public async Task Order_MultiplePayments_ThreeWaySplit_ShouldTrackAll()
     {
@@ -65,6 +71,9 @@ public class PaymentSplitScenarioTests
         state.Payments.Should().HaveCount(3);
     }
 
+    // Given: an open order with a $75 total
+    // When: $25 is paid by gift card and $50 is paid in cash with a $3 tip
+    // Then: the order is fully paid combining both payment methods
     [Fact]
     public async Task Order_MultiplePayments_WithGiftCard_ShouldCombine()
     {
@@ -87,6 +96,9 @@ public class PaymentSplitScenarioTests
     // Partial Payment Scenarios
     // ============================================================================
 
+    // Given: an open order with a $100 total
+    // When: only $40 is paid in cash
+    // Then: the order status is partially paid with a $60 balance due
     [Fact]
     public async Task Order_PartialPayment_ShouldSetPartiallyPaidStatus()
     {
@@ -103,6 +115,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.PartiallyPaid);
     }
 
+    // Given: an open order with a $100 total and a $30 partial cash payment already applied
+    // When: the remaining $70 is paid by credit card
+    // Then: the order transitions from partially paid to fully paid
     [Fact]
     public async Task Order_PartialPayment_ThenFullPayment_ShouldCompletePaid()
     {
@@ -126,6 +141,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: an open order with a $200 total
+    // When: four successive payments of $50 each are applied across cash and card
+    // Then: all payments accumulate and the order becomes fully paid with tips totaled
     [Fact]
     public async Task Order_MultiplePartialPayments_ShouldAccumulate()
     {
@@ -156,6 +174,9 @@ public class PaymentSplitScenarioTests
     // Overpayment Scenarios
     // ============================================================================
 
+    // Given: an open order with a $50 total
+    // When: the customer pays $60 in cash, rounding up
+    // Then: the order is marked as paid with a negative balance indicating overpayment
     [Fact]
     public async Task Order_Overpayment_ShouldSetPaidStatus()
     {
@@ -176,6 +197,9 @@ public class PaymentSplitScenarioTests
     // Payment Removal Scenarios
     // ============================================================================
 
+    // Given: a fully paid order with a single $100 credit card payment and a $5 tip
+    // When: the payment is removed from the order
+    // Then: the order reverts to open with zero paid, zero tips, and the full balance due
     [Fact]
     public async Task Order_RemovePayment_ShouldUpdateBalance()
     {
@@ -199,6 +223,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Open);
     }
 
+    // Given: a fully paid order with a $60 cash and $40 card split payment
+    // When: the card payment is removed
+    // Then: the order reverts to partially paid with only the cash payment remaining
     [Fact]
     public async Task Order_RemoveOneOfMultiplePayments_ShouldRevertToPartiallyPaid()
     {
@@ -228,6 +255,9 @@ public class PaymentSplitScenarioTests
     // Split Bill with Payment Grains
     // ============================================================================
 
+    // Given: an $80 order with two separate payment grains created for a split bill
+    // When: one guest pays $40 cash and another pays $40 by card, both with tips
+    // Then: the order is fully paid and both payment grains show completed status
     [Fact]
     public async Task SplitBill_TwoPaymentGrains_ForSameOrder()
     {
@@ -264,6 +294,9 @@ public class PaymentSplitScenarioTests
         payment2State.Status.Should().Be(PaymentStatus.Completed);
     }
 
+    // Given: a $75 order to be split unevenly between two guests
+    // When: one guest pays $50 by card and the other pays $25 in cash, each adding tips
+    // Then: the order is fully paid with the combined $8 tip total
     [Fact]
     public async Task SplitBill_UnequalSplit_ShouldWorkCorrectly()
     {
@@ -287,6 +320,9 @@ public class PaymentSplitScenarioTests
     // Close Order with Split Payment
     // ============================================================================
 
+    // Given: a sent order with a $100 total fully covered by a cash and card split payment
+    // When: the order is closed
+    // Then: the order status transitions to closed successfully
     [Fact]
     public async Task Order_Close_AfterSplitPayment_ShouldSucceed()
     {
@@ -305,6 +341,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Closed);
     }
 
+    // Given: a sent order with a $100 total and only $50 paid in cash
+    // When: an attempt is made to close the order
+    // Then: the close is rejected because there is an outstanding balance
     [Fact]
     public async Task Order_Close_WithPartialPayment_ShouldFail()
     {
@@ -326,6 +365,9 @@ public class PaymentSplitScenarioTests
     // Tips with Split Payments
     // ============================================================================
 
+    // Given: a $120 order to be split three ways
+    // When: each guest pays $40 with varying tip percentages (20%, 15%, 25%)
+    // Then: all individual tips accumulate to a $24 total on the fully paid order
     [Fact]
     public async Task Order_SplitPayment_TipsShouldAccumulate()
     {
@@ -348,6 +390,9 @@ public class PaymentSplitScenarioTests
     // Edge Cases
     // ============================================================================
 
+    // Given: an order with a 100% discount voucher applied, reducing the total to zero
+    // When: a zero-amount voucher payment is recorded to complete the order
+    // Then: the order is marked as paid with zero balance due
     [Fact]
     public async Task Order_ZeroAmountPayment_ShouldBeRecorded()
     {
@@ -371,6 +416,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: an open order with a $100 total
+    // When: ten separate $10 cash payments are recorded, each with a $1 tip
+    // Then: all ten payments are tracked with the correct totals and accumulated tips
     [Fact]
     public async Task Order_ManySmallPayments_ShouldAllBeTracked()
     {
@@ -391,6 +439,9 @@ public class PaymentSplitScenarioTests
         state.Status.Should().Be(OrderStatus.Paid);
     }
 
+    // Given: a fully paid order with one cash payment
+    // When: a removal is attempted for a payment ID that does not exist on the order
+    // Then: the operation is a no-op and the existing payment remains intact
     [Fact]
     public async Task Order_RemoveNonExistentPayment_ShouldNotFail()
     {
@@ -411,6 +462,9 @@ public class PaymentSplitScenarioTests
     // Payment Method Tracking
     // ============================================================================
 
+    // Given: an open order with a $100 total
+    // When: three payments are recorded using cash, credit card, and gift card
+    // Then: each payment's method is correctly tracked on the order
     [Fact]
     public async Task Order_Payments_ShouldTrackMethod()
     {

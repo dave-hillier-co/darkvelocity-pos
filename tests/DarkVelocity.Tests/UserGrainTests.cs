@@ -16,6 +16,9 @@ public class UserGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new user with email, display name, and employee type
+    // When: the user is created in the organization
+    // Then: the user is assigned an ID, email is stored, and creation timestamp is recorded
     [Fact]
     public async Task CreateAsync_ShouldCreateUser()
     {
@@ -35,6 +38,9 @@ public class UserGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a user created as a manager in an organization
+    // When: the user state is retrieved
+    // Then: the state contains the user's ID, organization, email, display name, manager type, and active status
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -57,6 +63,9 @@ public class UserGrainTests
         state.Status.Should().Be(UserStatus.Active);
     }
 
+    // Given: an existing user in the organization
+    // When: the user's display name is updated
+    // Then: the state version increments and the display name reflects the change
     [Fact]
     public async Task UpdateAsync_ShouldUpdateUser()
     {
@@ -76,6 +85,9 @@ public class UserGrainTests
         state.DisplayName.Should().Be("Updated Name");
     }
 
+    // Given: an existing user without a PIN
+    // When: a four-digit PIN is set for POS login
+    // Then: the user's PIN hash is stored (non-empty)
     [Fact]
     public async Task SetPinAsync_ShouldSetPin()
     {
@@ -94,6 +106,9 @@ public class UserGrainTests
         state.PinHash.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a user with PIN "1234" configured for POS login
+    // When: the correct PIN "1234" is submitted for verification
+    // Then: verification succeeds
     [Fact]
     public async Task VerifyPinAsync_WithCorrectPin_ShouldSucceed()
     {
@@ -112,6 +127,9 @@ public class UserGrainTests
         result.Success.Should().BeTrue();
     }
 
+    // Given: a user with PIN "1234" configured for POS login
+    // When: an incorrect PIN "5678" is submitted for verification
+    // Then: verification fails with an "Invalid PIN" error
     [Fact]
     public async Task VerifyPinAsync_WithIncorrectPin_ShouldFail()
     {
@@ -131,6 +149,9 @@ public class UserGrainTests
         result.Error.Should().Be("Invalid PIN");
     }
 
+    // Given: a user with a valid PIN whose account has been locked
+    // When: the correct PIN is submitted for verification
+    // Then: verification fails with a "User account is locked" error
     [Fact]
     public async Task VerifyPinAsync_WhenLocked_ShouldFail()
     {
@@ -151,6 +172,9 @@ public class UserGrainTests
         result.Error.Should().Be("User account is locked");
     }
 
+    // Given: a user in an organization with no site access
+    // When: access to a specific site is granted
+    // Then: the user has access to that site
     [Fact]
     public async Task GrantSiteAccessAsync_ShouldAddSiteAccess()
     {
@@ -170,6 +194,9 @@ public class UserGrainTests
         hasAccess.Should().BeTrue();
     }
 
+    // Given: a user who has been granted access to a site
+    // When: site access is revoked
+    // Then: the user no longer has access to that site
     [Fact]
     public async Task RevokeSiteAccessAsync_ShouldRemoveSiteAccess()
     {
@@ -190,6 +217,9 @@ public class UserGrainTests
         hasAccess.Should().BeFalse();
     }
 
+    // Given: a user not assigned to any user group
+    // When: the user is added to a user group
+    // Then: the user's group memberships include the new group
     [Fact]
     public async Task AddToGroupAsync_ShouldAddGroup()
     {
@@ -209,6 +239,9 @@ public class UserGrainTests
         state.UserGroupIds.Should().Contain(groupId);
     }
 
+    // Given: an active user in the organization
+    // When: the user account is deactivated
+    // Then: the user's status changes to Inactive
     [Fact]
     public async Task DeactivateAsync_ShouldSetStatusToInactive()
     {
@@ -227,6 +260,9 @@ public class UserGrainTests
         state.Status.Should().Be(UserStatus.Inactive);
     }
 
+    // Given: an active user in the organization
+    // When: the user account is locked for a security reason
+    // Then: the user's status changes to Locked
     [Fact]
     public async Task LockAsync_ShouldSetStatusToLocked()
     {
@@ -245,6 +281,9 @@ public class UserGrainTests
         state.Status.Should().Be(UserStatus.Locked);
     }
 
+    // Given: a user whose account has been locked
+    // When: the user account is unlocked
+    // Then: the user's status returns to Active
     [Fact]
     public async Task UnlockAsync_ShouldSetStatusToActive()
     {
@@ -264,6 +303,9 @@ public class UserGrainTests
         state.Status.Should().Be(UserStatus.Active);
     }
 
+    // Given: an existing user who has not yet logged in
+    // When: a login event is recorded
+    // Then: the user's last login timestamp is set to approximately now
     [Fact]
     public async Task RecordLoginAsync_ShouldUpdateLastLoginAt()
     {
@@ -294,6 +336,9 @@ public class UserGroupGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new user group with name and description for an organization
+    // When: the user group is created
+    // Then: the group is assigned an ID and creation timestamp is recorded
     [Fact]
     public async Task CreateAsync_ShouldCreateUserGroup()
     {
@@ -312,6 +357,9 @@ public class UserGroupGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a user group created with name "Managers" and description
+    // When: the group state is retrieved
+    // Then: the state contains the group's ID, organization, name, and description
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -332,6 +380,9 @@ public class UserGroupGrainTests
         state.Description.Should().Be("Management team");
     }
 
+    // Given: a user group with no members
+    // When: a user is added as a member
+    // Then: the group reports the user as a member
     [Fact]
     public async Task AddMemberAsync_ShouldAddMember()
     {
@@ -351,6 +402,9 @@ public class UserGroupGrainTests
         hasMember.Should().BeTrue();
     }
 
+    // Given: a user group with a member
+    // When: the member is removed from the group
+    // Then: the group no longer reports the user as a member
     [Fact]
     public async Task RemoveMemberAsync_ShouldRemoveMember()
     {
@@ -371,6 +425,9 @@ public class UserGroupGrainTests
         hasMember.Should().BeFalse();
     }
 
+    // Given: a user group with two members added
+    // When: the member list is retrieved
+    // Then: both members are returned
     [Fact]
     public async Task GetMembersAsync_ShouldReturnAllMembers()
     {

@@ -29,6 +29,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== TIER BENEFIT CONFIGURATION TESTS ====================
 
+    // Given: an existing loyalty program
+    // When: a VIP tier is added with five distinct benefits (multiplier, delivery, booking, birthday, access)
+    // Then: all five benefits are stored on the tier
     [Fact]
     public async Task AddTierAsync_WithMultipleBenefits_ShouldStoreAllBenefits()
     {
@@ -68,6 +71,9 @@ public class LoyaltyTierBenefitTests
         tier.Benefits.Should().Contain(b => b.Type == BenefitType.ExclusiveAccess);
     }
 
+    // Given: an existing loyalty program
+    // When: a Basic tier is added with no benefits specified (null)
+    // Then: the tier has an empty benefits list rather than null
     [Fact]
     public async Task AddTierAsync_WithNullBenefits_ShouldHaveEmptyBenefitsList()
     {
@@ -86,6 +92,9 @@ public class LoyaltyTierBenefitTests
         tier.Benefits.Should().BeEmpty();
     }
 
+    // Given: a loyalty program tier with one original benefit
+    // When: the tier is updated with three new benefits
+    // Then: the original benefit is replaced and only the three new benefits exist
     [Fact]
     public async Task UpdateTierAsync_AddingBenefits_ShouldReplaceBenefits()
     {
@@ -118,6 +127,9 @@ public class LoyaltyTierBenefitTests
         updatedTier.Benefits.Should().Contain(b => b.Name == "New Benefit 1");
     }
 
+    // Given: a loyalty program tier with two benefits
+    // When: the tier is updated with an empty benefits list
+    // Then: all benefits are removed from the tier
     [Fact]
     public async Task UpdateTierAsync_ClearingBenefits_ShouldSetEmptyList()
     {
@@ -144,6 +156,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== TIER-BASED REWARD FILTERING TESTS ====================
 
+    // Given: a loyalty program with rewards requiring different minimum tier levels (none, 1, 2, 3, 4)
+    // When: available rewards are queried at each tier level
+    // Then: each tier sees only rewards at or below its minimum level requirement
     [Fact]
     public async Task GetAvailableRewardsAsync_ShouldFilterByMinimumTierLevel()
     {
@@ -178,6 +193,9 @@ public class LoyaltyTierBenefitTests
         platinumRewards.Should().HaveCount(5); // All rewards
     }
 
+    // Given: a loyalty program with a reward that has no minimum tier requirement
+    // When: available rewards are queried at any tier level (0, 1, or 10)
+    // Then: the reward is available to all tier levels
     [Fact]
     public async Task GetAvailableRewardsAsync_WithNoMinimumTier_ShouldBeAvailableToAll()
     {
@@ -201,6 +219,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== TIER EARNING MULTIPLIER TESTS ====================
 
+    // Given: an active loyalty program with four tiers (Bronze 1x, Silver 1.5x, Gold 2x, Platinum 3x)
+    // When: points are calculated for a $100 purchase at each tier level
+    // Then: earned points scale with each tier's multiplier (100, 150, 200, 300)
     [Fact]
     public async Task CalculatePointsAsync_WithDifferentTierMultipliers_ShouldApplyCorrectMultiplier()
     {
@@ -230,6 +251,9 @@ public class LoyaltyTierBenefitTests
         platinumResult.TotalPoints.Should().Be(300); // 100 * 3.0
     }
 
+    // Given: an active loyalty program with only a Bronze tier defined
+    // When: points are calculated for a non-existent tier level (99)
+    // Then: the default 1x multiplier is used for the calculation
     [Fact]
     public async Task CalculatePointsAsync_WithNonExistentTier_ShouldUseDefaultMultiplier()
     {
@@ -252,6 +276,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== TIER MAINTENANCE POINTS TESTS ====================
 
+    // Given: an existing loyalty program
+    // When: a Gold tier is added with 500 maintenance points and a 30-day grace period
+    // Then: the maintenance points and grace period are stored on the tier
     [Fact]
     public async Task AddTierAsync_WithMaintenancePoints_ShouldStore()
     {
@@ -275,6 +302,9 @@ public class LoyaltyTierBenefitTests
         tier.GracePeriodDays.Should().Be(30);
     }
 
+    // Given: an existing loyalty program
+    // When: a Bronze tier is added without specifying maintenance points
+    // Then: maintenance points and grace period are null
     [Fact]
     public async Task AddTierAsync_WithoutMaintenancePoints_ShouldBeNull()
     {
@@ -295,6 +325,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== TIER ORDERING TESTS ====================
 
+    // Given: a loyalty program with four tiers added in non-sequential order
+    // When: all tiers are retrieved
+    // Then: the tiers are returned sorted ascending by level (Bronze, Silver, Gold, Platinum)
     [Fact]
     public async Task GetTiersAsync_ShouldReturnOrderedByLevel()
     {
@@ -326,6 +359,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== POINTS EXPIRY CONFIGURATION TESTS ====================
 
+    // Given: an existing loyalty program
+    // When: points expiry is configured with 24-month expiration and 60-day warning
+    // Then: all expiry fields are stored correctly
     [Fact]
     public async Task ConfigurePointsExpiryAsync_ShouldSetAllFields()
     {
@@ -348,6 +384,9 @@ public class LoyaltyTierBenefitTests
         state.PointsExpiry.WarningDays.Should().Be(60);
     }
 
+    // Given: a loyalty program with points expiry enabled
+    // When: points expiry is reconfigured as disabled
+    // Then: the expiry configuration reflects the disabled state
     [Fact]
     public async Task ConfigurePointsExpiryAsync_Disabled_ShouldSetEnabled()
     {
@@ -369,6 +408,9 @@ public class LoyaltyTierBenefitTests
 
     // ==================== REWARD LIMIT TESTS ====================
 
+    // Given: an existing loyalty program
+    // When: a reward is added with a limit of 3 redemptions per month and 14-day validity
+    // Then: all redemption limit fields are stored on the reward
     [Fact]
     public async Task AddRewardAsync_WithLimits_ShouldStoreAllLimitFields()
     {
@@ -396,6 +438,9 @@ public class LoyaltyTierBenefitTests
         reward.ValidDays.Should().Be(14);
     }
 
+    // Given: an existing loyalty program
+    // When: a reward is added with a lifetime limit of one redemption per customer
+    // Then: the lifetime limit period is stored on the reward
     [Fact]
     public async Task AddRewardAsync_LifetimeLimit_ShouldStore()
     {

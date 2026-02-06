@@ -38,6 +38,9 @@ public class PartialDeliveryTests
     // Partial Receive on PO Tests
     // ============================================================================
 
+    // Given: A submitted purchase order with a single line of 100 units of ground beef
+    // When: The line is received in three deliveries (30, 40, 30 units)
+    // Then: The PO transitions through PartiallyReceived to Received as quantities accumulate to 100
     [Fact]
     public async Task PurchaseOrder_PartialReceive_SingleItem_ShouldTrackProgress()
     {
@@ -81,6 +84,9 @@ public class PartialDeliveryTests
         (await grain.IsFullyReceivedAsync()).Should().BeTrue();
     }
 
+    // Given: A submitted purchase order with three lines (chicken 50, beef 30, pork 20)
+    // When: Chicken is fully received, beef is partially received, and pork is not yet received
+    // Then: Each line tracks its received quantity independently and the PO remains PartiallyReceived
     [Fact]
     public async Task PurchaseOrder_PartialReceive_MultipleItems_ShouldTrackSeparately()
     {
@@ -116,6 +122,9 @@ public class PartialDeliveryTests
         snapshot.Lines.First(l => l.LineId == lineId3).QuantityReceived.Should().Be(0);
     }
 
+    // Given: A submitted purchase order for 1,000 small parts
+    // When: The line is received across 10 deliveries of 100 units each
+    // Then: The accumulated received quantity reaches 1,000 and the PO status transitions to Received
     [Fact]
     public async Task PurchaseOrder_ReceiveInManySmallDeliveries_ShouldAccumulate()
     {
@@ -150,6 +159,9 @@ public class PartialDeliveryTests
     // Delivery With Discrepancies Tests
     // ============================================================================
 
+    // Given: A delivery with a line for tomatoes where 80 units were received
+    // When: A short delivery discrepancy is recorded (expected 100, actual 80)
+    // Then: The delivery is flagged with a ShortDelivery discrepancy showing expected vs actual quantities
     [Fact]
     public async Task Delivery_ShortWithDiscrepancy_ShouldRecordBoth()
     {
@@ -183,6 +195,9 @@ public class PartialDeliveryTests
         discrepancy.ActualQuantity.Should().Be(80);
     }
 
+    // Given: A delivery with three lines (milk, eggs, butter)
+    // When: Discrepancies are recorded: short delivery on milk, damaged goods on eggs, incorrect price on butter
+    // Then: All three discrepancy types are tracked on the delivery
     [Fact]
     public async Task Delivery_MultipleDiscrepancyTypes_ShouldTrackAll()
     {
@@ -226,6 +241,9 @@ public class PartialDeliveryTests
             DiscrepancyType.IncorrectPrice);
     }
 
+    // Given: A delivery with a line for 120 potatoes received against an expected 100
+    // When: An over-delivery discrepancy is recorded
+    // Then: The discrepancy shows OverDelivery type with expected 100 and actual 120
     [Fact]
     public async Task Delivery_OverDelivery_ShouldBeTrackedAsDiscrepancy()
     {
@@ -259,6 +277,9 @@ public class PartialDeliveryTests
     // Accept/Reject Flow Tests
     // ============================================================================
 
+    // Given: A delivery with a recorded short delivery discrepancy on cheese (50 expected, 45 received)
+    // When: The delivery is accepted despite the discrepancy
+    // Then: The delivery status transitions to Accepted while preserving the discrepancy record
     [Fact]
     public async Task Delivery_AcceptWithDiscrepancies_ShouldMaintainDiscrepancyRecords()
     {
@@ -288,6 +309,9 @@ public class PartialDeliveryTests
         snapshot.Discrepancies.Should().HaveCount(1);
     }
 
+    // Given: A delivery of fresh fish with all product expired and a quality issue discrepancy recorded
+    // When: The entire delivery is rejected
+    // Then: The delivery status transitions to Rejected with the rejection reason noting expired product
     [Fact]
     public async Task Delivery_RejectDueToQualityIssue_ShouldMarkAsRejected()
     {
@@ -323,6 +347,9 @@ public class PartialDeliveryTests
     // Direct Delivery (No PO) Tests
     // ============================================================================
 
+    // Given: A walk-in vendor delivering goods without an existing purchase order
+    // When: A direct delivery is created with no PO reference
+    // Then: The delivery is created in Pending status with no purchase order association
     [Fact]
     public async Task Delivery_WithoutPO_ShouldCreateDirectDelivery()
     {
@@ -348,6 +375,9 @@ public class PartialDeliveryTests
         result.Status.Should().Be(DeliveryStatus.Pending);
     }
 
+    // Given: A direct delivery from a farmer's market vendor with no purchase order
+    // When: Three items are added (organic tomatoes, fresh herbs, local honey)
+    // Then: All three lines are recorded with a total delivery value of $173
     [Fact]
     public async Task Delivery_DirectDelivery_CanAddMultipleItems()
     {
@@ -383,6 +413,9 @@ public class PartialDeliveryTests
     // Batch and Expiry Tracking Tests
     // ============================================================================
 
+    // Given: A delivery receiving perishable goods (cream and yogurt) with batch tracking
+    // When: Lines are added with batch numbers and expiry dates
+    // Then: Each line records its batch number and expiry date for traceability
     [Fact]
     public async Task Delivery_WithBatchInfo_ShouldTrackBatchNumbers()
     {
@@ -418,6 +451,9 @@ public class PartialDeliveryTests
         snapshot.Lines[1].ExpiryDate.Should().BeCloseTo(expiryDate2, TimeSpan.FromSeconds(1));
     }
 
+    // Given: A delivery containing perishable milk and non-perishable napkins
+    // When: Lines are added with batch info for milk but none for napkins
+    // Then: Milk has batch number and expiry date while napkins have neither
     [Fact]
     public async Task Delivery_MixedBatchedAndUnbatched_ShouldHandle()
     {
@@ -456,6 +492,9 @@ public class PartialDeliveryTests
     // Total Calculation Tests
     // ============================================================================
 
+    // Given: A delivery with three lines (Item A at $50, Item B at $50, Item C at $100)
+    // When: The delivery snapshot is retrieved
+    // Then: The total delivery value is calculated as $200
     [Fact]
     public async Task Delivery_TotalValue_ShouldSumAllLines()
     {
@@ -481,6 +520,9 @@ public class PartialDeliveryTests
         snapshot.TotalValue.Should().Be(200m);
     }
 
+    // Given: A delivery with a single line of 3 units at $125.50 each
+    // When: The delivery snapshot is retrieved
+    // Then: The line total is calculated as $376.50
     [Fact]
     public async Task Delivery_LineTotal_ShouldCalculateCorrectly()
     {

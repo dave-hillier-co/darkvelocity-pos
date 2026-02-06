@@ -24,6 +24,9 @@ public class MultiCurrencyGiftCardTests
     // Currency Preservation Tests
     // ============================================================================
 
+    // Given: A new gift card being created
+    // When: The card is created with USD as the currency
+    // Then: The card stores USD as its currency
     [Fact]
     public async Task GiftCard_Create_WithUSD_ShouldStoreCurrency()
     {
@@ -45,6 +48,9 @@ public class MultiCurrencyGiftCardTests
         state.Currency.Should().Be("USD");
     }
 
+    // Given: A new gift card being created
+    // When: The card is created with EUR as the currency
+    // Then: The card stores EUR as its currency
     [Fact]
     public async Task GiftCard_Create_WithEUR_ShouldStoreCurrency()
     {
@@ -66,6 +72,9 @@ public class MultiCurrencyGiftCardTests
         state.Currency.Should().Be("EUR");
     }
 
+    // Given: A new gift card being created
+    // When: The card is created with GBP as the currency
+    // Then: The card stores GBP as its currency
     [Fact]
     public async Task GiftCard_Create_WithGBP_ShouldStoreCurrency()
     {
@@ -87,6 +96,9 @@ public class MultiCurrencyGiftCardTests
         state.Currency.Should().Be("GBP");
     }
 
+    // Given: A new gift card being created with a 10,000 unit value
+    // When: The card is created with JPY as the currency
+    // Then: The card stores JPY as its currency with the correct whole-number value
     [Fact]
     public async Task GiftCard_Create_WithJPY_ShouldStoreCurrency()
     {
@@ -109,6 +121,9 @@ public class MultiCurrencyGiftCardTests
         state.InitialValue.Should().Be(10000m);
     }
 
+    // Given: A new gift card being created without specifying a currency
+    // When: The card is created using the default currency
+    // Then: The card defaults to USD as its currency
     [Fact]
     public async Task GiftCard_Create_DefaultCurrency_ShouldBeUSD()
     {
@@ -133,6 +148,9 @@ public class MultiCurrencyGiftCardTests
     // Currency Preservation Through Operations
     // ============================================================================
 
+    // Given: An activated EUR gift card with a 100 balance
+    // When: The card is reloaded with an additional 50
+    // Then: The currency remains EUR and the balance increases to 150
     [Fact]
     public async Task GiftCard_Reload_ShouldPreserveCurrency()
     {
@@ -160,6 +178,9 @@ public class MultiCurrencyGiftCardTests
         state.CurrentBalance.Should().Be(150m);
     }
 
+    // Given: An activated GBP gift card with a 100 balance
+    // When: 30 is redeemed from the card
+    // Then: The currency remains GBP and the balance decreases to 70
     [Fact]
     public async Task GiftCard_Redeem_ShouldPreserveCurrency()
     {
@@ -188,6 +209,9 @@ public class MultiCurrencyGiftCardTests
         state.CurrentBalance.Should().Be(70m);
     }
 
+    // Given: An activated CAD gift card with 60 remaining after a 40 redemption
+    // When: A 20 refund is applied back to the card
+    // Then: The currency remains CAD and the balance increases to 80
     [Fact]
     public async Task GiftCard_RefundToCard_ShouldPreserveCurrency()
     {
@@ -218,6 +242,9 @@ public class MultiCurrencyGiftCardTests
         state.CurrentBalance.Should().Be(80m); // 100 - 40 + 20
     }
 
+    // Given: An activated AUD gift card with a 100 balance
+    // When: A positive balance adjustment of 25 is applied
+    // Then: The currency remains AUD and the balance increases to 125
     [Fact]
     public async Task GiftCard_Adjust_ShouldPreserveCurrency()
     {
@@ -249,6 +276,9 @@ public class MultiCurrencyGiftCardTests
     // Different Currency Amounts
     // ============================================================================
 
+    // Given: An activated JPY gift card with a 100,000 balance
+    // When: 45,678 is redeemed from the card
+    // Then: The currency remains JPY and the balance correctly reflects 54,322
     [Fact]
     public async Task GiftCard_HighValueCurrency_ShouldHandleLargeAmounts()
     {
@@ -277,6 +307,9 @@ public class MultiCurrencyGiftCardTests
         state.CurrentBalance.Should().Be(54322m);
     }
 
+    // Given: An activated USD gift card with a $99.99 balance
+    // When: $33.33 is redeemed from the card
+    // Then: The balance precisely reflects $66.66 with correct decimal precision
     [Fact]
     public async Task GiftCard_DecimalCurrency_ShouldHandlePrecision()
     {
@@ -308,6 +341,9 @@ public class MultiCurrencyGiftCardTests
     // Transaction Currency Tracking
     // ============================================================================
 
+    // Given: An activated CHF gift card with a 200 balance
+    // When: Multiple redemptions and a reload are performed
+    // Then: The currency remains CHF throughout and the balance accurately reflects all operations
     [Fact]
     public async Task GiftCard_Transactions_ShouldMaintainConsistentCurrency()
     {
@@ -348,6 +384,9 @@ public class MultiCurrencyGiftCardTests
     // Different Card Types with Currency
     // ============================================================================
 
+    // Given: A new digital gift card being created
+    // When: The card is created as a Digital type with EUR currency
+    // Then: Both the Digital card type and EUR currency are stored
     [Fact]
     public async Task GiftCard_DigitalCard_ShouldPreserveCurrency()
     {
@@ -370,6 +409,9 @@ public class MultiCurrencyGiftCardTests
         state.Currency.Should().Be("EUR");
     }
 
+    // Given: A new promotional gift card being created
+    // When: The card is created as a Promotional type with GBP currency
+    // Then: Both the Promotional card type and GBP currency are stored
     [Fact]
     public async Task GiftCard_PromotionalCard_ShouldPreserveCurrency()
     {
@@ -396,6 +438,9 @@ public class MultiCurrencyGiftCardTests
     // Edge Cases
     // ============================================================================
 
+    // Given: A promotional gift card created with zero initial value in MXN
+    // When: The card is activated and reloaded with 500
+    // Then: The currency remains MXN with zero initial value and 500 current balance
     [Fact]
     public async Task GiftCard_ZeroValueCard_ShouldPreserveCurrency()
     {
@@ -423,6 +468,9 @@ public class MultiCurrencyGiftCardTests
         state.CurrentBalance.Should().Be(500m);
     }
 
+    // Given: An activated NZD gift card with a 100 balance
+    // When: The card is cancelled as lost
+    // Then: The currency remains NZD and the status changes to Cancelled
     [Fact]
     public async Task GiftCard_Cancel_ShouldPreserveCurrency()
     {
@@ -449,6 +497,9 @@ public class MultiCurrencyGiftCardTests
         state.Status.Should().Be(GiftCardStatus.Cancelled);
     }
 
+    // Given: An activated SEK gift card with a 100 balance
+    // When: The card is expired
+    // Then: The currency remains SEK and the status changes to Expired
     [Fact]
     public async Task GiftCard_Expire_ShouldPreserveCurrency()
     {

@@ -24,6 +24,9 @@ public class DeliveryPlatformGrainTests
     private IDeliveryPlatformGrain GetDeliveryPlatformGrain(Guid orgId, Guid platformId)
         => _fixture.Cluster.GrainFactory.GetGrain<IDeliveryPlatformGrain>(GrainKeys.DeliveryPlatform(orgId, platformId));
 
+    // Given: UberEats platform credentials and configuration
+    // When: the delivery platform connection is established
+    // Then: the platform is created with active status, merchant details, and zero daily counters
     [Fact]
     public async Task ConnectAsync_ShouldCreateDeliveryPlatform()
     {
@@ -56,6 +59,9 @@ public class DeliveryPlatformGrainTests
         result.TotalRevenueToday.Should().Be(0);
     }
 
+    // Given: an already connected DoorDash delivery platform
+    // When: a duplicate connection attempt is made
+    // Then: the operation is rejected to prevent duplicate platform integrations
     [Fact]
     public async Task ConnectAsync_ShouldThrowIfAlreadyConnected()
     {
@@ -78,6 +84,9 @@ public class DeliveryPlatformGrainTests
             .WithMessage("Delivery platform already exists");
     }
 
+    // Given: a connected Deliveroo delivery platform
+    // When: the platform name and API credentials are updated
+    // Then: the platform details are modified to reflect the new configuration
     [Fact]
     public async Task UpdateAsync_ShouldUpdatePlatformDetails()
     {
@@ -104,6 +113,9 @@ public class DeliveryPlatformGrainTests
         result.Name.Should().Be("Deliveroo Production");
     }
 
+    // Given: an active JustEat delivery platform
+    // When: the platform status is changed to paused
+    // Then: the platform stops accepting orders while preserving other configuration
     [Fact]
     public async Task UpdateAsync_WithStatusChange_ShouldUpdateStatus()
     {
@@ -130,6 +142,9 @@ public class DeliveryPlatformGrainTests
         result.Status.Should().Be(DeliveryPlatformStatus.Paused);
     }
 
+    // Given: an active Wolt delivery platform
+    // When: the platform is disconnected
+    // Then: the platform status transitions to disconnected, ending the integration
     [Fact]
     public async Task DisconnectAsync_ShouldSetStatusToDisconnected()
     {
@@ -152,6 +167,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Status.Should().Be(DeliveryPlatformStatus.Disconnected);
     }
 
+    // Given: an active GrubHub delivery platform
+    // When: the platform is paused and then resumed
+    // Then: the status toggles between paused and active accordingly
     [Fact]
     public async Task PauseAndResume_ShouldToggleStatus()
     {
@@ -177,6 +195,9 @@ public class DeliveryPlatformGrainTests
         resumedSnapshot.Status.Should().Be(DeliveryPlatformStatus.Active);
     }
 
+    // Given: a connected Deliverect aggregator platform
+    // When: a venue is mapped to a platform store ID
+    // Then: the location mapping is stored linking the internal site to the external store
     [Fact]
     public async Task AddLocationMappingAsync_ShouldAddLocation()
     {
@@ -207,6 +228,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Locations[0].IsActive.Should().BeTrue();
     }
 
+    // Given: a UberEats platform with an existing location mapping
+    // When: the same location is re-mapped with a different store ID and settings
+    // Then: the existing mapping is replaced with the updated store details
     [Fact]
     public async Task AddLocationMappingAsync_ExistingLocation_ShouldUpdate()
     {
@@ -243,6 +267,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Locations[0].OperatingHoursOverride.Should().Be("{\"hours\": \"10am-10pm\"}");
     }
 
+    // Given: a DoorDash platform with a mapped location
+    // When: the location mapping is removed
+    // Then: the platform has no remaining location mappings
     [Fact]
     public async Task RemoveLocationMappingAsync_ShouldRemoveLocation()
     {
@@ -272,6 +299,9 @@ public class DeliveryPlatformGrainTests
         snapshot.Locations.Should().BeEmpty();
     }
 
+    // Given: an active Postmates delivery platform
+    // When: multiple orders are received throughout the day
+    // Then: daily order count and revenue totals accumulate correctly
     [Fact]
     public async Task RecordOrderAsync_ShouldIncrementDailyCounters()
     {
@@ -299,6 +329,9 @@ public class DeliveryPlatformGrainTests
         snapshot.LastOrderAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a connected Deliverect aggregator platform
+    // When: a menu or catalog sync operation completes
+    // Then: the last sync timestamp is updated to the current time
     [Fact]
     public async Task RecordSyncAsync_ShouldUpdateTimestamp()
     {
@@ -322,6 +355,9 @@ public class DeliveryPlatformGrainTests
         snapshot.LastSyncAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a delivery platform that has not been connected
+    // When: any operation (update, disconnect, pause, record order, get snapshot) is attempted
+    // Then: all operations are rejected because the platform is not initialized
     [Fact]
     public async Task Operations_OnUninitializedGrain_ShouldThrow()
     {
@@ -353,6 +389,9 @@ public class DeliveryPlatformGrainTests
             .WithMessage("Delivery platform grain not initialized");
     }
 
+    // Given: a Deliverect aggregator platform for a multi-location restaurant group
+    // When: three venue locations are mapped to their platform store IDs
+    // Then: all location mappings are tracked including active and inactive sites
     [Fact]
     public async Task MultipleLocationMappings_ShouldTrackAll()
     {
@@ -405,6 +444,9 @@ public class ExternalOrderStateTransitionTests
     private IExternalOrderGrain GetExternalOrderGrain(Guid orgId, Guid orderId)
         => _fixture.Cluster.GrainFactory.GetGrain<IExternalOrderGrain>(GrainKeys.ExternalOrder(orgId, orderId));
 
+    // Given: an external delivery order that has already been rejected
+    // When: an attempt is made to accept the rejected order
+    // Then: the operation is rejected because only pending orders can be accepted
     [Fact]
     public async Task AcceptAsync_OnRejectedOrder_ShouldThrow()
     {
@@ -422,6 +464,9 @@ public class ExternalOrderStateTransitionTests
             .WithMessage("Order is not pending");
     }
 
+    // Given: an external delivery order that has already been accepted
+    // When: an attempt is made to reject the accepted order
+    // Then: the operation is rejected because only pending orders can be rejected
     [Fact]
     public async Task RejectAsync_OnAcceptedOrder_ShouldThrow()
     {
@@ -439,6 +484,9 @@ public class ExternalOrderStateTransitionTests
             .WithMessage("Order is not pending");
     }
 
+    // Given: an external delivery order that has already been received
+    // When: the same order is received a second time
+    // Then: the duplicate is rejected to enforce idempotency
     [Fact]
     public async Task ReceiveAsync_OnExistingOrder_ShouldThrow()
     {
@@ -455,6 +503,9 @@ public class ExternalOrderStateTransitionTests
             .WithMessage("External order already exists");
     }
 
+    // Given: an accepted external delivery order
+    // When: a platform API failure occurs during processing
+    // Then: the order is marked as failed with the error message preserved
     [Fact]
     public async Task MarkFailedAsync_ShouldSetStatusAndMessage()
     {
@@ -475,6 +526,9 @@ public class ExternalOrderStateTransitionTests
         snapshot.ErrorMessage.Should().Be("Platform API timeout");
     }
 
+    // Given: an external delivery order already in preparation
+    // When: the customer requests cancellation during preparation
+    // Then: the order is cancelled with the cancellation reason stored
     [Fact]
     public async Task CancelAsync_AfterPreparation_ShouldCancelWithReason()
     {
@@ -496,6 +550,9 @@ public class ExternalOrderStateTransitionTests
         snapshot.ErrorMessage.Should().Be("Customer requested cancellation");
     }
 
+    // Given: a newly received external delivery order
+    // When: the order progresses through the complete delivery lifecycle (pending, accepted, preparing, ready, picked up, delivered)
+    // Then: each status transition is recorded with timestamps at each stage
     [Fact]
     public async Task FullWorkflow_Delivery_ShouldProgressThroughAllStates()
     {
@@ -532,6 +589,9 @@ public class ExternalOrderStateTransitionTests
         delivered.Status.Should().Be(ExternalOrderStatus.Delivered);
     }
 
+    // Given: an external order that has not been received yet
+    // When: any operation (accept, reject, get snapshot) is attempted
+    // Then: all operations are rejected because the order is not initialized
     [Fact]
     public async Task Operations_OnUninitializedGrain_ShouldThrow()
     {
@@ -554,6 +614,9 @@ public class ExternalOrderStateTransitionTests
             .WithMessage("External order grain not initialized");
     }
 
+    // Given: a received external delivery order
+    // When: platform communication fails and is retried five times
+    // Then: the retry count accumulates to five reflecting all sync attempts
     [Fact]
     public async Task RetryCount_ShouldAccumulateAcrossMultipleIncrements()
     {
@@ -576,6 +639,9 @@ public class ExternalOrderStateTransitionTests
         snapshot.RetryCount.Should().Be(5);
     }
 
+    // Given: an accepted external delivery order
+    // When: courier details are received and subsequently updated with a new status
+    // Then: the courier assignment and status changes are tracked on the order
     [Fact]
     public async Task CourierUpdate_ShouldTrackCourierInfo()
     {
@@ -613,6 +679,9 @@ public class ExternalOrderStateTransitionTests
         afterUpdate.Courier!.Status.Should().Be(30);
     }
 
+    // Given: an accepted external delivery order
+    // When: the external order is linked to an internal POS order
+    // Then: the internal order ID is stored for cross-referencing between systems
     [Fact]
     public async Task LinkInternalOrder_ShouldSetInternalOrderId()
     {

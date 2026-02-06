@@ -9,6 +9,9 @@ public class WebhookDeliveryServiceTests
 {
     #region Signature Tests
 
+    // Given: a JSON payload and a secret key
+    // When: generating an HMAC-SHA256 signature
+    // Then: it should produce a 64-character lowercase hex string
     [Fact]
     public void GenerateSignature_ShouldReturnHmacSha256()
     {
@@ -26,6 +29,9 @@ public class WebhookDeliveryServiceTests
         signature.Should().MatchRegex("^[a-f0-9]+$"); // Lowercase hex
     }
 
+    // Given: the same payload and secret
+    // When: generating signatures twice
+    // Then: both signatures should be identical
     [Fact]
     public void GenerateSignature_SameInputs_ShouldReturnSameSignature()
     {
@@ -42,6 +48,9 @@ public class WebhookDeliveryServiceTests
         signature1.Should().Be(signature2);
     }
 
+    // Given: the same payload but different secrets
+    // When: generating signatures
+    // Then: the signatures should differ
     [Fact]
     public void GenerateSignature_DifferentSecrets_ShouldReturnDifferentSignatures()
     {
@@ -57,6 +66,9 @@ public class WebhookDeliveryServiceTests
         signature1.Should().NotBe(signature2);
     }
 
+    // Given: a payload signed with the correct secret
+    // When: verifying the signature
+    // Then: validation should succeed
     [Fact]
     public void VerifySignature_ValidSignature_ShouldReturnTrue()
     {
@@ -73,6 +85,9 @@ public class WebhookDeliveryServiceTests
         isValid.Should().BeTrue();
     }
 
+    // Given: a valid signature prefixed with "sha256="
+    // When: verifying the signature
+    // Then: validation should succeed, stripping the prefix automatically
     [Fact]
     public void VerifySignature_WithSha256Prefix_ShouldReturnTrue()
     {
@@ -89,6 +104,9 @@ public class WebhookDeliveryServiceTests
         isValid.Should().BeTrue();
     }
 
+    // Given: a payload and an invalid signature
+    // When: verifying the signature
+    // Then: validation should fail
     [Fact]
     public void VerifySignature_InvalidSignature_ShouldReturnFalse()
     {
@@ -104,6 +122,9 @@ public class WebhookDeliveryServiceTests
         isValid.Should().BeFalse();
     }
 
+    // Given: a payload signed with one secret
+    // When: verifying with a different secret
+    // Then: validation should fail
     [Fact]
     public void VerifySignature_WrongSecret_ShouldReturnFalse()
     {
@@ -123,6 +144,9 @@ public class WebhookDeliveryServiceTests
 
     #region Stub Delivery Tests
 
+    // Given: a webhook endpoint URL and a payload with a secret
+    // When: delivering the webhook via the stub service
+    // Then: it should return a successful delivery result with status 200
     [Fact]
     public async Task DeliverAsync_Stub_ShouldReturnSuccess()
     {
@@ -143,6 +167,9 @@ public class WebhookDeliveryServiceTests
         result.ResponseTimeMs.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: a webhook endpoint URL with custom headers
+    // When: delivering the webhook via the stub service
+    // Then: it should succeed regardless of the custom headers
     [Fact]
     public async Task DeliverAsync_Stub_WithHeaders_ShouldSucceed()
     {
@@ -168,6 +195,9 @@ public class WebhookDeliveryServiceTests
 
     #region Result Factory Tests
 
+    // Given: a successful webhook delivery with response details
+    // When: creating a succeeded result
+    // Then: it should capture status code, response body, timing, and headers
     [Fact]
     public void WebhookDeliveryResult_Succeeded_ShouldSetCorrectProperties()
     {
@@ -188,6 +218,9 @@ public class WebhookDeliveryServiceTests
         result.ErrorMessage.Should().BeNull();
     }
 
+    // Given: a failed webhook delivery due to a connection timeout
+    // When: creating a failed result with retry flag
+    // Then: it should capture the error details and indicate retry eligibility
     [Fact]
     public void WebhookDeliveryResult_Failed_ShouldSetCorrectProperties()
     {
@@ -207,6 +240,9 @@ public class WebhookDeliveryServiceTests
         result.ShouldRetry.Should().BeTrue();
     }
 
+    // Given: a failed webhook delivery due to an invalid URL
+    // When: creating a non-retryable failed result
+    // Then: it should indicate that retry is not appropriate
     [Fact]
     public void WebhookDeliveryResult_Failed_WithNonRetryable_ShouldNotRetry()
     {

@@ -19,6 +19,9 @@ public class AlertRuleEvaluationTests
 
     #region Low Stock Rule Tests
 
+    // Given: an ingredient with 5 units on hand and a reorder point of 20
+    // When: alert rules are evaluated against the inventory metrics
+    // Then: a LowStock alert is triggered for the ingredient with the actual value in metadata
     [Fact]
     public async Task EvaluateRulesAsync_LowStock_WhenBelowReorderPoint_ShouldTrigger()
     {
@@ -53,6 +56,9 @@ public class AlertRuleEvaluationTests
         alert.Metadata.Should().ContainKey("actualValue");
     }
 
+    // Given: an ingredient with 50 units on hand and a reorder point of 20
+    // When: alert rules are evaluated against the inventory metrics
+    // Then: no LowStock alert is triggered because stock is above the reorder point
     [Fact]
     public async Task EvaluateRulesAsync_LowStock_WhenAboveReorderPoint_ShouldNotTrigger()
     {
@@ -86,6 +92,9 @@ public class AlertRuleEvaluationTests
 
     #region Out of Stock Rule Tests
 
+    // Given: an ingredient with zero units on hand
+    // When: alert rules are evaluated against the inventory metrics
+    // Then: an OutOfStock alert is triggered
     [Fact]
     public async Task EvaluateRulesAsync_OutOfStock_WhenZero_ShouldTrigger()
     {
@@ -118,6 +127,9 @@ public class AlertRuleEvaluationTests
 
     #region Negative Stock Rule Tests
 
+    // Given: an ingredient with a negative quantity of -5 units (inventory discrepancy)
+    // When: alert rules are evaluated against the inventory metrics
+    // Then: a NegativeStock alert is triggered at Critical severity
     [Fact]
     public async Task EvaluateRulesAsync_NegativeStock_WhenNegative_ShouldTrigger()
     {
@@ -152,6 +164,9 @@ public class AlertRuleEvaluationTests
 
     #region Expiry Risk Rule Tests
 
+    // Given: a perishable ingredient expiring in 2 days (within the default threshold)
+    // When: alert rules are evaluated against the expiry metrics
+    // Then: an ExpiryRisk alert is triggered with the days-until-expiry in the message
     [Fact]
     public async Task EvaluateRulesAsync_ExpiryRisk_WhenWithinThreshold_ShouldTrigger()
     {
@@ -182,6 +197,9 @@ public class AlertRuleEvaluationTests
         alert.Message.Should().Contain("2");
     }
 
+    // Given: a shelf-stable ingredient expiring in 90 days (well beyond the threshold)
+    // When: alert rules are evaluated against the expiry metrics
+    // Then: no ExpiryRisk alert is triggered
     [Fact]
     public async Task EvaluateRulesAsync_ExpiryRisk_WhenFarFromExpiry_ShouldNotTrigger()
     {
@@ -214,6 +232,9 @@ public class AlertRuleEvaluationTests
 
     #region GP Dropped Rule Tests
 
+    // Given: a site with gross profit at 58% this week vs 65% last week (7-point drop)
+    // When: alert rules are evaluated against the profitability metrics
+    // Then: a GPDropped alert is triggered due to the significant margin decline
     [Fact]
     public async Task EvaluateRulesAsync_GPDropped_WhenSignificantDrop_ShouldTrigger()
     {
@@ -246,6 +267,9 @@ public class AlertRuleEvaluationTests
 
     #region High Variance Rule Tests
 
+    // Given: a site with an 18% COGS variance (actual vs theoretical cost)
+    // When: alert rules are evaluated against the costing metrics
+    // Then: a HighVariance alert is triggered because the variance exceeds the threshold
     [Fact]
     public async Task EvaluateRulesAsync_HighVariance_WhenExceedsThreshold_ShouldTrigger()
     {
@@ -277,6 +301,9 @@ public class AlertRuleEvaluationTests
 
     #region Supplier Price Spike Rule Tests
 
+    // Given: a supplier whose item price increased by 15%
+    // When: alert rules are evaluated against the supplier pricing metrics
+    // Then: a SupplierPriceSpike alert is triggered
     [Fact]
     public async Task EvaluateRulesAsync_SupplierPriceSpike_WhenSignificantIncrease_ShouldTrigger()
     {
@@ -309,6 +336,9 @@ public class AlertRuleEvaluationTests
 
     #region Cooldown Period Tests
 
+    // Given: a LowStock alert that was already triggered for an ingredient
+    // When: the same metrics are evaluated again immediately
+    // Then: the alert does not re-trigger due to the cooldown period
     [Fact]
     public async Task EvaluateRulesAsync_WithCooldown_ShouldNotTriggerDuringCooldown()
     {
@@ -344,6 +374,9 @@ public class AlertRuleEvaluationTests
 
     #region Disabled Rule Tests
 
+    // Given: the LowStock alert rule has been disabled for the site
+    // When: inventory metrics below the reorder point are evaluated
+    // Then: no LowStock alert is triggered because the rule is disabled
     [Fact]
     public async Task EvaluateRulesAsync_DisabledRule_ShouldNotTrigger()
     {
@@ -382,6 +415,9 @@ public class AlertRuleEvaluationTests
 
     #region Multiple Rules Tests
 
+    // Given: an ingredient with a quantity of -2 units (both out of stock and negative)
+    // When: alert rules are evaluated against the inventory metrics
+    // Then: both OutOfStock and NegativeStock alerts are triggered simultaneously
     [Fact]
     public async Task EvaluateRulesAsync_MultipleConditions_ShouldTriggerAll()
     {
@@ -416,6 +452,9 @@ public class AlertRuleEvaluationTests
 
     #region Context Tests
 
+    // Given: an out-of-stock ingredient with additional context (last order ID and consumption time)
+    // When: alert rules are evaluated with context metadata
+    // Then: the triggered alert's metadata includes the context information from the metrics snapshot
     [Fact]
     public async Task EvaluateRulesAsync_WithContext_ShouldIncludeInMetadata()
     {

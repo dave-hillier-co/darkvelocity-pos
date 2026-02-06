@@ -18,6 +18,9 @@ public class AccountingStreamTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: A newly created gift card with a $50 initial value
+    // When: The gift card is activated at a site for an order
+    // Then: A GiftCardActivatedEvent is published to the gift card stream with the card details and amount
     [Fact]
     public async Task GiftCardGrain_ActivateAsync_PublishesEvent()
     {
@@ -78,6 +81,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: An activated gift card with a $100 balance
+    // When: $25 is redeemed from the gift card against an order
+    // Then: A GiftCardRedeemedEvent is published with the redemption amount and $75 remaining balance
     [Fact]
     public async Task GiftCardGrain_RedeemAsync_PublishesEvent()
     {
@@ -140,6 +146,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: An activated gift card with a $75 unredeemed balance
+    // When: The gift card is expired
+    // Then: A GiftCardExpiredEvent is published with the breakage amount equal to the remaining balance
     [Fact]
     public async Task GiftCardGrain_ExpireAsync_PublishesEventWithBreakage()
     {
@@ -193,6 +202,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: An initialized customer spend projection with no prior spend
+    // When: A $150 net spend is recorded for the customer's order
+    // Then: A CustomerSpendRecordedEvent and LoyaltyPointsEarnedEvent are published with matching spend and points
     [Fact]
     public async Task CustomerSpendProjection_RecordSpendAsync_PublishesSpendEvent()
     {
@@ -250,6 +262,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: A customer at Bronze loyalty tier with no prior spend
+    // When: A $600 spend is recorded, crossing the Silver tier threshold of $500
+    // Then: A CustomerTierChangedEvent is published showing promotion from Bronze to Silver
     [Fact]
     public async Task CustomerSpendProjection_TierChange_PublishesEvent()
     {
@@ -301,6 +316,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: A customer with 300 loyalty points earned from a prior $300 spend
+    // When: 100 loyalty points are redeemed for a discount on an order
+    // Then: A LoyaltyPointsRedeemedEvent is published with the discount value and 200 remaining points
     [Fact]
     public async Task CustomerSpendProjection_RedeemPoints_PublishesEvent()
     {
@@ -362,6 +380,9 @@ public class AccountingStreamTests
         }
     }
 
+    // Given: A customer with $200 recorded spend from a prior order
+    // When: The $200 spend is reversed due to an order refund
+    // Then: A CustomerSpendReversedEvent is published with the reversed amount and refund reason
     [Fact]
     public async Task CustomerSpendProjection_ReverseSpend_PublishesEvent()
     {

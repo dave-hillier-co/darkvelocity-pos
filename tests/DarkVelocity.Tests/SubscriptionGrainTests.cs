@@ -18,6 +18,9 @@ public class SubscriptionGrainTests
 
     #region Subscription Creation Tests
 
+    // Given: a new organization with no existing subscription
+    // When: a Starter plan subscription with monthly billing is created
+    // Then: the subscription should be associated with the organization, on the Starter plan, with a recent creation timestamp
     [Fact]
     public async Task CreateAsync_ShouldCreateSubscription()
     {
@@ -34,6 +37,9 @@ public class SubscriptionGrainTests
         result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an organization that already has an active subscription
+    // When: a second subscription creation is attempted
+    // Then: the system should reject the duplicate subscription
     [Fact]
     public async Task CreateAsync_WhenAlreadyExists_ShouldThrow()
     {
@@ -50,6 +56,9 @@ public class SubscriptionGrainTests
             .WithMessage("Subscription already exists");
     }
 
+    // Given: an organization on the Pro plan with annual billing
+    // When: the subscription state is retrieved
+    // Then: the plan limits should allow 10 sites, 50 users, advanced reporting, and custom branding
     [Fact]
     public async Task GetStateAsync_ShouldReturnCorrectPlanLimits()
     {
@@ -74,6 +83,9 @@ public class SubscriptionGrainTests
 
     #region Trial Management Tests
 
+    // Given: an organization on the Free plan
+    // When: a 14-day trial of the Pro plan is started
+    // Then: the subscription should be in trialing status on the Pro plan with a trial end date 14 days out
     [Fact]
     public async Task StartTrialAsync_ShouldStartTrial()
     {
@@ -92,6 +104,9 @@ public class SubscriptionGrainTests
         state.TrialEndsAt.Should().BeCloseTo(DateTime.UtcNow.AddDays(14), TimeSpan.FromSeconds(5));
     }
 
+    // Given: an organization that has already used its trial for the Pro plan
+    // When: a second trial is attempted for the Enterprise plan
+    // Then: the system should reject the trial since the organization has already used its trial
     [Fact]
     public async Task StartTrialAsync_WhenTrialAlreadyUsed_ShouldThrow()
     {
@@ -109,6 +124,9 @@ public class SubscriptionGrainTests
             .WithMessage("Trial has already been used");
     }
 
+    // Given: an organization trialing the Pro plan
+    // When: the trial ends and the organization converts to a paid subscription
+    // Then: the subscription should become active on the Pro plan
     [Fact]
     public async Task EndTrialAsync_ConvertToPaid_ShouldKeepPlan()
     {
@@ -127,6 +145,9 @@ public class SubscriptionGrainTests
         state.Plan.Should().Be(SubscriptionPlan.Pro);
     }
 
+    // Given: an organization trialing the Pro plan
+    // When: the trial ends without converting to a paid subscription
+    // Then: the subscription should revert to the Free plan with cancelled status
     [Fact]
     public async Task EndTrialAsync_NotConverted_ShouldRevertToFree()
     {
@@ -149,6 +170,9 @@ public class SubscriptionGrainTests
 
     #region Plan Change Tests
 
+    // Given: an organization on the Starter plan
+    // When: the plan is upgraded to Pro
+    // Then: the change should record the old (Starter) and new (Pro) plans, and limits should update to Pro tier (10 sites)
     [Fact]
     public async Task ChangePlanAsync_ShouldChangePlan()
     {
@@ -169,6 +193,9 @@ public class SubscriptionGrainTests
         state.Limits.MaxSites.Should().Be(10);
     }
 
+    // Given: an organization already on the Pro plan
+    // When: a plan change to Pro is attempted (same plan)
+    // Then: the system should reject the no-op change
     [Fact]
     public async Task ChangePlanAsync_ToSamePlan_ShouldThrow()
     {
@@ -189,6 +216,9 @@ public class SubscriptionGrainTests
 
     #region Usage Tracking Tests
 
+    // Given: an organization on the Starter plan with no prior usage recorded
+    // When: usage is recorded with 2 sites, 5 users, and 100 transactions
+    // Then: the current usage should reflect 2 sites, 5 users, and 100 monthly transactions
     [Fact]
     public async Task RecordUsageAsync_ShouldUpdateUsageMetrics()
     {
@@ -210,6 +240,9 @@ public class SubscriptionGrainTests
         usage.TransactionsThisMonth.Should().Be(100);
     }
 
+    // Given: a Starter plan subscription (max 3 sites) with 2 sites currently in use
+    // When: usage limits are checked
+    // Then: the sites limit should show 2 of 3 used (~67%), not exceeded
     [Fact]
     public async Task CheckUsageLimitsAsync_ShouldReturnCorrectStatus()
     {
@@ -231,6 +264,9 @@ public class SubscriptionGrainTests
         siteLimit.PercentageUsed.Should().BeApproximately(66.67, 1);
     }
 
+    // Given: a Starter plan subscription (max 3 sites) with all 3 sites already in use
+    // When: a check is made whether another site can be added
+    // Then: the check should return false since the site limit has been reached
     [Fact]
     public async Task CanAddSiteAsync_WhenAtLimit_ShouldReturnFalse()
     {
@@ -247,6 +283,9 @@ public class SubscriptionGrainTests
         canAdd.Should().BeFalse();
     }
 
+    // Given: a Starter plan subscription (max 10 users) with 5 users currently active
+    // When: a check is made whether another user can be added
+    // Then: the check should return true since the user limit has not been reached
     [Fact]
     public async Task CanAddUserAsync_WhenUnderLimit_ShouldReturnTrue()
     {
@@ -267,6 +306,9 @@ public class SubscriptionGrainTests
 
     #region Payment Method Tests
 
+    // Given: a Starter plan subscription with no payment methods
+    // When: a Visa card ending in 4242 is added as a payment method
+    // Then: the payment method should be stored as the default with correct card details
     [Fact]
     public async Task AddPaymentMethodAsync_ShouldAddPaymentMethod()
     {
@@ -292,6 +334,9 @@ public class SubscriptionGrainTests
         state.DefaultPaymentMethodId.Should().Be("pm_test123");
     }
 
+    // Given: a paid Starter plan subscription with only one payment method on file
+    // When: removal of the sole payment method is attempted
+    // Then: the system should reject the removal to prevent a paid plan from having no payment method
     [Fact]
     public async Task RemovePaymentMethodAsync_WhenOnlyMethodOnPaidPlan_ShouldThrow()
     {
@@ -313,6 +358,9 @@ public class SubscriptionGrainTests
 
     #region Cancellation Tests
 
+    // Given: an active Starter plan subscription
+    // When: the subscription is cancelled immediately with a reason
+    // Then: the status should change to cancelled with a recent cancellation timestamp
     [Fact]
     public async Task CancelAsync_Immediate_ShouldCancelImmediately()
     {
@@ -330,6 +378,9 @@ public class SubscriptionGrainTests
         state.CancelledAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: an active Starter plan subscription
+    // When: the subscription is cancelled at the end of the current billing period (not immediate)
+    // Then: the subscription should remain active but with a scheduled cancellation date at period end
     [Fact]
     public async Task CancelAsync_EndOfPeriod_ShouldSetCancelAtPeriodEnd()
     {
@@ -347,6 +398,9 @@ public class SubscriptionGrainTests
         state.CancelAtPeriodEnd.Should().NotBeNull();
     }
 
+    // Given: a previously cancelled Starter plan subscription
+    // When: the subscription is reactivated
+    // Then: the status should return to active with the cancellation timestamp cleared
     [Fact]
     public async Task ReactivateAsync_ShouldReactivateSubscription()
     {
@@ -369,6 +423,9 @@ public class SubscriptionGrainTests
 
     #region Feature Access Tests
 
+    // Given: an organization on the Pro plan
+    // When: access to the advanced_reporting feature is checked
+    // Then: the feature should be available on the Pro tier
     [Fact]
     public async Task HasFeatureAsync_ProPlan_ShouldHaveAdvancedReporting()
     {
@@ -384,6 +441,9 @@ public class SubscriptionGrainTests
         hasFeature.Should().BeTrue();
     }
 
+    // Given: an organization on the Starter plan
+    // When: access to the advanced_reporting feature is checked
+    // Then: the feature should not be available on the Starter tier
     [Fact]
     public async Task HasFeatureAsync_StarterPlan_ShouldNotHaveAdvancedReporting()
     {
@@ -399,6 +459,9 @@ public class SubscriptionGrainTests
         hasFeature.Should().BeFalse();
     }
 
+    // Given: an organization on the Enterprise plan
+    // When: access to the SSO feature is checked
+    // Then: SSO should be available as an Enterprise-tier feature
     [Fact]
     public async Task HasFeatureAsync_EnterprisePlan_ShouldHaveSso()
     {
@@ -418,6 +481,9 @@ public class SubscriptionGrainTests
 
     #region Pricing Tests
 
+    // Given: an organization on the Starter plan with monthly billing
+    // When: the current subscription price is retrieved
+    // Then: the monthly price should be $49
     [Fact]
     public async Task GetCurrentPriceAsync_MonthlyStarter_ShouldReturn49()
     {
@@ -433,6 +499,9 @@ public class SubscriptionGrainTests
         price.Should().Be(49m);
     }
 
+    // Given: an organization on the Pro plan with annual billing
+    // When: the current subscription price is retrieved
+    // Then: the annual price should be $1,490
     [Fact]
     public async Task GetCurrentPriceAsync_AnnualPro_ShouldReturn1490()
     {

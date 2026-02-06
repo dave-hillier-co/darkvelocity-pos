@@ -57,6 +57,9 @@ public class AccountGrainTests
 
     #region Create Tests
 
+    // Given: a new, uninitialized account
+    // When: the account is created as an asset account with a code and name
+    // Then: the account is active with zero balance and the specified details
     [Fact]
     public async Task CreateAsync_ShouldCreateAccount()
     {
@@ -88,6 +91,9 @@ public class AccountGrainTests
         state.IsActive.Should().BeTrue();
     }
 
+    // Given: a new, uninitialized account
+    // When: the account is created with an opening balance of 1000
+    // Then: the balance reflects the opening amount and an opening journal entry is recorded
     [Fact]
     public async Task CreateAsync_WithOpeningBalance_ShouldSetBalance()
     {
@@ -115,6 +121,9 @@ public class AccountGrainTests
         entries[0].Amount.Should().Be(1000m);
     }
 
+    // Given: an account that has already been created
+    // When: a second creation attempt is made for the same account
+    // Then: the operation is rejected because the account already exists
     [Fact]
     public async Task CreateAsync_AlreadyExists_ShouldThrow()
     {
@@ -137,6 +146,9 @@ public class AccountGrainTests
             .WithMessage("Account already exists");
     }
 
+    // Given: a new account with an empty account code
+    // When: the account creation is attempted
+    // Then: the operation is rejected because an account code is required
     [Fact]
     public async Task CreateAsync_EmptyAccountCode_ShouldThrow()
     {
@@ -163,6 +175,9 @@ public class AccountGrainTests
 
     #region Debit/Credit Tests
 
+    // Given: an asset account with a balance of 1000
+    // When: a debit of 500 is posted (cash received)
+    // Then: the balance increases to 1500 because debits increase asset accounts
     [Fact]
     public async Task PostDebitAsync_AssetAccount_ShouldIncreaseBalance()
     {
@@ -183,6 +198,9 @@ public class AccountGrainTests
         result.EntryType.Should().Be(JournalEntryType.Debit);
     }
 
+    // Given: an asset account with a balance of 1000
+    // When: a credit of 300 is posted (cash paid out)
+    // Then: the balance decreases to 700 because credits decrease asset accounts
     [Fact]
     public async Task PostCreditAsync_AssetAccount_ShouldDecreaseBalance()
     {
@@ -203,6 +221,9 @@ public class AccountGrainTests
         result.EntryType.Should().Be(JournalEntryType.Credit);
     }
 
+    // Given: a revenue account with 1000 in recorded sales
+    // When: a debit of 200 is posted (sales return)
+    // Then: the balance decreases to 800 because debits decrease revenue accounts
     [Fact]
     public async Task PostDebitAsync_RevenueAccount_ShouldDecreaseBalance()
     {
@@ -224,6 +245,9 @@ public class AccountGrainTests
         result.NewBalance.Should().Be(800m);
     }
 
+    // Given: a revenue account with zero balance
+    // When: a credit of 1500 is posted (sales revenue earned)
+    // Then: the balance increases to 1500 because credits increase revenue accounts
     [Fact]
     public async Task PostCreditAsync_RevenueAccount_ShouldIncreaseBalance()
     {
@@ -242,6 +266,9 @@ public class AccountGrainTests
         result.NewBalance.Should().Be(1500m);
     }
 
+    // Given: an asset account
+    // When: a debit is posted with an invoice reference and linked order
+    // Then: the journal entry stores the reference number, type, and linked entity ID
     [Fact]
     public async Task PostDebitAsync_WithReference_ShouldStoreReference()
     {
@@ -268,6 +295,9 @@ public class AccountGrainTests
         entry.ReferenceId.Should().Be(orderId);
     }
 
+    // Given: an active asset account
+    // When: a debit of zero is posted
+    // Then: the operation is rejected because posting amounts must be positive
     [Fact]
     public async Task PostDebitAsync_ZeroAmount_ShouldThrow()
     {
@@ -287,6 +317,9 @@ public class AccountGrainTests
             .WithMessage("Amount must be positive*");
     }
 
+    // Given: an asset account that has been deactivated
+    // When: a debit is posted to the inactive account
+    // Then: the operation is rejected because inactive accounts cannot receive postings
     [Fact]
     public async Task PostDebitAsync_InactiveAccount_ShouldThrow()
     {
@@ -311,6 +344,9 @@ public class AccountGrainTests
 
     #region Adjustment Tests
 
+    // Given: an asset account with a balance of 1000
+    // When: the balance is adjusted to 1200 for a physical count correction
+    // Then: the balance becomes 1200 with a 200 adjustment entry recorded
     [Fact]
     public async Task AdjustBalanceAsync_ShouldSetNewBalance()
     {
@@ -331,6 +367,9 @@ public class AccountGrainTests
         result.EntryType.Should().Be(JournalEntryType.Adjustment);
     }
 
+    // Given: an asset account with a balance of 1000
+    // When: the balance is adjusted to the same amount of 1000
+    // Then: the operation is rejected because no actual change would occur
     [Fact]
     public async Task AdjustBalanceAsync_SameBalance_ShouldThrow()
     {
@@ -354,6 +393,9 @@ public class AccountGrainTests
 
     #region Reversal Tests
 
+    // Given: an asset account with a 500 debit entry posted against a 1000 opening balance
+    // When: the debit entry is reversed due to an error
+    // Then: the balance returns to 1000, the original entry is marked reversed, and a reversal entry is created
     [Fact]
     public async Task ReverseEntryAsync_ShouldReverseDebit()
     {
@@ -388,6 +430,9 @@ public class AccountGrainTests
         reversalEntry.ReversedEntryId.Should().Be(debitResult.EntryId);
     }
 
+    // Given: an asset account with a 300 credit entry posted against a 1000 opening balance
+    // When: the credit entry is reversed due to an error
+    // Then: the balance returns to the original 1000
     [Fact]
     public async Task ReverseEntryAsync_ShouldReverseCredit()
     {
@@ -413,6 +458,9 @@ public class AccountGrainTests
         result.NewBalance.Should().Be(1000m); // Back to original
     }
 
+    // Given: a debit entry that has already been reversed once
+    // When: a second reversal is attempted on the same entry
+    // Then: the operation is rejected because entries can only be reversed once
     [Fact]
     public async Task ReverseEntryAsync_AlreadyReversed_ShouldThrow()
     {
@@ -442,6 +490,9 @@ public class AccountGrainTests
             .WithMessage("Entry has already been reversed");
     }
 
+    // Given: a reversal entry created from reversing a debit
+    // When: a reversal is attempted on the reversal entry itself
+    // Then: the operation is rejected because reversal entries cannot be reversed
     [Fact]
     public async Task ReverseEntryAsync_ReversalEntry_ShouldThrow()
     {
@@ -475,6 +526,9 @@ public class AccountGrainTests
 
     #region Query Tests
 
+    // Given: an asset account with a 1000 opening balance, a 500 deposit, and a 200 withdrawal
+    // When: the current balance is queried
+    // Then: the balance is 1300 reflecting all posted transactions
     [Fact]
     public async Task GetBalanceAsync_ShouldReturnCurrentBalance()
     {
@@ -493,6 +547,9 @@ public class AccountGrainTests
         balance.Should().Be(1300m);
     }
 
+    // Given: a cash asset account with an opening balance, a deposit, and a withdrawal
+    // When: the account summary is requested
+    // Then: it includes account details, cumulative debit/credit totals, entry count, and current balance
     [Fact]
     public async Task GetSummaryAsync_ShouldReturnAccountSummary()
     {
@@ -519,6 +576,9 @@ public class AccountGrainTests
         summary.IsActive.Should().BeTrue();
     }
 
+    // Given: an asset account with three debit entries posted in sequence
+    // When: the two most recent entries are requested
+    // Then: the entries are returned in reverse chronological order (newest first)
     [Fact]
     public async Task GetRecentEntriesAsync_ShouldReturnEntriesInOrder()
     {
@@ -540,6 +600,9 @@ public class AccountGrainTests
         entries[1].Description.Should().Be("Second");
     }
 
+    // Given: an asset account with two entries linked to the same order and one unlinked entry
+    // When: entries are queried by the order reference
+    // Then: only the two entries linked to that order are returned
     [Fact]
     public async Task GetEntriesByReferenceAsync_ShouldReturnMatchingEntries()
     {
@@ -563,6 +626,9 @@ public class AccountGrainTests
         entries.All(e => e.ReferenceId == orderId).Should().BeTrue();
     }
 
+    // Given: an asset account with two deposits made at different times
+    // When: the balance is queried at a timestamp between the two deposits
+    // Then: the historical balance reflects only transactions up to that point in time
     [Fact]
     public async Task GetBalanceAtAsync_ShouldReturnHistoricalBalance()
     {
@@ -589,6 +655,9 @@ public class AccountGrainTests
 
     #region Period Close Tests
 
+    // Given: an asset account with a deposit and withdrawal posted in the current period
+    // When: the accounting period is closed
+    // Then: a period summary is created with correct debit/credit totals and closing balance
     [Fact]
     public async Task ClosePeriodAsync_ShouldCreatePeriodSummary()
     {
@@ -618,6 +687,9 @@ public class AccountGrainTests
         summaries.Should().HaveCount(1);
     }
 
+    // Given: an active asset account in the current period
+    // When: a period close is attempted for a non-current period (year 2020)
+    // Then: the operation is rejected because only the current period can be closed
     [Fact]
     public async Task ClosePeriodAsync_WrongPeriod_ShouldThrow()
     {
@@ -637,6 +709,9 @@ public class AccountGrainTests
             .WithMessage("Cannot close period*");
     }
 
+    // Given: an account with two consecutive periods already closed
+    // When: a period close is attempted on the first (already closed) period
+    // Then: the operation is rejected because the period has already been finalized
     [Fact]
     public async Task ClosePeriodAsync_AlreadyClosed_ShouldThrow()
     {
@@ -674,6 +749,9 @@ public class AccountGrainTests
 
     #region Lifecycle Tests
 
+    // Given: an account that has never been created
+    // When: checking whether the account exists
+    // Then: the account does not exist
     [Fact]
     public async Task ExistsAsync_NewGrain_ShouldReturnFalse()
     {
@@ -689,6 +767,9 @@ public class AccountGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: an asset account that has been created
+    // When: checking whether the account exists
+    // Then: the account exists
     [Fact]
     public async Task ExistsAsync_CreatedGrain_ShouldReturnTrue()
     {
@@ -704,6 +785,9 @@ public class AccountGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: an active asset account
+    // When: the account is deactivated
+    // Then: the account is marked inactive and no further postings can be made
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateAccount()
     {
@@ -720,6 +804,9 @@ public class AccountGrainTests
         summary.IsActive.Should().BeFalse();
     }
 
+    // Given: an asset account that was previously deactivated
+    // When: the account is reactivated
+    // Then: the account becomes active again and can receive postings
     [Fact]
     public async Task ActivateAsync_ShouldReactivateAccount()
     {
@@ -737,6 +824,9 @@ public class AccountGrainTests
         summary.IsActive.Should().BeTrue();
     }
 
+    // Given: a system-designated cash account that cannot be disabled
+    // When: deactivation is attempted on the system account
+    // Then: the operation is rejected because system accounts are protected from deactivation
     [Fact]
     public async Task DeactivateAsync_SystemAccount_ShouldThrow()
     {
@@ -762,6 +852,9 @@ public class AccountGrainTests
             .WithMessage("System accounts cannot be deactivated");
     }
 
+    // Given: an existing asset account
+    // When: the account name, description, and tax code are updated
+    // Then: the account reflects the new details and records a last-modified timestamp
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAccountDetails()
     {
@@ -789,6 +882,9 @@ public class AccountGrainTests
 
     #region All Account Types Tests
 
+    // Given: a debit-normal account (asset or expense) with zero balance
+    // When: a debit of 100 is posted
+    // Then: the balance increases to 100 following double-entry debit-normal rules
     [Theory]
     [InlineData(AccountType.Asset)]
     [InlineData(AccountType.Expense)]
@@ -817,6 +913,9 @@ public class AccountGrainTests
         result.NewBalance.Should().Be(100m);
     }
 
+    // Given: a credit-normal account (liability, equity, or revenue) with zero balance
+    // When: a credit of 100 is posted
+    // Then: the balance increases to 100 following double-entry credit-normal rules
     [Theory]
     [InlineData(AccountType.Liability)]
     [InlineData(AccountType.Equity)]

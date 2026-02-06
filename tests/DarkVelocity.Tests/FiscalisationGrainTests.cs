@@ -24,6 +24,9 @@ public class FiscalDeviceGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalDeviceGrain>(key);
     }
 
+    // Given: A new fiscal device grain
+    // When: Registering a Swissbit Cloud TSE with serial number, API endpoint, and credentials
+    // Then: The device is registered as Active with zero transaction and signature counters
     [Fact]
     public async Task RegisterAsync_WithSwissbitCloud_RegistersDevice()
     {
@@ -53,6 +56,9 @@ public class FiscalDeviceGrainTests
         snapshot.SignatureCounter.Should().Be(0);
     }
 
+    // Given: A new fiscal device grain
+    // When: Registering a Swissbit USB TSE with serial number
+    // Then: The device is registered with the SwissbitUsb device type
     [Fact]
     public async Task RegisterAsync_WithSwissbitUsb_RegistersDevice()
     {
@@ -75,6 +81,9 @@ public class FiscalDeviceGrainTests
         snapshot.DeviceType.Should().Be(FiscalDeviceType.SwissbitUsb);
     }
 
+    // Given: A new fiscal device grain
+    // When: Registering a Fiskaly Cloud TSE with API endpoint and credentials
+    // Then: The device is registered with the FiskalyCloud type and correct API endpoint
     [Fact]
     public async Task RegisterAsync_WithFiskalyCloud_RegistersDevice()
     {
@@ -98,6 +107,9 @@ public class FiscalDeviceGrainTests
         snapshot.ApiEndpoint.Should().Be("https://kassensichv.fiskaly.com");
     }
 
+    // Given: A registered Epson fiscal device
+    // When: Updating the device with a new public key, certificate expiry, and API endpoint
+    // Then: The updated fields reflect the new values
     [Fact]
     public async Task UpdateAsync_UpdatesDeviceDetails()
     {
@@ -122,6 +134,9 @@ public class FiscalDeviceGrainTests
         snapshot.ApiEndpoint.Should().Be("https://new-endpoint.com");
     }
 
+    // Given: A registered active Diebold fiscal device
+    // When: Deactivating the device
+    // Then: The device status transitions to Inactive
     [Fact]
     public async Task DeactivateAsync_SetsStatusToInactive()
     {
@@ -139,6 +154,9 @@ public class FiscalDeviceGrainTests
         snapshot.Status.Should().Be(FiscalDeviceStatus.Inactive);
     }
 
+    // Given: A registered Swissbit Cloud fiscal device
+    // When: Requesting 3 sequential transaction counters
+    // Then: Counters increment from 1 to 3
     [Fact]
     public async Task GetNextTransactionCounterAsync_IncrementsCounter()
     {
@@ -159,6 +177,9 @@ public class FiscalDeviceGrainTests
         counter3.Should().Be(3);
     }
 
+    // Given: A registered Fiskaly Cloud fiscal device
+    // When: Requesting 2 sequential signature counters
+    // Then: Counters increment from 1 to 2
     [Fact]
     public async Task GetNextSignatureCounterAsync_IncrementsCounter()
     {
@@ -177,6 +198,9 @@ public class FiscalDeviceGrainTests
         sig2.Should().Be(2);
     }
 
+    // Given: A registered Swissbit USB fiscal device
+    // When: Recording a sync event
+    // Then: The LastSyncAt timestamp is set to approximately now
     [Fact]
     public async Task RecordSyncAsync_UpdatesLastSyncAt()
     {
@@ -195,6 +219,9 @@ public class FiscalDeviceGrainTests
         snapshot.LastSyncAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A fiscal device with a certificate expiring in 15 days
+    // When: Checking if the certificate is expiring within 30 days
+    // Then: The check returns true
     [Fact]
     public async Task IsCertificateExpiringAsync_WhenExpiringWithin30Days_ReturnsTrue()
     {
@@ -211,6 +238,9 @@ public class FiscalDeviceGrainTests
         isExpiring.Should().BeTrue();
     }
 
+    // Given: A fiscal device with a certificate expiring in 1 year
+    // When: Checking if the certificate is expiring within 30 days
+    // Then: The check returns false
     [Fact]
     public async Task IsCertificateExpiringAsync_WhenNotExpiring_ReturnsFalse()
     {
@@ -227,6 +257,9 @@ public class FiscalDeviceGrainTests
         isExpiring.Should().BeFalse();
     }
 
+    // Given: An already registered fiscal device
+    // When: Attempting to register the same device grain again
+    // Then: An InvalidOperationException is thrown with "Fiscal device already registered"
     [Fact]
     public async Task RegisterAsync_AlreadyRegistered_ShouldThrow()
     {
@@ -246,6 +279,9 @@ public class FiscalDeviceGrainTests
             .WithMessage("Fiscal device already registered");
     }
 
+    // Given: An uninitialized fiscal device grain (never registered)
+    // When: Attempting any operation (snapshot, update, deactivate, counters, sync, certificate check)
+    // Then: Each operation throws InvalidOperationException with "Fiscal device grain not initialized"
     [Fact]
     public async Task Operations_OnUninitialized_ShouldThrow()
     {
@@ -277,6 +313,9 @@ public class FiscalDeviceGrainTests
             .WithMessage("Fiscal device grain not initialized");
     }
 
+    // Given: A new fiscal device grain
+    // When: Registering an Epson RT-88VI fiscal printer
+    // Then: The device is registered as Active with the Epson device type
     [Fact]
     public async Task RegisterAsync_EpsonDevice_ShouldSucceed()
     {
@@ -304,6 +343,9 @@ public class FiscalDeviceGrainTests
         snapshot.Status.Should().Be(FiscalDeviceStatus.Active);
     }
 
+    // Given: A new fiscal device grain
+    // When: Registering a Diebold TSE with public key, API endpoint, and client ID
+    // Then: The device is registered with all fields including public key and client ID
     [Fact]
     public async Task RegisterAsync_DieboldDevice_ShouldSucceed()
     {
@@ -333,6 +375,9 @@ public class FiscalDeviceGrainTests
         snapshot.ClientId.Should().Be("diebold-client-001");
     }
 
+    // Given: A registered Swissbit Cloud fiscal device
+    // When: Updating the device status to CertificateExpiring
+    // Then: The device status reflects CertificateExpiring
     [Fact]
     public async Task UpdateAsync_StatusChange_ShouldUpdate()
     {
@@ -356,6 +401,9 @@ public class FiscalDeviceGrainTests
         snapshot.Status.Should().Be(FiscalDeviceStatus.CertificateExpiring);
     }
 
+    // Given: A fiscal device with a certificate that expired 10 days ago
+    // When: Checking if the certificate is expiring within 30 days
+    // Then: The check returns true (already expired)
     [Fact]
     public async Task IsCertificateExpiringAsync_Expired_ShouldReturnTrue()
     {
@@ -373,6 +421,9 @@ public class FiscalDeviceGrainTests
         isExpiring.Should().BeTrue();
     }
 
+    // Given: A fiscal device with a certificate expiring in exactly 30 days
+    // When: Checking if the certificate is expiring within 30 days
+    // Then: The check returns true (boundary is inclusive)
     [Fact]
     public async Task IsCertificateExpiringAsync_ExactlyAtThreshold_ShouldReturnTrue()
     {
@@ -390,6 +441,9 @@ public class FiscalDeviceGrainTests
         isExpiring.Should().BeTrue();
     }
 
+    // Given: A Fiskaly Cloud device with no certificate expiry date set
+    // When: Checking if the certificate is expiring within 30 days
+    // Then: The check returns false (no certificate to expire)
     [Fact]
     public async Task IsCertificateExpiringAsync_NoCertificate_ShouldHandle()
     {
@@ -446,6 +500,9 @@ public class FiscalTransactionGrainTests
         return deviceId;
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a receipt transaction for a cash order of 119.00 with 19% VAT
+    // Then: The transaction is created in Pending status with correct amounts and type
     [Fact]
     public async Task CreateAsync_WithReceipt_CreatesTransaction()
     {
@@ -487,6 +544,9 @@ public class FiscalTransactionGrainTests
         snapshot.Status.Should().Be(FiscalTransactionStatus.Pending);
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a training receipt transaction
+    // Then: The transaction is created with TrainingReceipt type
     [Fact]
     public async Task CreateAsync_WithTrainingReceipt_CreatesTransaction()
     {
@@ -513,6 +573,9 @@ public class FiscalTransactionGrainTests
         snapshot.TransactionType.Should().Be(FiscalTransactionType.TrainingReceipt);
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a void transaction with negative amounts (-25.00)
+    // Then: The transaction is created with Void type and negative gross amount
     [Fact]
     public async Task CreateAsync_WithVoid_CreatesTransaction()
     {
@@ -540,6 +603,9 @@ public class FiscalTransactionGrainTests
         snapshot.GrossAmount.Should().Be(-25.00m);
     }
 
+    // Given: A pending fiscal transaction for a receipt
+    // When: Signing the transaction with signature data, counter, and certificate serial
+    // Then: The transaction status transitions to Signed with all signature fields populated
     [Fact]
     public async Task SignAsync_SignsTransaction()
     {
@@ -574,6 +640,9 @@ public class FiscalTransactionGrainTests
         snapshot.EndTime.Should().NotBeNull();
     }
 
+    // Given: A pending fiscal transaction
+    // When: Marking the transaction as failed with error "TSE device not responding"
+    // Then: The transaction status transitions to Failed with the error message
     [Fact]
     public async Task MarkFailedAsync_SetsStatusToFailed()
     {
@@ -598,6 +667,9 @@ public class FiscalTransactionGrainTests
         snapshot.ErrorMessage.Should().Be("TSE device not responding");
     }
 
+    // Given: A pending fiscal transaction
+    // When: Incrementing the retry count twice
+    // Then: The retry count is 2 and status transitions to Retrying
     [Fact]
     public async Task IncrementRetryAsync_IncrementsRetryCount()
     {
@@ -623,6 +695,9 @@ public class FiscalTransactionGrainTests
         snapshot.Status.Should().Be(FiscalTransactionStatus.Retrying);
     }
 
+    // Given: A signed fiscal transaction
+    // When: Marking the transaction as exported for DSFinV-K
+    // Then: The ExportedAt timestamp is set
     [Fact]
     public async Task MarkExportedAsync_SetsExportedAt()
     {
@@ -649,6 +724,9 @@ public class FiscalTransactionGrainTests
         snapshot.ExportedAt.Should().NotBeNull();
     }
 
+    // Given: A signed fiscal transaction with QR code data containing "V0;STORE;5"
+    // When: Retrieving the QR code data
+    // Then: The QR code data string contains the expected KassenSichV-formatted content
     [Fact]
     public async Task GetQrCodeDataAsync_ReturnsQrCode()
     {
@@ -674,6 +752,9 @@ public class FiscalTransactionGrainTests
         qrCode.Should().Contain("V0;STORE;5");
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a cancellation transaction with negative amounts (-119.00) referencing an original order
+    // Then: The transaction is created with Cancellation type and negative gross amount
     [Fact]
     public async Task CreateAsync_CancellationTransaction_ShouldSucceed()
     {
@@ -713,6 +794,9 @@ public class FiscalTransactionGrainTests
         snapshot.Status.Should().Be(FiscalTransactionStatus.Pending);
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a receipt transaction with AVTransfer process type (cash transfer)
+    // Then: The transaction is created with AVTransfer process type
     [Fact]
     public async Task CreateAsync_AVTransferProcess_ShouldSucceed()
     {
@@ -743,6 +827,9 @@ public class FiscalTransactionGrainTests
         snapshot.GrossAmount.Should().Be(500.00m);
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a receipt transaction with AVBestellung (pre-order) process type
+    // Then: The transaction is created with AVBestellung process type
     [Fact]
     public async Task CreateAsync_AVBestellungProcess_ShouldSucceed()
     {
@@ -778,6 +865,9 @@ public class FiscalTransactionGrainTests
         snapshot.ProcessType.Should().Be(FiscalProcessType.AVBestellung);
     }
 
+    // Given: A registered fiscal device at a location
+    // When: Creating a receipt transaction with AVSonstiger (other) process type
+    // Then: The transaction is created with AVSonstiger process type
     [Fact]
     public async Task CreateAsync_AVSonstigerProcess_ShouldSucceed()
     {
@@ -804,6 +894,9 @@ public class FiscalTransactionGrainTests
         snapshot.ProcessType.Should().Be(FiscalProcessType.AVSonstiger);
     }
 
+    // Given: A fiscal transaction that has already been created
+    // When: Attempting to create the same transaction grain again
+    // Then: An InvalidOperationException is thrown with "Fiscal transaction already exists"
     [Fact]
     public async Task CreateAsync_AlreadyCreated_ShouldThrow()
     {
@@ -833,6 +926,9 @@ public class FiscalTransactionGrainTests
             .WithMessage("Fiscal transaction already exists");
     }
 
+    // Given: A fiscal transaction that has already been signed
+    // When: Attempting to sign the transaction a second time
+    // Then: An InvalidOperationException is thrown with "Transaction already signed"
     [Fact]
     public async Task SignAsync_AlreadySigned_ShouldThrow()
     {
@@ -860,6 +956,9 @@ public class FiscalTransactionGrainTests
             .WithMessage("Transaction already signed");
     }
 
+    // Given: An uninitialized fiscal transaction grain (never created)
+    // When: Attempting any operation (snapshot, sign, fail, retry, export, QR code)
+    // Then: Each operation throws InvalidOperationException with "Fiscal transaction grain not initialized"
     [Fact]
     public async Task Operations_OnUninitialized_ShouldThrow()
     {
@@ -1123,6 +1222,9 @@ public class FiscalJournalGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalJournalGrain>(key);
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a TransactionSigned event with IP address and details
+    // Then: The journal contains one entry of type TransactionSigned with Info severity
     [Fact]
     public async Task LogEventAsync_LogsTransactionSignedEvent()
     {
@@ -1149,6 +1251,9 @@ public class FiscalJournalGrainTests
         entries[0].Severity.Should().Be(FiscalEventSeverity.Info);
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a DeviceRegistered event for a new TSE device
+    // Then: The journal contains one DeviceRegistered entry
     [Fact]
     public async Task LogEventAsync_LogsDeviceRegisteredEvent()
     {
@@ -1173,6 +1278,9 @@ public class FiscalJournalGrainTests
         entries.Should().ContainSingle(e => e.EventType == FiscalEventType.DeviceRegistered);
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging an Error event for a TSE communication timeout
+    // Then: The error appears in the journal's error list with Error severity
     [Fact]
     public async Task LogEventAsync_LogsErrorEvent()
     {
@@ -1198,6 +1306,9 @@ public class FiscalJournalGrainTests
         errors[0].Severity.Should().Be(FiscalEventSeverity.Error);
     }
 
+    // Given: A fiscal journal with entries from two different devices
+    // When: Querying entries for device 1
+    // Then: Only device 1's 2 entries are returned
     [Fact]
     public async Task GetEntriesByDeviceAsync_FiltersEntriesByDevice()
     {
@@ -1225,6 +1336,9 @@ public class FiscalJournalGrainTests
         device1Entries.Should().OnlyContain(e => e.DeviceId == deviceId1);
     }
 
+    // Given: A fiscal journal with Info, Error, and Warning events
+    // When: Retrieving only error events
+    // Then: Only the 2 Error-severity entries are returned
     [Fact]
     public async Task GetErrorsAsync_ReturnsOnlyErrors()
     {
@@ -1254,6 +1368,9 @@ public class FiscalJournalGrainTests
         errors.Should().OnlyContain(e => e.Severity == FiscalEventSeverity.Error);
     }
 
+    // Given: A fiscal journal with 3 entries of different event types
+    // When: Querying the total entry count
+    // Then: The count returns 3
     [Fact]
     public async Task GetEntryCountAsync_ReturnsTotalCount()
     {
@@ -1278,6 +1395,9 @@ public class FiscalJournalGrainTests
         count.Should().Be(3);
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a DeviceDecommissioned event for a TSE replacement
+    // Then: The entry is logged with Warning severity and decommission details
     [Fact]
     public async Task LogEventAsync_DeviceDecommissioned_ShouldLog()
     {
@@ -1306,6 +1426,9 @@ public class FiscalJournalGrainTests
         entry.Details.Should().Contain("decommissioned");
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging an ExportGenerated event for a DSFinV-K export
+    // Then: The entry is logged with the export ID and export details
     [Fact]
     public async Task LogEventAsync_ExportGenerated_ShouldLog()
     {
@@ -1334,6 +1457,9 @@ public class FiscalJournalGrainTests
         entry.Details.Should().Contain("DSFinV-K");
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a DeviceStatusChanged event for a certificate expiring warning
+    // Then: The entry is logged with Warning severity and the device ID
     [Fact]
     public async Task LogEventAsync_DeviceStatusChanged_ShouldLog()
     {
@@ -1362,6 +1488,9 @@ public class FiscalJournalGrainTests
         entry.Severity.Should().Be(FiscalEventSeverity.Warning);
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a SelfTestPerformed event for a daily self-test
+    // Then: The entry is logged with the device ID and self-test details
     [Fact]
     public async Task LogEventAsync_SelfTestPerformed_ShouldLog()
     {
@@ -1390,6 +1519,9 @@ public class FiscalJournalGrainTests
         entry.Details.Should().Contain("self-test");
     }
 
+    // Given: An empty fiscal journal for today's date
+    // When: Logging a Warning-severity event about certificate expiry
+    // Then: The entry is logged with Warning severity and does not appear in error queries
     [Fact]
     public async Task LogEventAsync_WarningSeverity_ShouldLog()
     {
@@ -1419,6 +1551,9 @@ public class FiscalJournalGrainTests
         errors.Should().BeEmpty();
     }
 
+    // Given: A fiscal journal with 3 events logged sequentially with small delays
+    // When: Retrieving all entries
+    // Then: Entries are returned in chronological order with ascending timestamps
     [Fact]
     public async Task GetEntriesAsync_ShouldReturnChronological()
     {
@@ -1455,6 +1590,9 @@ public class FiscalJournalGrainTests
         entries[1].Timestamp.Should().BeBefore(entries[2].Timestamp);
     }
 
+    // Given: A fiscal journal with entries from 2 different locations
+    // When: Filtering entries by location
+    // Then: Location 1 has 2 entries and location 2 has 1 entry
     [Fact]
     public async Task GetEntriesAsync_ByLocation_ShouldFilter()
     {
@@ -1488,6 +1626,9 @@ public class FiscalJournalGrainTests
         location2Entries.Should().OnlyContain(e => e.LocationId == location2);
     }
 
+    // Given: A fiscal journal for a high-traffic day
+    // When: Logging 100 entries to a single journal
+    // Then: All 100 entries are stored with unique IDs and can be queried by device
     [Fact]
     public async Task HighVolume_ManyEntries_ShouldHandle()
     {
@@ -1547,6 +1688,9 @@ public class TaxRateGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ITaxRateGrain>(key);
     }
 
+    // Given: A new tax rate grain for Germany
+    // When: Creating a standard 19% VAT rate with fiscal code "NORMAL"
+    // Then: The tax rate is created as active with correct country, rate, and description
     [Fact]
     public async Task CreateAsync_WithGermanStandardRate_CreatesTaxRate()
     {
@@ -1570,6 +1714,9 @@ public class TaxRateGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A new tax rate grain for Germany
+    // When: Creating a reduced 7% VAT rate with fiscal code "REDUCED"
+    // Then: The tax rate is created with 7% rate and REDUCED fiscal code
     [Fact]
     public async Task CreateAsync_WithReducedRate_CreatesTaxRate()
     {
@@ -1590,6 +1737,9 @@ public class TaxRateGrainTests
         snapshot.FiscalCode.Should().Be("REDUCED");
     }
 
+    // Given: A new tax rate grain for Germany
+    // When: Creating a 0% VAT rate with fiscal code "NULL" for zero-rated items
+    // Then: The tax rate is created with 0% rate
     [Fact]
     public async Task CreateAsync_WithZeroRate_CreatesTaxRate()
     {
@@ -1609,6 +1759,9 @@ public class TaxRateGrainTests
         snapshot.Rate.Should().Be(0m);
     }
 
+    // Given: An active Austrian 20% standard VAT tax rate effective from January 2024
+    // When: Deactivating the tax rate with an effective-to date of December 31, 2024
+    // Then: The tax rate is marked inactive with the specified end date
     [Fact]
     public async Task DeactivateAsync_SetsEffectiveTo()
     {
@@ -1627,6 +1780,9 @@ public class TaxRateGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: A Swiss 8.1% standard VAT tax rate effective from January 2024
+    // When: Querying the current tax rate
+    // Then: The rate of 8.1% is returned
     [Fact]
     public async Task GetCurrentRateAsync_ReturnsCurrentRate()
     {
@@ -1642,6 +1798,9 @@ public class TaxRateGrainTests
         rate.Should().Be(8.1m);
     }
 
+    // Given: A French 20% standard VAT rate effective from January 1 to December 31, 2024
+    // When: Checking if the rate is active on June 15, 2024 (mid-range)
+    // Then: The rate is reported as active
     [Fact]
     public async Task IsActiveOnDateAsync_WhenDateInRange_ReturnsTrue()
     {
@@ -1657,6 +1816,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: An Italian 22% standard VAT rate effective from January 1 to June 30, 2024
+    // When: Checking if the rate is active on December 1, 2024 (after expiry)
+    // Then: The rate is reported as inactive
     [Fact]
     public async Task IsActiveOnDateAsync_WhenDateOutOfRange_ReturnsFalse()
     {
@@ -1672,6 +1834,9 @@ public class TaxRateGrainTests
         isActive.Should().BeFalse();
     }
 
+    // Given: A Spanish 21% standard VAT rate effective from January 2024 with no end date
+    // When: Checking if the rate is active on January 1, 2030 (far future)
+    // Then: The rate is reported as active since it has no expiry
     [Fact]
     public async Task IsActiveOnDateAsync_WhenNoEndDate_ReturnsTrue()
     {
@@ -1687,6 +1852,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: An existing Polish 23% standard VAT tax rate
+    // When: Attempting to create a duplicate tax rate for the same country and fiscal code
+    // Then: An InvalidOperationException is thrown indicating the tax rate already exists
     [Fact]
     public async Task CreateAsync_AlreadyCreated_ShouldThrow()
     {
@@ -1705,6 +1873,9 @@ public class TaxRateGrainTests
             .WithMessage("Tax rate already exists");
     }
 
+    // Given: An uninitialized tax rate grain (never created)
+    // When: Attempting any operation (snapshot, deactivate, get rate, check active)
+    // Then: Each operation throws InvalidOperationException with "Tax rate grain not initialized"
     [Fact]
     public async Task Operations_OnUninitialized_ShouldThrow()
     {
@@ -1726,6 +1897,9 @@ public class TaxRateGrainTests
             .WithMessage("Tax rate grain not initialized");
     }
 
+    // Given: A Belgian 21% standard VAT rate effective from July 1 to December 31, 2024
+    // When: Checking if the rate is active exactly on the effective-from date (July 1)
+    // Then: The rate is reported as active (inclusive boundary)
     [Fact]
     public async Task IsActiveOnDateAsync_ExactlyOnEffectiveFrom_ShouldReturnTrue()
     {
@@ -1743,6 +1917,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A Dutch 21% standard VAT rate effective from January 1 to December 31, 2024
+    // When: Checking if the rate is active exactly on the effective-to date (December 31)
+    // Then: The rate is reported as active (inclusive boundary)
     [Fact]
     public async Task IsActiveOnDateAsync_ExactlyOnEffectiveTo_ShouldReturnTrue()
     {
@@ -1760,6 +1937,9 @@ public class TaxRateGrainTests
         isActive.Should().BeTrue();
     }
 
+    // Given: A Portuguese 23% standard VAT rate effective from January 1, 2025
+    // When: Checking if the rate is active on December 31, 2024 (before effective date)
+    // Then: The rate is reported as inactive
     [Fact]
     public async Task IsActiveOnDateAsync_BeforeEffectiveFrom_ShouldReturnFalse()
     {
@@ -1800,6 +1980,9 @@ public class TseGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<ITseGrain>(key);
     }
 
+    // Given: A new uninitialized TSE grain
+    // When: Initializing the TSE for a specific location
+    // Then: The TSE is initialized with zero transaction and signature counters and valid certificate data
     [Fact]
     public async Task InitializeAsync_InitializesTse()
     {
@@ -1819,6 +2002,9 @@ public class TseGrainTests
         snapshot.PublicKeyBase64.Should().NotBeNullOrEmpty();
     }
 
+    // Given: An initialized TSE device at a location
+    // When: Starting a new Kassenbeleg transaction with process data and client ID "POS-001"
+    // Then: The transaction starts successfully with transaction number 1 and the correct client ID
     [Fact]
     public async Task StartTransactionAsync_StartsTransaction()
     {
@@ -1841,6 +2027,9 @@ public class TseGrainTests
         result.ClientId.Should().Be("POS-001");
     }
 
+    // Given: An initialized TSE with an active Kassenbeleg transaction
+    // When: Finishing the transaction with final process data
+    // Then: A valid HMAC-SHA256 signature is generated with a KassenSichV-compliant QR code starting with "V0;"
     [Fact]
     public async Task FinishTransactionAsync_GeneratesSignature()
     {
@@ -1873,6 +2062,9 @@ public class TseGrainTests
         finishResult.EndTime.Should().BeAfter(finishResult.StartTime);
     }
 
+    // Given: An initialized TSE with an active transaction containing initial process data
+    // When: Updating the transaction's process data with revised amounts
+    // Then: The update succeeds
     [Fact]
     public async Task UpdateTransactionAsync_UpdatesProcessData()
     {
@@ -1896,6 +2088,9 @@ public class TseGrainTests
         updateSuccess.Should().BeTrue();
     }
 
+    // Given: An initialized TSE device
+    // When: Performing a self-test diagnostic check
+    // Then: The self-test passes and the last self-test timestamp is recorded
     [Fact]
     public async Task SelfTestAsync_PerformsSelfTest()
     {
@@ -1917,6 +2112,9 @@ public class TseGrainTests
         snapshot.LastSelfTestPassed.Should().BeTrue();
     }
 
+    // Given: An initialized TSE device
+    // When: Configuring an external mapping to a Fiskaly Cloud TSE with forwarding enabled
+    // Then: The external mapping is stored with the correct external device ID, TSE type, and forwarding settings
     [Fact]
     public async Task ConfigureExternalMappingAsync_ConfiguresMapping()
     {
@@ -1944,6 +2142,9 @@ public class TseGrainTests
         snapshot.ExternalMapping.ForwardAllEvents.Should().BeTrue();
     }
 
+    // Given: An initialized TSE device with no prior transactions
+    // When: Starting and finishing three sequential Kassenbeleg transactions
+    // Then: Transaction numbers increment from 1 to 3 and signature counters match, with the TSE tracking all 3
     [Fact]
     public async Task MultipleTransactions_IncrementCounters()
     {
@@ -1984,6 +2185,9 @@ public class TseGrainTests
         snapshot.SignatureCounter.Should().Be(3);
     }
 
+    // Given: An initialized TSE device with no active transactions
+    // When: Attempting to finish a non-existent transaction number 999
+    // Then: The operation fails with a "not found" error
     [Fact]
     public async Task FinishTransactionAsync_WithInvalidTransactionNumber_Fails()
     {
@@ -2003,6 +2207,9 @@ public class TseGrainTests
         result.ErrorMessage.Should().Contain("not found");
     }
 
+    // Given: An initialized TSE with an active transaction
+    // When: Receiving an external TSE response with external transaction ID, signature, and certificate
+    // Then: The external response is processed without error
     [Fact]
     public async Task ReceiveExternalResponseAsync_ProcessesExternalResponse()
     {
@@ -2065,6 +2272,9 @@ public class FiscalTransactionWithTseTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiscalDeviceGrain>(key);
     }
 
+    // Given: A registered fiscal device and an initialized TSE at a location
+    // When: Creating and signing a 119.00 EUR receipt transaction through the TSE with CASH payment
+    // Then: The transaction is signed with a valid signature, QR code (V0; prefix), and incrementing counters
     [Fact]
     public async Task CreateAndSignWithTseAsync_CreatesAndSignsTransaction()
     {
@@ -2116,6 +2326,9 @@ public class FiscalTransactionWithTseTests
         snapshot.EndTime.Should().BeAfter(snapshot.StartTime);
     }
 
+    // Given: A registered Fiskaly Cloud fiscal device and an initialized TSE
+    // When: Creating and signing a void transaction for -50.00 EUR
+    // Then: The void transaction is signed with negative amounts and a valid signature
     [Fact]
     public async Task CreateAndSignWithTseAsync_WithVoid_CreatesSignedVoidTransaction()
     {
@@ -2159,6 +2372,9 @@ public class FiscalTransactionWithTseTests
         snapshot.Signature.Should().NotBeNullOrEmpty();
     }
 
+    // Given: A registered Swissbit USB fiscal device and an initialized TSE
+    // When: Creating and signing three sequential receipt transactions through the TSE
+    // Then: Transaction numbers and signature counters increment from 1 to 3, and the TSE tracks all 3
     [Fact]
     public async Task CreateAndSignWithTseAsync_MultipleTransactions_IncrementCounters()
     {
@@ -2223,6 +2439,9 @@ public class FiscalTransactionWithTseTests
 
 public class InternalTseProviderTests
 {
+    // Given: A fresh internal TSE provider with no prior transactions
+    // When: Starting three sequential Kassenbeleg transactions
+    // Then: Transaction numbers increment from 1 to 3
     [Fact]
     public async Task StartTransactionAsync_ReturnsIncrementingTransactionNumbers()
     {
@@ -2237,6 +2456,9 @@ public class InternalTseProviderTests
         result3.TransactionNumber.Should().Be(3);
     }
 
+    // Given: An internal TSE provider with an active transaction
+    // When: Finishing the transaction
+    // Then: A valid HMAC-SHA256 signature is generated with signature counter 1
     [Fact]
     public async Task FinishTransactionAsync_GeneratesValidSignature()
     {
@@ -2252,6 +2474,9 @@ public class InternalTseProviderTests
         finish.SignatureCounter.Should().Be(1);
     }
 
+    // Given: An internal TSE provider with an active Kassenbeleg transaction
+    // When: Finishing the transaction
+    // Then: A KassenSichV-compliant QR code is generated containing "V0;", "HMAC-SHA256", "utcTime", and the signature counter
     [Fact]
     public async Task FinishTransactionAsync_GeneratesKassenSichVQrCode()
     {
@@ -2268,6 +2493,9 @@ public class InternalTseProviderTests
         finish.QrCodeData.Should().Contain(finish.SignatureCounter.ToString());
     }
 
+    // Given: An internal TSE provider with no active transactions
+    // When: Attempting to finish a non-existent transaction number 999
+    // Then: The operation fails with a "not found" error
     [Fact]
     public async Task FinishTransactionAsync_WithUnknownTransaction_ReturnsFailed()
     {
@@ -2279,6 +2507,9 @@ public class InternalTseProviderTests
         result.ErrorMessage.Should().Contain("not found");
     }
 
+    // Given: An internal TSE provider with an active transaction containing initial process data
+    // When: Updating the transaction's process data
+    // Then: The update succeeds
     [Fact]
     public async Task UpdateTransactionAsync_UpdatesProcessData()
     {
@@ -2290,6 +2521,9 @@ public class InternalTseProviderTests
         updated.Should().BeTrue();
     }
 
+    // Given: An internal TSE provider
+    // When: Running the self-test diagnostic
+    // Then: The self-test passes with no error message
     [Fact]
     public async Task SelfTestAsync_ReturnsPassingResult()
     {
@@ -2301,6 +2535,9 @@ public class InternalTseProviderTests
         result.ErrorMessage.Should().BeNull();
     }
 
+    // Given: An internal TSE provider
+    // When: Retrieving the certificate serial number
+    // Then: A non-empty serial starting with "DVTSE" is returned
     [Fact]
     public async Task GetCertificateSerialAsync_ReturnsCertificateSerial()
     {
@@ -2312,6 +2549,9 @@ public class InternalTseProviderTests
         serial.Should().StartWith("DVTSE");
     }
 
+    // Given: An internal TSE provider instance
+    // When: Checking the IsInternal property
+    // Then: It returns true indicating this is a built-in TSE implementation
     [Fact]
     public void IsInternal_ReturnsTrue()
     {
@@ -2320,6 +2560,9 @@ public class InternalTseProviderTests
         provider.IsInternal.Should().BeTrue();
     }
 
+    // Given: An internal TSE provider instance
+    // When: Checking the ProviderType property
+    // Then: It returns "InternalTse" identifying the provider type
     [Fact]
     public void ProviderType_ReturnsInternalTse()
     {
@@ -2328,6 +2571,9 @@ public class InternalTseProviderTests
         provider.ProviderType.Should().Be("InternalTse");
     }
 
+    // Given: An internal TSE provider
+    // When: Signing two transactions with different process data
+    // Then: Each transaction produces a unique signature and unique QR code data
     [Fact]
     public async Task MultipleSignatures_HaveUniqueValues()
     {
@@ -2351,6 +2597,9 @@ public class InternalTseProviderTests
 
 public class FiskalyConfigurationTests
 {
+    // Given: A Fiskaly configuration for Germany in the Test environment
+    // When: Resolving the base URL
+    // Then: The KassenSichV middleware v2 URL is returned
     [Fact]
     public void GetBaseUrl_Germany_Test_ReturnsCorrectUrl()
     {
@@ -2369,6 +2618,9 @@ public class FiskalyConfigurationTests
         url.Should().Be("https://kassensichv-middleware.fiskaly.com/api/v2");
     }
 
+    // Given: A Fiskaly configuration for Germany in the Production environment
+    // When: Resolving the base URL
+    // Then: The KassenSichV middleware v2 URL is returned
     [Fact]
     public void GetBaseUrl_Germany_Production_ReturnsCorrectUrl()
     {
@@ -2387,6 +2639,9 @@ public class FiskalyConfigurationTests
         url.Should().Be("https://kassensichv-middleware.fiskaly.com/api/v2");
     }
 
+    // Given: A Fiskaly configuration for Austria in the Test environment
+    // When: Resolving the base URL
+    // Then: The RKSV v1 URL is returned
     [Fact]
     public void GetBaseUrl_Austria_Test_ReturnsCorrectUrl()
     {
@@ -2405,6 +2660,9 @@ public class FiskalyConfigurationTests
         url.Should().Be("https://rksv.fiskaly.com/api/v1");
     }
 
+    // Given: A Fiskaly configuration for Austria in the Production environment
+    // When: Resolving the base URL
+    // Then: The RKSV v1 URL is returned
     [Fact]
     public void GetBaseUrl_Austria_Production_ReturnsCorrectUrl()
     {
@@ -2423,6 +2681,9 @@ public class FiskalyConfigurationTests
         url.Should().Be("https://rksv.fiskaly.com/api/v1");
     }
 
+    // Given: A Fiskaly configuration for Italy in the Test environment
+    // When: Resolving the base URL
+    // Then: The RT (Registratore Telematico) v1 URL is returned
     [Fact]
     public void GetBaseUrl_Italy_Test_ReturnsCorrectUrl()
     {
@@ -2441,6 +2702,9 @@ public class FiskalyConfigurationTests
         url.Should().Be("https://rt.fiskaly.com/api/v1");
     }
 
+    // Given: A Fiskaly configuration for Italy in the Production environment
+    // When: Resolving the base URL
+    // Then: The RT (Registratore Telematico) v1 URL is returned
     [Fact]
     public void GetBaseUrl_Italy_Production_ReturnsCorrectUrl()
     {
@@ -2481,6 +2745,9 @@ public class FiskalyIntegrationGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiskalyIntegrationGrain>(key);
     }
 
+    // Given: A new Fiskaly integration grain that has not been configured
+    // When: Retrieving the integration snapshot
+    // Then: The snapshot shows the integration as disabled with no TSS ID
     [Fact]
     public async Task GetSnapshotAsync_WhenNotConfigured_ReturnsDisabledSnapshot()
     {
@@ -2493,6 +2760,9 @@ public class FiskalyIntegrationGrainTests
         snapshot.TssId.Should().BeNull();
     }
 
+    // Given: A Fiskaly integration grain that has not been configured
+    // When: Testing the connection to the Fiskaly service
+    // Then: The connection test returns false
     [Fact]
     public async Task TestConnectionAsync_WhenNotConfigured_ReturnsFalse()
     {
@@ -2511,6 +2781,9 @@ public class FiskalyIntegrationGrainTests
 
 public class FiskalyDtoTests
 {
+    // Given: VAT amounts for NORMAL and REDUCED_1 rates, and payment amounts for CASH and NON_CASH
+    // When: Creating a Fiskaly receipt DTO with receipt type "RECEIPT"
+    // Then: The receipt contains 2 VAT rate amounts and 2 payment type amounts
     [Fact]
     public void FiskalyReceipt_CanBeCreated()
     {
@@ -2532,6 +2805,9 @@ public class FiskalyDtoTests
         receipt.AmountsPerPaymentType.Should().HaveCount(2);
     }
 
+    // Given: RKSV amounts for Normal (100.00), Reduced1 (50.00), and Zero (10.00) tax categories
+    // When: Creating an Austrian RKSV receipt request with type "STANDARD"
+    // Then: The receipt contains the correct amounts mapped to each Austrian tax category
     [Fact]
     public void FiskalyRksvReceiptRequest_CanBeCreated()
     {
@@ -2550,6 +2826,9 @@ public class FiskalyDtoTests
         receipt.Amounts.Zero.Should().Be("10.00");
     }
 
+    // Given: A Fiskaly receipt with type "RECEIPT"
+    // When: Wrapping it in a transaction schema using the Standard V1 format
+    // Then: The schema's StandardV1 property contains the receipt with the correct type
     [Fact]
     public void FiskalyTransactionSchema_CanBeCreatedWithStandardV1()
     {
@@ -2565,6 +2844,9 @@ public class FiskalyDtoTests
         schema.StandardV1!.Receipt.ReceiptType.Should().Be("RECEIPT");
     }
 
+    // Given: A VAT rate of "NORMAL" with amount "119.00"
+    // When: Creating a FiskalyVatAmount DTO
+    // Then: The VatRate and Amount properties are correctly mapped
     [Fact]
     public void FiskalyVatAmount_MapsToCorrectProperties()
     {
@@ -2574,6 +2856,9 @@ public class FiskalyDtoTests
         vatAmount.Amount.Should().Be("119.00");
     }
 
+    // Given: A payment type of "CASH" with amount "50.00"
+    // When: Creating a FiskalyPaymentAmount DTO
+    // Then: The PaymentType and Amount properties are correctly mapped
     [Fact]
     public void FiskalyPaymentAmount_MapsToCorrectProperties()
     {
@@ -2590,6 +2875,9 @@ public class FiskalyDtoTests
 
 public class FiskalyRegionTests
 {
+    // Given: A Fiskaly region (Germany/KassenSichV, Austria/RKSV, or Italy/RT)
+    // When: Creating a configuration for that region and resolving the base URL
+    // Then: A valid non-empty URL is returned for each supported region
     [Theory]
     [InlineData(FiskalyRegion.Germany, "KassenSichV")]
     [InlineData(FiskalyRegion.Austria, "RKSV")]
@@ -2611,6 +2899,9 @@ public class FiskalyRegionTests
         config.GetBaseUrl().Should().NotBeNullOrEmpty();
     }
 
+    // Given: A Fiskaly environment (Test or Production)
+    // When: Creating a configuration for that environment and resolving the base URL
+    // Then: A valid non-empty URL is returned for each supported environment
     [Theory]
     [InlineData(FiskalyEnvironment.Test)]
     [InlineData(FiskalyEnvironment.Production)]
@@ -2652,6 +2943,9 @@ public class FiskalyConfigGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IFiskalyConfigGrain>(key);
     }
 
+    // Given: A new Fiskaly config grain that has never been configured
+    // When: Retrieving the tenant configuration
+    // Then: Default values are returned with Fiskaly disabled, no credentials, and Germany as default region
     [Fact]
     public async Task GetConfigAsync_WhenNew_ReturnsDefaultConfig()
     {
@@ -2666,6 +2960,9 @@ public class FiskalyConfigGrainTests
         config.Region.Should().Be(FiskalyRegion.Germany); // Default
     }
 
+    // Given: A new Fiskaly config grain
+    // When: Updating the configuration with Austria Production settings, API credentials, and forwarding enabled
+    // Then: All fields are persisted including region, environment, credentials, client ID, and version is incremented
     [Fact]
     public async Task UpdateConfigAsync_UpdatesAllFields()
     {
@@ -2696,6 +2993,9 @@ public class FiskalyConfigGrainTests
         result.Version.Should().BeGreaterThan(0);
     }
 
+    // Given: A Fiskaly config grain configured with credentials but currently disabled
+    // When: Enabling the Fiskaly integration
+    // Then: The configuration is marked as enabled
     [Fact]
     public async Task EnableAsync_EnablesConfig()
     {
@@ -2719,6 +3019,9 @@ public class FiskalyConfigGrainTests
         result.Enabled.Should().BeTrue();
     }
 
+    // Given: A Fiskaly config grain that is currently enabled with credentials
+    // When: Disabling the Fiskaly integration
+    // Then: The configuration is marked as disabled
     [Fact]
     public async Task DisableAsync_DisablesConfig()
     {
@@ -2742,6 +3045,9 @@ public class FiskalyConfigGrainTests
         result.Enabled.Should().BeFalse();
     }
 
+    // Given: A Fiskaly config grain with a null API key
+    // When: Validating the configuration
+    // Then: Validation fails with an error mentioning "API Key"
     [Fact]
     public async Task ValidateAsync_WithMissingApiKey_ReturnsError()
     {
@@ -2766,6 +3072,9 @@ public class FiskalyConfigGrainTests
         result.Errors.Should().Contain(e => e.Contains("API Key"));
     }
 
+    // Given: A Fiskaly config grain for Germany with a null TSS ID (required for KassenSichV)
+    // When: Validating the configuration
+    // Then: Validation fails with an error mentioning "TSS ID"
     [Fact]
     public async Task ValidateAsync_WithMissingTssIdForGermany_ReturnsError()
     {
@@ -2790,6 +3099,9 @@ public class FiskalyConfigGrainTests
         result.Errors.Should().Contain(e => e.Contains("TSS ID"));
     }
 
+    // Given: A Fiskaly config grain for Germany Production with all required fields populated
+    // When: Validating the configuration
+    // Then: Validation passes with no errors
     [Fact]
     public async Task ValidateAsync_WithValidConfig_ReturnsValid()
     {
@@ -2814,6 +3126,9 @@ public class FiskalyConfigGrainTests
         result.Errors.Should().BeEmpty();
     }
 
+    // Given: A Fiskaly config grain for Germany in the Test environment with all required fields
+    // When: Validating the configuration
+    // Then: Validation passes but includes a warning about using the "Test environment"
     [Fact]
     public async Task ValidateAsync_WithTestEnvironment_ReturnsWarning()
     {
@@ -2838,6 +3153,9 @@ public class FiskalyConfigGrainTests
         result.Warnings.Should().Contain(w => w.Contains("Test environment"));
     }
 
+    // Given: A Fiskaly config grain enabled for Austria Production with API credentials
+    // When: Retrieving the Fiskaly configuration object
+    // Then: A non-null configuration is returned with the correct region, environment, and credentials
     [Fact]
     public async Task GetFiskalyConfigurationAsync_WhenEnabled_ReturnsConfig()
     {
@@ -2867,6 +3185,9 @@ public class FiskalyConfigGrainTests
         config.ClientId.Should().Be("register-123");
     }
 
+    // Given: A Fiskaly config grain that is explicitly disabled
+    // When: Retrieving the Fiskaly configuration object
+    // Then: Null is returned since the integration is disabled
     [Fact]
     public async Task GetFiskalyConfigurationAsync_WhenDisabled_ReturnsNull()
     {
@@ -2890,6 +3211,9 @@ public class FiskalyConfigGrainTests
         config.Should().BeNull();
     }
 
+    // Given: A Fiskaly config grain enabled but with null API key and API secret
+    // When: Retrieving the Fiskaly configuration object
+    // Then: Null is returned since credentials are missing
     [Fact]
     public async Task GetFiskalyConfigurationAsync_WithMissingCredentials_ReturnsNull()
     {
@@ -2920,6 +3244,9 @@ public class FiskalyConfigGrainTests
 
 public class FiskalyOptionsTests
 {
+    // Given: A default FiskalyOptions instance
+    // When: Inspecting the default property values
+    // Then: Fiskaly is disabled, defaults to Germany/Test, 30s timeout, 3 retries with exponential backoff
     [Fact]
     public void FiskalyOptions_HasCorrectDefaults()
     {
@@ -2936,6 +3263,9 @@ public class FiskalyOptionsTests
         options.TokenRefreshBufferMinutes.Should().Be(5);
     }
 
+    // Given: A default FiskalyRegionOptions instance
+    // When: Inspecting the default URL mappings for each region
+    // Then: Germany uses KassenSichV v2 URLs, Austria uses RKSV v1 URLs, and Italy uses RT v1 URLs
     [Fact]
     public void FiskalyRegionOptions_HasCorrectDefaultUrls()
     {
@@ -2949,6 +3279,9 @@ public class FiskalyOptionsTests
         options.Italy.ProductionUrl.Should().Be("https://rt.fiskaly.com/api/v1");
     }
 
+    // Given: A default FiskalyTenantOptions instance
+    // When: Inspecting the default property values
+    // Then: Fiskaly is disabled, defaults to Germany/Test, with forwarding and external signature required
     [Fact]
     public void FiskalyTenantOptions_HasCorrectDefaults()
     {

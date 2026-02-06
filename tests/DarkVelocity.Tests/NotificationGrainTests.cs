@@ -22,6 +22,9 @@ public class NotificationGrainTests
 
     #region Email Notification Tests
 
+    // Given: an initialized notification grain for an organization
+    // When: an email notification is sent to a recipient
+    // Then: the notification should be created with Email type and Sent status
     [Fact]
     public async Task SendEmailAsync_ShouldSendAndReturnNotification()
     {
@@ -46,6 +49,9 @@ public class NotificationGrainTests
         notification.SentAt.Should().NotBeNull();
     }
 
+    // Given: an initialized notification grain
+    // When: an email notification is sent
+    // Then: the notification should be retrievable by its ID
     [Fact]
     public async Task SendEmailAsync_ShouldPersistNotification()
     {
@@ -72,6 +78,9 @@ public class NotificationGrainTests
 
     #region SMS Notification Tests
 
+    // Given: an initialized notification grain
+    // When: an SMS notification is sent to a phone number
+    // Then: the notification should be created with SMS type and Sent status
     [Fact]
     public async Task SendSmsAsync_ShouldSendAndReturnNotification()
     {
@@ -97,6 +106,9 @@ public class NotificationGrainTests
 
     #region Push Notification Tests
 
+    // Given: an initialized notification grain
+    // When: a push notification is sent to a device token with payload data
+    // Then: the notification should be created with Push type and Sent status
     [Fact]
     public async Task SendPushAsync_ShouldSendAndReturnNotification()
     {
@@ -124,6 +136,9 @@ public class NotificationGrainTests
 
     #region Slack Notification Tests
 
+    // Given: an initialized notification grain
+    // When: a Slack message is sent via webhook to a channel
+    // Then: the notification should be created with Slack type and Sent status
     [Fact]
     public async Task SendSlackAsync_ShouldSendAndReturnNotification()
     {
@@ -149,6 +164,9 @@ public class NotificationGrainTests
 
     #region Query Tests
 
+    // Given: an organization with email and SMS notifications sent
+    // When: querying notifications filtered by type
+    // Then: only notifications matching the requested type should be returned
     [Fact]
     public async Task GetNotificationsAsync_ShouldReturnFilteredByType()
     {
@@ -174,6 +192,9 @@ public class NotificationGrainTests
         smsNotifications[0].Type.Should().Be(NotificationType.Sms);
     }
 
+    // Given: 10 email notifications sent to an organization
+    // When: querying with a limit of 5
+    // Then: only 5 notifications should be returned
     [Fact]
     public async Task GetNotificationsAsync_ShouldRespectLimit()
     {
@@ -195,6 +216,9 @@ public class NotificationGrainTests
         notifications.Should().HaveCount(5);
     }
 
+    // Given: three email notifications sent sequentially
+    // When: querying all notifications
+    // Then: notifications should be returned in descending chronological order (newest first)
     [Fact]
     public async Task GetNotificationsAsync_ShouldReturnInDescendingOrder()
     {
@@ -222,6 +246,9 @@ public class NotificationGrainTests
 
     #region Channel Management Tests
 
+    // Given: an initialized notification grain
+    // When: an email notification channel is configured with a minimum severity
+    // Then: the channel should be created and retrievable
     [Fact]
     public async Task AddChannelAsync_ShouldAddChannel()
     {
@@ -247,6 +274,9 @@ public class NotificationGrainTests
         channels.Should().ContainSingle(c => c.Target == "alerts@example.com");
     }
 
+    // Given: a configured notification channel
+    // When: the channel target address is updated
+    // Then: the channel should reflect the new target
     [Fact]
     public async Task UpdateChannelAsync_ShouldUpdateExistingChannel()
     {
@@ -272,6 +302,9 @@ public class NotificationGrainTests
         channels[0].Target.Should().Be("updated@example.com");
     }
 
+    // Given: a configured notification channel
+    // When: the channel is removed
+    // Then: no channels should remain for the organization
     [Fact]
     public async Task RemoveChannelAsync_ShouldRemoveChannel()
     {
@@ -296,6 +329,9 @@ public class NotificationGrainTests
         channels.Should().BeEmpty();
     }
 
+    // Given: an enabled notification channel
+    // When: the channel is disabled
+    // Then: the channel should be marked as not enabled
     [Fact]
     public async Task SetChannelEnabledAsync_ShouldToggleChannelState()
     {
@@ -324,6 +360,9 @@ public class NotificationGrainTests
 
     #region Error Handling Tests
 
+    // Given: a notification grain that has not been initialized
+    // When: attempting to send an email notification
+    // Then: the operation should be rejected as not initialized
     [Fact]
     public async Task SendEmailAsync_WhenNotInitialized_ShouldThrow()
     {
@@ -342,6 +381,9 @@ public class NotificationGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: an initialized notification grain with no notifications
+    // When: querying for a nonexistent notification ID
+    // Then: null should be returned
     [Fact]
     public async Task GetNotificationAsync_WhenNotFound_ShouldReturnNull()
     {
@@ -361,6 +403,9 @@ public class NotificationGrainTests
 
     #region Stream Event Tests
 
+    // Given: an organization with a notification stream subscription
+    // When: an email notification is sent
+    // Then: NotificationQueued and NotificationSent stream events should be published
     [Fact]
     public async Task SendEmailAsync_ShouldPublishNotificationEvents()
     {
@@ -411,6 +456,9 @@ public class NotificationGrainTests
 
     #region Metadata Tests
 
+    // Given: an initialized notification grain
+    // When: an email is sent with order-related metadata key-value pairs
+    // Then: the metadata should be persisted and retrievable on the notification
     [Fact]
     public async Task SendEmailAsync_WithMetadata_ShouldPersistMetadata()
     {
@@ -440,6 +488,9 @@ public class NotificationGrainTests
         retrieved.Metadata["customerName"].Should().Be("John Doe");
     }
 
+    // Given: an initialized notification grain and an existing alert
+    // When: an email notification triggered by the alert is sent
+    // Then: the notification should be linked to the alert and retrievable by alert ID
     [Fact]
     public async Task SendEmailAsync_WithTriggeredByAlertId_ShouldPersist()
     {

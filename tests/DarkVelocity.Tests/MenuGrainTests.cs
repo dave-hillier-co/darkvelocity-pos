@@ -20,6 +20,9 @@ public class MenuCategoryGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IMenuCategoryGrain>(key);
     }
 
+    // Given: no existing menu category
+    // When: a new "Starters" category is created with a display order, color, and description
+    // Then: the category is active with the correct name, description, display order, color, and zero items
     [Fact]
     public async Task CreateAsync_ShouldCreateCategory()
     {
@@ -47,6 +50,9 @@ public class MenuCategoryGrainTests
         result.ItemCount.Should().Be(0);
     }
 
+    // Given: an existing "Starters" menu category
+    // When: the category name, description, display order, and color are updated
+    // Then: the category reflects the new name "Appetizers", updated description, reordered position, and new color
     [Fact]
     public async Task UpdateAsync_ShouldUpdateCategory()
     {
@@ -76,6 +82,9 @@ public class MenuCategoryGrainTests
         result.Color.Should().Be("#00FF00");
     }
 
+    // Given: an active "Seasonal" menu category
+    // When: the category is deactivated
+    // Then: the category is marked as inactive
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateCategory()
     {
@@ -98,6 +107,9 @@ public class MenuCategoryGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a "Mains" category with zero items
+    // When: three menu items are added to the category
+    // Then: the category item count is 3
     [Fact]
     public async Task IncrementItemCountAsync_ShouldIncreaseCount()
     {
@@ -122,6 +134,9 @@ public class MenuCategoryGrainTests
         snapshot.ItemCount.Should().Be(3);
     }
 
+    // Given: a "Desserts" category with 2 items
+    // When: one item is removed from the category
+    // Then: the category item count decreases to 1
     [Fact]
     public async Task DecrementItemCountAsync_ShouldDecreaseCount()
     {
@@ -146,6 +161,9 @@ public class MenuCategoryGrainTests
         snapshot.ItemCount.Should().Be(1);
     }
 
+    // Given: an empty category with zero items
+    // When: item count is decremented below zero
+    // Then: the item count remains at zero and does not go negative
     [Fact]
     public async Task DecrementItemCountAsync_AtZero_ShouldRemainZero()
     {
@@ -186,6 +204,9 @@ public class MenuItemGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IMenuItemGrain>(key);
     }
 
+    // Given: no existing menu item
+    // When: a "Caesar Salad" is created at $12.99 with inventory tracking and a SKU
+    // Then: the item is active with correct name, price, SKU, inventory tracking enabled, and no modifiers
     [Fact]
     public async Task CreateAsync_ShouldCreateMenuItem()
     {
@@ -220,6 +241,9 @@ public class MenuItemGrainTests
         result.Modifiers.Should().BeEmpty();
     }
 
+    // Given: an existing "House Burger" menu item at $14.99 without inventory tracking
+    // When: the item name, description, price, and inventory tracking are updated
+    // Then: the item reflects the new name "Classic Burger", updated price of $15.99, and inventory tracking enabled
     [Fact]
     public async Task UpdateAsync_ShouldUpdateMenuItem()
     {
@@ -259,6 +283,9 @@ public class MenuItemGrainTests
         result.TrackInventory.Should().BeTrue();
     }
 
+    // Given: an active "Seasonal Special" menu item
+    // When: the item is deactivated
+    // Then: the item is marked as inactive
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateItem()
     {
@@ -286,6 +313,9 @@ public class MenuItemGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: a "Fish & Chips" menu item priced at $16.50
+    // When: the item price is queried
+    // Then: the returned price is $16.50
     [Fact]
     public async Task GetPriceAsync_ShouldReturnPrice()
     {
@@ -312,6 +342,9 @@ public class MenuItemGrainTests
         price.Should().Be(16.50m);
     }
 
+    // Given: a "Coffee" menu item with no modifiers
+    // When: a required "Size" modifier with Small, Medium, and Large options is added
+    // Then: the item has one modifier group with 3 options and the modifier is marked as required
     [Fact]
     public async Task AddModifierAsync_ShouldAddModifierGroup()
     {
@@ -356,6 +389,9 @@ public class MenuItemGrainTests
         snapshot.Modifiers[0].Options.Should().HaveCount(3);
     }
 
+    // Given: a "Pizza" menu item with no modifiers
+    // When: a required "Size" modifier and an optional "Extra Toppings" modifier are both added
+    // Then: the item has two modifier groups, one required and one optional
     [Fact]
     public async Task AddModifierAsync_MultipleModifiers_ShouldAddAll()
     {
@@ -414,6 +450,9 @@ public class MenuItemGrainTests
         snapshot.Modifiers.Should().Contain(m => m.Name == "Extra Toppings" && !m.IsRequired);
     }
 
+    // Given: a "Sandwich" menu item with a "Bread" modifier offering White and Wheat options
+    // When: the same modifier is re-added with a new name "Bread Type" and an additional Sourdough option
+    // Then: the modifier is replaced in-place with the updated name and 3 options
     [Fact]
     public async Task AddModifierAsync_UpdateExisting_ShouldReplaceModifier()
     {
@@ -473,6 +512,9 @@ public class MenuItemGrainTests
         snapshot.Modifiers[0].Options.Should().HaveCount(3);
     }
 
+    // Given: a "Steak" menu item with a required "Temperature" modifier (Rare, Medium, Well Done)
+    // When: the temperature modifier is removed
+    // Then: the item has no modifiers
     [Fact]
     public async Task RemoveModifierAsync_ShouldRemoveModifier()
     {
@@ -515,6 +557,9 @@ public class MenuItemGrainTests
         snapshot.Modifiers.Should().BeEmpty();
     }
 
+    // Given: a "Pasta Carbonara" priced at $18.99 with a linked recipe
+    // When: the theoretical food cost is updated to $5.75
+    // Then: the item shows a cost of $5.75 and a cost percentage of approximately 30.28%
     [Fact]
     public async Task UpdateCostAsync_ShouldUpdateTheoreticalCost()
     {
@@ -543,6 +588,9 @@ public class MenuItemGrainTests
         snapshot.CostPercent.Should().BeApproximately(30.28m, 0.01m);
     }
 
+    // Given: no existing menu item
+    // When: a "Chicken Parmesan" is created with a linked recipe
+    // Then: the item stores the recipe reference for cost tracking
     [Fact]
     public async Task CreateAsync_WithRecipe_ShouldLinkRecipe()
     {
@@ -569,6 +617,9 @@ public class MenuItemGrainTests
         result.RecipeId.Should().Be(recipeId);
     }
 
+    // Given: no existing menu item
+    // When: a menu item is created with a negative price of -$5.00
+    // Then: the operation is rejected with a validation error about negative prices
     [Fact]
     public async Task CreateAsync_WithNegativePrice_ShouldThrowException()
     {
@@ -595,6 +646,9 @@ public class MenuItemGrainTests
             .WithMessage("*negative*");
     }
 
+    // Given: no existing menu item
+    // When: a menu item is created with an empty name
+    // Then: the operation is rejected with a validation error about empty names
     [Fact]
     public async Task CreateAsync_WithEmptyName_ShouldThrowException()
     {
@@ -621,6 +675,9 @@ public class MenuItemGrainTests
             .WithMessage("*empty*");
     }
 
+    // Given: an existing menu item
+    // When: a modifier group with zero options is added
+    // Then: the operation is rejected because a modifier must have at least one option
     [Fact]
     public async Task AddModifierAsync_WithNoOptions_ShouldThrowException()
     {
@@ -657,6 +714,9 @@ public class MenuItemGrainTests
             .WithMessage("*at least one option*");
     }
 
+    // Given: an existing menu item
+    // When: a modifier is added with minimum selections (5) exceeding maximum selections (2)
+    // Then: the operation is rejected because min selections cannot exceed max selections
     [Fact]
     public async Task AddModifierAsync_MinGreaterThanMax_ShouldThrowException()
     {
@@ -715,6 +775,9 @@ public class MenuDefinitionGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IMenuDefinitionGrain>(key);
     }
 
+    // Given: no existing POS menu definition
+    // When: a new "Main POS Menu" is created as the default menu for dine-in orders
+    // Then: the menu is active, set as default, and has no screens
     [Fact]
     public async Task CreateAsync_ShouldCreateMenuDefinition()
     {
@@ -740,6 +803,9 @@ public class MenuDefinitionGrainTests
         result.Screens.Should().BeEmpty();
     }
 
+    // Given: an existing "Bar Menu" definition
+    // When: the menu name and description are updated
+    // Then: the menu reflects the new name "Bar & Lounge Menu" and description
     [Fact]
     public async Task UpdateAsync_ShouldUpdateMenuDefinition()
     {
@@ -765,6 +831,9 @@ public class MenuDefinitionGrainTests
         result.Description.Should().Be("For bar service area");
     }
 
+    // Given: a "Quick Service Menu" definition with no screens
+    // When: a "Main Screen" with a 4x6 grid layout is added
+    // Then: the menu has one screen with the correct name, rows, and columns
     [Fact]
     public async Task AddScreenAsync_ShouldAddScreen()
     {
@@ -799,6 +868,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Columns.Should().Be(6);
     }
 
+    // Given: a menu definition with no screens
+    // When: a "Drinks" screen is added with 3 pre-configured item buttons (Coffee, Tea, Soda)
+    // Then: the screen contains all 3 buttons with correct labels and linked menu item IDs
     [Fact]
     public async Task AddScreenAsync_WithButtons_ShouldAddScreenWithButtons()
     {
@@ -838,6 +910,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Buttons[0].MenuItemId.Should().Be(menuItemId);
     }
 
+    // Given: a menu with a 3x4 screen named "Screen 1"
+    // When: the screen name, color, and grid dimensions are updated to 5x8
+    // Then: the screen reflects the new name "Food Screen", updated color, and expanded grid layout
     [Fact]
     public async Task UpdateScreenAsync_ShouldUpdateScreen()
     {
@@ -871,6 +946,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Columns.Should().Be(8);
     }
 
+    // Given: a menu with two screens ("Screen 1" and "Screen 2")
+    // When: the first screen is removed
+    // Then: only "Screen 2" remains in the menu
     [Fact]
     public async Task RemoveScreenAsync_ShouldRemoveScreen()
     {
@@ -899,6 +977,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Name.Should().Be("Screen 2");
     }
 
+    // Given: a menu screen with a 4x6 grid and no buttons
+    // When: a "Burger" item button is placed at row 1, column 2
+    // Then: the screen has one button at the specified grid position with the correct label
     [Fact]
     public async Task AddButtonAsync_ShouldAddButtonToScreen()
     {
@@ -937,6 +1018,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Buttons[0].Column.Should().Be(2);
     }
 
+    // Given: a menu with a main screen and a "Drinks" sub-screen
+    // When: a navigation button linking to the drinks sub-screen is added to the main screen
+    // Then: the button is typed as "Navigation" and references the drinks sub-screen ID
     [Fact]
     public async Task AddButtonAsync_NavigationButton_ShouldLinkToSubScreen()
     {
@@ -976,6 +1060,9 @@ public class MenuDefinitionGrainTests
         mainScreen.Buttons[0].ButtonType.Should().Be("Navigation");
     }
 
+    // Given: a menu screen with two item buttons ("Item 1" and "Item 2")
+    // When: the first button is removed
+    // Then: only the "Item 2" button remains on the screen
     [Fact]
     public async Task RemoveButtonAsync_ShouldRemoveButton()
     {
@@ -1007,6 +1094,9 @@ public class MenuDefinitionGrainTests
         snapshot.Screens[0].Buttons[0].Label.Should().Be("Item 2");
     }
 
+    // Given: a non-default "Secondary Menu" definition
+    // When: the menu is promoted to the default menu
+    // Then: the menu is marked as the default POS menu
     [Fact]
     public async Task SetAsDefaultAsync_ShouldSetAsDefault()
     {
@@ -1046,6 +1136,9 @@ public class AccountingGroupGrainTests
         return _fixture.Cluster.GrainFactory.GetGrain<IAccountingGroupGrain>(key);
     }
 
+    // Given: no existing accounting group
+    // When: a "Food Sales" accounting group is created with revenue and COGS account codes
+    // Then: the group is active with correct name, code, accounts, and zero item count
     [Fact]
     public async Task CreateAsync_ShouldCreateAccountingGroup()
     {
@@ -1075,6 +1168,9 @@ public class AccountingGroupGrainTests
         result.ItemCount.Should().Be(0);
     }
 
+    // Given: an existing "Beverages" accounting group with code 4200
+    // When: the group name and description are updated
+    // Then: the name is "Beverage Sales", description is updated, and the code remains unchanged
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAccountingGroup()
     {
@@ -1105,6 +1201,9 @@ public class AccountingGroupGrainTests
         result.Code.Should().Be("4200"); // Unchanged
     }
 
+    // Given: a "Merchandise" accounting group with zero items
+    // When: two menu items are assigned to the group
+    // Then: the group item count is 2
     [Fact]
     public async Task IncrementItemCountAsync_ShouldIncreaseCount()
     {
@@ -1129,6 +1228,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(2);
     }
 
+    // Given: an "Alcohol" accounting group with 3 assigned items
+    // When: one item is removed from the group
+    // Then: the group item count decreases to 2
     [Fact]
     public async Task DecrementItemCountAsync_ShouldDecreaseCount()
     {
@@ -1155,6 +1257,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(2);
     }
 
+    // Given: an active "Discontinued" accounting group
+    // When: the group is deactivated via update
+    // Then: the group is marked as inactive
     [Fact]
     public async Task UpdateAsync_Deactivate_ShouldDeactivateGroup()
     {

@@ -22,6 +22,9 @@ public class ExpenseGrainTests
             GrainKeys.Expense(orgId, siteId, expenseId));
     }
 
+    // Given: A new expense grain for a site
+    // When: A $250 utilities expense for a monthly electricity bill is recorded
+    // Then: The expense is created with pending status and the correct category, description, and vendor
     [Fact]
     public async Task RecordAsync_ShouldCreateExpense()
     {
@@ -53,6 +56,9 @@ public class ExpenseGrainTests
         snapshot.Status.Should().Be(ExpenseStatus.Pending);
     }
 
+    // Given: An expense that has already been recorded for a site
+    // When: A second expense is recorded with the same expense ID
+    // Then: An error is thrown indicating the expense already exists
     [Fact]
     public async Task RecordAsync_AlreadyExists_ShouldThrow()
     {
@@ -76,6 +82,9 @@ public class ExpenseGrainTests
             .WithMessage("Expense already exists");
     }
 
+    // Given: A recorded supplies expense of $150 for office supplies
+    // When: The description and amount are updated to include cleaning materials at $175.50
+    // Then: The expense reflects the updated description and amount
     [Fact]
     public async Task UpdateAsync_ShouldModifyExpense()
     {
@@ -100,6 +109,9 @@ public class ExpenseGrainTests
         snapshot.Amount.Should().Be(175.50m);
     }
 
+    // Given: A pending marketing expense of $500 for social media ads
+    // When: The expense is approved by a manager
+    // Then: The status changes to Approved with the approver ID and approval timestamp recorded
     [Fact]
     public async Task ApproveAsync_ShouldChangeStatusToApproved()
     {
@@ -123,6 +135,9 @@ public class ExpenseGrainTests
         snapshot.ApprovedAt.Should().NotBeNull();
     }
 
+    // Given: An expense that has already been approved
+    // When: A second approval attempt is made
+    // Then: An error is thrown because only pending expenses can be approved
     [Fact]
     public async Task ApproveAsync_NotPending_ShouldThrow()
     {
@@ -146,6 +161,9 @@ public class ExpenseGrainTests
             .WithMessage("Cannot approve expense in status*");
     }
 
+    // Given: A pending travel expense of $800 for a conference flight
+    // When: The expense is rejected with a cancellation reason
+    // Then: The status changes to Rejected and the rejection reason is recorded in notes
     [Fact]
     public async Task RejectAsync_ShouldChangeStatusToRejected()
     {
@@ -169,6 +187,9 @@ public class ExpenseGrainTests
         snapshot.Notes.Should().Contain("Conference cancelled");
     }
 
+    // Given: An approved insurance expense of $2,000
+    // When: The expense is marked as paid with a check reference number
+    // Then: The status changes to Paid with the check number and payment method recorded
     [Fact]
     public async Task MarkPaidAsync_ShouldChangeStatusToPaid()
     {
@@ -197,6 +218,9 @@ public class ExpenseGrainTests
         snapshot.PaymentMethod.Should().Be(PaymentMethod.Check);
     }
 
+    // Given: A pending maintenance expense of $450 for HVAC repair
+    // When: The expense is voided as a duplicate entry
+    // Then: The status changes to Voided with the void reason recorded in notes
     [Fact]
     public async Task VoidAsync_ShouldChangeStatusToVoided()
     {
@@ -221,6 +245,9 @@ public class ExpenseGrainTests
         snapshot.Notes.Should().Contain("Duplicate entry");
     }
 
+    // Given: A recorded supplies expense for cleaning supplies
+    // When: A receipt PDF document is attached to the expense
+    // Then: The document URL and filename are stored on the expense
     [Fact]
     public async Task AttachDocumentAsync_ShouldAddDocument()
     {
@@ -245,6 +272,9 @@ public class ExpenseGrainTests
         snapshot.DocumentFilename.Should().Be("receipt-123.pdf");
     }
 
+    // Given: An expense that has been voided
+    // When: An update to the voided expense amount is attempted
+    // Then: An error is thrown because voided expenses cannot be modified
     [Fact]
     public async Task UpdateAsync_VoidedExpense_ShouldThrow()
     {
@@ -270,6 +300,9 @@ public class ExpenseGrainTests
             .WithMessage("Cannot modify voided expense");
     }
 
+    // Given: A new, uninitialized expense grain
+    // When: The existence check is performed
+    // Then: The grain reports it does not exist
     [Fact]
     public async Task ExistsAsync_NewGrain_ShouldReturnFalse()
     {
@@ -283,6 +316,9 @@ public class ExpenseGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: An expense grain after a licenses expense has been recorded
+    // When: The existence check is performed
+    // Then: The grain reports it exists
     [Fact]
     public async Task ExistsAsync_AfterRecord_ShouldReturnTrue()
     {
@@ -303,6 +339,9 @@ public class ExpenseGrainTests
         exists.Should().BeTrue();
     }
 
+    // Given: A new expense grain for professional services
+    // When: An accounting services expense is recorded with tax-related, annual, and accounting tags
+    // Then: All three tags are stored on the expense
     [Fact]
     public async Task RecordAsync_WithTags_ShouldStoreTags()
     {
@@ -324,6 +363,9 @@ public class ExpenseGrainTests
         snapshot.Tags.Should().Contain("accounting");
     }
 
+    // Given: A new expense grain for equipment purchase
+    // When: A $5,000 commercial oven expense is recorded with $400 tax amount and tax-deductible flag
+    // Then: The tax amount and deductibility flag are correctly stored
     [Fact]
     public async Task RecordAsync_WithTaxInfo_ShouldStoreCorrectly()
     {
@@ -347,6 +389,9 @@ public class ExpenseGrainTests
 
     #region SetRecurrence Tests
 
+    // Given: A recorded monthly rent expense of $5,000
+    // When: A monthly recurrence pattern with day-of-month 1 is set
+    // Then: The expense is flagged as recurring
     [Fact]
     public async Task SetRecurrenceAsync_ShouldSetRecurrencePattern()
     {
@@ -374,6 +419,9 @@ public class ExpenseGrainTests
         snapshot.IsRecurring.Should().BeTrue();
     }
 
+    // Given: A recorded weekly cleaning service expense of $150
+    // When: A weekly recurrence pattern for every Friday is set
+    // Then: The expense is flagged as recurring
     [Fact]
     public async Task SetRecurrenceAsync_WeeklyPattern_ShouldWork()
     {
@@ -401,6 +449,9 @@ public class ExpenseGrainTests
         snapshot.IsRecurring.Should().BeTrue();
     }
 
+    // Given: A recorded quarterly insurance premium expense of $2,500
+    // When: A quarterly recurrence pattern is set
+    // Then: The expense is flagged as recurring
     [Fact]
     public async Task SetRecurrenceAsync_QuarterlyPattern_ShouldWork()
     {
@@ -427,6 +478,9 @@ public class ExpenseGrainTests
         snapshot.IsRecurring.Should().BeTrue();
     }
 
+    // Given: A new, uninitialized expense grain with no recorded expense
+    // When: A recurrence pattern is set on the non-existent expense
+    // Then: An error is thrown because the expense has not been initialized
     [Fact]
     public async Task SetRecurrenceAsync_OnNonExistentExpense_ShouldThrow()
     {
@@ -447,6 +501,9 @@ public class ExpenseGrainTests
             .WithMessage("Expense not initialized");
     }
 
+    // Given: A recorded bi-weekly payroll processing fee of $100
+    // When: A bi-weekly recurrence pattern is set
+    // Then: The expense is flagged as recurring
     [Fact]
     public async Task SetRecurrenceAsync_BiWeeklyPattern_ShouldWork()
     {
@@ -473,6 +530,9 @@ public class ExpenseGrainTests
         snapshot.IsRecurring.Should().BeTrue();
     }
 
+    // Given: A recorded equipment lease expense of $500
+    // When: A monthly recurrence pattern with an end date of December 31, 2024 is set
+    // Then: The expense is flagged as recurring with a finite duration
     [Fact]
     public async Task SetRecurrenceAsync_WithEndDate_ShouldStorePattern()
     {
@@ -546,6 +606,9 @@ public class ExpenseIndexGrainTests
 
     #region RegisterExpense Tests
 
+    // Given: An empty expense index for a site
+    // When: A $250 utilities expense is registered in the index
+    // Then: The expense appears in query results
     [Fact]
     public async Task RegisterExpenseAsync_ShouldRegisterExpense()
     {
@@ -567,6 +630,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().Contain(e => e.ExpenseId == expense.ExpenseId);
     }
 
+    // Given: An empty expense index for a site
+    // When: Three expenses (rent, utilities, supplies) are registered
+    // Then: The index contains all three expenses
     [Fact]
     public async Task RegisterExpenseAsync_MultipleExpenses_ShouldRegisterAll()
     {
@@ -597,6 +663,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Date Range Tests
 
+    // Given: Three expenses dated Jan 1, Jan 15, and Feb 1
+    // When: The index is queried for the date range Jan 10 through Jan 31
+    // Then: Only the Jan 15 expense is returned
     [Fact]
     public async Task QueryAsync_FilterByDateRange_ShouldReturnMatchingExpenses()
     {
@@ -622,6 +691,9 @@ public class ExpenseIndexGrainTests
         result.Expenses[0].Amount.Should().Be(200m);
     }
 
+    // Given: Three expenses dated Jan 1, Jan 15, and Feb 1
+    // When: The index is queried with only a from-date of Jan 10
+    // Then: The two expenses on or after Jan 10 are returned
     [Fact]
     public async Task QueryAsync_FilterByFromDateOnly_ShouldReturnExpensesAfter()
     {
@@ -645,6 +717,9 @@ public class ExpenseIndexGrainTests
         result.TotalCount.Should().Be(2);
     }
 
+    // Given: Three expenses dated Jan 1, Jan 15, and Feb 1
+    // When: The index is queried with only a to-date of Jan 20
+    // Then: The two expenses on or before Jan 20 are returned
     [Fact]
     public async Task QueryAsync_FilterByToDateOnly_ShouldReturnExpensesBefore()
     {
@@ -672,6 +747,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Category Filter Tests
 
+    // Given: An index with rent, two utilities, and supplies expenses
+    // When: The index is queried filtering by the Utilities category
+    // Then: Only the two utilities expenses are returned totaling $550
     [Fact]
     public async Task QueryAsync_FilterByCategory_ShouldReturnMatchingExpenses()
     {
@@ -702,6 +780,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Status Filter Tests
 
+    // Given: An index with expenses in Pending, Approved, and Paid statuses
+    // When: The index is queried filtering by Pending status
+    // Then: Only the two pending expenses are returned totaling $500
     [Fact]
     public async Task QueryAsync_FilterByStatus_ShouldReturnMatchingExpenses()
     {
@@ -732,6 +813,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Vendor Filter Tests
 
+    // Given: An index with expenses from "City Power & Light", "City Water Works", and "Office Depot"
+    // When: The index is queried with vendor filter "City"
+    // Then: The two City-prefixed vendor expenses are returned
     [Fact]
     public async Task QueryAsync_FilterByVendor_ShouldReturnMatchingExpenses()
     {
@@ -755,6 +839,9 @@ public class ExpenseIndexGrainTests
         result.TotalCount.Should().Be(2);
     }
 
+    // Given: An index with expenses from "STAPLES" and "staples office" (mixed case)
+    // When: The index is queried with vendor filter "staples" in lowercase
+    // Then: Both expenses are returned regardless of vendor name casing
     [Fact]
     public async Task QueryAsync_FilterByVendor_ShouldBeCaseInsensitive()
     {
@@ -780,6 +867,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Amount Range Tests
 
+    // Given: An index with expenses of $50, $150, $250, and $500
+    // When: The index is queried for amounts between $100 and $300
+    // Then: Only the $150 and $250 expenses are returned
     [Fact]
     public async Task QueryAsync_FilterByAmountRange_ShouldReturnMatchingExpenses()
     {
@@ -803,6 +893,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().OnlyContain(e => e.Amount >= 100m && e.Amount <= 300m);
     }
 
+    // Given: An index with expenses of $50, $150, and $250
+    // When: The index is queried with a minimum amount of $100
+    // Then: Only the two expenses at or above $100 are returned
     [Fact]
     public async Task QueryAsync_FilterByMinAmountOnly_ShouldReturnExpensesAbove()
     {
@@ -823,6 +916,9 @@ public class ExpenseIndexGrainTests
         result.TotalCount.Should().Be(2);
     }
 
+    // Given: An index with expenses of $50, $150, and $250
+    // When: The index is queried with a maximum amount of $200
+    // Then: Only the two expenses at or below $200 are returned
     [Fact]
     public async Task QueryAsync_FilterByMaxAmountOnly_ShouldReturnExpensesBelow()
     {
@@ -847,6 +943,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Pagination Tests
 
+    // Given: An index with 10 expenses registered on consecutive dates
+    // When: The index is queried with skip 3 and take 3 for pagination
+    // Then: 3 expenses are returned and the total count remains 10
     [Fact]
     public async Task QueryAsync_WithPagination_ShouldReturnCorrectPage()
     {
@@ -873,6 +972,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().HaveCount(3);
     }
 
+    // Given: An index with only 2 expenses
+    // When: The index is queried with skip 10 (beyond total count)
+    // Then: An empty result set is returned with total count of 2
     [Fact]
     public async Task QueryAsync_SkipBeyondTotal_ShouldReturnEmpty()
     {
@@ -894,6 +996,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().BeEmpty();
     }
 
+    // Given: An index with 60 registered expenses
+    // When: The index is queried with no pagination parameters
+    // Then: The default page size of 50 is applied, returning 50 expenses with total count of 60
     [Fact]
     public async Task QueryAsync_DefaultPagination_ShouldUseDefaults()
     {
@@ -919,6 +1024,9 @@ public class ExpenseIndexGrainTests
 
     #region QueryAsync - Combined Filters Tests
 
+    // Given: An index with expenses of various categories, statuses, and dates
+    // When: The index is queried combining Utilities category, Approved status, and January date range filters
+    // Then: Only the single expense matching all three criteria is returned
     [Fact]
     public async Task QueryAsync_CombinedFilters_ShouldApplyAll()
     {
@@ -964,6 +1072,9 @@ public class ExpenseIndexGrainTests
 
     #region GetCategoryTotals Tests
 
+    // Given: An index with expenses across rent, utilities, and supplies categories in January
+    // When: Category totals are requested for January
+    // Then: Totals are grouped by category with correct amounts and counts (e.g., utilities $550 from 2 expenses)
     [Fact]
     public async Task GetCategoryTotalsAsync_ShouldReturnTotalsByCategory()
     {
@@ -1004,6 +1115,9 @@ public class ExpenseIndexGrainTests
         utilitiesTotal.Count.Should().Be(2);
     }
 
+    // Given: An index with an approved, a voided, and a rejected utilities expense
+    // When: Category totals are requested for January
+    // Then: Only the approved expense is counted, excluding voided and rejected entries
     [Fact]
     public async Task GetCategoryTotalsAsync_ShouldExcludeVoidedAndRejected()
     {
@@ -1034,6 +1148,9 @@ public class ExpenseIndexGrainTests
         utilitiesTotal.Count.Should().Be(1);
     }
 
+    // Given: An index with three monthly rent expenses in Jan, Feb, and Mar
+    // When: Category totals are requested for the date range Jan 15 through Feb 15
+    // Then: Only the February rent expense falls within the range
     [Fact]
     public async Task GetCategoryTotalsAsync_ShouldFilterByDateRange()
     {
@@ -1064,6 +1181,9 @@ public class ExpenseIndexGrainTests
         rentTotal.Count.Should().Be(1);
     }
 
+    // Given: An index with supplies ($100), rent ($5,000), and utilities ($300) expenses
+    // When: Category totals are requested for January
+    // Then: Categories are ordered by total amount descending: rent, utilities, supplies
     [Fact]
     public async Task GetCategoryTotalsAsync_ShouldOrderByAmountDescending()
     {
@@ -1097,6 +1217,9 @@ public class ExpenseIndexGrainTests
 
     #region GetTotal Tests
 
+    // Given: An index with paid ($5,000), approved ($300), and pending ($150) expenses in January
+    // When: The total is requested for the January date range
+    // Then: All non-voided, non-rejected expenses are summed to $5,450
     [Fact]
     public async Task GetTotalAsync_ShouldReturnTotalExpenses()
     {
@@ -1124,6 +1247,9 @@ public class ExpenseIndexGrainTests
         total.Should().Be(5450m);
     }
 
+    // Given: An index with a paid ($500), a voided ($300), and a rejected ($200) expense
+    // When: The total is requested for January
+    // Then: Only the paid expense of $500 is counted, excluding voided and rejected
     [Fact]
     public async Task GetTotalAsync_ShouldExcludeVoidedAndRejected()
     {
@@ -1151,6 +1277,9 @@ public class ExpenseIndexGrainTests
         total.Should().Be(500m);
     }
 
+    // Given: An index with expenses on Jan 1 ($1,000), Jan 15 ($2,000), and Feb 1 ($3,000)
+    // When: The total is requested for Jan 10 through Jan 31
+    // Then: Only the Jan 15 expense of $2,000 is included in the total
     [Fact]
     public async Task GetTotalAsync_ShouldFilterByDateRange()
     {
@@ -1178,6 +1307,9 @@ public class ExpenseIndexGrainTests
         total.Should().Be(2000m);
     }
 
+    // Given: An index with a January expense but no expenses in June
+    // When: The total is requested for the June date range
+    // Then: The total is zero since no expenses fall within the range
     [Fact]
     public async Task GetTotalAsync_EmptyDateRange_ShouldReturnZero()
     {
@@ -1203,6 +1335,9 @@ public class ExpenseIndexGrainTests
 
     #region RemoveExpense Tests
 
+    // Given: An index with two registered expenses
+    // When: One expense is removed by its ID
+    // Then: Only the remaining expense is present in query results
     [Fact]
     public async Task RemoveExpenseAsync_ShouldRemoveFromIndex()
     {
@@ -1225,6 +1360,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().NotContain(e => e.ExpenseId == expenseId);
     }
 
+    // Given: An empty expense index
+    // When: A removal is attempted for a non-existent expense ID
+    // Then: The operation completes without error (no-op)
     [Fact]
     public async Task RemoveExpenseAsync_NonExistent_ShouldNotThrow()
     {
@@ -1240,6 +1378,9 @@ public class ExpenseIndexGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: An index with a $500 and a $300 paid expense
+    // When: The $500 expense is removed from the index
+    // Then: The total for the period drops to $300
     [Fact]
     public async Task RemoveExpenseAsync_ShouldUpdateTotals()
     {
@@ -1270,6 +1411,9 @@ public class ExpenseIndexGrainTests
 
     #region UpdateExpense Tests
 
+    // Given: A pending expense of $100 registered in the index
+    // When: The expense is updated to $150 with Approved status
+    // Then: The index reflects the updated amount and status
     [Fact]
     public async Task UpdateExpenseAsync_ShouldUpdateInIndex()
     {
@@ -1299,6 +1443,9 @@ public class ExpenseIndexGrainTests
         expense.Status.Should().Be(ExpenseStatus.Approved);
     }
 
+    // Given: An empty expense index
+    // When: An update is attempted for a non-existent expense ID
+    // Then: No expense is added to the index (no-op)
     [Fact]
     public async Task UpdateExpenseAsync_NonExistent_ShouldNotAdd()
     {
@@ -1321,6 +1468,9 @@ public class ExpenseIndexGrainTests
 
     #region Empty Index Tests
 
+    // Given: An empty expense index with no registered expenses
+    // When: The index is queried with no filters
+    // Then: The result has zero total count, zero total amount, and an empty expense list
     [Fact]
     public async Task QueryAsync_EmptyIndex_ShouldReturnEmptyResult()
     {
@@ -1338,6 +1488,9 @@ public class ExpenseIndexGrainTests
         result.Expenses.Should().BeEmpty();
     }
 
+    // Given: An empty expense index with no registered expenses
+    // When: Category totals are requested for the full year
+    // Then: An empty list of category totals is returned
     [Fact]
     public async Task GetCategoryTotalsAsync_EmptyIndex_ShouldReturnEmpty()
     {
@@ -1355,6 +1508,9 @@ public class ExpenseIndexGrainTests
         totals.Should().BeEmpty();
     }
 
+    // Given: An empty expense index with no registered expenses
+    // When: The total is requested for the full year
+    // Then: The total is zero
     [Fact]
     public async Task GetTotalAsync_EmptyIndex_ShouldReturnZero()
     {

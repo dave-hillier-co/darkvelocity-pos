@@ -16,6 +16,9 @@ public class SettlementBatchGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new settlement batch for today's business date at a site
+    // When: the batch is opened
+    // Then: the batch is in Open status with a BATCH- prefixed number and the correct business date
     [Fact]
     public async Task OpenAsync_ShouldCreateBatch()
     {
@@ -40,6 +43,9 @@ public class SettlementBatchGrainTests
         state.BusinessDate.Should().Be(businessDate);
     }
 
+    // Given: an open settlement batch and an initiated credit card payment of $100
+    // When: the payment is added to the batch
+    // Then: the batch contains one payment with a total amount of $100
     [Fact]
     public async Task AddPaymentAsync_ShouldAddPaymentToBatch()
     {
@@ -71,6 +77,9 @@ public class SettlementBatchGrainTests
         state.PaymentCount.Should().Be(1);
     }
 
+    // Given: an open settlement batch
+    // When: the batch is closed by a user
+    // Then: the batch status transitions to Closed
     [Fact]
     public async Task CloseAsync_ShouldCloseBatch()
     {
@@ -93,6 +102,9 @@ public class SettlementBatchGrainTests
         state.Status.Should().Be(SettlementBatchStatus.Closed);
     }
 
+    // Given: a closed settlement batch containing a $100 credit card payment
+    // When: the batch is settled with $2.50 in processing fees
+    // Then: the settled amount is $100, processing fees are $2.50, net amount is $97.50, and status is Settled
     [Fact]
     public async Task RecordSettlementAsync_ShouldSettleBatch()
     {
@@ -127,6 +139,9 @@ public class SettlementBatchGrainTests
         state.Status.Should().Be(SettlementBatchStatus.Settled);
     }
 
+    // Given: an open settlement batch with a $100 credit card payment and a $50 cash payment
+    // When: the totals by payment method are retrieved
+    // Then: two method groups are returned with the correct amounts for credit card and cash
     [Fact]
     public async Task GetTotalsByMethodAsync_ShouldGroupByPaymentMethod()
     {
@@ -164,6 +179,9 @@ public class SettlementBatchGrainTests
         totals.Should().Contain(t => t.Method == PaymentMethod.Cash && t.TotalAmount == 50m);
     }
 
+    // Given: a settlement batch that has been closed
+    // When: the batch is reopened with a reason
+    // Then: the batch status transitions back to Open
     [Fact]
     public async Task ReopenAsync_ShouldReopenClosedBatch()
     {
@@ -186,6 +204,9 @@ public class SettlementBatchGrainTests
         state.Status.Should().Be(SettlementBatchStatus.Open);
     }
 
+    // Given: a closed settlement batch ready for settlement
+    // When: the settlement fails with a GATEWAY_ERROR
+    // Then: the batch status becomes Failed with the error code recorded and the settlement attempt count incremented
     [Fact]
     public async Task RecordSettlementFailureAsync_ShouldRecordFailure()
     {

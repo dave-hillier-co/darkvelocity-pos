@@ -27,6 +27,9 @@ public class CashDrawerHardwareGrainTests
 
     #region Registration Tests
 
+    // Given: A new cash drawer hardware device with printer connection
+    // When: The drawer is registered with a linked printer, location, and name
+    // Then: The drawer is created as active with printer connection type and linked printer ID
     [Fact]
     public async Task RegisterAsync_PrinterConnected_ShouldRegisterDrawerWithPrinterId()
     {
@@ -57,6 +60,9 @@ public class CashDrawerHardwareGrainTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: A new cash drawer hardware device with network connection
+    // When: The drawer is registered with an IP address and port
+    // Then: The drawer is created with network connection type and the specified IP and port
     [Fact]
     public async Task RegisterAsync_NetworkConnected_ShouldRegisterWithNetworkDetails()
     {
@@ -81,6 +87,9 @@ public class CashDrawerHardwareGrainTests
         result.PrinterId.Should().BeNull();
     }
 
+    // Given: A new cash drawer hardware device with USB connection
+    // When: The drawer is registered as USB-connected
+    // Then: The drawer is created with USB connection type and no network or printer details
     [Fact]
     public async Task RegisterAsync_UsbConnected_ShouldRegisterUsbDrawer()
     {
@@ -105,6 +114,9 @@ public class CashDrawerHardwareGrainTests
         result.Port.Should().BeNull();
     }
 
+    // Given: A new cash drawer hardware device
+    // When: The drawer is registered without specifying pulse settings
+    // Then: Default ESC/POS pulse settings are applied (pin 0, 100ms on, 100ms off)
     [Fact]
     public async Task RegisterAsync_ShouldSetDefaultPulseSettings()
     {
@@ -128,6 +140,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(100);
     }
 
+    // Given: A new cash drawer hardware device
+    // When: The drawer is registered
+    // Then: The last-opened timestamp is null because the drawer has never been physically opened
     [Fact]
     public async Task RegisterAsync_ShouldInitializeLastOpenedAtAsNull()
     {
@@ -149,6 +164,9 @@ public class CashDrawerHardwareGrainTests
         result.LastOpenedAt.Should().BeNull();
     }
 
+    // Given: A cash drawer hardware device that has already been registered
+    // When: A second registration is attempted for the same drawer
+    // Then: The registration is rejected because the drawer is already registered
     [Fact]
     public async Task RegisterAsync_AlreadyRegistered_ShouldThrowException()
     {
@@ -170,6 +188,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*already registered*");
     }
 
+    // Given: A new network-connected cash drawer without a specified port
+    // When: The drawer is registered with only an IP address
+    // Then: The drawer is created with the IP address and a null port
     [Fact]
     public async Task RegisterAsync_NetworkWithoutPort_ShouldRegisterWithNullPort()
     {
@@ -196,6 +217,9 @@ public class CashDrawerHardwareGrainTests
 
     #region Update Tests
 
+    // Given: A registered USB cash drawer with an original name
+    // When: The drawer name is updated
+    // Then: The drawer reflects the new name
     [Fact]
     public async Task UpdateAsync_ShouldUpdateName()
     {
@@ -222,6 +246,9 @@ public class CashDrawerHardwareGrainTests
         result.Name.Should().Be("Updated Name");
     }
 
+    // Given: A registered printer-connected cash drawer with an original printer ID
+    // When: The linked printer ID is updated to a new printer
+    // Then: The drawer reflects the new printer ID
     [Fact]
     public async Task UpdateAsync_ShouldUpdatePrinterId()
     {
@@ -250,6 +277,9 @@ public class CashDrawerHardwareGrainTests
         result.PrinterId.Should().Be(newPrinterId);
     }
 
+    // Given: A registered network-connected cash drawer with original IP and port
+    // When: The IP address and port are updated
+    // Then: The drawer reflects the new network settings
     [Fact]
     public async Task UpdateAsync_ShouldUpdateNetworkSettings()
     {
@@ -277,6 +307,9 @@ public class CashDrawerHardwareGrainTests
         result.Port.Should().Be(4001);
     }
 
+    // Given: A registered printer-connected cash drawer with default pulse settings
+    // When: The kick pulse pin, on-time, and off-time are updated
+    // Then: The drawer reflects the new pulse configuration
     [Fact]
     public async Task UpdateAsync_ShouldUpdatePulseSettings()
     {
@@ -305,6 +338,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(150);
     }
 
+    // Given: An active registered cash drawer
+    // When: The drawer is updated with IsActive set to false
+    // Then: The drawer becomes inactive
     [Fact]
     public async Task UpdateAsync_ShouldDeactivateViaIsActive()
     {
@@ -331,6 +367,9 @@ public class CashDrawerHardwareGrainTests
         result.IsActive.Should().BeFalse();
     }
 
+    // Given: A registered cash drawer that has been deactivated
+    // When: The drawer is updated with IsActive set to true
+    // Then: The drawer is reactivated
     [Fact]
     public async Task UpdateAsync_ShouldReactivateDeactivatedDrawer()
     {
@@ -358,6 +397,9 @@ public class CashDrawerHardwareGrainTests
         result.IsActive.Should().BeTrue();
     }
 
+    // Given: A registered printer-connected cash drawer with specific configuration
+    // When: An update is submitted with all null fields
+    // Then: All existing settings remain unchanged
     [Fact]
     public async Task UpdateAsync_WithAllNullFields_ShouldNotChangeState()
     {
@@ -390,6 +432,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(100);
     }
 
+    // Given: A cash drawer hardware identifier that has never been registered
+    // When: An update is attempted
+    // Then: The update is rejected because the drawer is not initialized
     [Fact]
     public async Task UpdateAsync_OnUninitializedGrain_ShouldThrowException()
     {
@@ -414,6 +459,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered USB cash drawer with initial configuration
+    // When: All configurable fields are updated simultaneously
+    // Then: All fields reflect the new values
     [Fact]
     public async Task UpdateAsync_MultipleFieldsAtOnce_ShouldUpdateAll()
     {
@@ -452,6 +500,9 @@ public class CashDrawerHardwareGrainTests
 
     #region Deactivate Tests
 
+    // Given: An active registered cash drawer
+    // When: The drawer is deactivated
+    // Then: The drawer's active status is set to false
     [Fact]
     public async Task DeactivateAsync_ShouldSetIsActiveFalse()
     {
@@ -471,6 +522,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: A cash drawer hardware identifier that has never been registered
+    // When: Deactivation is attempted
+    // Then: The deactivation is rejected because the drawer is not initialized
     [Fact]
     public async Task DeactivateAsync_OnUninitializedGrain_ShouldThrowException()
     {
@@ -487,6 +541,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A cash drawer that has already been deactivated
+    // When: A second deactivation is attempted
+    // Then: The drawer remains deactivated
     [Fact]
     public async Task DeactivateAsync_AlreadyDeactivated_ShouldRemainDeactivated()
     {
@@ -507,6 +564,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: A registered printer-connected cash drawer with name, location, and printer
+    // When: The drawer is deactivated
+    // Then: All properties except active status are preserved
     [Fact]
     public async Task DeactivateAsync_ShouldPreserveOtherProperties()
     {
@@ -535,6 +595,9 @@ public class CashDrawerHardwareGrainTests
 
     #region RecordOpen Tests
 
+    // Given: A registered printer-connected cash drawer
+    // When: A drawer open event is recorded
+    // Then: The last-opened timestamp is set to the current time
     [Fact]
     public async Task RecordOpenAsync_ShouldSetLastOpenedAt()
     {
@@ -555,6 +618,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.LastOpenedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered cash drawer that has already been opened once
+    // When: A second drawer open event is recorded after a delay
+    // Then: The last-opened timestamp advances to the most recent open
     [Fact]
     public async Task RecordOpenAsync_MultipleTimes_ShouldUpdateTimestamp()
     {
@@ -579,6 +645,9 @@ public class CashDrawerHardwareGrainTests
         secondOpen.Should().BeAfter(firstOpen!.Value);
     }
 
+    // Given: A cash drawer hardware identifier that has never been registered
+    // When: A drawer open event is recorded
+    // Then: The recording is rejected because the drawer is not initialized
     [Fact]
     public async Task RecordOpenAsync_OnUninitializedGrain_ShouldThrowException()
     {
@@ -595,6 +664,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered cash drawer that has been deactivated
+    // When: A drawer open event is recorded
+    // Then: The open timestamp is recorded even though the drawer is inactive
     [Fact]
     public async Task RecordOpenAsync_OnDeactivatedDrawer_ShouldStillRecord()
     {
@@ -620,6 +692,9 @@ public class CashDrawerHardwareGrainTests
 
     #region GetKickCommand Tests
 
+    // Given: A registered printer-connected cash drawer
+    // When: The ESC/POS kick command is requested
+    // Then: The command starts with the ESC/POS drawer kick prefix
     [Fact]
     public async Task GetKickCommandAsync_ShouldReturnEscPosFormat()
     {
@@ -638,6 +713,9 @@ public class CashDrawerHardwareGrainTests
         kickCommand.Should().StartWith("\\x1B\\x70");
     }
 
+    // Given: A registered cash drawer with default pulse settings
+    // When: The kick command is requested
+    // Then: The command encodes pin 0 in the ESC/POS byte sequence
     [Fact]
     public async Task GetKickCommandAsync_WithDefaultSettings_ShouldReturnPin0()
     {
@@ -657,6 +735,9 @@ public class CashDrawerHardwareGrainTests
         kickCommand.Should().Contain("\\x00");
     }
 
+    // Given: A registered cash drawer with kick pulse pin set to 1
+    // When: The kick command is requested
+    // Then: The command encodes pin 1 in the ESC/POS byte sequence
     [Fact]
     public async Task GetKickCommandAsync_WithCustomPin_ShouldReflectInCommand()
     {
@@ -678,6 +759,9 @@ public class CashDrawerHardwareGrainTests
         kickCommand.Should().Contain("\\x01");
     }
 
+    // Given: A registered cash drawer with 200ms on-time and 200ms off-time pulse settings
+    // When: The kick command is requested
+    // Then: The timing values are halved per ESC/POS spec, encoding 100 (0x64)
     [Fact]
     public async Task GetKickCommandAsync_WithCustomTiming_ShouldCalculateCorrectly()
     {
@@ -699,6 +783,9 @@ public class CashDrawerHardwareGrainTests
         kickCommand.Should().Contain("\\x64");
     }
 
+    // Given: A cash drawer hardware identifier that has never been registered
+    // When: The kick command is requested
+    // Then: The request is rejected because the drawer is not initialized
     [Fact]
     public async Task GetKickCommandAsync_OnUninitializedGrain_ShouldThrowException()
     {
@@ -715,6 +802,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered USB-connected cash drawer
+    // When: The kick command is requested
+    // Then: The ESC/POS kick command is returned regardless of connection type
     [Fact]
     public async Task GetKickCommandAsync_UsbDrawer_ShouldStillReturnCommand()
     {
@@ -737,6 +827,9 @@ public class CashDrawerHardwareGrainTests
 
     #region GetSnapshot Tests
 
+    // Given: A registered cash drawer with custom pulse settings that has been opened
+    // When: The drawer snapshot is retrieved
+    // Then: All configuration including ID, location, name, printer, pulse settings, and last opened time are returned
     [Fact]
     public async Task GetSnapshotAsync_ShouldReturnCompleteState()
     {
@@ -769,6 +862,9 @@ public class CashDrawerHardwareGrainTests
         snapshot.LastOpenedAt.Should().NotBeNull();
     }
 
+    // Given: A cash drawer hardware identifier that has never been registered
+    // When: The drawer snapshot is requested
+    // Then: The request is rejected because the drawer is not initialized
     [Fact]
     public async Task GetSnapshotAsync_OnUninitializedGrain_ShouldThrowException()
     {
@@ -785,6 +881,9 @@ public class CashDrawerHardwareGrainTests
             .WithMessage("*not initialized*");
     }
 
+    // Given: A registered cash drawer that has been updated, deactivated, and reactivated
+    // When: The drawer snapshot is retrieved
+    // Then: The snapshot reflects the latest state from all accumulated operations
     [Fact]
     public async Task GetSnapshotAsync_AfterMultipleOperations_ShouldReflectLatestState()
     {
@@ -815,6 +914,9 @@ public class CashDrawerHardwareGrainTests
 
     #region Connection Type Specific Tests
 
+    // Given: A new cash drawer with printer connection type but no printer ID specified
+    // When: The drawer is registered
+    // Then: The registration succeeds with printer connection type and a null printer link
     [Fact]
     public async Task PrinterConnectionType_ShouldRequirePrinterId()
     {
@@ -833,6 +935,9 @@ public class CashDrawerHardwareGrainTests
         result.PrinterId.Should().BeNull();
     }
 
+    // Given: A new network-connected cash drawer with IP address and standard print port
+    // When: The drawer is registered
+    // Then: The network details are stored on the drawer
     [Fact]
     public async Task NetworkConnectionType_ShouldStoreNetworkDetails()
     {
@@ -857,6 +962,9 @@ public class CashDrawerHardwareGrainTests
 
     #region Edge Cases
 
+    // Given: A new cash drawer with an empty name
+    // When: The drawer is registered
+    // Then: The registration succeeds with an empty name
     [Fact]
     public async Task RegisterAsync_WithEmptyName_ShouldAccept()
     {
@@ -874,6 +982,9 @@ public class CashDrawerHardwareGrainTests
         result.Name.Should().BeEmpty();
     }
 
+    // Given: A registered cash drawer
+    // When: The pulse on-time and off-time are set to zero
+    // Then: The zero timing values are accepted
     [Fact]
     public async Task UpdateAsync_WithZeroPulseTiming_ShouldAccept()
     {
@@ -894,6 +1005,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(0);
     }
 
+    // Given: A registered cash drawer
+    // When: The pulse on-time and off-time are set to 1000ms
+    // Then: The large timing values are accepted
     [Fact]
     public async Task UpdateAsync_WithLargePulseTiming_ShouldAccept()
     {
@@ -914,6 +1028,9 @@ public class CashDrawerHardwareGrainTests
         result.KickPulseOffTime.Should().Be(1000);
     }
 
+    // Given: A new cash drawer with a 500-character name
+    // When: The drawer is registered
+    // Then: The long name is accepted and stored
     [Fact]
     public async Task RegisterAsync_WithLongName_ShouldAccept()
     {
@@ -932,6 +1049,9 @@ public class CashDrawerHardwareGrainTests
         result.Name.Should().Be(longName);
     }
 
+    // Given: A registered network-connected cash drawer
+    // When: The IP address is updated to a hostname string "drawer.local"
+    // Then: The hostname string is accepted as the IP address field
     [Fact]
     public async Task UpdateAsync_IpAddressFormat_ShouldAcceptAnyString()
     {
@@ -955,6 +1075,9 @@ public class CashDrawerHardwareGrainTests
 
     #region State Persistence Tests
 
+    // Given: A registered printer-connected cash drawer
+    // When: The drawer is updated, opened, and deactivated in sequence
+    // Then: All state changes persist and the final snapshot reflects the cumulative result
     [Fact]
     public async Task StateChanges_ShouldPersistAcrossMultipleOperations()
     {

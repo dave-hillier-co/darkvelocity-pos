@@ -19,6 +19,9 @@ public class LineItemsGrainTests
         => _fixture.Cluster.GrainFactory.GetGrain<ILineItemsGrain>(
             GrainKeys.LineItems(orgId, ownerType, ownerId));
 
+    // Given: An empty line items collection for an order
+    // When: A menu item with quantity 2 at $10 is added
+    // Then: The line item is created with correct extended price and totals
     [Fact]
     public async Task AddAsync_ShouldAddLineItem()
     {
@@ -38,6 +41,9 @@ public class LineItemsGrainTests
         result.Totals.Subtotal.Should().Be(20.00m);
     }
 
+    // Given: An empty line items collection for an order
+    // When: A line item is added with menu item ID and name metadata
+    // Then: The metadata is stored alongside the line item
     [Fact]
     public async Task AddAsync_WithMetadata_ShouldStoreMetadata()
     {
@@ -62,6 +68,9 @@ public class LineItemsGrainTests
         lines[0].Metadata["Name"].Should().Be("Cheeseburger");
     }
 
+    // Given: An empty line items collection for an order
+    // When: Three line items of different types are added sequentially
+    // Then: Each line receives an incrementing index and totals reflect all items
     [Fact]
     public async Task AddAsync_MultipleTimes_ShouldIncrementIndex()
     {
@@ -86,6 +95,9 @@ public class LineItemsGrainTests
         totals.Subtotal.Should().Be(10.00m + 10.00m + 7.50m);
     }
 
+    // Given: An empty line items collection for an order
+    // When: A line item is added with zero quantity
+    // Then: The addition is rejected because quantity must be positive
     [Fact]
     public async Task AddAsync_WithZeroQuantity_ShouldThrow()
     {
@@ -102,6 +114,9 @@ public class LineItemsGrainTests
             .WithMessage("*Quantity must be positive*");
     }
 
+    // Given: An empty line items collection for an order
+    // When: A line item is added with an empty item type
+    // Then: The addition is rejected because item type is required
     [Fact]
     public async Task AddAsync_WithEmptyItemType_ShouldThrow()
     {
@@ -118,6 +133,9 @@ public class LineItemsGrainTests
             .WithMessage("*Item type is required*");
     }
 
+    // Given: A line items collection with one item at quantity 1 and $10
+    // When: The line is updated to quantity 3 at $12
+    // Then: The line reflects the new quantity, price, and extended price of $36
     [Fact]
     public async Task UpdateAsync_ShouldUpdateLine()
     {
@@ -139,6 +157,9 @@ public class LineItemsGrainTests
         lines[0].UpdatedAt.Should().NotBeNull();
     }
 
+    // Given: A line items collection with one item at quantity 2 and $10
+    // When: Only the quantity is updated to 5 without changing the price
+    // Then: The quantity changes but the unit price remains at $10
     [Fact]
     public async Task UpdateAsync_PartialUpdate_ShouldOnlyUpdateSpecifiedFields()
     {
@@ -158,6 +179,9 @@ public class LineItemsGrainTests
         lines[0].ExtendedPrice.Should().Be(50.00m);
     }
 
+    // Given: A line item with existing metadata (key1)
+    // When: The line is updated with new metadata (key2)
+    // Then: The old metadata is replaced entirely with the new metadata
     [Fact]
     public async Task UpdateAsync_WithMetadata_ShouldReplaceMetadata()
     {
@@ -176,6 +200,9 @@ public class LineItemsGrainTests
         lines[0].Metadata.Should().NotContainKey("key1");
     }
 
+    // Given: An empty line items collection for an order
+    // When: An update is attempted on a non-existent line ID
+    // Then: The update is rejected because the line was not found
     [Fact]
     public async Task UpdateAsync_NonExistentLine_ShouldThrow()
     {
@@ -192,6 +219,9 @@ public class LineItemsGrainTests
             .WithMessage("*Line not found*");
     }
 
+    // Given: A line items collection with one voided line item
+    // When: An update is attempted on the voided line
+    // Then: The update is rejected because voided lines cannot be modified
     [Fact]
     public async Task UpdateAsync_VoidedLine_ShouldThrow()
     {
@@ -210,6 +240,9 @@ public class LineItemsGrainTests
             .WithMessage("*Cannot update a voided line*");
     }
 
+    // Given: A line items collection with one active line item
+    // When: The line is voided with a reason
+    // Then: The line is marked as voided and excluded from non-voided queries
     [Fact]
     public async Task VoidAsync_ShouldVoidLine()
     {
@@ -235,6 +268,9 @@ public class LineItemsGrainTests
         linesWithoutVoided.Should().BeEmpty();
     }
 
+    // Given: A line items collection with two active line items
+    // When: One line is voided
+    // Then: Totals exclude the voided line and the voided count is incremented
     [Fact]
     public async Task VoidAsync_ShouldExcludeFromTotals()
     {
@@ -256,6 +292,9 @@ public class LineItemsGrainTests
         totals.Subtotal.Should().Be(10.00m); // Only second line
     }
 
+    // Given: A line items collection with one already-voided line
+    // When: A second void is attempted on the same line
+    // Then: The void is rejected because the line is already voided
     [Fact]
     public async Task VoidAsync_AlreadyVoided_ShouldThrow()
     {
@@ -274,6 +313,9 @@ public class LineItemsGrainTests
             .WithMessage("*Line is already voided*");
     }
 
+    // Given: A line items collection with one active line item
+    // When: A void is attempted with an empty reason
+    // Then: The void is rejected because a reason is required for audit
     [Fact]
     public async Task VoidAsync_WithoutReason_ShouldThrow()
     {
@@ -291,6 +333,9 @@ public class LineItemsGrainTests
             .WithMessage("*Void reason is required*");
     }
 
+    // Given: A line items collection with two line items
+    // When: The first line is removed
+    // Then: Only the second line remains in the collection
     [Fact]
     public async Task RemoveAsync_ShouldRemoveLine()
     {
@@ -310,6 +355,9 @@ public class LineItemsGrainTests
         lines.Should().NotContain(l => l.Id == result.LineId);
     }
 
+    // Given: An empty line items collection for an order
+    // When: A removal is attempted on a non-existent line ID
+    // Then: The removal is rejected because the line was not found
     [Fact]
     public async Task RemoveAsync_NonExistentLine_ShouldThrow()
     {
@@ -326,6 +374,9 @@ public class LineItemsGrainTests
             .WithMessage("*Line not found*");
     }
 
+    // Given: A line items collection with three items added in sequence
+    // When: All lines are retrieved
+    // Then: Lines are returned ordered by their creation index
     [Fact]
     public async Task GetLinesAsync_ShouldReturnOrderedByIndex()
     {
@@ -350,6 +401,9 @@ public class LineItemsGrainTests
         lines[2].Index.Should().Be(2);
     }
 
+    // Given: An empty line items collection with no items added
+    // When: Totals are requested
+    // Then: All totals (line count, quantity, subtotal) return zero
     [Fact]
     public async Task GetTotalsAsync_EmptyCollection_ShouldReturnZeros()
     {
@@ -368,6 +422,9 @@ public class LineItemsGrainTests
         totals.Subtotal.Should().Be(0);
     }
 
+    // Given: A line items collection with one item added
+    // When: The grain state is retrieved
+    // Then: State reflects the organization, owner, lines, and current version
     [Fact]
     public async Task GetStateAsync_ShouldReturnState()
     {
@@ -388,6 +445,9 @@ public class LineItemsGrainTests
         state.Version.Should().Be(1);
     }
 
+    // Given: An empty line items collection with no items
+    // When: A check for existing lines is performed
+    // Then: The check returns false
     [Fact]
     public async Task HasLinesAsync_WithNoLines_ShouldReturnFalse()
     {
@@ -403,6 +463,9 @@ public class LineItemsGrainTests
         hasLines.Should().BeFalse();
     }
 
+    // Given: A line items collection with one item
+    // When: A check for existing lines is performed
+    // Then: The check returns true
     [Fact]
     public async Task HasLinesAsync_WithLines_ShouldReturnTrue()
     {
@@ -419,6 +482,9 @@ public class LineItemsGrainTests
         hasLines.Should().BeTrue();
     }
 
+    // Given: Two line items grains for the same owner ID but different owner types (order vs purchase-doc)
+    // When: Items are added to each grain independently
+    // Then: Each grain maintains isolated state with its own line items
     [Fact]
     public async Task DifferentOwnerTypes_ShouldHaveIsolatedState()
     {

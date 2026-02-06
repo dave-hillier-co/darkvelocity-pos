@@ -22,6 +22,9 @@ public class RecipeDocumentGrainTests
             GrainKeys.RecipeDocument(orgId, documentId));
     }
 
+    // Given: a new Classic Margarita recipe with tequila, triple sec, and lime juice
+    // When: creating the recipe document with immediate publication
+    // Then: version 1 is published with all three ingredients and no draft
     [Fact]
     public async Task CreateAsync_ShouldCreateDocument()
     {
@@ -58,6 +61,9 @@ public class RecipeDocumentGrainTests
         result.Published.Ingredients.Should().HaveCount(3);
     }
 
+    // Given: a new recipe created without immediate publication
+    // When: the recipe document is created
+    // Then: only a draft version exists with no published version
     [Fact]
     public async Task CreateAsync_WithoutPublish_ShouldCreateDraft()
     {
@@ -80,6 +86,9 @@ public class RecipeDocumentGrainTests
         result.Draft!.Name.Should().Be("Draft Recipe");
     }
 
+    // Given: a published recipe calling for 200g flour
+    // When: creating a draft that increases flour to 250g
+    // Then: a version 2 draft exists alongside the unchanged published version 1
     [Fact]
     public async Task CreateDraftAsync_ShouldCreateNewDraftVersion()
     {
@@ -118,6 +127,9 @@ public class RecipeDocumentGrainTests
         snapshot.TotalVersions.Should().Be(2);
     }
 
+    // Given: a published recipe (4 portions) with a draft version changing yield to 6 portions
+    // When: publishing the draft
+    // Then: the new version becomes live with the updated 6-portion yield and no draft remains
     [Fact]
     public async Task PublishDraftAsync_ShouldMakeDraftLive()
     {
@@ -144,6 +156,9 @@ public class RecipeDocumentGrainTests
         snapshot.Published.PortionYield.Should().Be(6);
     }
 
+    // Given: a published recipe with an unwanted draft version
+    // When: discarding the draft
+    // Then: the draft is removed, the published version remains, and version count resets to 1
     [Fact]
     public async Task DiscardDraftAsync_ShouldRemoveDraft()
     {
@@ -168,6 +183,9 @@ public class RecipeDocumentGrainTests
         snapshot.TotalVersions.Should().Be(1);
     }
 
+    // Given: a recipe at version 2 (yield changed from 4 to 8 portions)
+    // When: reverting to version 1
+    // Then: a new version 3 is created with the original 4-portion yield from version 1
     [Fact]
     public async Task RevertToVersionAsync_ShouldRevertToOlderVersion()
     {
@@ -195,6 +213,9 @@ public class RecipeDocumentGrainTests
         snapshot.TotalVersions.Should().Be(3);
     }
 
+    // Given: a recipe that has been published three times (V1, V2, V3)
+    // When: retrieving the version history
+    // Then: all three versions are returned in reverse chronological order
     [Fact]
     public async Task GetVersionHistoryAsync_ShouldReturnAllVersions()
     {
@@ -220,6 +241,9 @@ public class RecipeDocumentGrainTests
         history[2].VersionNumber.Should().Be(1);
     }
 
+    // Given: a published grilled chicken recipe in English
+    // When: adding a Spanish translation
+    // Then: the recipe includes the "es-ES" locale with the translated name and description
     [Fact]
     public async Task AddTranslationAsync_ShouldAddLocalization()
     {
@@ -245,6 +269,9 @@ public class RecipeDocumentGrainTests
         version.Translations["es-ES"].Description.Should().Be("Receta de pollo a la parrilla");
     }
 
+    // Given: a recipe with a published seasonal version (version 2)
+    // When: scheduling that version to activate tomorrow
+    // Then: an active schedule is created targeting version 2 at the specified time
     [Fact]
     public async Task ScheduleChangeAsync_ShouldCreateSchedule()
     {
@@ -277,6 +304,9 @@ public class RecipeDocumentGrainTests
         schedules.Should().HaveCount(1);
     }
 
+    // Given: a recipe with a pending scheduled version change
+    // When: cancelling the schedule
+    // Then: the schedule is removed and no pending changes remain
     [Fact]
     public async Task CancelScheduleAsync_ShouldRemoveSchedule()
     {
@@ -297,6 +327,9 @@ public class RecipeDocumentGrainTests
         schedules.Should().BeEmpty();
     }
 
+    // Given: a published recipe that is no longer needed
+    // When: archiving the recipe as discontinued
+    // Then: the recipe is marked as archived
     [Fact]
     public async Task ArchiveAsync_ShouldArchiveDocument()
     {
@@ -316,6 +349,9 @@ public class RecipeDocumentGrainTests
         snapshot.IsArchived.Should().BeTrue();
     }
 
+    // Given: a previously archived recipe document
+    // When: restoring the recipe
+    // Then: the recipe is no longer marked as archived and is available again
     [Fact]
     public async Task RestoreAsync_ShouldRestoreArchivedDocument()
     {
@@ -336,6 +372,9 @@ public class RecipeDocumentGrainTests
         snapshot.IsArchived.Should().BeFalse();
     }
 
+    // Given: a published recipe with an ingredient costed at $0.01/g
+    // When: the ingredient price doubles to $0.02/g and costs are recalculated
+    // Then: the recipe reflects the updated ingredient unit cost
     [Fact]
     public async Task RecalculateCostAsync_ShouldUpdateCosts()
     {
@@ -364,6 +403,9 @@ public class RecipeDocumentGrainTests
         snapshot.Published!.Ingredients[0].UnitCost.Should().Be(0.02m);
     }
 
+    // Given: a published recipe not linked to any menu item
+    // When: linking the recipe to a menu item
+    // Then: the menu item appears in the recipe's linked items list
     [Fact]
     public async Task LinkMenuItemAsync_ShouldLinkMenuItem()
     {
@@ -384,6 +426,9 @@ public class RecipeDocumentGrainTests
         linkedItems.Should().Contain(menuItemId);
     }
 
+    // Given: a recipe linked to a specific menu item
+    // When: unlinking the menu item from the recipe
+    // Then: the menu item no longer appears in the recipe's linked items list
     [Fact]
     public async Task UnlinkMenuItemAsync_ShouldUnlinkMenuItem()
     {
@@ -405,6 +450,9 @@ public class RecipeDocumentGrainTests
         linkedItems.Should().NotContain(menuItemId);
     }
 
+    // Given: a recipe with 100g ingredient A (no waste, $0.01/g) and 50g ingredient B (10% waste, $0.02/g) yielding 4 portions
+    // When: creating the recipe and calculating costs
+    // Then: theoretical cost is ~$2.11 and cost per portion is ~$0.53
     [Fact]
     public async Task CostCalculation_ShouldCalculateCorrectly()
     {
@@ -437,6 +485,9 @@ public class RecipeDocumentGrainTests
         published.CostPerPortion.Should().BeApproximately(0.53m, 0.01m);
     }
 
+    // Given: a recipe with version 2 published and scheduled for activation in 7 days
+    // When: previewing the recipe at the current time and after the scheduled activation
+    // Then: both previews show version 2 content since it is already the published version
     [Fact]
     public async Task PreviewAtAsync_ShouldReturnScheduledVersion()
     {
@@ -481,6 +532,9 @@ public class RecipeCategoryDocumentGrainTests
             GrainKeys.RecipeCategoryDocument(orgId, documentId));
     }
 
+    // Given: a new "Cocktails" recipe category with display order 1 and a red color code
+    // When: creating the category with immediate publication
+    // Then: the published category has the correct name, display order, and color
     [Fact]
     public async Task CreateAsync_ShouldCreateCategory()
     {
@@ -503,6 +557,9 @@ public class RecipeCategoryDocumentGrainTests
         result.Published.Color.Should().Be("#FF5733");
     }
 
+    // Given: a published "Main Courses" recipe category with no recipes
+    // When: adding two recipes to the category
+    // Then: the category contains both recipe document IDs
     [Fact]
     public async Task AddRecipeAsync_ShouldAddRecipeToCategory()
     {

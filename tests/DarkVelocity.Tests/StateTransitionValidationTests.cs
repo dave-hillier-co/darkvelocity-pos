@@ -26,6 +26,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Confirm Transitions
 
+    // Given: A booking that has been confirmed and the guest has arrived
+    // When: Attempting to confirm the booking again
+    // Then: The confirmation is rejected because an arrived booking cannot be re-confirmed
     [Fact]
     public async Task Booking_Confirm_FromArrived_ShouldThrow()
     {
@@ -40,6 +43,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking where the guest has been seated at a table
+    // When: Attempting to confirm the already-seated booking
+    // Then: The confirmation is rejected because a seated booking cannot be re-confirmed
     [Fact]
     public async Task Booking_Confirm_FromSeated_ShouldThrow()
     {
@@ -54,6 +60,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking that has been completed (guest departed)
+    // When: Attempting to confirm the completed booking
+    // Then: The confirmation is rejected because completed bookings are immutable
     [Fact]
     public async Task Booking_Confirm_FromCompleted_ShouldThrow()
     {
@@ -68,6 +77,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking that has been cancelled
+    // When: Attempting to confirm the cancelled booking
+    // Then: The confirmation is rejected because cancelled bookings cannot be confirmed
     [Fact]
     public async Task Booking_Confirm_FromCancelled_ShouldThrow()
     {
@@ -82,6 +94,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A requested booking with a required deposit that has not been paid
+    // When: Attempting to confirm the booking without deposit payment
+    // Then: The confirmation is rejected because the deposit has not been received
     [Fact]
     public async Task Booking_Confirm_WithRequiredDeposit_ShouldThrow()
     {
@@ -105,6 +120,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Modify Transitions
 
+    // Given: A booking where the guest has already arrived
+    // When: Attempting to modify the party size after arrival
+    // Then: The modification is rejected because arrived bookings cannot be modified
     [Fact]
     public async Task Booking_Modify_FromArrived_ShouldThrow()
     {
@@ -119,6 +137,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking where the guest has been seated
+    // When: Attempting to modify the party size while guests are seated
+    // Then: The modification is rejected because seated bookings cannot be modified
     [Fact]
     public async Task Booking_Modify_FromSeated_ShouldThrow()
     {
@@ -133,6 +154,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A completed booking (guest has departed)
+    // When: Attempting to modify the party size after completion
+    // Then: The modification is rejected because completed bookings are immutable
     [Fact]
     public async Task Booking_Modify_FromCompleted_ShouldThrow()
     {
@@ -147,6 +171,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A cancelled booking
+    // When: Attempting to modify the party size on the cancelled booking
+    // Then: The modification is rejected because cancelled bookings cannot be modified
     [Fact]
     public async Task Booking_Modify_FromCancelled_ShouldThrow()
     {
@@ -165,6 +192,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Cancel Transitions
 
+    // Given: A completed booking where the guest has departed
+    // When: Attempting to cancel the completed booking
+    // Then: The cancellation is rejected because completed bookings cannot be cancelled
     [Fact]
     public async Task Booking_Cancel_FromCompleted_ShouldThrow()
     {
@@ -179,6 +209,9 @@ public class StateTransitionValidationTests
             .WithMessage("*Cannot cancel completed booking*");
     }
 
+    // Given: An already cancelled booking
+    // When: Attempting to cancel the booking a second time
+    // Then: The duplicate cancellation is rejected
     [Fact]
     public async Task Booking_Cancel_WhenAlreadyCancelled_ShouldThrow()
     {
@@ -197,6 +230,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Arrival Transitions
 
+    // Given: A booking still in Requested status (not yet confirmed)
+    // When: Attempting to record guest arrival before confirmation
+    // Then: The arrival is rejected because only confirmed bookings can receive arrivals
     [Fact]
     public async Task Booking_RecordArrival_FromRequested_ShouldThrow()
     {
@@ -214,6 +250,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking where guests are already seated
+    // When: Attempting to record arrival again after seating
+    // Then: The arrival is rejected because the guest has already been seated
     [Fact]
     public async Task Booking_RecordArrival_FromSeated_ShouldThrow()
     {
@@ -228,6 +267,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A cancelled booking
+    // When: Attempting to record guest arrival on a cancelled booking
+    // Then: The arrival is rejected because cancelled bookings cannot receive arrivals
     [Fact]
     public async Task Booking_RecordArrival_FromCancelled_ShouldThrow()
     {
@@ -246,6 +288,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Seating Transitions
 
+    // Given: A booking still in Requested status (not yet confirmed or arrived)
+    // When: Attempting to seat the guest directly from Requested
+    // Then: The seating is rejected because guests must arrive before being seated
     [Fact]
     public async Task Booking_SeatGuest_FromRequested_ShouldThrow()
     {
@@ -263,6 +308,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A cancelled booking
+    // When: Attempting to seat guests from a cancelled booking
+    // Then: The seating is rejected because cancelled bookings cannot proceed
     [Fact]
     public async Task Booking_SeatGuest_FromCancelled_ShouldThrow()
     {
@@ -277,6 +325,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking marked as a no-show
+    // When: Attempting to seat guests from a no-show booking
+    // Then: The seating is rejected because no-show bookings cannot be seated
     [Fact]
     public async Task Booking_SeatGuest_FromNoShow_ShouldThrow()
     {
@@ -295,6 +346,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Departure Transitions
 
+    // Given: A confirmed booking where guests have not yet been seated
+    // When: Attempting to record departure before seating
+    // Then: The departure is rejected because guests must be seated before departing
     [Fact]
     public async Task Booking_RecordDeparture_FromConfirmed_ShouldThrow()
     {
@@ -309,6 +363,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking where the guest has arrived but has not been seated
+    // When: Attempting to record departure without seating
+    // Then: The departure is rejected because guests must be seated before departing
     [Fact]
     public async Task Booking_RecordDeparture_FromArrived_ShouldThrow()
     {
@@ -323,6 +380,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking still in Requested status
+    // When: Attempting to record departure from an unconfirmed booking
+    // Then: The departure is rejected because the booking has not progressed through the lifecycle
     [Fact]
     public async Task Booking_RecordDeparture_FromRequested_ShouldThrow()
     {
@@ -344,6 +404,9 @@ public class StateTransitionValidationTests
 
     #region Booking - No Show Transitions
 
+    // Given: A booking still in Requested status (not yet confirmed)
+    // When: Attempting to mark the booking as a no-show
+    // Then: The no-show is rejected because only confirmed bookings can be marked as no-show
     [Fact]
     public async Task Booking_MarkNoShow_FromRequested_ShouldThrow()
     {
@@ -361,6 +424,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A booking where the guest is currently seated
+    // When: Attempting to mark a seated booking as a no-show
+    // Then: The no-show is rejected because the guest is present and seated
     [Fact]
     public async Task Booking_MarkNoShow_FromSeated_ShouldThrow()
     {
@@ -379,6 +445,9 @@ public class StateTransitionValidationTests
 
     #region Booking - Deposit Transitions
 
+    // Given: An already confirmed booking
+    // When: Attempting to require a deposit after the booking has been confirmed
+    // Then: The deposit requirement is rejected because deposits must be set before confirmation
     [Fact]
     public async Task Booking_RequireDeposit_FromConfirmed_ShouldThrow()
     {
@@ -393,6 +462,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*");
     }
 
+    // Given: A requested booking with no deposit requirement set
+    // When: Attempting to record a deposit payment
+    // Then: The payment is rejected because no deposit was required for this booking
     [Fact]
     public async Task Booking_RecordDepositPayment_WithoutDeposit_ShouldThrow()
     {
@@ -418,6 +490,9 @@ public class StateTransitionValidationTests
 
     #region Order - Line Operations on Closed/Voided Orders
 
+    // Given: A closed order that has been fully settled
+    // When: Attempting to add a new line item to the closed order
+    // Then: The line add is rejected because closed orders cannot accept new items
     [Fact]
     public async Task Order_AddLine_WhenClosed_ShouldThrow()
     {
@@ -433,6 +508,9 @@ public class StateTransitionValidationTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A voided order
+    // When: Attempting to add a new line item to the voided order
+    // Then: The line add is rejected because voided orders cannot accept new items
     [Fact]
     public async Task Order_AddLine_WhenVoided_ShouldThrow()
     {
@@ -448,6 +526,9 @@ public class StateTransitionValidationTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A closed order with an existing line item
+    // When: Attempting to update the line item quantity on the closed order
+    // Then: The update is rejected because closed orders are immutable
     [Fact]
     public async Task Order_UpdateLine_WhenClosed_ShouldThrow()
     {
@@ -462,6 +543,9 @@ public class StateTransitionValidationTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A closed order with an existing line item
+    // When: Attempting to void a line item on the closed order
+    // Then: The void is rejected because closed orders are immutable
     [Fact]
     public async Task Order_VoidLine_WhenClosed_ShouldThrow()
     {
@@ -476,6 +560,9 @@ public class StateTransitionValidationTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A voided order with an existing line item
+    // When: Attempting to remove a line item from the voided order
+    // Then: The removal is rejected because voided orders are immutable
     [Fact]
     public async Task Order_RemoveLine_WhenVoided_ShouldThrow()
     {
@@ -494,6 +581,9 @@ public class StateTransitionValidationTests
 
     #region Order - Send Operations
 
+    // Given: An open order with no line items added
+    // When: Attempting to send the empty order to the kitchen
+    // Then: The send is rejected because there are no pending items to prepare
     [Fact]
     public async Task Order_Send_WithoutItems_ShouldThrow()
     {
@@ -508,6 +598,9 @@ public class StateTransitionValidationTests
             .WithMessage("*No pending items*");
     }
 
+    // Given: A closed order
+    // When: Attempting to send the closed order to the kitchen
+    // Then: The send is rejected because closed orders cannot be sent
     [Fact]
     public async Task Order_Send_WhenClosed_ShouldThrow()
     {
@@ -526,6 +619,9 @@ public class StateTransitionValidationTests
 
     #region Order - Close Operations
 
+    // Given: A sent order with unpaid items and an outstanding balance
+    // When: Attempting to close the order before full payment
+    // Then: The close is rejected because there is an outstanding balance
     [Fact]
     public async Task Order_Close_WithOutstandingBalance_ShouldThrow()
     {
@@ -544,6 +640,9 @@ public class StateTransitionValidationTests
 
     #region Order - Void Operations
 
+    // Given: An already voided order
+    // When: Attempting to void the order a second time
+    // Then: The duplicate void is rejected
     [Fact]
     public async Task Order_Void_WhenAlreadyVoided_ShouldThrow()
     {
@@ -558,6 +657,9 @@ public class StateTransitionValidationTests
             .WithMessage("*closed or voided*");
     }
 
+    // Given: A closed and settled order
+    // When: Attempting to void the closed order
+    // Then: The void is rejected because closed orders cannot be voided
     [Fact]
     public async Task Order_Void_WhenClosed_ShouldThrow()
     {
@@ -576,6 +678,9 @@ public class StateTransitionValidationTests
 
     #region Order - Reopen Operations
 
+    // Given: An order that is currently open
+    // When: Attempting to reopen an already-open order
+    // Then: The reopen is rejected because only closed or voided orders can be reopened
     [Fact]
     public async Task Order_Reopen_WhenOpen_ShouldThrow()
     {
@@ -590,6 +695,9 @@ public class StateTransitionValidationTests
             .WithMessage("*only reopen closed or voided*");
     }
 
+    // Given: An order that has been sent to the kitchen
+    // When: Attempting to reopen a sent order
+    // Then: The reopen is rejected because only closed or voided orders can be reopened
     [Fact]
     public async Task Order_Reopen_WhenSent_ShouldThrow()
     {
@@ -608,6 +716,9 @@ public class StateTransitionValidationTests
 
     #region Order - Discount Operations
 
+    // Given: A closed and settled order
+    // When: Attempting to apply a 10% discount to the closed order
+    // Then: The discount is rejected because closed orders cannot accept discounts
     [Fact]
     public async Task Order_ApplyDiscount_WhenClosed_ShouldThrow()
     {
@@ -631,6 +742,9 @@ public class StateTransitionValidationTests
 
     #region Payment - Authorization Flow
 
+    // Given: A completed cash payment
+    // When: Attempting to request card authorization on an already completed payment
+    // Then: The authorization request is rejected because the payment must be in Initiated status
     [Fact]
     public async Task Payment_RequestAuthorization_WhenCompleted_ShouldThrow()
     {
@@ -645,6 +759,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*Initiated*");
     }
 
+    // Given: A payment in Initiated status (authorization not yet requested)
+    // When: Attempting to record an authorization result without requesting it first
+    // Then: The authorization is rejected because the payment must be in Authorizing status
     [Fact]
     public async Task Payment_RecordAuthorization_WhenNotAuthorizing_ShouldThrow()
     {
@@ -660,6 +777,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*Authorizing*");
     }
 
+    // Given: A payment in Initiated status (not yet authorized)
+    // When: Attempting to capture a payment that has not been authorized
+    // Then: The capture is rejected because the payment must be in Authorized status
     [Fact]
     public async Task Payment_Capture_WhenNotAuthorized_ShouldThrow()
     {
@@ -678,6 +798,9 @@ public class StateTransitionValidationTests
 
     #region Payment - Completion Flow
 
+    // Given: An already completed cash payment
+    // When: Attempting to complete the cash payment a second time
+    // Then: The completion is rejected because the payment must be in Initiated status
     [Fact]
     public async Task Payment_CompleteCash_WhenCompleted_ShouldThrow()
     {
@@ -692,6 +815,9 @@ public class StateTransitionValidationTests
             .WithMessage("*status*Initiated*");
     }
 
+    // Given: A voided payment
+    // When: Attempting to complete a card payment on the voided payment
+    // Then: The card completion is rejected because voided payments cannot be completed
     [Fact]
     public async Task Payment_CompleteCard_WhenVoided_ShouldThrow()
     {
@@ -711,6 +837,9 @@ public class StateTransitionValidationTests
 
     #region Payment - Refund Flow
 
+    // Given: A payment in Initiated status (not yet completed)
+    // When: Attempting to refund the payment before it has been completed
+    // Then: The refund is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_Refund_WhenNotCompleted_ShouldThrow()
     {
@@ -725,6 +854,9 @@ public class StateTransitionValidationTests
             .WithMessage("*only refund completed payments*");
     }
 
+    // Given: A completed cash payment
+    // When: Attempting to refund more than the original payment amount
+    // Then: The refund is rejected because the refund exceeds the available balance
     [Fact]
     public async Task Payment_Refund_ExceedsBalance_ShouldThrow()
     {
@@ -741,6 +873,9 @@ public class StateTransitionValidationTests
             .WithMessage("*exceeds available balance*");
     }
 
+    // Given: A completed cash payment that has already been fully refunded
+    // When: Attempting to issue another refund on the fully refunded payment
+    // Then: The refund is rejected because the payment is no longer in Completed status
     [Fact]
     public async Task Payment_Refund_WhenAlreadyFullyRefunded_ShouldThrow()
     {
@@ -763,6 +898,9 @@ public class StateTransitionValidationTests
 
     #region Payment - Void Flow
 
+    // Given: An already voided payment
+    // When: Attempting to void the payment a second time
+    // Then: The duplicate void is rejected
     [Fact]
     public async Task Payment_Void_WhenAlreadyVoided_ShouldThrow()
     {
@@ -777,6 +915,9 @@ public class StateTransitionValidationTests
             .WithMessage("*Cannot void payment with status*");
     }
 
+    // Given: A fully refunded payment
+    // When: Attempting to void the refunded payment
+    // Then: The void is rejected because fully refunded payments cannot be voided
     [Fact]
     public async Task Payment_Void_WhenFullyRefunded_ShouldThrow()
     {
@@ -797,6 +938,9 @@ public class StateTransitionValidationTests
 
     #region Payment - Tip Adjustment
 
+    // Given: A payment in Initiated status (not yet completed)
+    // When: Attempting to adjust the tip before the payment is completed
+    // Then: The tip adjustment is rejected because only completed payments can have tips adjusted
     [Fact]
     public async Task Payment_AdjustTip_WhenNotCompleted_ShouldThrow()
     {

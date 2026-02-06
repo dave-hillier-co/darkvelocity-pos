@@ -23,6 +23,9 @@ public class MenuItemDocumentGrainTests
             GrainKeys.MenuItemDocument(orgId, documentId));
     }
 
+    // Given: no existing menu item document
+    // When: a "Caesar Salad" at $12.99 is created with immediate publication
+    // Then: the document is at version 1, published with the correct name and price, and has no draft
     [Fact]
     public async Task CreateAsync_ShouldCreateDocument()
     {
@@ -49,6 +52,9 @@ public class MenuItemDocumentGrainTests
         result.Published.Price.Should().Be(12.99m);
     }
 
+    // Given: no existing menu item document
+    // When: a "Draft Item" is created without immediate publication
+    // Then: the document exists only as a draft at version 1 with no published version
     [Fact]
     public async Task CreateAsync_WithoutPublish_ShouldCreateDraft()
     {
@@ -71,6 +77,9 @@ public class MenuItemDocumentGrainTests
         result.Draft!.Name.Should().Be("Draft Item");
     }
 
+    // Given: a published menu item document at version 1
+    // When: a new draft is created with an updated name, price, and change note
+    // Then: the draft is at version 2 with the new values while the published version remains at version 1
     [Fact]
     public async Task CreateDraftAsync_ShouldCreateNewDraftVersion()
     {
@@ -101,6 +110,9 @@ public class MenuItemDocumentGrainTests
         snapshot.TotalVersions.Should().Be(2);
     }
 
+    // Given: a published menu item with a pending draft containing an updated name and price
+    // When: the draft is published
+    // Then: the published version advances to version 2 with the draft's content and the draft is cleared
     [Fact]
     public async Task PublishDraftAsync_ShouldMakeDraftLive()
     {
@@ -127,6 +139,9 @@ public class MenuItemDocumentGrainTests
         snapshot.Published.Price.Should().Be(15.00m);
     }
 
+    // Given: a published menu item with a pending draft at an extreme price
+    // When: the draft is discarded
+    // Then: the draft is removed, version count returns to 1, and the original published version remains
     [Fact]
     public async Task DiscardDraftAsync_ShouldRemoveDraft()
     {
@@ -153,6 +168,9 @@ public class MenuItemDocumentGrainTests
         snapshot.TotalVersions.Should().Be(1);
     }
 
+    // Given: a menu item with version 1 ($10) and version 2 ($20) both published
+    // When: the item is reverted to version 1
+    // Then: a new version 3 is created with version 1's content ($10) and the total version count is 3
     [Fact]
     public async Task RevertToVersionAsync_ShouldRevertToOlderVersion()
     {
@@ -180,6 +198,9 @@ public class MenuItemDocumentGrainTests
         snapshot.TotalVersions.Should().Be(3);
     }
 
+    // Given: a menu item document that has been published through 3 versions
+    // When: the version history is retrieved
+    // Then: all 3 versions are returned in reverse chronological order (newest first)
     [Fact]
     public async Task GetVersionHistoryAsync_ShouldReturnAllVersions()
     {
@@ -205,6 +226,9 @@ public class MenuItemDocumentGrainTests
         history[2].VersionNumber.Should().Be(1);
     }
 
+    // Given: a published "Chicken" menu item in English
+    // When: a Spanish (es-ES) translation is added with name, description, and kitchen name
+    // Then: the published version includes the Spanish translation with all translated fields
     [Fact]
     public async Task AddTranslationAsync_ShouldAddLocalization()
     {
@@ -233,6 +257,9 @@ public class MenuItemDocumentGrainTests
         version.Translations["es-ES"].KitchenName.Should().Be("POLLO");
     }
 
+    // Given: a menu item with a published version and a happy hour pricing version
+    // When: the happy hour version is scheduled to activate tomorrow
+    // Then: an active schedule entry is created targeting the correct version and activation time
     [Fact]
     public async Task ScheduleChangeAsync_ShouldCreateSchedule()
     {
@@ -267,6 +294,9 @@ public class MenuItemDocumentGrainTests
         schedules.Should().HaveCount(1);
     }
 
+    // Given: a menu item with a scheduled version change
+    // When: the schedule is cancelled
+    // Then: the schedule list is empty and no version change is pending
     [Fact]
     public async Task CancelScheduleAsync_ShouldRemoveSchedule()
     {

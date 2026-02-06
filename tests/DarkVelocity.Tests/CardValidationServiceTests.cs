@@ -8,6 +8,9 @@ public class CardValidationServiceTests
 {
     private readonly CardValidationService _service = new();
 
+    // Given: A card number in various formats (Visa, Mastercard, Amex, Discover, invalid, empty)
+    // When: The card number is validated using Luhn check and format rules
+    // Then: Valid card numbers pass and invalid ones are rejected
     [Theory]
     [InlineData("4242424242424242", true)]    // Visa
     [InlineData("5555555555554444", true)]    // Mastercard
@@ -28,6 +31,9 @@ public class CardValidationServiceTests
         result.Should().Be(expected);
     }
 
+    // Given: A card number with a specific issuer prefix (Visa, Mastercard, Amex, Discover, Diners, JCB)
+    // When: The card brand is detected from the number prefix
+    // Then: The correct card network brand is identified
     [Theory]
     [InlineData("4242424242424242", "visa")]
     [InlineData("4000056655665556", "visa")]
@@ -48,6 +54,9 @@ public class CardValidationServiceTests
         brand.Should().Be(expectedBrand);
     }
 
+    // Given: A single card number used for payment
+    // When: The card fingerprint is generated twice
+    // Then: Both fingerprints are identical, enabling duplicate card detection
     [Fact]
     public void GenerateFingerprint_SameCard_ShouldReturnSameFingerprint()
     {
@@ -62,6 +71,9 @@ public class CardValidationServiceTests
         fingerprint1.Should().Be(fingerprint2);
     }
 
+    // Given: Two different card numbers (Visa and Mastercard)
+    // When: Fingerprints are generated for each card
+    // Then: The fingerprints differ, ensuring unique card identification
     [Fact]
     public void GenerateFingerprint_DifferentCards_ShouldReturnDifferentFingerprints()
     {
@@ -73,6 +85,9 @@ public class CardValidationServiceTests
         fingerprint1.Should().NotBe(fingerprint2);
     }
 
+    // Given: A card number to be displayed in receipts or UI
+    // When: The card number is masked for PCI compliance
+    // Then: Only the last four digits remain visible with the rest replaced by asterisks
     [Theory]
     [InlineData("4242424242424242", "****4242")]
     [InlineData("5555555555554444", "****4444")]
@@ -86,6 +101,9 @@ public class CardValidationServiceTests
         masked.Should().Be(expected);
     }
 
+    // Given: A full card number from a payment transaction
+    // When: The last four digits are extracted for display
+    // Then: The correct trailing digits are returned for receipt printing
     [Theory]
     [InlineData("4242424242424242", "4242")]
     [InlineData("5555555555554444", "4444")]
@@ -99,6 +117,9 @@ public class CardValidationServiceTests
         last4.Should().Be(expected);
     }
 
+    // Given: An expiry month and year from a card payment form
+    // When: The expiry date is validated against current date and format rules
+    // Then: Future dates pass, past dates and invalid months are rejected
     [Theory]
     [InlineData(12, 2030, true)]   // Future expiry
     [InlineData(1, 2020, false)]   // Past expiry
@@ -114,6 +135,9 @@ public class CardValidationServiceTests
         result.Should().Be(expected);
     }
 
+    // Given: A CVC code and card brand (3 digits for standard cards, 4 for Amex)
+    // When: The CVC is validated against the brand-specific length requirement
+    // Then: Correctly sized numeric CVCs pass and mismatched or non-numeric ones are rejected
     [Theory]
     [InlineData("123", "visa", true)]
     [InlineData("1234", "amex", true)]
@@ -130,6 +154,9 @@ public class CardValidationServiceTests
         result.Should().Be(expected);
     }
 
+    // Given: A card number without BIN-level funding type data
+    // When: The funding type is detected
+    // Then: The card defaults to credit funding type
     [Fact]
     public void DetectFundingType_ShouldDefaultToCredit()
     {
@@ -140,6 +167,9 @@ public class CardValidationServiceTests
         funding.Should().Be("credit");
     }
 
+    // Given: A valid card number formatted with spaces or dashes
+    // When: The card number is validated
+    // Then: Formatting characters are stripped and the card passes validation
     [Theory]
     [InlineData("4242424242424242")]
     [InlineData("4242 4242 4242 4242")]
@@ -153,6 +183,9 @@ public class CardValidationServiceTests
         result.Should().BeTrue();
     }
 
+    // Given: The same card number in clean and space-formatted forms
+    // When: Fingerprints are generated for both representations
+    // Then: Both produce identical fingerprints regardless of formatting
     [Fact]
     public void GenerateFingerprint_WithFormattedNumber_ShouldMatchClean()
     {

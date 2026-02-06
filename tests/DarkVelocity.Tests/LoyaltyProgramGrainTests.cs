@@ -41,6 +41,9 @@ public class LoyaltyProgramGrainTests
         return grain;
     }
 
+    // Given: an organization without a loyalty program
+    // When: a new loyalty program named "VIP Rewards" is created
+    // Then: the program is created in Draft status with the specified name and description
     [Fact]
     public async Task CreateAsync_ShouldCreateProgram()
     {
@@ -64,6 +67,9 @@ public class LoyaltyProgramGrainTests
         state.Description.Should().Be("Exclusive rewards for our best customers");
     }
 
+    // Given: an existing loyalty program
+    // When: the program name and description are updated
+    // Then: the program reflects the new name and description
     [Fact]
     public async Task UpdateAsync_ShouldUpdateProgram()
     {
@@ -81,6 +87,9 @@ public class LoyaltyProgramGrainTests
         state.Description.Should().Be("Updated description");
     }
 
+    // Given: an existing loyalty program
+    // When: a per-dollar earning rule is added with 10 points per dollar and $5 minimum spend
+    // Then: the earning rule is stored with the specified configuration
     [Fact]
     public async Task AddEarningRuleAsync_ShouldAddRule()
     {
@@ -106,6 +115,9 @@ public class LoyaltyProgramGrainTests
         rules[0].MinimumSpend.Should().Be(5m);
     }
 
+    // Given: an existing loyalty program
+    // When: a "Double Points Tuesday" bonus day rule is added with a 2x multiplier
+    // Then: the earning rule is stored with bonus day type and applicable day of Tuesday
     [Fact]
     public async Task AddEarningRuleAsync_BonusDay_ShouldAddBonusRule()
     {
@@ -129,6 +141,9 @@ public class LoyaltyProgramGrainTests
         rule.ApplicableDays.Should().Contain(DayOfWeek.Tuesday);
     }
 
+    // Given: a loyalty program with an active earning rule
+    // When: the earning rule is deactivated
+    // Then: the rule no longer appears in the list of active earning rules
     [Fact]
     public async Task UpdateEarningRuleAsync_ShouldDeactivateRule()
     {
@@ -146,6 +161,9 @@ public class LoyaltyProgramGrainTests
         rules.Should().BeEmpty(); // Active rules only
     }
 
+    // Given: an existing loyalty program
+    // When: a Gold tier is added with 1000 points required, benefits, 2x multiplier, and maintenance requirements
+    // Then: the tier is stored with all specified benefits and configuration
     [Fact]
     public async Task AddTierAsync_ShouldAddTier()
     {
@@ -182,6 +200,9 @@ public class LoyaltyProgramGrainTests
         tiers[0].Benefits.Should().HaveCount(2);
     }
 
+    // Given: a loyalty program with an existing tier at level 1
+    // When: another tier is added at the same level 1
+    // Then: the operation is rejected because a tier at that level already exists
     [Fact]
     public async Task AddTierAsync_DuplicateLevel_ShouldThrow()
     {
@@ -199,6 +220,9 @@ public class LoyaltyProgramGrainTests
             .WithMessage("*level 1 already exists*");
     }
 
+    // Given: a loyalty program with Bronze (level 1), Silver (level 2), and Gold (level 3) tiers
+    // When: the next tier after Bronze (level 1) is requested
+    // Then: the Silver tier (level 2) is returned
     [Fact]
     public async Task GetNextTierAsync_ShouldReturnNextTier()
     {
@@ -216,6 +240,9 @@ public class LoyaltyProgramGrainTests
         nextTier.Level.Should().Be(2);
     }
 
+    // Given: a loyalty program with Bronze, Silver, and Gold tiers (Gold is the highest at level 3)
+    // When: the next tier after Gold (level 3) is requested
+    // Then: null is returned because there is no higher tier
     [Fact]
     public async Task GetNextTierAsync_AtMaxTier_ShouldReturnNull()
     {
@@ -231,6 +258,9 @@ public class LoyaltyProgramGrainTests
         nextTier.Should().BeNull();
     }
 
+    // Given: an existing loyalty program
+    // When: a "Free Coffee" reward is added requiring 100 points with tier and usage limits
+    // Then: the reward is stored with the specified points cost, type, and redemption limits
     [Fact]
     public async Task AddRewardAsync_ShouldAddReward()
     {
@@ -261,6 +291,9 @@ public class LoyaltyProgramGrainTests
         state.Rewards[0].Type.Should().Be(RewardType.FreeItem);
     }
 
+    // Given: a loyalty program with rewards at different minimum tier levels (all, Silver+, Gold+)
+    // When: available rewards are queried for Bronze, Silver, and Gold tier levels
+    // Then: each tier level sees only the rewards at or below their minimum tier requirement
     [Fact]
     public async Task GetAvailableRewardsAsync_ShouldFilterByTier()
     {
@@ -286,6 +319,9 @@ public class LoyaltyProgramGrainTests
         goldRewards.Should().HaveCount(3);
     }
 
+    // Given: a fully configured loyalty program with earning rules and tiers in Draft status
+    // When: the program is activated
+    // Then: the program status changes to Active with an activation timestamp
     [Fact]
     public async Task ActivateAsync_ShouldActivateProgram()
     {
@@ -303,6 +339,9 @@ public class LoyaltyProgramGrainTests
         state.ActivatedAt.Should().NotBeNull();
     }
 
+    // Given: a loyalty program with tiers but no earning rules
+    // When: activation is attempted
+    // Then: the operation is rejected because at least one earning rule is required
     [Fact]
     public async Task ActivateAsync_WithoutRules_ShouldThrow()
     {
@@ -320,6 +359,9 @@ public class LoyaltyProgramGrainTests
             .WithMessage("*at least one earning rule*");
     }
 
+    // Given: a loyalty program with earning rules but no tiers
+    // When: activation is attempted
+    // Then: the operation is rejected because at least one tier is required
     [Fact]
     public async Task ActivateAsync_WithoutTiers_ShouldThrow()
     {
@@ -337,6 +379,9 @@ public class LoyaltyProgramGrainTests
             .WithMessage("*at least one tier*");
     }
 
+    // Given: an active loyalty program
+    // When: the program is paused
+    // Then: the program status changes to Paused
     [Fact]
     public async Task PauseAsync_ShouldPauseProgram()
     {
@@ -354,6 +399,9 @@ public class LoyaltyProgramGrainTests
         state.Status.Should().Be(ProgramStatus.Paused);
     }
 
+    // Given: an existing loyalty program
+    // When: points expiry is configured with 18-month expiration and 45-day warning
+    // Then: the expiry settings are stored and enabled
     [Fact]
     public async Task ConfigurePointsExpiryAsync_ShouldSetExpiry()
     {
@@ -373,6 +421,9 @@ public class LoyaltyProgramGrainTests
         state.PointsExpiry.WarningDays.Should().Be(45);
     }
 
+    // Given: an existing loyalty program
+    // When: a referral program is configured with 100 referrer points, 50 referee points, and $25 qualifying spend
+    // Then: the referral program settings are stored and enabled
     [Fact]
     public async Task ConfigureReferralProgramAsync_ShouldSetReferral()
     {
@@ -393,6 +444,9 @@ public class LoyaltyProgramGrainTests
         state.ReferralProgram.MinimumQualifyingSpend.Should().Be(25m);
     }
 
+    // Given: an active loyalty program with 10 points per dollar and a Bronze tier (1x multiplier)
+    // When: points are calculated for a $50 purchase at Bronze tier
+    // Then: 500 base points are earned with no tier multiplier bonus applied
     [Fact]
     public async Task CalculatePointsAsync_ShouldCalculateBasePoints()
     {
@@ -411,6 +465,9 @@ public class LoyaltyProgramGrainTests
         result.TotalPoints.Should().Be(500);
     }
 
+    // Given: an active loyalty program with 10 points per dollar and a Gold tier (2x multiplier)
+    // When: points are calculated for a $50 purchase at Gold tier
+    // Then: 1000 total points are earned (500 base * 2.0 Gold multiplier)
     [Fact]
     public async Task CalculatePointsAsync_WithTierMultiplier_ShouldApplyMultiplier()
     {
@@ -429,6 +486,9 @@ public class LoyaltyProgramGrainTests
         result.TotalPoints.Should().Be(1000);
     }
 
+    // Given: an active loyalty program with a "Double Points Tuesday" bonus rule
+    // When: points are calculated for a $50 purchase on a Tuesday at Silver tier
+    // Then: the bonus day multiplier stacks with the tier multiplier for 1500 total points
     [Fact]
     public async Task CalculatePointsAsync_WithBonusDay_ShouldApplyBonus()
     {
@@ -459,6 +519,9 @@ public class LoyaltyProgramGrainTests
         result.TotalPoints.Should().Be(1500);
     }
 
+    // Given: an existing loyalty program with no members
+    // When: two customer enrollments are recorded
+    // Then: both total enrollments and active members count reflect two members
     [Fact]
     public async Task IncrementEnrollmentsAsync_ShouldIncrementCounters()
     {
@@ -477,6 +540,9 @@ public class LoyaltyProgramGrainTests
         state.ActiveMembers.Should().Be(2);
     }
 
+    // Given: an existing loyalty program
+    // When: points are issued in two batches (500 and 300)
+    // Then: the program tracks 800 total points issued
     [Fact]
     public async Task RecordPointsIssuedAsync_ShouldTrackPoints()
     {
@@ -494,6 +560,9 @@ public class LoyaltyProgramGrainTests
         state.TotalPointsIssued.Should().Be(800);
     }
 
+    // Given: an existing loyalty program
+    // When: points are redeemed in two batches (200 and 100)
+    // Then: the program tracks 300 total points redeemed
     [Fact]
     public async Task RecordPointsRedeemedAsync_ShouldTrackRedemptions()
     {
@@ -511,6 +580,9 @@ public class LoyaltyProgramGrainTests
         state.TotalPointsRedeemed.Should().Be(300);
     }
 
+    // Given: an existing loyalty program
+    // When: terms and conditions text is set
+    // Then: the terms and conditions are stored on the program
     [Fact]
     public async Task SetTermsAndConditionsAsync_ShouldSetTerms()
     {
@@ -529,6 +601,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Program Lifecycle Tests ====================
 
+    // Given: an active loyalty program
+    // When: the program is deactivated
+    // Then: the program status changes to Archived
     [Fact]
     public async Task DeactivateAsync_ShouldArchiveProgram()
     {
@@ -546,6 +621,9 @@ public class LoyaltyProgramGrainTests
         state.Status.Should().Be(ProgramStatus.Archived);
     }
 
+    // Given: a loyalty program that has been archived
+    // When: reactivation is attempted
+    // Then: the operation is rejected because archived programs cannot be reactivated
     [Fact]
     public async Task ActivateAsync_Archived_ShouldThrow()
     {
@@ -564,6 +642,9 @@ public class LoyaltyProgramGrainTests
             .WithMessage("*archived*");
     }
 
+    // Given: a loyalty program in Draft status (not yet activated)
+    // When: pausing is attempted
+    // Then: the operation is rejected because only active programs can be paused
     [Fact]
     public async Task PauseAsync_NotActive_ShouldThrow()
     {
@@ -580,6 +661,9 @@ public class LoyaltyProgramGrainTests
             .WithMessage("*Cannot pause*");
     }
 
+    // Given: a loyalty program transitioning through Draft, Active, and Paused states
+    // When: the active status is checked at each state
+    // Then: only the Active state returns true; Draft and Paused return false
     [Fact]
     public async Task IsActiveAsync_ShouldReturnCorrectStatus()
     {
@@ -609,6 +693,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Earning Rule Tests ====================
 
+    // Given: a loyalty program with two earning rules
+    // When: the first earning rule is removed
+    // Then: only the second earning rule remains
     [Fact]
     public async Task RemoveEarningRuleAsync_ShouldRemove()
     {
@@ -633,6 +720,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Points Calculation Tests ====================
 
+    // Given: an active loyalty program with a $50 minimum spend earning rule
+    // When: points are calculated for a $25 purchase (below the minimum)
+    // Then: zero points are earned
     [Fact]
     public async Task CalculatePointsAsync_BelowMinimumSpend_ShouldReturn0()
     {
@@ -659,6 +749,9 @@ public class LoyaltyProgramGrainTests
         result.TotalPoints.Should().Be(0);
     }
 
+    // Given: a loyalty program whose only earning rule has been deactivated
+    // When: points are calculated for a $100 purchase
+    // Then: zero points are earned and no rule is applied
     [Fact]
     public async Task CalculatePointsAsync_NoActiveRules_ShouldReturn0()
     {
@@ -685,6 +778,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Rewards Tests ====================
 
+    // Given: a loyalty program with three rewards, one of which has been deactivated
+    // When: available rewards are queried
+    // Then: only the two active rewards are returned
     [Fact]
     public async Task GetAvailableRewardsAsync_ShouldExcludeInactive()
     {
@@ -716,6 +812,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Tier Management Tests ====================
 
+    // Given: a loyalty program with a Silver tier at 500 points with one benefit
+    // When: the tier is updated with a new points requirement (750) and new benefits
+    // Then: the tier reflects the updated points threshold and replacement benefits
     [Fact]
     public async Task UpdateTierAsync_ShouldUpdateTier()
     {
@@ -747,6 +846,9 @@ public class LoyaltyProgramGrainTests
         updatedTier.Benefits.Should().Contain(b => b.Name == "New Benefit 1");
     }
 
+    // Given: a loyalty program with Bronze, Silver, and Gold tiers
+    // When: the Silver tier is removed
+    // Then: only Bronze and Gold tiers remain
     [Fact]
     public async Task RemoveTierAsync_ShouldRemoveTier()
     {
@@ -772,6 +874,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Reward Validation Tests ====================
 
+    // Given: an existing loyalty program
+    // When: a free welcome gift reward is added with zero points cost
+    // Then: the reward is stored successfully as a complimentary tier benefit
     [Fact]
     public async Task AddRewardAsync_ZeroPointsCost_ShouldSucceed()
     {
@@ -798,6 +903,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Remove Reward Tests ====================
 
+    // Given: a loyalty program with two rewards
+    // When: the first reward is removed
+    // Then: only the second reward remains
     [Fact]
     public async Task RemoveRewardAsync_ShouldRemoveReward()
     {
@@ -822,6 +930,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Decrement Active Members Tests ====================
 
+    // Given: a loyalty program with three active members
+    // When: one active member is decremented (e.g., member leaves the program)
+    // Then: active members drops to two while total enrollments remains unchanged
     [Fact]
     public async Task DecrementActiveMembersAsync_ShouldDecrement()
     {
@@ -847,6 +958,9 @@ public class LoyaltyProgramGrainTests
         stateAfter.TotalEnrollments.Should().Be(3); // Total unchanged
     }
 
+    // Given: a loyalty program with zero active members
+    // When: a member decrement is attempted
+    // Then: the active member count stays at zero rather than going negative
     [Fact]
     public async Task DecrementActiveMembersAsync_AtZero_ShouldNotGoNegative()
     {
@@ -865,6 +979,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Update Reward Tests ====================
 
+    // Given: a loyalty program with a reward costing 100 points
+    // When: the reward's points cost is updated to 150
+    // Then: the reward reflects the new points cost
     [Fact]
     public async Task UpdateRewardAsync_ShouldUpdatePointsCost()
     {
@@ -891,6 +1008,9 @@ public class LoyaltyProgramGrainTests
 
     // ==================== Resume Program Tests ====================
 
+    // Given: a loyalty program that was activated and then paused
+    // When: the program is activated again
+    // Then: the program status returns to Active
     [Fact]
     public async Task ActivateAsync_FromPaused_ShouldReactivate()
     {

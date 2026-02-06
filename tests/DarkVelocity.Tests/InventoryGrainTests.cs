@@ -23,6 +23,9 @@ public class InventoryGrainTests
         return grain;
     }
 
+    // Given: a new ingredient (Ground Beef) being tracked for the first time
+    // When: the inventory record is initialized with reorder point of 10 lbs and par level of 50 lbs
+    // Then: the ingredient is registered with its SKU, unit, and stock thresholds
     [Fact]
     public async Task InitializeAsync_ShouldInitializeInventory()
     {
@@ -46,6 +49,9 @@ public class InventoryGrainTests
         state.ParLevel.Should().Be(50);
     }
 
+    // Given: an empty Ground Beef inventory
+    // When: a batch of 100 lbs at $5.00/lb is received
+    // Then: stock on hand is 100 lbs and cost is $5.00/lb with one active batch
     [Fact]
     public async Task ReceiveBatchAsync_ShouldAddBatchAndUpdateQuantity()
     {
@@ -67,6 +73,9 @@ public class InventoryGrainTests
         batches[0].BatchNumber.Should().Be("BATCH001");
     }
 
+    // Given: an empty Ground Beef inventory
+    // When: 100 lbs at $5.00/lb and 100 lbs at $7.00/lb are received
+    // Then: stock on hand is 200 lbs with a weighted average cost of $6.00/lb
     [Fact]
     public async Task ReceiveBatchAsync_MultipleBatches_ShouldCalculateWeightedAverageCost()
     {
@@ -86,6 +95,9 @@ public class InventoryGrainTests
         level.WeightedAverageCost.Should().Be(6.00m); // (500 + 700) / 200 = 6
     }
 
+    // Given: 50 lbs of Ground Beef at $5.00/lb and 50 lbs at $7.00/lb received in order
+    // When: 60 lbs are consumed for production
+    // Then: FIFO depletes all 50 lbs from the first batch and 10 lbs from the second, costing $320
     [Fact]
     public async Task ConsumeAsync_ShouldUseFifo()
     {
@@ -114,6 +126,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(40);
     }
 
+    // Given: 50 lbs of Ground Beef in stock
+    // When: 100 lbs are consumed for production
+    // Then: stock goes to -50 lbs, flagging a discrepancy for reconciliation
     [Fact]
     public async Task ConsumeAsync_BeyondAvailable_ShouldAllowNegativeStock()
     {
@@ -133,6 +148,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(-50);
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: 10 lbs are recorded as waste due to spoilage
+    // Then: stock on hand decreases to 90 lbs
     [Fact]
     public async Task RecordWasteAsync_ShouldDeductStock()
     {
@@ -152,6 +170,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(90);
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: a physical count adjustment sets the quantity to 120 lbs
+    // Then: stock on hand increases to 120 lbs to reflect the extra stock found
     [Fact]
     public async Task AdjustQuantityAsync_Increase_ShouldAddStock()
     {
@@ -171,6 +192,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(120);
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: a physical count adjustment sets the quantity to 80 lbs
+    // Then: stock on hand decreases to 80 lbs to reflect the shortage
     [Fact]
     public async Task AdjustQuantityAsync_Decrease_ShouldRemoveStock()
     {
@@ -190,6 +214,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(80);
     }
 
+    // Given: Ground Beef inventory with reorder point of 10 lbs and par level of 50 lbs
+    // When: stock moves from 0 to 5 to 30 to 60 lbs through successive deliveries
+    // Then: stock level transitions through OutOfStock, Low, Normal, and AbovePar
     [Fact]
     public async Task GetStockLevelAsync_ShouldReturnCorrectLevel()
     {
@@ -219,6 +246,9 @@ public class InventoryGrainTests
         level.Should().Be(StockLevel.AbovePar);
     }
 
+    // Given: 50 lbs of Ground Beef in stock
+    // When: checking stock sufficiency for 30, 50, and 51 lbs
+    // Then: sufficient for 30 and 50 lbs, insufficient for 51 lbs
     [Fact]
     public async Task HasSufficientStockAsync_ShouldReturnCorrectValue()
     {
@@ -236,6 +266,9 @@ public class InventoryGrainTests
         (await grain.HasSufficientStockAsync(51)).Should().BeFalse();
     }
 
+    // Given: 50 lbs in an expired batch and 50 lbs in a valid batch
+    // When: expired batches are written off
+    // Then: only the 50 lbs from the valid batch remain in stock
     [Fact]
     public async Task WriteOffExpiredBatchesAsync_ShouldRemoveExpiredStock()
     {
@@ -260,6 +293,9 @@ public class InventoryGrainTests
         batches[0].BatchNumber.Should().Be("BATCH002");
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: 30 lbs are transferred out to another site
+    // Then: stock on hand decreases to 70 lbs
     [Fact]
     public async Task TransferOutAsync_ShouldDeductStock()
     {
@@ -279,6 +315,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(70);
     }
 
+    // Given: 20 lbs of Ground Beef in stock with a reorder point of 10 lbs
+    // When: 15 lbs are consumed for production
+    // Then: stock drops to 5 lbs and stock level is flagged as Low
     [Fact]
     public async Task ConsumeAsync_BelowReorderPoint_ShouldTriggerAlert()
     {
@@ -300,6 +339,9 @@ public class InventoryGrainTests
         state.QuantityOnHand.Should().Be(5);
     }
 
+    // Given: an empty Ground Beef inventory
+    // When: a batch of 50 lbs at $4.00/lb is received
+    // Then: ledger reflects exactly 50 lbs available and correctly reports insufficiency above that
     [Fact]
     public async Task ReceiveBatchAsync_ShouldIntegrateWithLedger()
     {
@@ -321,6 +363,9 @@ public class InventoryGrainTests
         (await grain.HasSufficientStockAsync(51)).Should().BeFalse();
     }
 
+    // Given: 50 lbs of Ground Beef in stock at $10.00/lb
+    // When: 80 lbs are consumed exceeding available stock
+    // Then: the 30 excess lbs are costed at the weighted average of $10.00/lb, totaling $800
     [Fact]
     public async Task ConsumeAsync_BeyondAvailable_ShouldEstimateCostFromWAC()
     {
@@ -345,6 +390,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(-30); // Negative stock
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: a physical count of 85 lbs is recorded
+    // Then: stock adjusts to 85 lbs and the count date is recorded
     [Fact]
     public async Task RecordPhysicalCountAsync_ShouldAdjustAndRecordCountDate()
     {
@@ -369,6 +417,9 @@ public class InventoryGrainTests
         state.LastCountedAt.Should().BeOnOrAfter(beforeCount);
     }
 
+    // Given: Ground Beef inventory with reorder point of 10 and par level of 50
+    // When: settings are updated to reorder point of 20 and par level of 100
+    // Then: both thresholds are updated to the new values
     [Fact]
     public async Task UpdateSettingsAsync_ShouldUpdateBothReorderAndPar()
     {
@@ -387,6 +438,9 @@ public class InventoryGrainTests
         state.ParLevel.Should().Be(100);
     }
 
+    // Given: an active Ground Beef inventory
+    // When: more than 100 stock movements are recorded through receipts and consumptions
+    // Then: the movement history is pruned to keep only the most recent 100 entries
     [Fact]
     public async Task RecordMovement_Over100_ShouldPruneOldest()
     {
@@ -412,6 +466,9 @@ public class InventoryGrainTests
         state.RecentMovements.Count.Should().BeLessThanOrEqualTo(100);
     }
 
+    // Given: Ground Beef stock fully depleted after receiving 50 lbs at $5.00/lb and consuming all
+    // When: a new batch of 30 lbs at $8.00/lb is received
+    // Then: weighted average cost resets to the new batch cost of $8.00/lb
     [Fact]
     public async Task WAC_StockGoesToZero_ThenReceive_ShouldResetToNewCost()
     {
@@ -438,6 +495,9 @@ public class InventoryGrainTests
         levelAfter.WeightedAverageCost.Should().Be(8.00m);
     }
 
+    // Given: Ground Beef stock at -10 lbs after overselling
+    // When: a new batch of 50 lbs at $6.00/lb is received
+    // Then: stock becomes 40 lbs and weighted average cost is $6.00/lb from the new batch
     [Fact]
     public async Task WAC_NegativeStock_ThenReceive_ShouldCalculateCorrectly()
     {
@@ -465,6 +525,9 @@ public class InventoryGrainTests
         levelAfter.WeightedAverageCost.Should().Be(6.00m);
     }
 
+    // Given: 25 lbs in an expired batch and 25 lbs in a valid batch
+    // When: expired batches are written off
+    // Then: only the 25 lbs from the valid batch remain in stock
     [Fact]
     public async Task WriteOffExpiredBatches_ExpiresExactlyNow_ShouldWriteOff()
     {
@@ -493,6 +556,9 @@ public class InventoryGrainTests
         batches[0].BatchNumber.Should().Be("VALID");
     }
 
+    // Given: an older expired batch of 30 lbs at $4.00/lb and a newer valid batch of 30 lbs at $6.00/lb
+    // When: 20 lbs are consumed using FIFO
+    // Then: consumption draws from the oldest batch first regardless of expiry status
     [Fact]
     public async Task ConsumeFifo_ExpiredBatchPresent_ShouldConsumeFromNonExpired()
     {
@@ -517,6 +583,9 @@ public class InventoryGrainTests
         result.BatchBreakdown[0].UnitCost.Should().Be(4.00m);
     }
 
+    // Given: 5 lbs of Ground Beef in stock, below the reorder point of 10 lbs
+    // When: a delivery of 20 lbs arrives
+    // Then: stock level transitions from Low to Normal
     [Fact]
     public async Task ReceiveBatch_FromLow_ShouldTransitionToNormal()
     {
@@ -539,6 +608,9 @@ public class InventoryGrainTests
         levelAfter.Should().Be(StockLevel.Normal);
     }
 
+    // Given: 30 lbs of Ground Beef in stock, within normal range
+    // When: a delivery of 30 lbs arrives bringing total to 60 lbs
+    // Then: stock level transitions to AbovePar, exceeding the par level of 50 lbs
     [Fact]
     public async Task ReceiveBatch_AbovePar_ShouldTransitionToAbovePar()
     {
@@ -564,6 +636,9 @@ public class InventoryGrainTests
         level.QuantityOnHand.Should().Be(60); // Above par level of 50
     }
 
+    // Given: 100 lbs of Ground Beef in stock
+    // When: 25 lbs are transferred out to another site
+    // Then: the movement history records a -25 transfer with the transfer ID and user who performed it
     [Fact]
     public async Task TransferOut_ShouldRecordMovementWithTransferId()
     {
@@ -591,6 +666,9 @@ public class InventoryGrainTests
         transferMovement.PerformedBy.Should().Be(transferredBy);
     }
 
+    // Given: an empty inventory at the destination site
+    // When: 40 lbs at $5.50/lb are received via inter-site transfer
+    // Then: stock shows 40 lbs, a transfer batch is created, and the source site is recorded
     [Fact]
     public async Task ReceiveTransfer_ShouldRecordSourceSite()
     {

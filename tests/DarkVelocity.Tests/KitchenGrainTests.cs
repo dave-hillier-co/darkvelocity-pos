@@ -31,6 +31,9 @@ public class KitchenTicketGrainTests
         return grain;
     }
 
+    // Given: No existing kitchen ticket for the given order
+    // When: A kitchen ticket is created for a VIP dine-in order at table T10 with allergy notes
+    // Then: The ticket is created with correct order details, VIP priority, and a KOT number
     [Fact]
     public async Task CreateAsync_ShouldCreateTicket()
     {
@@ -69,6 +72,9 @@ public class KitchenTicketGrainTests
         state.Notes.Should().Be("Allergy: nuts");
     }
 
+    // Given: An existing kitchen ticket for a dine-in order
+    // When: A burger with modifiers and special instructions is added to the grill station
+    // Then: The item appears on the ticket with correct details and station assignment
     [Fact]
     public async Task AddItemAsync_ShouldAddItem()
     {
@@ -103,6 +109,9 @@ public class KitchenTicketGrainTests
         state.AssignedStationIds.Should().Contain(stationId);
     }
 
+    // Given: A kitchen ticket with a pending burger item
+    // When: The cook starts preparing the burger
+    // Then: The item status changes to preparing and the ticket becomes in-progress
     [Fact]
     public async Task StartItemAsync_ShouldStartItem()
     {
@@ -129,6 +138,9 @@ public class KitchenTicketGrainTests
         state.Status.Should().Be(TicketStatus.InProgress);
     }
 
+    // Given: A kitchen ticket with a burger being prepared
+    // When: The cook completes the burger preparation
+    // Then: The item status changes to ready and the single-item ticket becomes ready
     [Fact]
     public async Task CompleteItemAsync_ShouldCompleteItem()
     {
@@ -155,6 +167,9 @@ public class KitchenTicketGrainTests
         state.Status.Should().Be(TicketStatus.Ready); // Only item completed
     }
 
+    // Given: A kitchen ticket with a burger and fries both being prepared
+    // When: Both items are completed
+    // Then: The ticket status changes to ready with completion time recorded
     [Fact]
     public async Task CompleteAllItems_ShouldMakeTicketReady()
     {
@@ -186,6 +201,9 @@ public class KitchenTicketGrainTests
         state.PrepTime.Should().NotBeNull();
     }
 
+    // Given: A kitchen ticket with a pending burger item
+    // When: The item is voided because the customer changed their order
+    // Then: The item status changes to voided
     [Fact]
     public async Task VoidItemAsync_ShouldVoidItem()
     {
@@ -208,6 +226,9 @@ public class KitchenTicketGrainTests
         state.Items[0].Status.Should().Be(TicketItemStatus.Voided);
     }
 
+    // Given: A kitchen ticket with all items completed and ready for service
+    // When: The expo bumps the ticket to mark it as served
+    // Then: The ticket status changes to served with bump timestamp recorded
     [Fact]
     public async Task BumpAsync_ShouldMarkServed()
     {
@@ -235,6 +256,9 @@ public class KitchenTicketGrainTests
         state.BumpedBy.Should().Be(bumpedBy);
     }
 
+    // Given: An existing kitchen ticket
+    // When: The entire ticket is voided due to order cancellation
+    // Then: The ticket status changes to voided with the void reason noted
     [Fact]
     public async Task VoidAsync_ShouldVoidTicket()
     {
@@ -254,6 +278,9 @@ public class KitchenTicketGrainTests
         state.Notes.Should().Contain("VOID: Order cancelled");
     }
 
+    // Given: An existing kitchen ticket with normal priority
+    // When: The priority is escalated to rush
+    // Then: The ticket priority updates to rush
     [Fact]
     public async Task SetPriorityAsync_ShouldUpdatePriority()
     {
@@ -272,6 +299,9 @@ public class KitchenTicketGrainTests
         state.Priority.Should().Be(TicketPriority.Rush);
     }
 
+    // Given: An existing kitchen ticket with normal priority
+    // When: The ticket is marked as rush
+    // Then: The ticket priority changes to rush
     [Fact]
     public async Task MarkRushAsync_ShouldSetRushPriority()
     {
@@ -290,6 +320,9 @@ public class KitchenTicketGrainTests
         state.Priority.Should().Be(TicketPriority.Rush);
     }
 
+    // Given: An existing kitchen ticket
+    // When: Fire-all is triggered to expedite all items
+    // Then: The ticket is marked as fire-all with AllDay priority
     [Fact]
     public async Task FireAllAsync_ShouldSetFireAll()
     {
@@ -309,6 +342,9 @@ public class KitchenTicketGrainTests
         state.Priority.Should().Be(TicketPriority.AllDay);
     }
 
+    // Given: A kitchen ticket with three items, one already completed
+    // When: Pending items are queried
+    // Then: Only the two items still awaiting preparation are returned
     [Fact]
     public async Task GetPendingItemsAsync_ShouldReturnPendingItems()
     {
@@ -335,6 +371,9 @@ public class KitchenTicketGrainTests
         pending.Select(i => i.Name).Should().Contain("Salad");
     }
 
+    // Given: A kitchen ticket with one item that has been started and completed
+    // When: Ticket timings are queried
+    // Then: Wait time, prep time, and completion timestamp are all recorded
     [Fact]
     public async Task GetTimingsAsync_ShouldReturnTimings()
     {
@@ -378,6 +417,9 @@ public class KitchenStationGrainTests
         return grain;
     }
 
+    // Given: A new kitchen station grain
+    // When: The station is opened as a grill station
+    // Then: The station is active with correct name, type, and open status
     [Fact]
     public async Task OpenAsync_ShouldOpenStation()
     {
@@ -398,6 +440,9 @@ public class KitchenStationGrainTests
         state.Status.Should().Be(StationStatus.Open);
     }
 
+    // Given: An open kitchen station
+    // When: Menu categories and specific menu items are assigned to the station
+    // Then: The station tracks both category and item assignments for routing
     [Fact]
     public async Task AssignItemsAsync_ShouldAssignItems()
     {
@@ -419,6 +464,9 @@ public class KitchenStationGrainTests
         state.AssignedMenuItemIds.Should().Contain(menuItemId);
     }
 
+    // Given: An open kitchen station
+    // When: A printer is assigned to the station
+    // Then: The station records the printer ID for ticket printing
     [Fact]
     public async Task SetPrinterAsync_ShouldSetPrinter()
     {
@@ -437,6 +485,9 @@ public class KitchenStationGrainTests
         state.PrinterId.Should().Be(printerId);
     }
 
+    // Given: An open kitchen station
+    // When: A kitchen display screen is assigned to the station
+    // Then: The station records the display ID for KDS routing
     [Fact]
     public async Task SetDisplayAsync_ShouldSetDisplay()
     {
@@ -455,6 +506,9 @@ public class KitchenStationGrainTests
         state.DisplayId.Should().Be(displayId);
     }
 
+    // Given: An open kitchen station with no active tickets
+    // When: A kitchen ticket is routed to the station
+    // Then: The station tracks the ticket in its active queue
     [Fact]
     public async Task ReceiveTicketAsync_ShouldAddTicket()
     {
@@ -473,6 +527,9 @@ public class KitchenStationGrainTests
         tickets.Should().Contain(ticketId);
     }
 
+    // Given: An open kitchen station with one active ticket
+    // When: The ticket is completed at the station
+    // Then: The ticket is removed from the station's active queue
     [Fact]
     public async Task CompleteTicketAsync_ShouldRemoveTicket()
     {
@@ -492,6 +549,9 @@ public class KitchenStationGrainTests
         tickets.Should().NotContain(ticketId);
     }
 
+    // Given: An open kitchen station
+    // When: The station is paused
+    // Then: The station status changes to paused
     [Fact]
     public async Task PauseAsync_ShouldPauseStation()
     {
@@ -509,6 +569,9 @@ public class KitchenStationGrainTests
         state.Status.Should().Be(StationStatus.Paused);
     }
 
+    // Given: A paused kitchen station
+    // When: The station is resumed
+    // Then: The station status returns to open
     [Fact]
     public async Task ResumeAsync_ShouldResumeStation()
     {
@@ -527,6 +590,9 @@ public class KitchenStationGrainTests
         state.Status.Should().Be(StationStatus.Open);
     }
 
+    // Given: An open kitchen station with one active ticket
+    // When: The station is closed at end of shift
+    // Then: The station is closed with timestamp and active tickets are cleared
     [Fact]
     public async Task CloseAsync_ShouldCloseStation()
     {
@@ -547,6 +613,9 @@ public class KitchenStationGrainTests
         state.CurrentTicketIds.Should().BeEmpty();
     }
 
+    // Given: An open kitchen station
+    // When: The station's open status is checked
+    // Then: The check confirms the station is open
     [Fact]
     public async Task IsOpenAsync_WhenOpen_ShouldReturnTrue()
     {
@@ -563,6 +632,9 @@ public class KitchenStationGrainTests
         isOpen.Should().BeTrue();
     }
 
+    // Given: A closed kitchen station
+    // When: The station's open status is checked
+    // Then: The check confirms the station is not open
     [Fact]
     public async Task IsOpenAsync_WhenClosed_ShouldReturnFalse()
     {

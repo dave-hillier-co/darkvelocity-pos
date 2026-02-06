@@ -10,6 +10,9 @@ public class FuzzyMatchingServiceTests
 {
     private readonly FuzzyMatchingService _service = new();
 
+    // Given: A raw supplier invoice line description with mixed casing and extra whitespace
+    // When: The description is normalized for matching
+    // Then: The output is lowercase, trimmed, and cleaned of non-alphanumeric characters
     [Theory]
     [InlineData("CHICKEN BREAST", "chicken breast")]
     [InlineData("  Organic  Eggs  ", "organic eggs")]
@@ -20,6 +23,9 @@ public class FuzzyMatchingServiceTests
         result.Should().Be(expected);
     }
 
+    // Given: An abbreviated receipt description using common supplier shorthand (CHKN, ORG, GRD BF)
+    // When: Abbreviations are expanded to full ingredient terms
+    // Then: The expanded text contains recognizable ingredient names for matching
     [Theory]
     [InlineData("CHKN BRST", "chicken breast")]
     [InlineData("ORG LG EGGS", "organic large eggs")]
@@ -31,6 +37,9 @@ public class FuzzyMatchingServiceTests
         result.ToLowerInvariant().Should().Contain(expected.Split(' ')[0]);
     }
 
+    // Given: A full product description "Organic Large Brown Eggs 24ct"
+    // When: The description is tokenized for fuzzy matching
+    // Then: Significant tokens (organic, large, brown, eggs, 24ct) are extracted for ingredient matching
     [Fact]
     public void Tokenize_ShouldExtractSignificantTokens()
     {
@@ -49,6 +58,9 @@ public class FuzzyMatchingServiceTests
         tokens.Should().Contain("24ct");
     }
 
+    // Given: Two ingredient descriptions with varying degrees of similarity
+    // When: String similarity is calculated between the descriptions
+    // Then: Exact matches score 1.0, near-typos score above 0.9, and dissimilar items score low
     [Theory]
     [InlineData("chicken breast", "chicken breast", 1.0)]
     [InlineData("chicken breast", "chicken breat", 0.9)] // typo
@@ -60,6 +72,9 @@ public class FuzzyMatchingServiceTests
         result.Should().BeGreaterThanOrEqualTo((decimal)minExpected);
     }
 
+    // Given: A product description with tokens mostly overlapping a known ingredient pattern
+    // When: The token overlap score is calculated
+    // Then: The score exceeds 0.8, indicating a strong ingredient match
     [Fact]
     public void CalculateTokenScore_HighOverlap_ShouldReturnHighScore()
     {
@@ -74,6 +89,9 @@ public class FuzzyMatchingServiceTests
         score.Should().BeGreaterThan(0.8m);
     }
 
+    // Given: A product description with tokens completely different from a known ingredient pattern
+    // When: The token overlap score is calculated
+    // Then: The score is below 0.3, indicating no ingredient match
     [Fact]
     public void CalculateTokenScore_NoOverlap_ShouldReturnLowScore()
     {
@@ -88,6 +106,9 @@ public class FuzzyMatchingServiceTests
         score.Should().BeLessThan(0.3m);
     }
 
+    // Given: Learned patterns for Chicken Breast and Ground Beef from previous invoice mappings
+    // When: A new invoice line "Chicken Breast Skinless Boneless" is matched against the patterns
+    // Then: Chicken Breast is returned as the top match with a high confidence score
     [Fact]
     public void FindPatternMatches_ShouldReturnBestMatches()
     {
@@ -126,6 +147,9 @@ public class FuzzyMatchingServiceTests
         matches[0].Score.Should().BeGreaterThan(0.7m);
     }
 
+    // Given: A catalog of ingredients including chicken, beef, and salmon
+    // When: An abbreviated receipt line "CHKN BRST BNLS" is matched against the catalog
+    // Then: Chicken items are suggested as top matches after abbreviation expansion
     [Fact]
     public void FindIngredientMatches_ShouldReturnSuggestions()
     {
@@ -151,6 +175,9 @@ public class FuzzyMatchingServiceTests
         chickenSuggestions.Should().NotBeEmpty();
     }
 
+    // Given: An ingredient "Extra Virgin Olive Oil" with the alias "EVOO"
+    // When: A receipt line containing "EVOO 1 Liter" is matched against the catalog
+    // Then: The ingredient is matched via its alias with high confidence
     [Fact]
     public void FindIngredientMatches_WithAliases_ShouldMatchOnAlias()
     {
@@ -176,6 +203,9 @@ public class FuzzyMatchingServiceTests
         suggestions[0].IngredientName.Should().Be("Extra Virgin Olive Oil");
     }
 
+    // Given: An abbreviated supplier receipt line (e.g., "KS ORG LG EGGS 24CT")
+    // When: The line is expanded and tokenized for ingredient matching
+    // Then: The core ingredient token (eggs, chicken, beef) is present after expansion
     [Theory]
     [InlineData("KS ORG LG EGGS 24CT", "eggs")]
     [InlineData("CHKN BRST BNLS SKNLS", "chicken")]

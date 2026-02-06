@@ -22,6 +22,9 @@ public class ExpiryMonitorGrainTests
         return grain;
     }
 
+    // Given: a new expiry monitor grain for a site
+    // When: the monitor is initialized
+    // Then: default expiry thresholds are set with 30-day warning and 7-day critical periods
     [Fact]
     public async Task InitializeAsync_ShouldSetupMonitor()
     {
@@ -40,6 +43,9 @@ public class ExpiryMonitorGrainTests
         settings.CriticalDays.Should().Be(7);
     }
 
+    // Given: a monitored dairy ingredient with a batch expiring in 5 days
+    // When: an expiry scan is performed
+    // Then: the batch is flagged as critical with the correct days-until-expiry count
     [Fact]
     public async Task ScanForExpiringItemsAsync_ShouldDetectExpiringBatches()
     {
@@ -67,6 +73,9 @@ public class ExpiryMonitorGrainTests
         report.CriticalItems[0].DaysUntilExpiry.Should().BeLessThanOrEqualTo(7);
     }
 
+    // Given: a monitored dairy ingredient with a batch that expired yesterday
+    // When: an expiry scan is performed
+    // Then: the batch is flagged as expired with the total spoilage value calculated
     [Fact]
     public async Task ScanForExpiringItemsAsync_ShouldDetectExpiredBatches()
     {
@@ -93,6 +102,9 @@ public class ExpiryMonitorGrainTests
         report.TotalExpiredValue.Should().Be(75); // 30 * 2.50
     }
 
+    // Given: a monitored ingredient with one expired batch and one valid batch
+    // When: expired batches are written off by a user
+    // Then: only the expired batch is removed and the remaining inventory reflects only the valid batch
     [Fact]
     public async Task WriteOffExpiredBatchesAsync_ShouldRemoveExpiredStock()
     {
@@ -124,6 +136,9 @@ public class ExpiryMonitorGrainTests
         level.QuantityOnHand.Should().Be(30); // Only valid batch remains
     }
 
+    // Given: a monitored ingredient with batches at critical (5d), urgent (10d), and warning (20d) expiry thresholds
+    // When: the value at risk is categorized by urgency
+    // Then: each urgency level shows the correct inventory value at risk
     [Fact]
     public async Task GetValueAtRiskByUrgencyAsync_ShouldCategorizeCorrectly()
     {

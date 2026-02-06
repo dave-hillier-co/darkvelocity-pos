@@ -25,6 +25,9 @@ public class PaymentGiftCardDecouplingTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: an activated gift card with $100 balance and a dine-in order
+    // When: a $50 gift card payment is completed against the order
+    // Then: the gift card balance is reduced to $50 via the event-driven subscriber and a redemption transaction is recorded
     [Fact]
     public async Task PaymentCompleted_WithGiftCard_RedeemFromGiftCard()
     {
@@ -101,6 +104,9 @@ public class PaymentGiftCardDecouplingTests
             t.PaymentId == paymentId);
     }
 
+    // Given: a gift card with $100 balance that was used for a $75 payment (leaving $25)
+    // When: $30 of the gift card payment is refunded
+    // Then: the gift card balance is credited back to $55 via the event-driven subscriber and a refund transaction is recorded
     [Fact]
     public async Task PaymentRefunded_WithGiftCard_CreditsBackToGiftCard()
     {
@@ -183,6 +189,9 @@ public class PaymentGiftCardDecouplingTests
             t.Amount == 30m);
     }
 
+    // Given: an activated gift card and a dine-in order with a payment stream subscription
+    // When: a $50 gift card payment is completed
+    // Then: the PaymentCompletedEvent on the stream contains the gift card ID, payment method, and payment ID
     [Fact]
     public async Task PaymentCompletedEvent_ContainsGiftCardId()
     {
@@ -268,6 +277,9 @@ public class PaymentGiftCardDecouplingTests
         }
     }
 
+    // Given: a completed $80 gift card payment with a payment stream subscription
+    // When: $25 of the gift card payment is refunded
+    // Then: the PaymentRefundedEvent on the stream contains the gift card ID, payment method, and refund amount
     [Fact]
     public async Task PaymentRefundedEvent_ContainsGiftCardId()
     {
@@ -360,6 +372,9 @@ public class PaymentGiftCardDecouplingTests
         }
     }
 
+    // Given: an activated gift card with $100 balance and a dine-in order
+    // When: a $50 cash payment is completed on the order (not a gift card payment)
+    // Then: the gift card balance remains at $100 with zero redemptions
     [Fact]
     public async Task NonGiftCardPayment_DoesNotAffectGiftCard()
     {

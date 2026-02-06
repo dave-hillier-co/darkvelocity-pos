@@ -22,6 +22,9 @@ public class ScheduledJobGrainTests
 
     #region One-Time Job Tests
 
+    // Given: a new scheduled job grain with no existing job
+    // When: a one-time job is scheduled to run in 5 minutes targeting a specific grain method
+    // Then: the job should be created with scheduled status, correct trigger type, and the specified run time
     [Fact]
     public async Task ScheduleAsync_OneTimeJob_ShouldCreateJob()
     {
@@ -51,6 +54,9 @@ public class ScheduledJobGrainTests
         job.IsEnabled.Should().BeTrue();
     }
 
+    // Given: a scheduled one-time job
+    // When: the job details are retrieved
+    // Then: the job should be returned with its configured name
     [Fact]
     public async Task GetJobAsync_ShouldReturnJob()
     {
@@ -75,6 +81,9 @@ public class ScheduledJobGrainTests
         job!.Name.Should().Be("Test Job");
     }
 
+    // Given: a scheduled job grain with no job ever created
+    // When: the job details are retrieved
+    // Then: null should be returned indicating no job exists
     [Fact]
     public async Task GetJobAsync_WhenNotExists_ShouldReturnNull()
     {
@@ -94,6 +103,9 @@ public class ScheduledJobGrainTests
 
     #region Recurring Job Tests
 
+    // Given: a new scheduled job grain
+    // When: a recurring hourly sync job is scheduled
+    // Then: the job should be created with recurring trigger type, 1-hour interval, and a future next-run time
     [Fact]
     public async Task ScheduleAsync_RecurringJob_ShouldCreateJob()
     {
@@ -121,6 +133,9 @@ public class ScheduledJobGrainTests
         job.NextRunAt.Should().BeAfter(DateTime.UtcNow);
     }
 
+    // Given: a new scheduled job grain
+    // When: a recurring job is scheduled with a delayed start time 2 hours from now
+    // Then: the next run time should match the specified start time rather than running immediately
     [Fact]
     public async Task ScheduleAsync_RecurringJob_WithStartTime_ShouldUseStartTime()
     {
@@ -149,6 +164,9 @@ public class ScheduledJobGrainTests
 
     #region Cron Job Tests
 
+    // Given: a new scheduled job grain
+    // When: a cron-based daily backup job is scheduled with expression "0 0 * * *" (midnight daily)
+    // Then: the job should be created with cron trigger type, the correct expression, and a calculated next-run time
     [Fact]
     public async Task ScheduleAsync_CronJob_ShouldCreateJob()
     {
@@ -177,6 +195,9 @@ public class ScheduledJobGrainTests
 
     #region Cancel Tests
 
+    // Given: a scheduled one-time job set to run in 1 hour
+    // When: the job is cancelled with a reason
+    // Then: the job status should change to cancelled and the job should be disabled
     [Fact]
     public async Task CancelAsync_ShouldCancelJob()
     {
@@ -203,6 +224,9 @@ public class ScheduledJobGrainTests
         job.IsEnabled.Should().BeFalse();
     }
 
+    // Given: a scheduled job grain with no job created
+    // When: cancellation is attempted
+    // Then: the system should reject the cancellation since the job does not exist
     [Fact]
     public async Task CancelAsync_WhenNotExists_ShouldThrow()
     {
@@ -222,6 +246,9 @@ public class ScheduledJobGrainTests
 
     #region Pause/Resume Tests
 
+    // Given: a recurring hourly job in scheduled status
+    // When: the job is paused
+    // Then: the job status should change to paused
     [Fact]
     public async Task PauseAsync_ShouldPauseJob()
     {
@@ -247,6 +274,9 @@ public class ScheduledJobGrainTests
         job!.Status.Should().Be(JobStatus.Paused);
     }
 
+    // Given: a recurring hourly job that has been paused
+    // When: the job is resumed
+    // Then: the job status should return to scheduled
     [Fact]
     public async Task ResumeAsync_ShouldResumeJob()
     {
@@ -274,6 +304,9 @@ public class ScheduledJobGrainTests
         job!.Status.Should().Be(JobStatus.Scheduled);
     }
 
+    // Given: a scheduled one-time job that is not in paused state
+    // When: a resume is attempted
+    // Then: the system should reject the resume since the job is not paused
     [Fact]
     public async Task ResumeAsync_WhenNotPaused_ShouldThrow()
     {
@@ -301,6 +334,9 @@ public class ScheduledJobGrainTests
 
     #region Trigger Tests
 
+    // Given: a one-time job scheduled to run in 1 hour
+    // When: the job is manually triggered for immediate execution
+    // Then: the execution should succeed with a valid execution ID and non-negative duration
     [Fact]
     public async Task TriggerAsync_ShouldExecuteImmediately()
     {
@@ -328,6 +364,9 @@ public class ScheduledJobGrainTests
         execution.DurationMs.Should().BeGreaterThanOrEqualTo(0);
     }
 
+    // Given: a one-time scheduled job
+    // When: the job is triggered and executions are retrieved
+    // Then: exactly one successful execution should be recorded with a completion timestamp
     [Fact]
     public async Task TriggerAsync_ShouldRecordExecution()
     {
@@ -358,6 +397,9 @@ public class ScheduledJobGrainTests
 
     #region Update Schedule Tests
 
+    // Given: a recurring job with a 1-hour interval
+    // When: the interval is updated to 30 minutes
+    // Then: the job schedule should reflect the new 30-minute interval
     [Fact]
     public async Task UpdateScheduleAsync_RecurringJob_ShouldUpdateInterval()
     {
@@ -384,6 +426,9 @@ public class ScheduledJobGrainTests
         job!.Interval.Should().Be(newInterval);
     }
 
+    // Given: a cron job running daily at midnight ("0 0 * * *")
+    // When: the cron expression is updated to run hourly ("0 * * * *")
+    // Then: the job should reflect the new hourly cron expression
     [Fact]
     public async Task UpdateScheduleAsync_CronJob_ShouldUpdateExpression()
     {
@@ -408,6 +453,9 @@ public class ScheduledJobGrainTests
         job!.CronExpression.Should().Be("0 * * * *");
     }
 
+    // Given: a one-time scheduled job
+    // When: an interval update is attempted (which only applies to recurring jobs)
+    // Then: the system should reject the update since intervals are not valid for one-time jobs
     [Fact]
     public async Task UpdateScheduleAsync_OneTimeJob_WithInterval_ShouldThrow()
     {
@@ -435,6 +483,9 @@ public class ScheduledJobGrainTests
 
     #region Registry Tests
 
+    // Given: an initialized job registry for an organization
+    // When: a one-time job and a recurring job are both scheduled
+    // Then: the registry should track both jobs with their correct trigger types
     [Fact]
     public async Task JobRegistry_ShouldTrackJobs()
     {
@@ -474,6 +525,9 @@ public class ScheduledJobGrainTests
         jobs.Should().Contain(j => j.Name == "Job 2" && j.TriggerType == JobTriggerType.Recurring);
     }
 
+    // Given: a job registry with one scheduled job and one paused job
+    // When: jobs are filtered by scheduled status and then by paused status
+    // Then: each filter should return only the matching job
     [Fact]
     public async Task JobRegistry_GetJobsAsync_ShouldFilterByStatus()
     {
@@ -519,6 +573,9 @@ public class ScheduledJobGrainTests
 
     #region Stream Event Tests
 
+    // Given: a stream subscription listening for scheduled job events
+    // When: a one-time job is scheduled
+    // Then: a JobScheduledEvent should be published on the stream with the correct job ID and name
     [Fact]
     public async Task ScheduleJob_ShouldPublishScheduledEvent()
     {
@@ -568,6 +625,9 @@ public class ScheduledJobGrainTests
         }
     }
 
+    // Given: a scheduled one-time job with a stream subscription listening for job lifecycle events
+    // When: the job is manually triggered
+    // Then: both JobStartedEvent and JobCompletedEvent should be published with success status and duration
     [Fact]
     public async Task TriggerJob_ShouldPublishStartedAndCompletedEvents()
     {
@@ -621,6 +681,9 @@ public class ScheduledJobGrainTests
         }
     }
 
+    // Given: a scheduled one-time job with a stream subscription listening for cancellation events
+    // When: the job is cancelled with a reason
+    // Then: a JobCancelledEvent should be published with the correct job ID and cancellation reason
     [Fact]
     public async Task CancelJob_ShouldPublishCancelledEvent()
     {

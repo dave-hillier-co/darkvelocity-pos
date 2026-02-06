@@ -22,6 +22,9 @@ public class OAuthStateGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new OAuth state with Google provider, return URL, and PKCE S256 parameters
+    // When: the OAuth state is initialized
+    // Then: all PKCE parameters, provider, return URL, nonce, and scope are persisted with a 10-minute expiry
     [Fact]
     public async Task InitializeAsync_ShouldCreateStateWithPkceParams()
     {
@@ -57,6 +60,9 @@ public class OAuthStateGrainTests
         savedState.ExpiresAt.Should().BeCloseTo(DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(5));
     }
 
+    // Given: an OAuth state that has already been initialized
+    // When: initialization is attempted again
+    // Then: an error is raised indicating the state is already initialized
     [Fact]
     public async Task InitializeAsync_WhenAlreadyInitialized_ShouldThrow()
     {
@@ -78,6 +84,9 @@ public class OAuthStateGrainTests
             .WithMessage("OAuth state already initialized");
     }
 
+    // Given: a valid, unconsumed OAuth state for Microsoft provider with PKCE parameters
+    // When: the state is validated and consumed
+    // Then: validation succeeds, all parameters are returned, and the state is marked consumed
     [Fact]
     public async Task ValidateAndConsumeAsync_ShouldValidateAndMarkConsumed()
     {
@@ -115,6 +124,9 @@ public class OAuthStateGrainTests
         savedState.Consumed.Should().BeTrue();
     }
 
+    // Given: an OAuth state that has already been consumed once
+    // When: a second consumption attempt is made
+    // Then: validation fails with a "state_already_used" error
     [Fact]
     public async Task ValidateAndConsumeAsync_WhenAlreadyConsumed_ShouldFail()
     {
@@ -136,6 +148,9 @@ public class OAuthStateGrainTests
         result.Error.Should().Be("state_already_used");
     }
 
+    // Given: an OAuth state grain that was never initialized
+    // When: validation and consumption is attempted
+    // Then: validation fails with an "invalid_state" error
     [Fact]
     public async Task ValidateAndConsumeAsync_WhenNotInitialized_ShouldFail()
     {
@@ -151,6 +166,9 @@ public class OAuthStateGrainTests
         result.Error.Should().Be("invalid_state");
     }
 
+    // Given: an OAuth state initialized for the GitHub provider
+    // When: the state is retrieved
+    // Then: the provider and return URL are returned correctly
     [Fact]
     public async Task GetStateAsync_ShouldReturnCurrentState()
     {
@@ -195,6 +213,9 @@ public class AuthorizationCodeGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new authorization code with user, organization, client, redirect URI, scope, PKCE challenge, and roles
+    // When: the authorization code is issued
+    // Then: the code is valid and ready for exchange
     [Fact]
     public async Task IssueAsync_ShouldCreateAuthorizationCode()
     {
@@ -224,6 +245,9 @@ public class AuthorizationCodeGrainTests
         isValid.Should().BeTrue();
     }
 
+    // Given: an authorization code that has already been issued
+    // When: issuance is attempted again
+    // Then: an error is raised indicating the code was already issued
     [Fact]
     public async Task IssueAsync_WhenAlreadyIssued_ShouldThrow()
     {
@@ -247,6 +271,9 @@ public class AuthorizationCodeGrainTests
             .WithMessage("Authorization code already issued");
     }
 
+    // Given: a valid authorization code issued for a POS client with user info, scope, nonce, and roles
+    // When: the code is exchanged by the correct client
+    // Then: the user's identity details including ID, organization, display name, roles, scope, and nonce are returned
     [Fact]
     public async Task ExchangeAsync_WithValidCode_ShouldReturnUserInfo()
     {
@@ -281,6 +308,9 @@ public class AuthorizationCodeGrainTests
         result.Nonce.Should().Be("nonce123");
     }
 
+    // Given: an authorization code issued with a PKCE S256 code challenge
+    // When: the code is exchanged with the correct code verifier
+    // Then: the PKCE validation passes and user info is returned
     [Fact]
     public async Task ExchangeAsync_WithPkceS256_ShouldValidateCodeVerifier()
     {
@@ -307,6 +337,9 @@ public class AuthorizationCodeGrainTests
         result.Should().NotBeNull();
     }
 
+    // Given: an authorization code issued with a PKCE S256 code challenge
+    // When: the code is exchanged with an incorrect code verifier
+    // Then: the exchange is rejected and returns null
     [Fact]
     public async Task ExchangeAsync_WithPkceS256_WhenVerifierInvalid_ShouldReturnNull()
     {
@@ -333,6 +366,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code issued with a PKCE PLAIN code challenge
+    // When: the code is exchanged with the matching plain-text verifier
+    // Then: the PKCE validation passes and user info is returned
     [Fact]
     public async Task ExchangeAsync_WithPkcePlain_ShouldValidateCodeVerifier()
     {
@@ -358,6 +394,9 @@ public class AuthorizationCodeGrainTests
         result.Should().NotBeNull();
     }
 
+    // Given: an authorization code issued with a PKCE PLAIN code challenge
+    // When: the code is exchanged with an incorrect verifier
+    // Then: the exchange is rejected and returns null
     [Fact]
     public async Task ExchangeAsync_WithPkcePlain_WhenVerifierInvalid_ShouldReturnNull()
     {
@@ -382,6 +421,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code issued with a PKCE S256 challenge
+    // When: the code is exchanged without providing a code verifier
+    // Then: the exchange is rejected because PKCE verification is required
     [Fact]
     public async Task ExchangeAsync_WithPkceRequired_WhenVerifierMissing_ShouldReturnNull()
     {
@@ -406,6 +448,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code issued for client "pos-client"
+    // When: a different client attempts to exchange the code
+    // Then: the exchange is rejected and returns null
     [Fact]
     public async Task ExchangeAsync_WithWrongClientId_ShouldReturnNull()
     {
@@ -428,6 +473,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code that has already been exchanged once
+    // When: a second exchange attempt is made
+    // Then: the exchange is rejected to prevent authorization code replay
     [Fact]
     public async Task ExchangeAsync_WhenAlreadyExchanged_ShouldReturnNull()
     {
@@ -451,6 +499,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code grain that was never issued
+    // When: an exchange is attempted
+    // Then: the exchange returns null since no code exists
     [Fact]
     public async Task ExchangeAsync_WhenNotInitialized_ShouldReturnNull()
     {
@@ -465,6 +516,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeNull();
     }
 
+    // Given: an authorization code that has been issued
+    // When: its validity is checked
+    // Then: it reports as valid
     [Fact]
     public async Task IsValidAsync_WhenIssued_ShouldReturnTrue()
     {
@@ -485,6 +539,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeTrue();
     }
 
+    // Given: an authorization code grain that was never issued
+    // When: its validity is checked
+    // Then: it reports as invalid
     [Fact]
     public async Task IsValidAsync_WhenNotInitialized_ShouldReturnFalse()
     {
@@ -499,6 +556,9 @@ public class AuthorizationCodeGrainTests
         result.Should().BeFalse();
     }
 
+    // Given: an authorization code that has already been exchanged
+    // When: its validity is checked
+    // Then: it reports as invalid since the code has been consumed
     [Fact]
     public async Task IsValidAsync_WhenExchanged_ShouldReturnFalse()
     {
@@ -545,6 +605,9 @@ public class ExternalIdentityGrainTests
         _fixture = fixture;
     }
 
+    // Given: a Google external identity with user details including email, name, and avatar
+    // When: the external identity is linked to an internal user
+    // Then: the linked user info contains all provided identity details and a link timestamp
     [Fact]
     public async Task LinkAsync_ShouldLinkExternalIdentityToUser()
     {
@@ -581,6 +644,9 @@ public class ExternalIdentityGrainTests
         info.LinkedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a Microsoft external identity already linked to a user
+    // When: a second link attempt is made for the same external identity
+    // Then: an error is raised indicating the identity is already linked
     [Fact]
     public async Task LinkAsync_WhenAlreadyLinked_ShouldThrow()
     {
@@ -606,6 +672,9 @@ public class ExternalIdentityGrainTests
             .WithMessage("External identity already linked to a user");
     }
 
+    // Given: a GitHub external identity linked to a user with an email
+    // When: the linked user info is retrieved
+    // Then: the user ID, organization, and email are returned correctly
     [Fact]
     public async Task GetLinkedUserAsync_ShouldReturnUserInfo()
     {
@@ -634,6 +703,9 @@ public class ExternalIdentityGrainTests
         info.Email.Should().Be("user@github.com");
     }
 
+    // Given: a linked Google external identity that has been accessed once
+    // When: the linked user info is retrieved a second time
+    // Then: the last-used timestamp is updated to reflect the latest access
     [Fact]
     public async Task GetLinkedUserAsync_ShouldUpdateLastUsedAt()
     {
@@ -662,6 +734,9 @@ public class ExternalIdentityGrainTests
         secondCall!.LastUsedAt.Should().BeOnOrAfter(firstLastUsedAt!.Value);
     }
 
+    // Given: an external identity grain that has never been linked
+    // When: the linked user info is retrieved
+    // Then: null is returned indicating no link exists
     [Fact]
     public async Task GetLinkedUserAsync_WhenNotLinked_ShouldReturnNull()
     {
@@ -678,6 +753,9 @@ public class ExternalIdentityGrainTests
         info.Should().BeNull();
     }
 
+    // Given: a linked Google external identity with original email, name, and picture URL
+    // When: all identity fields are updated with new values
+    // Then: the linked user info reflects the updated email, name, and picture URL
     [Fact]
     public async Task UpdateInfoAsync_ShouldUpdateIdentityInfo()
     {
@@ -709,6 +787,9 @@ public class ExternalIdentityGrainTests
         info.PictureUrl.Should().Be("https://new.com/pic.jpg");
     }
 
+    // Given: a linked external identity with original email, name, and picture URL
+    // When: only the name field is updated (email and picture are null)
+    // Then: only the name changes while email and picture retain their original values
     [Fact]
     public async Task UpdateInfoAsync_WithPartialUpdate_ShouldOnlyUpdateProvidedFields()
     {
@@ -737,6 +818,9 @@ public class ExternalIdentityGrainTests
         info.PictureUrl.Should().Be("https://original.com/pic.jpg"); // unchanged
     }
 
+    // Given: an external identity grain that has never been linked
+    // When: an info update is attempted
+    // Then: the operation completes without error and the identity remains unlinked
     [Fact]
     public async Task UpdateInfoAsync_WhenNotLinked_ShouldDoNothing()
     {
@@ -754,6 +838,9 @@ public class ExternalIdentityGrainTests
         info.Should().BeNull();
     }
 
+    // Given: a linked Google external identity
+    // When: the identity link is removed
+    // Then: the linked user info returns null indicating the link has been cleared
     [Fact]
     public async Task UnlinkAsync_ShouldClearLink()
     {
@@ -777,6 +864,9 @@ public class ExternalIdentityGrainTests
         info.Should().BeNull();
     }
 
+    // Given: an external identity grain that has never been linked
+    // When: an unlink is attempted
+    // Then: the operation completes without error
     [Fact]
     public async Task UnlinkAsync_WhenNotLinked_ShouldNotThrow()
     {
@@ -809,6 +899,9 @@ public class OAuthLookupGrainTests
         _fixture = fixture;
     }
 
+    // Given: an organization's OAuth lookup with no registered external IDs
+    // When: a Google external ID is registered for a user
+    // Then: looking up that external ID returns the correct user
     [Fact]
     public async Task RegisterExternalIdAsync_ShouldCreateMapping()
     {
@@ -825,6 +918,9 @@ public class OAuthLookupGrainTests
         foundUserId.Should().Be(userId);
     }
 
+    // Given: a Google external ID already registered to a user
+    // When: the same user re-registers the same external ID
+    // Then: the operation is idempotent and succeeds without error
     [Fact]
     public async Task RegisterExternalIdAsync_WithSameUserAgain_ShouldNotThrow()
     {
@@ -842,6 +938,9 @@ public class OAuthLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: a Google external ID already linked to one user
+    // When: a different user tries to register the same external ID
+    // Then: an error is raised indicating the identity is already linked to another user
     [Fact]
     public async Task RegisterExternalIdAsync_WithDifferentUser_ShouldThrow()
     {
@@ -861,6 +960,9 @@ public class OAuthLookupGrainTests
             .WithMessage("External identity google:ext789 is already linked to a different user");
     }
 
+    // Given: a Microsoft external ID registered to a user in an organization
+    // When: the external ID is looked up by provider and ID
+    // Then: the correct user ID is returned
     [Fact]
     public async Task FindByExternalIdAsync_ShouldReturnUserId()
     {
@@ -878,6 +980,9 @@ public class OAuthLookupGrainTests
         foundUserId.Should().Be(userId);
     }
 
+    // Given: an organization's OAuth lookup with no matching external IDs
+    // When: an unknown provider and external ID are looked up
+    // Then: null is returned indicating no match exists
     [Fact]
     public async Task FindByExternalIdAsync_WhenUnknown_ShouldReturnNull()
     {
@@ -892,6 +997,9 @@ public class OAuthLookupGrainTests
         foundUserId.Should().BeNull();
     }
 
+    // Given: a Google external ID registered with mixed-case provider name "Google"
+    // When: the lookup is performed with lowercase provider name "google"
+    // Then: the user is found because provider matching is case-insensitive
     [Fact]
     public async Task FindByExternalIdAsync_ShouldBeCaseInsensitiveForProvider()
     {
@@ -909,6 +1017,9 @@ public class OAuthLookupGrainTests
         foundUserId.Should().Be(userId);
     }
 
+    // Given: a GitHub external ID registered to a user
+    // When: the external ID registration is removed
+    // Then: looking up that external ID returns null
     [Fact]
     public async Task UnregisterExternalIdAsync_ShouldRemoveMapping()
     {
@@ -927,6 +1038,9 @@ public class OAuthLookupGrainTests
         foundUserId.Should().BeNull();
     }
 
+    // Given: an organization's OAuth lookup with no matching registration
+    // When: an unregister is attempted for a nonexistent external ID
+    // Then: the operation completes without error
     [Fact]
     public async Task UnregisterExternalIdAsync_WhenNotRegistered_ShouldNotThrow()
     {
@@ -941,6 +1055,9 @@ public class OAuthLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: a user with Google, Microsoft, and GitHub external identities registered
+    // When: all external IDs for that user are retrieved
+    // Then: all three provider-to-external-ID mappings are returned
     [Fact]
     public async Task GetExternalIdsForUserAsync_ShouldReturnAllProviders()
     {
@@ -963,6 +1080,9 @@ public class OAuthLookupGrainTests
         externalIds["github"].Should().Be("github-id");
     }
 
+    // Given: a user with no external identity links in the organization
+    // When: the user's external IDs are retrieved
+    // Then: an empty dictionary is returned
     [Fact]
     public async Task GetExternalIdsForUserAsync_WhenNoLinks_ShouldReturnEmptyDictionary()
     {
@@ -978,6 +1098,9 @@ public class OAuthLookupGrainTests
         externalIds.Should().BeEmpty();
     }
 
+    // Given: two users each with different external identity providers
+    // When: external IDs are retrieved for the first user
+    // Then: only the first user's external IDs are returned, not the second user's
     [Fact]
     public async Task GetExternalIdsForUserAsync_ShouldNotIncludeOtherUsers()
     {
@@ -1015,6 +1138,9 @@ public class EmailLookupGrainTests
         _fixture = fixture;
     }
 
+    // Given: a unique email address not yet registered
+    // When: the email is registered for a user in an organization
+    // Then: looking up the email returns the correct organization and user mapping
     [Fact]
     public async Task RegisterEmailAsync_ShouldCreateMapping()
     {
@@ -1034,6 +1160,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: an email already registered to a user in an organization
+    // When: the same user re-registers the same email
+    // Then: the operation is idempotent and succeeds without error
     [Fact]
     public async Task RegisterEmailAsync_WithSameUserAgain_ShouldNotThrow()
     {
@@ -1052,6 +1181,9 @@ public class EmailLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: an email already registered to one user in an organization
+    // When: a different user attempts to register the same email in the same organization
+    // Then: an error is raised because email must be unique per organization
     [Fact]
     public async Task RegisterEmailAsync_WithDifferentUserInSameOrg_ShouldThrow()
     {
@@ -1072,6 +1204,9 @@ public class EmailLookupGrainTests
             .WithMessage($"Email {email} is already registered to a different user in this organization");
     }
 
+    // Given: an email registered to a user in an organization
+    // When: the email mapping is looked up
+    // Then: the correct organization and user mapping is returned
     [Fact]
     public async Task FindByEmailAsync_ShouldReturnUserMappings()
     {
@@ -1092,6 +1227,9 @@ public class EmailLookupGrainTests
         mappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: the same email registered to different users in two separate organizations
+    // When: the email mapping is looked up
+    // Then: both organization mappings are returned
     [Fact]
     public async Task FindByEmailAsync_ShouldWorkAcrossOrganizations()
     {
@@ -1115,6 +1253,9 @@ public class EmailLookupGrainTests
         mappings.Should().Contain(m => m.OrganizationId == org2 && m.UserId == user2);
     }
 
+    // Given: no email registrations matching the queried address
+    // When: a lookup is performed for a nonexistent email
+    // Then: an empty result is returned
     [Fact]
     public async Task FindByEmailAsync_WhenNotRegistered_ShouldReturnEmpty()
     {
@@ -1128,6 +1269,9 @@ public class EmailLookupGrainTests
         mappings.Should().BeEmpty();
     }
 
+    // Given: an email registered to a user in an organization
+    // When: the email mapping is unregistered for that organization
+    // Then: looking up that email returns no mappings
     [Fact]
     public async Task UnregisterEmailAsync_ShouldRemoveMapping()
     {
@@ -1147,6 +1291,9 @@ public class EmailLookupGrainTests
         mappings.Should().BeEmpty();
     }
 
+    // Given: the same email registered in two different organizations
+    // When: the email is unregistered for the first organization only
+    // Then: the second organization's mapping remains intact
     [Fact]
     public async Task UnregisterEmailAsync_ShouldOnlyRemoveSpecificOrg()
     {
@@ -1170,6 +1317,9 @@ public class EmailLookupGrainTests
         mappings[0].OrganizationId.Should().Be(org2);
     }
 
+    // Given: no email registration matching the provided address and organization
+    // When: an unregister is attempted for a nonexistent email
+    // Then: the operation completes without error
     [Fact]
     public async Task UnregisterEmailAsync_WhenNotRegistered_ShouldNotThrow()
     {
@@ -1183,6 +1333,9 @@ public class EmailLookupGrainTests
         await act.Should().NotThrowAsync();
     }
 
+    // Given: an email registered for a user in an organization
+    // When: the email is updated to a new address
+    // Then: the old email has no mappings and the new email maps to the same user and organization
     [Fact]
     public async Task UpdateEmailAsync_ShouldChangeMapping()
     {
@@ -1208,6 +1361,9 @@ public class EmailLookupGrainTests
         newMappings[0].UserId.Should().Be(userId);
     }
 
+    // Given: no previous email registration (null old email)
+    // When: an email update is performed with only a new email
+    // Then: only the new email is registered without attempting to remove a previous mapping
     [Fact]
     public async Task UpdateEmailAsync_WithNullOldEmail_ShouldOnlyRegisterNew()
     {
@@ -1225,6 +1381,9 @@ public class EmailLookupGrainTests
         mappings.Should().ContainSingle();
     }
 
+    // Given: an email registered with uppercase and leading/trailing spaces
+    // When: the email is looked up using lowercase without spaces
+    // Then: the mapping is found because emails are normalized to lowercase and trimmed
     [Fact]
     public async Task EmailNormalization_ShouldBeLowercaseAndTrimmed()
     {
@@ -1244,6 +1403,9 @@ public class EmailLookupGrainTests
         mappings.Should().ContainSingle();
     }
 
+    // Given: an email registered in lowercase
+    // When: the email is looked up using uppercase
+    // Then: the mapping is found because email lookup is case-insensitive
     [Fact]
     public async Task EmailNormalization_ShouldMatchDifferentCasing()
     {

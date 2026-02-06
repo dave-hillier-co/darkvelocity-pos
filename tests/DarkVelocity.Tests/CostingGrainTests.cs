@@ -21,6 +21,9 @@ public class CostingGrainTests
     // Recipe Grain Tests
     // ============================================================================
 
+    // Given: A new recipe grain for a menu item
+    // When: A Grilled Salmon recipe is created with a code, category, and prep instructions
+    // Then: The recipe is stored with active status and all metadata preserved
     [Fact]
     public async Task RecipeGrain_Create_CreatesRecipeSuccessfully()
     {
@@ -50,6 +53,9 @@ public class CostingGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A recipe with 2-portion yield and 200g salmon ingredient at $0.05/g with 10% waste
+    // When: The recipe cost is calculated against a $25.99 menu price
+    // Then: The total ingredient cost is $11 (waste-adjusted), cost per portion is $5.50, and cost percentage is ~21%
     [Fact]
     public async Task RecipeGrain_AddIngredient_CalculatesCostCorrectly()
     {
@@ -87,6 +93,9 @@ public class CostingGrainTests
         calculation.CostPercentage.Should().BeApproximately(21.16m, 0.1m);
     }
 
+    // Given: An existing recipe with no cost history
+    // When: Two cost snapshots are created at different menu prices ($15.99 and $16.99)
+    // Then: The cost history contains 2 entries with the most recent price first
     [Fact]
     public async Task RecipeGrain_CreateCostSnapshot_TracksHistory()
     {
@@ -120,6 +129,9 @@ public class CostingGrainTests
     // Ingredient Price Grain Tests
     // ============================================================================
 
+    // Given: A new ingredient price grain for Atlantic Salmon
+    // When: The ingredient is created with $25/kg price, pack size 1, and a preferred supplier
+    // Then: The ingredient is stored with the correct price per unit and active status
     [Fact]
     public async Task IngredientPriceGrain_Create_CreatesSuccessfully()
     {
@@ -148,6 +160,9 @@ public class CostingGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: An ingredient priced at $10/kg
+    // When: The price is updated to $12/kg due to supplier increase
+    // Then: The new price is $12, previous price is $10, change is +20%, and history has 2 entries
     [Fact]
     public async Task IngredientPriceGrain_UpdatePrice_TracksPriceHistory()
     {
@@ -182,6 +197,9 @@ public class CostingGrainTests
     // Cost Alert Grain Tests
     // ============================================================================
 
+    // Given: A new cost alert grain for an organization
+    // When: An ingredient price increase alert is created for Salmon ($20 to $25, 5 recipes affected)
+    // Then: The alert is created with 25% change, unacknowledged status, and impact details
     [Fact]
     public async Task CostAlertGrain_Create_CreatesAlertSuccessfully()
     {
@@ -214,6 +232,9 @@ public class CostingGrainTests
         snapshot.IsAcknowledged.Should().BeFalse();
     }
 
+    // Given: An unacknowledged margin-below-threshold cost alert
+    // When: A manager acknowledges the alert with a MenuUpdated action
+    // Then: The alert is marked as acknowledged with the action and notes recorded
     [Fact]
     public async Task CostAlertGrain_Acknowledge_UpdatesStatus()
     {
@@ -255,6 +276,9 @@ public class CostingGrainTests
     // Costing Settings Grain Tests
     // ============================================================================
 
+    // Given: A new costing settings grain for a site location
+    // When: The settings are initialized with defaults
+    // Then: Default targets are set (30% food cost, 25% beverage cost, 50% minimum margin, auto-recalculate on)
     [Fact]
     public async Task CostingSettingsGrain_Initialize_SetsDefaultValues()
     {
@@ -276,6 +300,9 @@ public class CostingGrainTests
         settings.AutoRecalculateCosts.Should().BeTrue();
     }
 
+    // Given: Costing settings initialized with default 10% price change alert threshold
+    // When: Price changes of 15% and 5% are evaluated
+    // Then: The 15% change triggers an alert and the 5% change does not
     [Fact]
     public async Task CostingSettingsGrain_ShouldAlertOnPriceChange_ReturnsCorrectly()
     {
@@ -300,6 +327,9 @@ public class CostingGrainTests
     // Additional Recipe Grain Tests
     // ============================================================================
 
+    // Given: A recipe with original name, code, description, and 2-portion yield
+    // When: The recipe metadata is updated with a new name, code, category, and 4-portion yield
+    // Then: All updated fields are reflected in the snapshot
     [Fact]
     public async Task RecipeGrain_UpdateAsync_ShouldUpdateRecipeMetadata()
     {
@@ -338,6 +368,9 @@ public class CostingGrainTests
         snapshot.PrepInstructions.Should().Be("Updated instructions");
     }
 
+    // Given: An active recipe
+    // When: The recipe is soft-deleted
+    // Then: The recipe is marked as inactive
     [Fact]
     public async Task RecipeGrain_DeleteAsync_ShouldSetInactiveFlag()
     {
@@ -364,6 +397,9 @@ public class CostingGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: A recipe with 100g of Salmon Fillet at $0.05/g with 10% waste
+    // When: The ingredient is updated to 200g at $0.08/g with 5% waste
+    // Then: The ingredient reflects the new quantity, cost, and waste-adjusted line cost of $16.80
     [Fact]
     public async Task RecipeGrain_UpdateIngredientAsync_ShouldUpdateQuantityAndCost()
     {
@@ -412,6 +448,9 @@ public class CostingGrainTests
         ingredients[0].CurrentLineCost.Should().Be(16.8m);
     }
 
+    // Given: A recipe with no ingredients
+    // When: An update is attempted for a non-existent ingredient ID
+    // Then: An error is thrown because the ingredient is not found in the recipe
     [Fact]
     public async Task RecipeGrain_UpdateIngredientAsync_NonExistent_ShouldThrow()
     {
@@ -444,6 +483,9 @@ public class CostingGrainTests
             .WithMessage("Ingredient not found");
     }
 
+    // Given: A recipe with one salmon ingredient
+    // When: The salmon ingredient is removed
+    // Then: The recipe has no ingredients remaining
     [Fact]
     public async Task RecipeGrain_RemoveIngredientAsync_ShouldRemoveIngredient()
     {
@@ -479,6 +521,9 @@ public class CostingGrainTests
         ingredients.Should().BeEmpty();
     }
 
+    // Given: A recipe with no ingredients
+    // When: Removal of a non-existent ingredient ID is attempted
+    // Then: An error is thrown because the ingredient is not found
     [Fact]
     public async Task RecipeGrain_RemoveIngredientAsync_NonExistent_ShouldThrow()
     {
@@ -505,6 +550,9 @@ public class CostingGrainTests
             .WithMessage("Ingredient not found");
     }
 
+    // Given: A recipe with an expensive ingredient ($10 cost) and a cheap ingredient ($5 cost)
+    // When: The ingredient breakdown is retrieved
+    // Then: Each ingredient shows its percentage of total cost (~66.67% and ~33.33%)
     [Fact]
     public async Task RecipeGrain_GetIngredientsAsync_ShouldReturnCostBreakdown()
     {
@@ -553,6 +601,9 @@ public class CostingGrainTests
         cheapIngredient.CostPercentOfTotal.Should().BeApproximately(33.33m, 0.1m);
     }
 
+    // Given: A recipe with two ingredients at $0.05/g and $0.10/g
+    // When: Ingredient prices are recalculated from new supplier prices ($0.08/g and $0.12/g)
+    // Then: The total cost per portion updates to $20 based on the new prices
     [Fact]
     public async Task RecipeGrain_RecalculateFromPricesAsync_ShouldUpdateCosts()
     {
@@ -602,6 +653,9 @@ public class CostingGrainTests
         snapshot.CurrentCostPerPortion.Should().Be(20m);
     }
 
+    // Given: A recipe with two ingredients at $0.05/g (cost $5) and $0.10/g (cost $10)
+    // When: Only the first ingredient price is updated to $0.08/g
+    // Then: The total cost reflects the updated first ingredient ($8) and unchanged second ($10), totaling $18
     [Fact]
     public async Task RecipeGrain_RecalculateFromPricesAsync_PartialPrices_ShouldUpdateMatching()
     {
@@ -650,6 +704,9 @@ public class CostingGrainTests
         snapshot.CurrentCostPerPortion.Should().Be(18m);
     }
 
+    // Given: A new recipe grain
+    // When: A recipe is created with zero portion yield
+    // Then: The portion yield defaults to 1 to avoid division by zero
     [Fact]
     public async Task RecipeGrain_CreateAsync_ZeroPortionYield_ShouldDefaultToOne()
     {
@@ -673,6 +730,9 @@ public class CostingGrainTests
         snapshot.PortionYield.Should().Be(1);
     }
 
+    // Given: A recipe with one ingredient costing $10
+    // When: The cost is calculated against a $0 menu price
+    // Then: The cost percentage and gross margin are null (cannot calculate against zero price)
     [Fact]
     public async Task RecipeGrain_CalculateCostAsync_ZeroMenuPrice_ShouldHandleNullMargin()
     {
@@ -708,6 +768,9 @@ public class CostingGrainTests
         calculation.GrossMarginPercent.Should().BeNull();
     }
 
+    // Given: A recipe with no ingredients
+    // When: The cost is calculated against a $10 menu price
+    // Then: The total cost is zero, cost percentage is 0%, and gross margin is 100%
     [Fact]
     public async Task RecipeGrain_CalculateCostAsync_NoIngredients_ShouldReturnZero()
     {
@@ -736,6 +799,9 @@ public class CostingGrainTests
         calculation.GrossMarginPercent.Should().Be(100m);
     }
 
+    // Given: A recipe that accumulates 55 weekly cost snapshots
+    // When: The cost history is retrieved
+    // Then: Only the most recent 52 snapshots are retained (one year of weekly history)
     [Fact]
     public async Task RecipeGrain_CreateCostSnapshotAsync_Over52_ShouldTrim()
     {
@@ -766,6 +832,9 @@ public class CostingGrainTests
         history.Should().HaveCount(52);
     }
 
+    // Given: A recipe created with full metadata (menu item, code, category, description, yield, instructions)
+    // When: The recipe snapshot is retrieved
+    // Then: All metadata fields are accurately returned
     [Fact]
     public async Task RecipeGrain_GetSnapshotAsync_ShouldReturnState()
     {
@@ -802,6 +871,9 @@ public class CostingGrainTests
         snapshot.IsActive.Should().BeTrue();
     }
 
+    // Given: A new, uninitialized recipe grain
+    // When: Existence is checked before and after recipe creation
+    // Then: The grain reports false before creation and true after
     [Fact]
     public async Task RecipeGrain_ExistsAsync_ShouldReturnCorrectStatus()
     {
@@ -835,6 +907,9 @@ public class CostingGrainTests
     // Additional Ingredient Price Grain Tests
     // ============================================================================
 
+    // Given: An ingredient priced at $10/kg with pack size 1
+    // When: The ingredient is updated to $20 with pack size 5 and a new supplier
+    // Then: The price per unit is recalculated to $4 ($20/5) and supplier is updated
     [Fact]
     public async Task IngredientPriceGrain_UpdateAsync_ShouldUpdatePriceAndPackSize()
     {
@@ -868,6 +943,9 @@ public class CostingGrainTests
         snapshot.PreferredSupplierName.Should().Be("New Supplier");
     }
 
+    // Given: An active ingredient price entry
+    // When: The ingredient is soft-deleted
+    // Then: The ingredient is marked as inactive
     [Fact]
     public async Task IngredientPriceGrain_DeleteAsync_ShouldSetInactiveFlag()
     {
@@ -894,6 +972,9 @@ public class CostingGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: An ingredient priced at $24 with a pack size of 8
+    // When: The price per unit is queried
+    // Then: The price per unit is $3.00 ($24/8)
     [Fact]
     public async Task IngredientPriceGrain_GetPricePerUnitAsync_ShouldCalculateCorrectly()
     {
@@ -919,6 +1000,9 @@ public class CostingGrainTests
         pricePerUnit.Should().Be(3.00m); // 24 / 8
     }
 
+    // Given: An ingredient priced at $10/kg
+    // When: The price decreases to $8/kg
+    // Then: The price change percentage shows -20%
     [Fact]
     public async Task IngredientPriceGrain_UpdatePriceAsync_Decrease_ShouldShowNegativeChangePercent()
     {
@@ -946,6 +1030,9 @@ public class CostingGrainTests
         snapshot.PriceChangePercent.Should().Be(-20m); // (8 - 10) / 10 * 100
     }
 
+    // Given: An ingredient priced at $10/kg
+    // When: The price is "updated" to the same $10/kg
+    // Then: The price change percentage is 0%
     [Fact]
     public async Task IngredientPriceGrain_UpdatePriceAsync_NoChange_ShouldShowZeroPercent()
     {
@@ -972,6 +1059,9 @@ public class CostingGrainTests
         snapshot.PriceChangePercent.Should().Be(0m);
     }
 
+    // Given: A new bulk ingredient priced at $50 for a pack of 10
+    // When: The ingredient is created
+    // Then: The price per unit is calculated as $5.00 ($50/10)
     [Fact]
     public async Task IngredientPriceGrain_CreateAsync_PackSizeGreaterThanOne_ShouldCalculatePricePerUnit()
     {
@@ -996,6 +1086,9 @@ public class CostingGrainTests
         snapshot.PricePerUnit.Should().Be(5.00m); // 50 / 10
     }
 
+    // Given: A new ingredient with zero pack size specified
+    // When: The ingredient is created
+    // Then: The pack size defaults to 1 and price per unit equals the full price
     [Fact]
     public async Task IngredientPriceGrain_CreateAsync_PackSizeZero_ShouldDefaultToOne()
     {
@@ -1020,6 +1113,9 @@ public class CostingGrainTests
         snapshot.PricePerUnit.Should().Be(10.00m);
     }
 
+    // Given: An ingredient that has accumulated 106 price history entries (1 initial + 105 updates)
+    // When: The price history is retrieved
+    // Then: Only the most recent 100 entries are retained
     [Fact]
     public async Task IngredientPriceGrain_PriceHistory_Over100_ShouldTrim()
     {
@@ -1050,6 +1146,9 @@ public class CostingGrainTests
         history.Should().HaveCount(100);
     }
 
+    // Given: A new, uninitialized ingredient price grain
+    // When: Existence is checked before and after creation
+    // Then: The grain reports false before creation and true after
     [Fact]
     public async Task IngredientPriceGrain_ExistsAsync_ShouldReturnCorrectStatus()
     {
@@ -1083,6 +1182,9 @@ public class CostingGrainTests
     // Additional Cost Alert Grain Tests
     // ============================================================================
 
+    // Given: A new cost alert grain for an organization
+    // When: A recipe cost increase alert is created for Grilled Salmon ($5.00 to $6.50, 30% increase)
+    // Then: The alert captures the recipe details, change percentage, and unacknowledged status
     [Fact]
     public async Task CostAlertGrain_CreateAsync_RecipeCostIncrease_ShouldSucceed()
     {
@@ -1116,6 +1218,9 @@ public class CostingGrainTests
         snapshot.IsAcknowledged.Should().BeFalse();
     }
 
+    // Given: A new cost alert grain for an organization
+    // When: An ingredient price decrease alert is created for Atlantic Salmon ($30 to $22, affecting 5 recipes)
+    // Then: The alert shows a ~-26.67% change and the opportunity to increase margins
     [Fact]
     public async Task CostAlertGrain_CreateAsync_IngredientPriceDecrease_ShouldSucceed()
     {
@@ -1149,6 +1254,9 @@ public class CostingGrainTests
         snapshot.AffectedRecipeCount.Should().Be(5);
     }
 
+    // Given: An unacknowledged recipe cost increase alert
+    // When: The alert is acknowledged with PriceAdjusted action and adjustment notes
+    // Then: The alert records the acknowledging user, action taken, notes, and timestamp
     [Fact]
     public async Task CostAlertGrain_AcknowledgeAsync_PriceAdjusted_ShouldRecord()
     {
@@ -1187,6 +1295,9 @@ public class CostingGrainTests
         snapshot.AcknowledgedAt.Should().NotBeNull();
     }
 
+    // Given: An unacknowledged margin-below-threshold alert (margin dropped from 60% to 45%)
+    // When: The alert is acknowledged with Accepted action (acceptable for current menu strategy)
+    // Then: The alert is marked as acknowledged with the Accepted action
     [Fact]
     public async Task CostAlertGrain_AcknowledgeAsync_Accepted_ShouldRecord()
     {
@@ -1222,6 +1333,9 @@ public class CostingGrainTests
         snapshot.ActionTaken.Should().Be(CostAlertAction.Accepted);
     }
 
+    // Given: An unacknowledged price increase alert for salt ($1.00 to $1.15, affecting 50 recipes)
+    // When: The alert is acknowledged with Ignored action due to minimal impact
+    // Then: The alert is marked as acknowledged with the Ignored action
     [Fact]
     public async Task CostAlertGrain_AcknowledgeAsync_Ignored_ShouldRecord()
     {
@@ -1257,6 +1371,9 @@ public class CostingGrainTests
         snapshot.ActionTaken.Should().Be(CostAlertAction.Ignored);
     }
 
+    // Given: A cost alert that has already been acknowledged
+    // When: A second acknowledgment is attempted
+    // Then: An error is thrown because the alert has already been acknowledged
     [Fact]
     public async Task CostAlertGrain_AcknowledgeAsync_AlreadyAcknowledged_ShouldThrow()
     {
@@ -1296,6 +1413,9 @@ public class CostingGrainTests
             .WithMessage("Alert has already been acknowledged");
     }
 
+    // Given: An unacknowledged cost alert for a recipe cost increase
+    // When: The acknowledged status is checked before and after acknowledgment
+    // Then: The status is false before and true after acknowledgment
     [Fact]
     public async Task CostAlertGrain_IsAcknowledgedAsync_ShouldReturnCorrectStatus()
     {
@@ -1335,6 +1455,9 @@ public class CostingGrainTests
         acknowledgedAfter.Should().BeTrue();
     }
 
+    // Given: A cost alert created with full details (type, recipe, ingredient, menu item, values, impact)
+    // When: The alert snapshot is retrieved
+    // Then: All fields are accurately returned including IDs, names, values, and impact description
     [Fact]
     public async Task CostAlertGrain_GetSnapshotAsync_ShouldReturnState()
     {
@@ -1380,6 +1503,9 @@ public class CostingGrainTests
         snapshot.AffectedRecipeCount.Should().Be(3);
     }
 
+    // Given: A new, uninitialized cost alert grain
+    // When: Existence is checked before and after alert creation
+    // Then: The grain reports false before creation and true after
     [Fact]
     public async Task CostAlertGrain_ExistsAsync_ShouldReturnCorrectStatus()
     {
@@ -1418,6 +1544,9 @@ public class CostingGrainTests
     // Additional Costing Settings Grain Tests
     // ============================================================================
 
+    // Given: Costing settings initialized with default values
+    // When: All settings are updated (targets, thresholds, auto-recalculate, snapshot frequency)
+    // Then: Every setting reflects the new values
     [Fact]
     public async Task CostingSettingsGrain_UpdateAsync_ShouldUpdateSettings()
     {
@@ -1453,6 +1582,9 @@ public class CostingGrainTests
         snapshot.SnapshotFrequencyDays.Should().Be(14);
     }
 
+    // Given: Costing settings initialized with defaults (30% food, 25% beverage, 50% min margin)
+    // When: Only the food cost target is updated to 35%
+    // Then: The food target changes to 35% while all other settings retain their default values
     [Fact]
     public async Task CostingSettingsGrain_UpdateAsync_PartialUpdate_ShouldPreserveOthers()
     {
@@ -1484,6 +1616,9 @@ public class CostingGrainTests
         snapshot.AutoRecalculateCosts.Should().BeTrue(); // Default
     }
 
+    // Given: Costing settings with a default 5% cost increase alert threshold
+    // When: A 3% cost increase is evaluated
+    // Then: No alert is triggered because the increase is below threshold
     [Fact]
     public async Task CostingSettingsGrain_ShouldAlertOnCostIncreaseAsync_BelowThreshold_ShouldReturnFalse()
     {
@@ -1503,6 +1638,9 @@ public class CostingGrainTests
         shouldAlert.Should().BeFalse();
     }
 
+    // Given: Costing settings with a default 5% cost increase alert threshold
+    // When: A 7% cost increase is evaluated
+    // Then: An alert is triggered because the increase exceeds the threshold
     [Fact]
     public async Task CostingSettingsGrain_ShouldAlertOnCostIncreaseAsync_AboveThreshold_ShouldReturnTrue()
     {
@@ -1522,6 +1660,9 @@ public class CostingGrainTests
         shouldAlert.Should().BeTrue();
     }
 
+    // Given: Costing settings with a default 50% minimum margin
+    // When: A margin of exactly 50% is evaluated
+    // Then: The margin is not below minimum (boundary is inclusive)
     [Fact]
     public async Task CostingSettingsGrain_IsMarginBelowMinimumAsync_AtThreshold_ShouldReturnFalse()
     {
@@ -1541,6 +1682,9 @@ public class CostingGrainTests
         isBelowMinimum.Should().BeFalse();
     }
 
+    // Given: Costing settings with a default 50% minimum margin
+    // When: A margin of 45% is evaluated
+    // Then: The margin is below minimum, indicating a costing problem
     [Fact]
     public async Task CostingSettingsGrain_IsMarginBelowMinimumAsync_BelowThreshold_ShouldReturnTrue()
     {
@@ -1560,6 +1704,9 @@ public class CostingGrainTests
         isBelowMinimum.Should().BeTrue();
     }
 
+    // Given: Costing settings with a default 60% warning margin
+    // When: A margin of exactly 60% is evaluated
+    // Then: The margin is not below warning level (boundary is inclusive)
     [Fact]
     public async Task CostingSettingsGrain_IsMarginBelowWarningAsync_AtThreshold_ShouldReturnFalse()
     {
@@ -1579,6 +1726,9 @@ public class CostingGrainTests
         isBelowWarning.Should().BeFalse();
     }
 
+    // Given: Costing settings with a default 60% warning margin
+    // When: A margin of 55% is evaluated
+    // Then: The margin is below warning level, indicating early attention needed
     [Fact]
     public async Task CostingSettingsGrain_IsMarginBelowWarningAsync_BelowThreshold_ShouldReturnTrue()
     {
@@ -1598,6 +1748,9 @@ public class CostingGrainTests
         isBelowWarning.Should().BeTrue();
     }
 
+    // Given: Costing settings already initialized and updated with a 35% food cost target
+    // When: The settings are initialized again
+    // Then: The customized 35% food cost target is preserved (re-initialization is a no-op)
     [Fact]
     public async Task CostingSettingsGrain_InitializeAsync_AlreadyInitialized_ShouldBeIdempotent()
     {
@@ -1629,6 +1782,9 @@ public class CostingGrainTests
         settings.TargetFoodCostPercent.Should().Be(35m);
     }
 
+    // Given: A new, uninitialized costing settings grain
+    // When: Existence is checked before and after initialization
+    // Then: The grain reports false before initialization and true after
     [Fact]
     public async Task CostingSettingsGrain_ExistsAsync_ShouldReturnCorrectStatus()
     {

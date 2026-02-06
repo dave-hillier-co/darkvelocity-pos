@@ -18,6 +18,9 @@ public class MenuEngineeringGrainTests
     private string GetGrainKey(Guid orgId, Guid siteId)
         => $"{orgId}:{siteId}:menu-engineering";
 
+    // Given: a new menu engineering grain for a site with a 70% target margin
+    // When: the grain is initialized
+    // Then: the grain is functional and can return classification counts
     [Fact]
     public async Task InitializeAsync_ShouldInitializeGrain()
     {
@@ -35,6 +38,9 @@ public class MenuEngineeringGrainTests
         classifications.Should().NotBeNull();
     }
 
+    // Given: an initialized menu engineering grain for a site
+    // When: sales data is recorded for a "Burger" (100 units, $1500 revenue, $4.50 cost)
+    // Then: the item's recorded units sold and total revenue match the submitted figures
     [Fact]
     public async Task RecordItemSalesAsync_ShouldRecordSales()
     {
@@ -64,6 +70,9 @@ public class MenuEngineeringGrainTests
         item.TotalRevenue.Should().Be(1500.00m);
     }
 
+    // Given: four menu items with varying margin and popularity (Star, Plowhorse, Puzzle, Dog profiles)
+    // When: the menu engineering analysis is run for the past 30 days
+    // Then: each classification bucket (Star, Plowhorse, Puzzle, Dog) contains at least one item
     [Fact]
     public async Task AnalyzeAsync_ShouldClassifyItemsCorrectly()
     {
@@ -129,6 +138,9 @@ public class MenuEngineeringGrainTests
         report.DogCount.Should().BeGreaterThanOrEqualTo(1);
     }
 
+    // Given: a "Burger" selling at $15.00 with a theoretical food cost of $4.50
+    // When: the menu engineering analysis is run
+    // Then: the contribution margin is $10.50 (70%), and total contribution is $1,050 for 100 units
     [Fact]
     public async Task AnalyzeAsync_ShouldCalculateContributionMargin()
     {
@@ -160,6 +172,9 @@ public class MenuEngineeringGrainTests
         item.TotalContribution.Should().Be(1050.00m);
     }
 
+    // Given: three menu items analyzed into Star (high margin + high popularity), Plowhorse (low margin + high popularity), and Dog (low margin + low popularity) classes
+    // When: querying items by the Star and Plowhorse menu engineering classifications
+    // Then: each class returns a non-empty list of matching items
     [Fact]
     public async Task GetItemsByClassAsync_ShouldReturnCorrectItems()
     {
@@ -212,6 +227,9 @@ public class MenuEngineeringGrainTests
         plowhorses.Should().NotBeEmpty();
     }
 
+    // Given: sales data for items in "Mains" (Burger + Steak) and "Sides" (Fries) categories
+    // When: the category-level menu engineering analysis is retrieved
+    // Then: two categories are returned with correct item counts and total units sold per category
     [Fact]
     public async Task GetCategoryAnalysisAsync_ShouldReturnCategoryBreakdown()
     {
@@ -264,6 +282,9 @@ public class MenuEngineeringGrainTests
         mainsCategory.TotalUnitsSold.Should().Be(150);
     }
 
+    // Given: a "Low Margin Burger" with 60% margin, below the 70% target margin
+    // When: price suggestions are requested with a 50% max price change allowance
+    // Then: at least one suggestion is returned recommending a price increase above the current $10.00
     [Fact]
     public async Task GetPriceSuggestionsAsync_ShouldSuggestPriceIncreases()
     {
@@ -314,6 +335,9 @@ public class MenuEngineeringGrainTests
         suggestions.First().SuggestedPrice.Should().BeGreaterThan(10.00m);
     }
 
+    // Given: an initialized menu engineering grain for a site
+    // When: sales data for 5 items is submitted in a single bulk operation
+    // Then: the analysis report shows all 5 items recorded
     [Fact]
     public async Task BulkRecordSalesAsync_ShouldRecordAllItems()
     {
@@ -341,6 +365,9 @@ public class MenuEngineeringGrainTests
         report.TotalMenuItems.Should().Be(5);
     }
 
+    // Given: a menu engineering grain initialized with a 70% target margin
+    // When: the target margin is updated to 75% and an item with 65% margin is analyzed
+    // Then: price suggestions are generated because the item falls below the new 75% target
     [Fact]
     public async Task SetTargetMarginAsync_ShouldUpdateTarget()
     {

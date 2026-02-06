@@ -15,6 +15,9 @@ public class HealthApiTests
         _client = fixture.CreateClient();
     }
 
+    // Given: the platform is running
+    // When: the health endpoint is checked
+    // Then: the system reports a healthy status
     [Fact]
     public async Task Health_ReturnsOkWithHealthyStatus()
     {

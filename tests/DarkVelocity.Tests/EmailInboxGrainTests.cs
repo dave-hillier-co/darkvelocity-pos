@@ -52,6 +52,9 @@ public class EmailInboxGrainTests
         };
     }
 
+    // Given: a new site without an email inbox
+    // When: the inbox is initialized with an inbox address
+    // Then: the inbox should be created with default settings and zero emails received
     [Fact]
     public async Task InitializeAsync_ShouldCreateInbox()
     {
@@ -75,6 +78,9 @@ public class EmailInboxGrainTests
         snapshot.TotalEmailsReceived.Should().Be(0);
     }
 
+    // Given: an email inbox that has already been initialized
+    // When: initialization is attempted again
+    // Then: the operation should be rejected as already initialized
     [Fact]
     public async Task InitializeAsync_AlreadyInitialized_ShouldThrow()
     {
@@ -95,6 +101,9 @@ public class EmailInboxGrainTests
             .WithMessage("Inbox already initialized");
     }
 
+    // Given: an active email inbox with auto-processing disabled
+    // When: a valid email with a PDF attachment is received
+    // Then: the email should be accepted and a purchase document should be created
     [Fact]
     public async Task ProcessEmailAsync_ValidEmail_ShouldAcceptAndCreateDocument()
     {
@@ -119,6 +128,9 @@ public class EmailInboxGrainTests
         result.DocumentIds.Should().HaveCount(1);
     }
 
+    // Given: an email inbox that has already processed a specific message
+    // When: the same email (same message ID) is received again
+    // Then: the duplicate email should be rejected
     [Fact]
     public async Task ProcessEmailAsync_DuplicateEmail_ShouldReject()
     {
@@ -144,6 +156,9 @@ public class EmailInboxGrainTests
         result.RejectionReason.Should().Be(EmailRejectionReason.Duplicate);
     }
 
+    // Given: an inbox restricted to trusted-supplier.com senders
+    // When: an email from an untrusted domain is received
+    // Then: the email should be rejected as unauthorized sender
     [Fact]
     public async Task ProcessEmailAsync_UnauthorizedSender_ShouldReject()
     {
@@ -170,6 +185,9 @@ public class EmailInboxGrainTests
         result.RejectionReason.Should().Be(EmailRejectionReason.UnauthorizedSender);
     }
 
+    // Given: an active email inbox
+    // When: an email with no attachments is received
+    // Then: the email should be rejected for missing attachments
     [Fact]
     public async Task ProcessEmailAsync_NoAttachments_ShouldReject()
     {
@@ -192,6 +210,9 @@ public class EmailInboxGrainTests
         result.RejectionReason.Should().Be(EmailRejectionReason.NoAttachments);
     }
 
+    // Given: an email inbox that has been deactivated
+    // When: an email is received
+    // Then: the email should be rejected because the inbox is inactive
     [Fact]
     public async Task ProcessEmailAsync_InactiveInbox_ShouldReject()
     {
@@ -216,6 +237,9 @@ public class EmailInboxGrainTests
         result.RejectionReason.Should().Be(EmailRejectionReason.SiteNotFound);
     }
 
+    // Given: an initialized email inbox
+    // When: inbox settings are updated with allowed sender domains, max attachment size, and document type
+    // Then: the inbox configuration should reflect the updated settings
     [Fact]
     public async Task UpdateSettingsAsync_ShouldUpdateConfiguration()
     {
@@ -244,6 +268,9 @@ public class EmailInboxGrainTests
         state.MaxAttachmentSizeBytes.Should().Be(10 * 1024 * 1024);
     }
 
+    // Given: an initialized active email inbox
+    // When: the inbox is deactivated and then reactivated
+    // Then: the inbox active state should toggle accordingly
     [Fact]
     public async Task ActivateDeactivateAsync_ShouldToggleState()
     {
@@ -267,6 +294,9 @@ public class EmailInboxGrainTests
         (await grain.GetSnapshotAsync()).IsActive.Should().BeTrue();
     }
 
+    // Given: an inbox with no processed messages
+    // When: an email is received and processed
+    // Then: the message ID should be tracked as processed
     [Fact]
     public async Task IsMessageProcessedAsync_ShouldTrackProcessedMessages()
     {
@@ -292,6 +322,9 @@ public class EmailInboxGrainTests
         (await grain.IsMessageProcessedAsync(messageId)).Should().BeTrue();
     }
 
+    // Given: a grain key for a site inbox
+    // When: checking inbox existence before and after initialization
+    // Then: it should return false before and true after initialization
     [Fact]
     public async Task ExistsAsync_ShouldReturnCorrectValue()
     {
@@ -311,6 +344,9 @@ public class EmailInboxGrainTests
         (await grain.ExistsAsync()).Should().BeTrue();
     }
 
+    // Given: an active inbox
+    // When: an email with two PDF attachments is received
+    // Then: two purchase documents should be created from a single email
     [Fact]
     public async Task ProcessEmailAsync_MultipleAttachments_ShouldCreateMultipleDocuments()
     {
@@ -355,6 +391,9 @@ public class EmailInboxGrainTests
         snapshot.TotalDocumentsCreated.Should().Be(2);
     }
 
+    // Given: an active inbox
+    // When: an email with "Receipt" in the subject line is received
+    // Then: the purchase document should be classified as a receipt
     [Fact]
     public async Task ProcessEmailAsync_ReceiptSubject_ShouldDetectReceiptType()
     {
@@ -382,6 +421,9 @@ public class EmailInboxGrainTests
         docSnapshot.DocumentType.Should().Be(PurchaseDocumentType.Receipt);
     }
 
+    // Given: an inbox restricted to trusted-supplier.com senders
+    // When: an email from the trusted domain is received
+    // Then: the email should be accepted
     [Fact]
     public async Task ProcessEmailAsync_TrustedDomain_ShouldAccept()
     {
@@ -407,6 +449,9 @@ public class EmailInboxGrainTests
         result.Accepted.Should().BeTrue();
     }
 
+    // Given: an inbox with a 100-byte max attachment size limit
+    // When: an email with an oversized attachment is received
+    // Then: the email should be rejected because no valid attachments remain after size filtering
     [Fact]
     public async Task ProcessEmailAsync_AttachmentTooLarge_ShouldSkipAttachment()
     {
@@ -448,6 +493,9 @@ public class EmailInboxGrainTests
     // Auto-Processing Tests
     // ============================================================================
 
+    // Given: an inbox with auto-processing enabled
+    // When: a supplier invoice email is received
+    // Then: the purchase document should be created and auto-processing attempted
     [Fact]
     public async Task ProcessEmailAsync_AutoProcessEnabled_ShouldProcessDocument()
     {
@@ -477,6 +525,9 @@ public class EmailInboxGrainTests
         docSnapshot.DocumentId.Should().Be(result.DocumentIds![0]);
     }
 
+    // Given: an inbox with auto-processing disabled
+    // When: a supplier email is received
+    // Then: the document should be created in Received status without processing
     [Fact]
     public async Task ProcessEmailAsync_AutoProcessDisabled_ShouldNotProcessDocument()
     {
@@ -509,6 +560,9 @@ public class EmailInboxGrainTests
     // Deduplication Boundary Tests
     // ============================================================================
 
+    // Given: an inbox approaching the 1000 message ID deduplication limit
+    // When: more than 1000 emails are processed
+    // Then: the tracked message IDs should be capped at 1000 while maintaining inbox functionality
     [Fact]
     public async Task ProcessEmailAsync_DeduplicationBoundary_ShouldMaintainMaxMessageIds()
     {
@@ -545,6 +599,9 @@ public class EmailInboxGrainTests
         // The important thing is we don't exceed 1000 tracked IDs
     }
 
+    // Given: an inbox with exactly 1000 tracked message IDs at the deduplication limit
+    // When: one additional email is processed
+    // Then: the message ID set should remain capped at 1000
     [Fact]
     public async Task ProcessEmailAsync_AtDeduplicationLimit_ShouldHandleGracefully()
     {
@@ -582,6 +639,9 @@ public class EmailInboxGrainTests
     // Statistics Accuracy Tests
     // ============================================================================
 
+    // Given: an inbox restricted to trusted.com senders
+    // When: 3 accepted, 2 unauthorized, and 1 duplicate email are processed
+    // Then: statistics should accurately reflect accepted, rejected, and processed counts
     [Fact]
     public async Task Statistics_ShouldAccuratelyTrackEmailCounts()
     {
@@ -631,6 +691,9 @@ public class EmailInboxGrainTests
         state.TotalEmailsProcessed.Should().Be(3);
     }
 
+    // Given: an active inbox
+    // When: one email with 3 attachments and one email with 1 attachment are received
+    // Then: the total documents created count should be 4
     [Fact]
     public async Task Statistics_ShouldTrackDocumentsCreatedPerEmail()
     {
@@ -684,6 +747,9 @@ public class EmailInboxGrainTests
         snapshot.TotalDocumentsCreated.Should().Be(4); // 3 + 1
     }
 
+    // Given: an inbox with no emails received
+    // When: two emails are processed sequentially
+    // Then: the last email received timestamp should update with each accepted email
     [Fact]
     public async Task Statistics_LastEmailReceivedAt_ShouldUpdate()
     {
@@ -727,6 +793,9 @@ public class EmailInboxGrainTests
     // Edge Cases and Validation Tests
     // ============================================================================
 
+    // Given: an inbox with a 2000-byte max attachment size
+    // When: an email with mixed valid and oversized attachments is received
+    // Then: only the valid-sized attachments should produce purchase documents
     [Fact]
     public async Task ProcessEmailAsync_MixedValidAndInvalidAttachments_ShouldProcessValidOnes()
     {
@@ -780,6 +849,9 @@ public class EmailInboxGrainTests
         result.DocumentIds.Should().HaveCount(2); // Only the two small PDFs
     }
 
+    // Given: an initialized inbox at a known state version
+    // When: an email is successfully processed
+    // Then: the inbox state version should increment by one
     [Fact]
     public async Task ProcessEmailAsync_Version_ShouldIncrementOnSuccess()
     {

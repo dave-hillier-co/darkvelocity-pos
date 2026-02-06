@@ -24,6 +24,9 @@ public class PaymentGrainTests
         return grain;
     }
 
+    // Given: an order with a line item totaling $100
+    // When: a cash payment of $100 is initiated against the order
+    // Then: the payment is created with Initiated status and the correct amount
     [Fact]
     public async Task InitiateAsync_ShouldCreatePayment()
     {
@@ -51,6 +54,9 @@ public class PaymentGrainTests
         state.Amount.Should().Be(100m);
     }
 
+    // Given: an initiated cash payment of $100
+    // When: the cashier completes the payment with $120 tendered and a $5 tip
+    // Then: the payment is completed with a total of $105 and $15 change given
     [Fact]
     public async Task CompleteCashAsync_ShouldCompletePayment()
     {
@@ -76,6 +82,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Completed);
     }
 
+    // Given: an initiated credit card payment of $100
+    // When: the card payment is processed with a $10 tip via Stripe
+    // Then: the payment is completed with a total of $110 and card details are recorded
     [Fact]
     public async Task CompleteCardAsync_ShouldCompletePayment()
     {
@@ -109,6 +118,9 @@ public class PaymentGrainTests
         state.CardInfo!.MaskedNumber.Should().Be("****4242");
     }
 
+    // Given: a completed cash payment of $100
+    // When: a full refund of $100 is issued for customer dissatisfaction
+    // Then: the payment is fully refunded with a zero remaining balance
     [Fact]
     public async Task RefundAsync_ShouldRefundPayment()
     {
@@ -136,6 +148,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Refunded);
     }
 
+    // Given: a completed cash payment of $100
+    // When: a partial refund of $30 is issued
+    // Then: $30 is refunded and $70 remains, with the payment marked as partially refunded
     [Fact]
     public async Task PartialRefundAsync_ShouldPartiallyRefund()
     {
@@ -163,6 +178,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.PartiallyRefunded);
     }
 
+    // Given: an initiated cash payment of $100
+    // When: the payment is voided because the customer cancelled
+    // Then: the payment status is Voided and the void reason is recorded
     [Fact]
     public async Task VoidAsync_ShouldVoidPayment()
     {
@@ -186,6 +204,9 @@ public class PaymentGrainTests
         state.VoidReason.Should().Be("Customer cancelled");
     }
 
+    // Given: a completed cash payment of $100 with a $10 tip
+    // When: the tip is adjusted to $15
+    // Then: the tip amount is updated to $15 and the total becomes $115
     [Fact]
     public async Task AdjustTipAsync_ShouldAdjustTip()
     {
@@ -214,6 +235,9 @@ public class PaymentGrainTests
     // Card Authorization Flow Tests
     // =========================================================================
 
+    // Given: an initiated credit card payment of $150
+    // When: the card is authorized, the authorization is recorded, and the payment is captured
+    // Then: the payment progresses through Authorizing, Authorized, and Captured statuses
     [Fact]
     public async Task Payment_CardAuthorization_FullFlow_ShouldSucceed()
     {
@@ -255,6 +279,9 @@ public class PaymentGrainTests
         stateAfterCapture.CapturedAt.Should().NotBeNull();
     }
 
+    // Given: an initiated credit card payment awaiting authorization
+    // When: the card is declined due to insufficient funds
+    // Then: the payment status is set to Declined
     [Fact]
     public async Task Payment_CardAuthorization_Declined_ShouldRecordDecline()
     {
@@ -278,6 +305,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Declined);
     }
 
+    // Given: an authorized credit card payment of $75
+    // When: the payment is voided because the customer changed their mind
+    // Then: the payment status is Voided and the void reason is recorded
     [Fact]
     public async Task Payment_VoidAuthorized_ShouldSucceed()
     {
@@ -304,6 +334,9 @@ public class PaymentGrainTests
         state.VoidReason.Should().Be("Customer changed mind");
     }
 
+    // Given: an authorized credit card payment of $200
+    // When: the card payment is completed directly from authorized status with a $20 tip
+    // Then: the payment is completed with a total of $220
     [Fact]
     public async Task Payment_CompleteCard_FromAuthorizedStatus_ShouldSucceed()
     {
@@ -334,6 +367,9 @@ public class PaymentGrainTests
     // State Transition Tests
     // =========================================================================
 
+    // Given: a payment that has already been completed
+    // When: completing the same payment a second time is attempted
+    // Then: the operation is rejected with an invalid status error
     [Fact]
     public async Task Payment_CompleteTwice_ShouldThrow()
     {
@@ -357,6 +393,9 @@ public class PaymentGrainTests
             .WithMessage("*Invalid status*");
     }
 
+    // Given: a completed cash payment of $100
+    // When: a manager voids the completed payment
+    // Then: the payment is successfully voided via manager override
     [Fact]
     public async Task Payment_VoidCompleted_ShouldThrow()
     {
@@ -380,6 +419,9 @@ public class PaymentGrainTests
         state.Status.Should().Be(PaymentStatus.Voided);
     }
 
+    // Given: an initiated payment that has not been completed
+    // When: a refund is attempted before the payment is completed
+    // Then: the operation is rejected because only completed payments can be refunded
     [Fact]
     public async Task Payment_RefundBeforeCompletion_ShouldThrow()
     {
@@ -402,6 +444,9 @@ public class PaymentGrainTests
             .WithMessage("*Can only refund completed payments*");
     }
 
+    // Given: an initiated payment that has not been completed
+    // When: a tip adjustment is attempted before the payment is completed
+    // Then: the operation is rejected because tips can only be adjusted on completed payments
     [Fact]
     public async Task Payment_AdjustTipBeforeCompletion_ShouldThrow()
     {
@@ -436,6 +481,9 @@ public class CashDrawerGrainTests
         _fixture = fixture;
     }
 
+    // Given: a new cash drawer at a site
+    // When: the drawer is opened with a $200 starting float
+    // Then: the drawer status is Open and the expected balance matches the opening float
     [Fact]
     public async Task OpenAsync_ShouldOpenDrawer()
     {
@@ -458,6 +506,9 @@ public class CashDrawerGrainTests
         state.ExpectedBalance.Should().Be(200m);
     }
 
+    // Given: an open cash drawer with a $200 balance
+    // When: $50 cash is received from a payment
+    // Then: the expected drawer balance increases to $250
     [Fact]
     public async Task RecordCashInAsync_ShouldIncreaseBalance()
     {
@@ -478,6 +529,9 @@ public class CashDrawerGrainTests
         balance.Should().Be(250m);
     }
 
+    // Given: an open cash drawer with a $200 balance
+    // When: $50 is paid out as change
+    // Then: the expected drawer balance decreases to $150
     [Fact]
     public async Task RecordCashOutAsync_ShouldDecreaseBalance()
     {
@@ -498,6 +552,9 @@ public class CashDrawerGrainTests
         balance.Should().Be(150m);
     }
 
+    // Given: an open cash drawer with a $500 balance
+    // When: a $300 cash drop is made to the safe
+    // Then: the expected balance decreases to $200 and the drop is recorded
     [Fact]
     public async Task RecordDropAsync_ShouldRecordDrop()
     {
@@ -520,6 +577,9 @@ public class CashDrawerGrainTests
         state.CashDrops[0].Amount.Should().Be(300m);
     }
 
+    // Given: an open cash drawer with $200 opening float and $100 cash received
+    // When: the drawer is closed with an actual count of $295
+    // Then: the drawer is closed showing a -$5 variance (short)
     [Fact]
     public async Task CloseAsync_ShouldCloseDrawerWithVariance()
     {
@@ -545,6 +605,9 @@ public class CashDrawerGrainTests
         state.Status.Should().Be(DrawerStatus.Closed);
     }
 
+    // Given: an open cash drawer
+    // When: the drawer is opened for a no-sale transaction (e.g., making change)
+    // Then: a no-sale transaction is recorded in the drawer history
     [Fact]
     public async Task OpenNoSaleAsync_ShouldRecordNoSale()
     {
@@ -569,6 +632,9 @@ public class CashDrawerGrainTests
     // Additional CashDrawer Tests
     // =========================================================================
 
+    // Given: an open cash drawer with $300 float and $150 cash received
+    // When: a cash count of $440 is performed
+    // Then: the drawer enters Counting status with the actual balance recorded
     [Fact]
     public async Task CashDrawer_CountAsync_ShouldReturnBalance()
     {
@@ -592,6 +658,9 @@ public class CashDrawerGrainTests
         state.LastCountedAt.Should().NotBeNull();
     }
 
+    // Given: a cash drawer that is already open
+    // When: opening the same drawer is attempted again
+    // Then: the operation is rejected because the drawer is already open
     [Fact]
     public async Task CashDrawer_OpenAlreadyOpen_ShouldThrow()
     {
@@ -612,6 +681,9 @@ public class CashDrawerGrainTests
             .WithMessage("*already open*");
     }
 
+    // Given: a cash drawer that has already been closed
+    // When: closing the same drawer is attempted again
+    // Then: the operation is rejected because the drawer is already closed
     [Fact]
     public async Task CashDrawer_CloseAlreadyClosed_ShouldThrow()
     {
@@ -633,6 +705,9 @@ public class CashDrawerGrainTests
             .WithMessage("*already closed*");
     }
 
+    // Given: a cash drawer that has been closed
+    // When: recording a cash-in transaction on the closed drawer is attempted
+    // Then: the operation is rejected because the drawer is not open
     [Fact]
     public async Task CashDrawer_RecordOnClosed_ShouldThrow()
     {
@@ -654,6 +729,9 @@ public class CashDrawerGrainTests
             .WithMessage("*not open*");
     }
 
+    // Given: an open cash drawer with $200 float and $100 received (expected $300)
+    // When: the drawer is closed with an actual count of $290
+    // Then: a negative variance of -$10 is calculated, indicating cash is short
     [Fact]
     public async Task CashDrawer_VarianceCalculation_Negative()
     {
@@ -676,6 +754,9 @@ public class CashDrawerGrainTests
         result.Variance.Should().Be(-10m); // $10 short
     }
 
+    // Given: an open cash drawer with $150 float, $75 received, and $25 paid out (expected $200)
+    // When: the drawer is closed with an actual count of $200
+    // Then: the variance is zero, indicating the drawer is perfectly balanced
     [Fact]
     public async Task CashDrawer_VarianceCalculation_Zero()
     {

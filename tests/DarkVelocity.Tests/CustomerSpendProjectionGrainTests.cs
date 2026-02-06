@@ -16,6 +16,9 @@ public class CustomerSpendProjectionGrainTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a new customer spend projection grain
+    // When: the projection is initialized for a customer
+    // Then: the state is set with Bronze tier, zero spend, zero points, and default multiplier
     [Fact]
     public async Task InitializeAsync_SetsInitialState()
     {
@@ -37,6 +40,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(0, state.AvailablePoints);
     }
 
+    // Given: an initialized customer spend projection at Bronze tier
+    // When: a $100 transaction is recorded
+    // Then: 100 points are earned, lifetime spend is $100, and the tier remains Bronze
     [Fact]
     public async Task RecordSpendAsync_AccumulatesSpend()
     {
@@ -71,6 +77,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(1, state.LifetimeTransactions);
     }
 
+    // Given: a customer at Bronze tier with $400 in recorded spend
+    // When: a $150 transaction pushes lifetime spend to $550 (crossing the $500 Silver threshold)
+    // Then: the customer is promoted to Silver tier with a 1.25x earning multiplier
     [Fact]
     public async Task RecordSpendAsync_TriggerstierPromotion()
     {
@@ -117,6 +126,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(550m, state2.LifetimeSpend);
     }
 
+    // Given: a customer already promoted to Silver tier (1.25x multiplier)
+    // When: a $100 transaction is recorded
+    // Then: 125 points are earned (100 * 1.0 * 1.25 Silver multiplier)
     [Fact]
     public async Task RecordSpendAsync_EarnsPointsWithMultiplier()
     {
@@ -158,6 +170,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(125, result.PointsEarned);
     }
 
+    // Given: a customer with 500 available loyalty points from spending
+    // When: 100 points are redeemed for a discount
+    // Then: the points balance is reduced to 400 and a $1.00 discount value is returned
     [Fact]
     public async Task RedeemPointsAsync_DeductsPoints()
     {
@@ -198,6 +213,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(400, pointsAfter);
     }
 
+    // Given: a customer with zero available loyalty points
+    // When: a 100-point redemption is attempted
+    // Then: the redemption is rejected due to insufficient points
     [Fact]
     public async Task RedeemPointsAsync_ThrowsOnInsufficientPoints()
     {
@@ -218,6 +236,9 @@ public class CustomerSpendProjectionGrainTests
                 RewardType: "Discount")));
     }
 
+    // Given: a customer with $200 in recorded spend and 200 earned points
+    // When: the full $200 order is refunded
+    // Then: lifetime spend and available points both return to zero
     [Fact]
     public async Task ReverseSpendAsync_ReducesSpendAndPoints()
     {
@@ -257,6 +278,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(0, stateAfter.AvailablePoints);
     }
 
+    // Given: a customer at Silver tier with $600 in recorded spend
+    // When: a $400 refund reduces lifetime spend to $200 (below the $500 Silver threshold)
+    // Then: the customer is demoted back to Bronze tier
     [Fact]
     public async Task ReverseSpendAsync_CanCauseTierDemotion()
     {
@@ -295,6 +319,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(200m, state2.LifetimeSpend);
     }
 
+    // Given: a customer at Silver tier with $750 in lifetime spend
+    // When: the spend projection snapshot is retrieved
+    // Then: the snapshot shows Silver tier, 1.25x multiplier, and $750 remaining to Gold tier
     [Fact]
     public async Task GetSnapshotAsync_ReturnsCorrectData()
     {
@@ -329,6 +356,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.NotNull(snapshot.LastTransactionAt);
     }
 
+    // Given: a customer with 200 earned loyalty points from spending
+    // When: point sufficiency is checked for various amounts
+    // Then: checks pass for 100 and 200 points but fail for 201 points
     [Fact]
     public async Task HasSufficientPointsAsync_ReturnsCorrectly()
     {
@@ -360,6 +390,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.False(await grain.HasSufficientPointsAsync(201));
     }
 
+    // Given: a customer at Bronze tier with $100 in spend under default tier thresholds
+    // When: custom tiers are configured with a VIP threshold at $50
+    // Then: the customer is automatically re-evaluated and promoted to VIP tier
     [Fact]
     public async Task ConfigureTiersAsync_AppliesCustomTiers()
     {
@@ -401,6 +434,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Year/Month Rollover Tests ====================
 
+    // Given: a newly initialized customer spend projection
+    // When: the first transaction is recorded
+    // Then: the current year, month, YTD spend, and MTD spend are all set correctly
     [Fact]
     public async Task RecordSpendAsync_InitialState_ShouldSetCurrentYearAndMonth()
     {
@@ -432,6 +468,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal(100m, state.MonthToDateSpend);
     }
 
+    // Given: an initialized customer spend projection
+    // When: two transactions ($100 and $150) are recorded in the same period
+    // Then: YTD, MTD, and lifetime spend all accumulate to $250
     [Fact]
     public async Task RecordSpendAsync_MultipleInSamePeriod_ShouldAccumulateYtdMtd()
     {
@@ -475,6 +514,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Recent Transactions Tests ====================
 
+    // Given: an initialized customer spend projection
+    // When: 105 transactions are recorded
+    // Then: only the 100 most recent are retained but lifetime transaction count reflects all 105
     [Fact]
     public async Task RecordSpendAsync_RecentTransactions_ShouldLimitTo100()
     {
@@ -511,6 +553,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Reverse Spend Tests ====================
 
+    // Given: a customer with $200 in recorded spend and 200 points
+    // When: a $50 refund is issued against a non-existent order ID
+    // Then: lifetime spend is reduced but points remain unchanged since no original transaction was found
     [Fact]
     public async Task ReverseSpendAsync_NonExistentOrder_ShouldHandleGracefully()
     {
@@ -553,6 +598,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Zero Spend Tests ====================
 
+    // Given: an initialized customer spend projection
+    // When: a zero-spend transaction is recorded (e.g., fully discounted order)
+    // Then: no points are earned but the transaction is still counted
     [Fact]
     public async Task RecordSpendAsync_ZeroSpend_ShouldHandle()
     {
@@ -586,6 +634,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== First Transaction Tests ====================
 
+    // Given: an initialized customer spend projection with no transactions
+    // When: two transactions are recorded sequentially
+    // Then: the first transaction timestamp is set once and not overwritten by subsequent transactions
     [Fact]
     public async Task RecordSpendAsync_ShouldTrackFirstTransactionAt()
     {
@@ -635,6 +686,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Version Tests ====================
 
+    // Given: an initialized customer spend projection
+    // When: two transactions are recorded sequentially
+    // Then: the state version increments by one with each recorded transaction
     [Fact]
     public async Task RecordSpendAsync_ShouldUpdateVersion()
     {
@@ -681,6 +735,9 @@ public class CustomerSpendProjectionGrainTests
 
     // ==================== Redemption Details Tests ====================
 
+    // Given: a customer with 500 earned loyalty points from spending
+    // When: 200 points are redeemed for a percentage discount
+    // Then: the redemption details (order, points, discount value, reward type) are tracked
     [Fact]
     public async Task RedeemPointsAsync_ShouldTrackRedemptionDetails()
     {
@@ -726,6 +783,9 @@ public class CustomerSpendProjectionGrainTests
         Assert.Equal("PercentageDiscount", redemption.RewardType);
     }
 
+    // Given: a customer with 1000 earned loyalty points from spending
+    // When: three separate redemptions are made for different reward types
+    // Then: all redemptions are tracked and the most recent appears first in history
     [Fact]
     public async Task RedeemPointsAsync_MultipleRedemptions_ShouldTrackAll()
     {

@@ -21,6 +21,9 @@ public class PaymentGatewayGrainTests
     // Merchant Grain Tests
     // ============================================================================
 
+    // Given: a new merchant with restaurant business details and US address
+    // When: the merchant account is created
+    // Then: the merchant is active with charges enabled but payouts disabled
     [Fact]
     public async Task MerchantGrain_Create_CreatesMerchantSuccessfully()
     {
@@ -57,6 +60,9 @@ public class PaymentGatewayGrainTests
         snapshot.Status.Should().Be("active");
     }
 
+    // Given: an existing merchant account
+    // When: a secret test API key is created for the merchant
+    // Then: the key is active with a test-mode prefix
     [Fact]
     public async Task MerchantGrain_CreateApiKey_CreatesKeySuccessfully()
     {
@@ -92,6 +98,9 @@ public class PaymentGatewayGrainTests
         apiKey.KeyPrefix.Should().Be("sk_test_");
     }
 
+    // Given: a merchant with an active API key
+    // When: the API key is revoked
+    // Then: the key is removed from the merchant's active keys
     [Fact]
     public async Task MerchantGrain_RevokeApiKey_DeactivatesKey()
     {
@@ -126,6 +135,9 @@ public class PaymentGatewayGrainTests
         keys.Should().BeEmpty();
     }
 
+    // Given: a merchant account with payouts initially disabled
+    // When: payouts are enabled for the merchant
+    // Then: the merchant's payout capability is activated
     [Fact]
     public async Task MerchantGrain_EnablePayouts_UpdatesFlag()
     {
@@ -162,6 +174,9 @@ public class PaymentGatewayGrainTests
     // Terminal Grain Tests
     // ============================================================================
 
+    // Given: a new payment terminal with a label, device type, and serial number
+    // When: the terminal is registered at a location
+    // Then: the terminal is active and records its device details
     [Fact]
     public async Task TerminalGrain_Register_CreatesTerminalSuccessfully()
     {
@@ -188,6 +203,9 @@ public class PaymentGatewayGrainTests
         snapshot.Status.Should().Be(TerminalStatus.Active);
     }
 
+    // Given: a registered payment terminal
+    // When: the terminal sends a heartbeat with its IP address and software version
+    // Then: the terminal's last-seen timestamp, IP, and version are updated
     [Fact]
     public async Task TerminalGrain_Heartbeat_UpdatesLastSeenAt()
     {
@@ -214,6 +232,9 @@ public class PaymentGatewayGrainTests
         snapshot.SoftwareVersion.Should().Be("1.2.3");
     }
 
+    // Given: a registered active payment terminal
+    // When: the terminal is deactivated
+    // Then: the terminal status becomes inactive
     [Fact]
     public async Task TerminalGrain_Deactivate_ChangesStatusToInactive()
     {
@@ -242,6 +263,9 @@ public class PaymentGatewayGrainTests
     // Refund Grain Tests
     // ============================================================================
 
+    // Given: a refund request for $15.00 against a payment intent with a customer-requested reason
+    // When: the refund is created
+    // Then: the refund is pending with a receipt number and the correct amount and currency
     [Fact]
     public async Task RefundGrain_Create_CreatesRefundSuccessfully()
     {
@@ -269,6 +293,9 @@ public class PaymentGatewayGrainTests
         snapshot.ReceiptNumber.Should().StartWith("RF-");
     }
 
+    // Given: a pending refund of $10.00
+    // When: the refund is processed
+    // Then: the refund status becomes succeeded with a completion timestamp
     [Fact]
     public async Task RefundGrain_Process_ChangesStatusToSucceeded()
     {
@@ -293,6 +320,9 @@ public class PaymentGatewayGrainTests
         snapshot.SucceededAt.Should().NotBeNull();
     }
 
+    // Given: a pending refund of $10.00
+    // When: the refund fails due to insufficient funds
+    // Then: the refund status becomes failed with the failure reason recorded
     [Fact]
     public async Task RefundGrain_Fail_RecordsFailureReason()
     {
@@ -321,6 +351,9 @@ public class PaymentGatewayGrainTests
     // Webhook Endpoint Grain Tests
     // ============================================================================
 
+    // Given: a webhook endpoint URL with subscriptions to payment and refund events
+    // When: the webhook endpoint is created
+    // Then: the endpoint is enabled and subscribed to the specified event types
     [Fact]
     public async Task WebhookEndpointGrain_Create_CreatesEndpointSuccessfully()
     {
@@ -346,6 +379,9 @@ public class PaymentGatewayGrainTests
         snapshot.EnabledEvents.Should().HaveCount(2);
     }
 
+    // Given: a webhook endpoint subscribed to payment_intent.succeeded and refund.* events
+    // When: event matching is checked for subscribed, wildcard-matched, and unsubscribed events
+    // Then: exact matches and wildcard matches pass, but unsubscribed event types are filtered out
     [Fact]
     public async Task WebhookEndpointGrain_ShouldReceiveEvent_FiltersCorrectly()
     {
@@ -372,6 +408,9 @@ public class PaymentGatewayGrainTests
         shouldReceiveCharge.Should().BeFalse();
     }
 
+    // Given: a webhook endpoint subscribed to all events
+    // When: the endpoint is disabled
+    // Then: the endpoint no longer receives any events
     [Fact]
     public async Task WebhookEndpointGrain_Disable_StopsReceivingEvents()
     {
@@ -395,6 +434,9 @@ public class PaymentGatewayGrainTests
         shouldReceive.Should().BeFalse();
     }
 
+    // Given: an enabled webhook endpoint subscribed to all events
+    // When: two delivery attempts are recorded (one successful, one failed with a server error)
+    // Then: both deliveries are tracked in the recent history and the last delivery timestamp is set
     [Fact]
     public async Task WebhookEndpointGrain_RecordDeliveryAttempt_TracksDeliveries()
     {

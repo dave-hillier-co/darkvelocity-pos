@@ -23,6 +23,9 @@ public class BookingSettingsGrainTests
         return grain;
     }
 
+    // Given: a venue with no booking settings configured
+    // When: booking settings are initialized for the venue
+    // Then: default settings are applied (11am open, 10pm close, max party size 8)
     [Fact]
     public async Task InitializeAsync_ShouldCreateSettings()
     {
@@ -46,6 +49,9 @@ public class BookingSettingsGrainTests
         state.MaxPartySizeOnline.Should().Be(8);
     }
 
+    // Given: a venue with default booking settings
+    // When: the manager updates operating hours, party size limits, slot intervals, and deposit requirements
+    // Then: all updated settings are persisted correctly
     [Fact]
     public async Task UpdateAsync_ShouldUpdateSettings()
     {
@@ -75,6 +81,9 @@ public class BookingSettingsGrainTests
         state.DepositAmount.Should().Be(25m);
     }
 
+    // Given: a venue open from 11am to 10pm with default settings
+    // When: availability is requested for a party of 4 on a future date
+    // Then: all time slots within operating hours are returned as available
     [Fact]
     public async Task GetAvailabilityAsync_ShouldReturnSlots()
     {
@@ -94,6 +103,9 @@ public class BookingSettingsGrainTests
         slots.All(s => s.IsAvailable).Should().BeTrue(); // No blocked dates
     }
 
+    // Given: a venue with a maximum online party size of 8
+    // When: availability is requested for a party of 12
+    // Then: all time slots are returned as unavailable because the party exceeds the maximum
     [Fact]
     public async Task GetAvailabilityAsync_WithLargeParty_ShouldReturnUnavailable()
     {
@@ -110,6 +122,9 @@ public class BookingSettingsGrainTests
         slots.All(s => !s.IsAvailable).Should().BeTrue();
     }
 
+    // Given: a venue open from 11am to 10pm
+    // When: slot availability is checked at noon, 6pm, 10am (before open), and 11pm (after close)
+    // Then: slots during operating hours are available; slots outside are unavailable
     [Fact]
     public async Task IsSlotAvailableAsync_ShouldCheckAvailability()
     {
@@ -127,6 +142,9 @@ public class BookingSettingsGrainTests
         (await grain.IsSlotAvailableAsync(date, new TimeOnly(12, 0), 12)).Should().BeFalse(); // Too large
     }
 
+    // Given: a venue accepting reservations
+    // When: a specific date is blocked (e.g., private event or holiday)
+    // Then: the date is marked as blocked and no reservations can be made for that date
     [Fact]
     public async Task BlockDateAsync_ShouldBlockDate()
     {
@@ -144,6 +162,9 @@ public class BookingSettingsGrainTests
         (await grain.IsSlotAvailableAsync(blockedDate, new TimeOnly(12, 0), 4)).Should().BeFalse();
     }
 
+    // Given: a venue with a previously blocked date
+    // When: the blocked date is unblocked
+    // Then: the date becomes available for reservations again
     [Fact]
     public async Task UnblockDateAsync_ShouldUnblockDate()
     {
@@ -162,6 +183,9 @@ public class BookingSettingsGrainTests
         (await grain.IsSlotAvailableAsync(blockedDate, new TimeOnly(12, 0), 4)).Should().BeTrue();
     }
 
+    // Given: a venue with a blocked date
+    // When: availability is requested for the blocked date
+    // Then: all time slots on that date are returned as unavailable
     [Fact]
     public async Task GetAvailabilityAsync_WithBlockedDate_ShouldReturnUnavailable()
     {
@@ -179,6 +203,9 @@ public class BookingSettingsGrainTests
         slots.All(s => !s.IsAvailable).Should().BeTrue();
     }
 
+    // Given: a venue configured with 30-minute slot intervals from 6pm to 10pm
+    // When: availability is requested for a party of 2
+    // Then: exactly 8 time slots are generated at 30-minute intervals
     [Fact]
     public async Task GetAvailabilityAsync_WithCustomSlotInterval_ShouldGenerateCorrectSlots()
     {
@@ -205,6 +232,9 @@ public class BookingSettingsGrainTests
 
     // Settings Validation Tests
 
+    // Given: a venue with booking settings
+    // When: the maximum bookings per slot is set to 5
+    // Then: each available time slot reports a capacity of 5 bookings
     [Fact]
     public async Task MaxBookingsPerSlot_ShouldEnforce()
     {
@@ -227,6 +257,9 @@ public class BookingSettingsGrainTests
         slots.All(s => s.AvailableCapacity == 5).Should().BeTrue();
     }
 
+    // Given: a venue with default booking settings
+    // When: the advance booking window is set to 14 days
+    // Then: the 14-day advance booking limit is persisted
     [Fact]
     public async Task AdvanceBookingDays_ShouldValidate()
     {
@@ -243,6 +276,9 @@ public class BookingSettingsGrainTests
         state.AdvanceBookingDays.Should().Be(14);
     }
 
+    // Given: a venue requiring deposits for large parties
+    // When: deposit requirement is enabled with a $50 amount
+    // Then: the deposit settings are saved with the default party size threshold of 6
     [Fact]
     public async Task DepositPartySizeThreshold_ShouldApply()
     {
@@ -263,6 +299,9 @@ public class BookingSettingsGrainTests
         state.DepositPartySizeThreshold.Should().Be(6); // Default value
     }
 
+    // Given: a venue with default booking settings
+    // When: the cancellation deadline is checked
+    // Then: the default cancellation deadline is 24 hours before the reservation
     [Fact]
     public async Task CancellationDeadline_ShouldEnforce()
     {
@@ -295,6 +334,9 @@ public class BookingCalendarGrainTests
         return grain;
     }
 
+    // Given: a venue on a specific date with no calendar
+    // When: the booking calendar is initialized for that date
+    // Then: the calendar is created with the correct date and no bookings
     [Fact]
     public async Task InitializeAsync_ShouldCreateCalendar()
     {
@@ -317,6 +359,9 @@ public class BookingCalendarGrainTests
         state.Bookings.Should().BeEmpty();
     }
 
+    // Given: an empty booking calendar
+    // When: a confirmed reservation for the Smith Party (4 guests at 7pm) is added
+    // Then: the booking appears on the calendar with the correct confirmation code, time, and party details
     [Fact]
     public async Task AddBookingAsync_ShouldAddBooking()
     {
@@ -349,6 +394,9 @@ public class BookingCalendarGrainTests
         bookings[0].Status.Should().Be(BookingStatus.Confirmed);
     }
 
+    // Given: a booking calendar with no reservations
+    // When: three confirmed reservations totaling 12 covers are added
+    // Then: the total cover count for the day is 12
     [Fact]
     public async Task AddBookingAsync_ShouldUpdateTotalCovers()
     {
@@ -368,6 +416,9 @@ public class BookingCalendarGrainTests
         coverCount.Should().Be(12); // 4 + 6 + 2
     }
 
+    // Given: a confirmed reservation for Smith at 7pm on the calendar
+    // When: the reservation status is updated to Seated at table T5
+    // Then: the calendar entry reflects the Seated status and table assignment
     [Fact]
     public async Task UpdateBookingAsync_ShouldUpdateBooking()
     {
@@ -394,6 +445,9 @@ public class BookingCalendarGrainTests
         bookings[0].TableNumber.Should().Be("T5");
     }
 
+    // Given: a calendar with one confirmed reservation
+    // When: the reservation is removed from the calendar
+    // Then: the calendar is empty and the cover count returns to zero
     [Fact]
     public async Task RemoveBookingAsync_ShouldRemoveBooking()
     {
@@ -416,6 +470,9 @@ public class BookingCalendarGrainTests
         coverCount.Should().Be(0);
     }
 
+    // Given: a calendar with two confirmed and one seated reservation
+    // When: bookings are filtered by Confirmed and Seated status
+    // Then: the confirmed filter returns 2 bookings and the seated filter returns 1 booking
     [Fact]
     public async Task GetBookingsAsync_WithStatusFilter_ShouldFilterBookings()
     {
@@ -439,6 +496,9 @@ public class BookingCalendarGrainTests
         seatedBookings[0].GuestName.Should().Be("Guest 2");
     }
 
+    // Given: a calendar with lunch bookings at noon and 1pm, and dinner bookings at 6pm and 7pm
+    // When: bookings are queried for the lunch window (11am-3pm) and dinner window (5pm-9pm)
+    // Then: each time range returns exactly 2 bookings
     [Fact]
     public async Task GetBookingsByTimeRangeAsync_ShouldFilterByTime()
     {
@@ -462,6 +522,9 @@ public class BookingCalendarGrainTests
         dinnerBookings.Should().HaveCount(2);
     }
 
+    // Given: a calendar with one confirmed, one seated, and one cancelled reservation
+    // When: booking counts are requested for each status and overall
+    // Then: each status count returns 1, and the total count returns 3
     [Fact]
     public async Task GetBookingCountAsync_ShouldReturnCorrectCount()
     {
@@ -482,6 +545,9 @@ public class BookingCalendarGrainTests
         (await grain.GetBookingCountAsync(BookingStatus.Cancelled)).Should().Be(1);
     }
 
+    // Given: three reservations added in non-chronological order (7pm, 8pm, 6pm)
+    // When: all bookings are retrieved from the calendar
+    // Then: the bookings are returned sorted by time (6pm, 7pm, 8pm)
     [Fact]
     public async Task GetBookingsAsync_ShouldReturnSortedByTime()
     {

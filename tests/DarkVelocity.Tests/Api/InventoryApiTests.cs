@@ -40,6 +40,9 @@ public class InventoryApiTests
         return (orgId, siteId);
     }
 
+    // Given: a site that tracks ingredient inventory
+    // When: a new ingredient is initialized with SKU, unit, reorder point, and par level
+    // Then: the inventory item is created with HAL links to receive stock
     [Fact]
     public async Task InitializeInventory_ReturnsCreatedWithHalResponse()
     {
@@ -75,6 +78,9 @@ public class InventoryApiTests
             .Should().EndWith("/receive");
     }
 
+    // Given: an ingredient that has been initialized in the site's inventory
+    // When: the inventory record is retrieved by ingredient identifier
+    // Then: the inventory details are returned with HAL links for receive, consume, and adjust
     [Fact]
     public async Task GetInventory_WhenExists_ReturnsOkWithHalResponse()
     {
@@ -101,6 +107,9 @@ public class InventoryApiTests
             .Should().EndWith("/adjust");
     }
 
+    // Given: a site with no matching inventory item
+    // When: a non-existent ingredient identifier is looked up
+    // Then: a not-found error is returned
     [Fact]
     public async Task GetInventory_WhenNotExists_ReturnsNotFound()
     {
@@ -119,6 +128,9 @@ public class InventoryApiTests
         json.RootElement.GetProperty("error").GetString().Should().Be("not_found");
     }
 
+    // Given: an initialized inventory item for an ingredient
+    // When: a batch is received from a supplier with quantity, cost, and expiry date
+    // Then: the stock is added and a HAL link to the inventory item is returned
     [Fact]
     public async Task ReceiveBatch_ReturnsOkWithHalResponse()
     {
@@ -153,6 +165,9 @@ public class InventoryApiTests
             .Should().Contain($"/inventory/{ingredientId}");
     }
 
+    // Given: an inventory item with stock on hand
+    // When: stock is consumed for order preparation
+    // Then: the quantity is deducted and a HAL link to the inventory item is returned
     [Fact]
     public async Task ConsumeStock_ReturnsOkWithHalResponse()
     {
@@ -181,6 +196,9 @@ public class InventoryApiTests
             .Should().Contain($"/inventory/{ingredientId}");
     }
 
+    // Given: an initialized inventory item
+    // When: the quantity is adjusted to match a physical count
+    // Then: the stock level is corrected and a HAL link to the inventory item is returned
     [Fact]
     public async Task AdjustQuantity_ReturnsOkWithHalResponse()
     {
@@ -205,6 +223,9 @@ public class InventoryApiTests
             .Should().Contain($"/inventory/{ingredientId}");
     }
 
+    // Given: an initialized inventory item
+    // When: the current stock level is queried
+    // Then: the stock level is returned with a HAL link to the inventory item
     [Fact]
     public async Task GetLevel_ReturnsOkWithHalResponse()
     {

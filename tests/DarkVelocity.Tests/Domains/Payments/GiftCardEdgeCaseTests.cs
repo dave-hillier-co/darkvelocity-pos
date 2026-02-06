@@ -24,6 +24,9 @@ public class GiftCardEdgeCaseTests
     // Gift Card Expiry Handling Tests
     // ============================================================================
 
+    // Given: An activated gift card with an expiry date in the past
+    // When: A redemption is attempted on the expired card
+    // Then: The redemption is rejected because the card has expired
     [Fact]
     public async Task GiftCard_RedeemExpiredCard_ShouldThrow()
     {
@@ -51,6 +54,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*expired*");
     }
 
+    // Given: An activated gift card with $100 balance that has expired
+    // When: Checking whether the card has sufficient balance for a $50 purchase
+    // Then: The balance check returns false because the card is expired
     [Fact]
     public async Task GiftCard_HasSufficientBalanceAsync_WhenExpired_ShouldReturnFalse()
     {
@@ -76,6 +82,9 @@ public class GiftCardEdgeCaseTests
         hasSufficient.Should().BeFalse();
     }
 
+    // Given: A fully depleted gift card with zero remaining balance
+    // When: The card is expired
+    // Then: The card status changes to Expired while maintaining zero balance
     [Fact]
     public async Task GiftCard_ExpireAsync_WithZeroBalance_ShouldChangeStatusOnly()
     {
@@ -110,6 +119,9 @@ public class GiftCardEdgeCaseTests
         state.CurrentBalance.Should().Be(0);
     }
 
+    // Given: An activated gift card that has been cancelled
+    // When: An expiration is attempted on the cancelled card
+    // Then: The expiration is rejected because cancelled cards cannot be expired
     [Fact]
     public async Task GiftCard_ExpireAsync_AlreadyCancelled_ShouldThrow()
     {
@@ -136,6 +148,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Cannot expire*");
     }
 
+    // Given: A gift card that has already been expired
+    // When: A second expiration is attempted
+    // Then: The expiration is rejected because the card is already expired
     [Fact]
     public async Task GiftCard_ExpireAsync_AlreadyExpired_ShouldThrow()
     {
@@ -162,6 +177,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Cannot expire*");
     }
 
+    // Given: An activated gift card that has been expired
+    // When: A reload of $50 is attempted on the expired card
+    // Then: The reload is rejected because expired cards cannot be reloaded
     [Fact]
     public async Task GiftCard_ReloadExpiredCard_ShouldThrow()
     {
@@ -189,6 +207,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Cannot reload*");
     }
 
+    // Given: An activated gift card that has been cancelled as lost
+    // When: A reload of $50 is attempted on the cancelled card
+    // Then: The reload is rejected because cancelled cards cannot be reloaded
     [Fact]
     public async Task GiftCard_ReloadCancelledCard_ShouldThrow()
     {
@@ -216,6 +237,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Cannot reload*");
     }
 
+    // Given: An activated gift card that has been expired
+    // When: A refund of $25 is attempted back to the expired card
+    // Then: The refund is rejected because expired cards cannot receive refunds
     [Fact]
     public async Task GiftCard_RefundToExpiredCard_ShouldThrow()
     {
@@ -247,6 +271,9 @@ public class GiftCardEdgeCaseTests
     // Gift Card Balance Edge Cases
     // ============================================================================
 
+    // Given: An activated gift card with a $75.50 balance
+    // When: The exact balance of $75.50 is redeemed
+    // Then: The card is fully depleted with zero remaining balance and Depleted status
     [Fact]
     public async Task GiftCard_RedeemExactBalance_ShouldDepleteCard()
     {
@@ -277,6 +304,9 @@ public class GiftCardEdgeCaseTests
         state.Status.Should().Be(GiftCardStatus.Depleted);
     }
 
+    // Given: An activated gift card with a $100 balance
+    // When: A redemption of $100.01 is attempted, one cent over the balance
+    // Then: The redemption is rejected due to insufficient balance
     [Fact]
     public async Task GiftCard_RedeemOnePennyMore_ShouldThrow()
     {
@@ -304,6 +334,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Insufficient balance*");
     }
 
+    // Given: An activated gift card with a $100 balance
+    // When: Three consecutive redemptions of $25, $30, and $20 are made
+    // Then: The remaining balance correctly decreases after each redemption and total redeemed is tracked
     [Fact]
     public async Task GiftCard_ConsecutiveRedemptions_ShouldMaintainCorrectBalance()
     {
@@ -338,6 +371,9 @@ public class GiftCardEdgeCaseTests
         state.RedemptionCount.Should().Be(3);
     }
 
+    // Given: A gift card that was created but never activated
+    // When: A redemption of $50 is attempted
+    // Then: The redemption is rejected because the card is not active
     [Fact]
     public async Task GiftCard_RedeemInactiveCar_ShouldThrow()
     {
@@ -365,6 +401,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*not active*");
     }
 
+    // Given: An activated gift card with a $100 initial balance
+    // When: Three consecutive reloads of $25, $50, and $10 are made
+    // Then: The balance increases correctly after each reload and total reloaded is tracked
     [Fact]
     public async Task GiftCard_MultipleReloads_ShouldAccumulateCorrectly()
     {
@@ -398,6 +437,9 @@ public class GiftCardEdgeCaseTests
         state.TotalReloaded.Should().Be(85m);
     }
 
+    // Given: An activated gift card with a $100 balance that received a $50 reload
+    // When: The reload transaction is voided as a duplicate
+    // Then: The balance is reversed back to the original $100
     [Fact]
     public async Task GiftCard_VoidTransaction_ForReload_ShouldReverseCredit()
     {
@@ -429,6 +471,9 @@ public class GiftCardEdgeCaseTests
         state.CurrentBalance.Should().Be(100m); // Back to original
     }
 
+    // Given: An activated gift card
+    // When: A void is attempted for a transaction ID that does not exist
+    // Then: The void is rejected because the transaction is not found
     [Fact]
     public async Task GiftCard_VoidNonExistentTransaction_ShouldThrow()
     {
@@ -455,6 +500,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*not found*");
     }
 
+    // Given: A gift card that has already been activated
+    // When: A second activation is attempted
+    // Then: The activation is rejected because the card is already active
     [Fact]
     public async Task GiftCard_ActivateTwice_ShouldThrow()
     {
@@ -480,6 +528,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*Cannot activate*");
     }
 
+    // Given: A gift card that has already been cancelled
+    // When: A second cancellation is attempted
+    // Then: The cancellation is rejected because the card is already cancelled
     [Fact]
     public async Task GiftCard_CancelTwice_ShouldThrow()
     {
@@ -506,6 +557,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*already cancelled*");
     }
 
+    // Given: An activated gift card that has been fully redeemed to zero balance
+    // When: A further redemption of $10 is attempted on the depleted card
+    // Then: The redemption is rejected because the card is not active (Depleted status)
     [Fact]
     public async Task GiftCard_RedeemDepletedCard_ShouldThrow()
     {
@@ -537,6 +591,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*not active*");
     }
 
+    // Given: An activated gift card with a $100 balance
+    // When: A minimal redemption of $0.01 is made
+    // Then: One cent is redeemed and the remaining balance is $99.99
     [Fact]
     public async Task GiftCard_SmallAmountRedemption_ShouldWork()
     {
@@ -564,6 +621,9 @@ public class GiftCardEdgeCaseTests
         result.RemainingBalance.Should().Be(99.99m);
     }
 
+    // Given: A gift card that has already been created
+    // When: A second creation is attempted for the same card
+    // Then: The creation is rejected because the card already exists
     [Fact]
     public async Task GiftCard_CreateTwice_ShouldThrow()
     {
@@ -592,6 +652,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*already exists*");
     }
 
+    // Given: An activated gift card with a $100 balance
+    // When: A positive balance adjustment of $25 is applied as a bonus credit
+    // Then: The card balance increases to $125
     [Fact]
     public async Task GiftCard_PositiveAdjustment_ShouldIncreaseBalance()
     {
@@ -617,6 +680,9 @@ public class GiftCardEdgeCaseTests
         newBalance.Should().Be(125m);
     }
 
+    // Given: An activated gift card with a $50 balance
+    // When: A negative balance adjustment of -$60 is attempted, exceeding the balance
+    // Then: The adjustment is rejected because it would result in a negative balance
     [Fact]
     public async Task GiftCard_NegativeAdjustment_ExceedingBalance_ShouldThrow()
     {
@@ -643,6 +709,9 @@ public class GiftCardEdgeCaseTests
             .WithMessage("*negative balance*");
     }
 
+    // Given: An activated gift card with a $50 balance
+    // When: A negative balance adjustment of exactly -$50 is applied
+    // Then: The card balance reaches zero and the status changes to Depleted
     [Fact]
     public async Task GiftCard_NegativeAdjustment_ExactBalance_ShouldDepleteCard()
     {
@@ -671,6 +740,9 @@ public class GiftCardEdgeCaseTests
         state.Status.Should().Be(GiftCardStatus.Depleted);
     }
 
+    // Given: An activated gift card with a $100 balance and $40 redeemed
+    // When: Retrieving the card balance information
+    // Then: The balance info shows $60 remaining, Active status, and the correct expiry date
     [Fact]
     public async Task GiftCard_GetBalanceInfo_ShouldReturnCorrectInfo()
     {

@@ -23,6 +23,9 @@ public class TableGrainTests
         return grain;
     }
 
+    // Given: no tables exist in the venue
+    // When: a new corner booth table T5 is created with capacity 2-6 and rectangle shape
+    // Then: the table is created with all specified properties and Available status
     [Fact]
     public async Task CreateAsync_ShouldCreateTable()
     {
@@ -57,6 +60,9 @@ public class TableGrainTests
         state.Status.Should().Be(TableStatus.Available);
     }
 
+    // Given: an existing table
+    // When: the table number, name, capacity, and shape are updated
+    // Then: all updated properties are persisted correctly
     [Fact]
     public async Task UpdateAsync_ShouldUpdateTable()
     {
@@ -81,6 +87,9 @@ public class TableGrainTests
         state.Shape.Should().Be(TableShape.Round);
     }
 
+    // Given: an available table
+    // When: the Smith Party of 4 is seated with a linked booking and order
+    // Then: the table status changes to Occupied with all occupancy details recorded
     [Fact]
     public async Task SeatAsync_ShouldOccupyTable()
     {
@@ -107,6 +116,9 @@ public class TableGrainTests
         state.CurrentOccupancy.ServerId.Should().Be(serverId);
     }
 
+    // Given: an occupied table with a walk-in guest
+    // When: the guest departs and the table is cleared
+    // Then: the table status changes to Dirty and the occupancy is removed
     [Fact]
     public async Task ClearAsync_ShouldMarkTableDirty()
     {
@@ -126,6 +138,9 @@ public class TableGrainTests
         state.CurrentOccupancy.Should().BeNull();
     }
 
+    // Given: a dirty table that needs bussing
+    // When: staff marks the table as clean
+    // Then: the table status changes back to Available
     [Fact]
     public async Task MarkCleanAsync_ShouldMakeTableAvailable()
     {
@@ -145,6 +160,9 @@ public class TableGrainTests
         state.Status.Should().Be(TableStatus.Available);
     }
 
+    // Given: an available table
+    // When: the table is blocked for a VIP reservation
+    // Then: the table status changes to Blocked
     [Fact]
     public async Task BlockAsync_ShouldBlockTable()
     {
@@ -162,6 +180,9 @@ public class TableGrainTests
         state.Status.Should().Be(TableStatus.Blocked);
     }
 
+    // Given: a blocked table
+    // When: the block is released
+    // Then: the table status changes back to Available
     [Fact]
     public async Task UnblockAsync_ShouldUnblockTable()
     {
@@ -180,6 +201,9 @@ public class TableGrainTests
         state.Status.Should().Be(TableStatus.Available);
     }
 
+    // Given: two separate tables
+    // When: the tables are combined to accommodate a larger party
+    // Then: the first table tracks the combination with the second table
     [Fact]
     public async Task CombineWithAsync_ShouldCombineTables()
     {
@@ -198,6 +222,9 @@ public class TableGrainTests
         state.CombinedWith.Should().Contain(tableId2);
     }
 
+    // Given: two tables that have been combined
+    // When: the tables are uncombined
+    // Then: the combination is cleared and the tables are independent again
     [Fact]
     public async Task UncombineAsync_ShouldSeparateTables()
     {
@@ -217,6 +244,9 @@ public class TableGrainTests
         state.CombinedWith.Should().BeEmpty();
     }
 
+    // Given: an existing table
+    // When: "window" and "quiet" tags are added
+    // Then: both tags are associated with the table
     [Fact]
     public async Task AddTagAsync_ShouldAddTag()
     {
@@ -236,6 +266,9 @@ public class TableGrainTests
         state.Tags.Should().Contain("quiet");
     }
 
+    // Given: a table tagged with "window" and "quiet"
+    // When: the "window" tag is removed
+    // Then: only the "quiet" tag remains
     [Fact]
     public async Task RemoveTagAsync_ShouldRemoveTag()
     {
@@ -256,6 +289,9 @@ public class TableGrainTests
         state.Tags.Should().Contain("quiet");
     }
 
+    // Given: an existing table
+    // When: the table's floor plan position is set with coordinates and rotation
+    // Then: the position is persisted with the correct X, Y, and rotation values
     [Fact]
     public async Task SetPositionAsync_ShouldUpdatePosition()
     {
@@ -277,6 +313,9 @@ public class TableGrainTests
         state.Position.Rotation.Should().Be(45);
     }
 
+    // Given: an existing table not assigned to any floor plan
+    // When: the table is assigned to a floor plan
+    // Then: the table records the floor plan assignment
     [Fact]
     public async Task SetFloorPlanAsync_ShouldAssignFloorPlan()
     {
@@ -295,6 +334,9 @@ public class TableGrainTests
         state.FloorPlanId.Should().Be(floorPlanId);
     }
 
+    // Given: a table that transitions through Available, Occupied, Dirty, and back to Available
+    // When: availability is checked at each stage
+    // Then: only Available status reports as available; Occupied and Dirty report as unavailable
     [Fact]
     public async Task IsAvailableAsync_ShouldReturnCorrectStatus()
     {
@@ -317,6 +359,9 @@ public class TableGrainTests
         (await grain.IsAvailableAsync()).Should().BeTrue();
     }
 
+    // Given: an existing table
+    // When: the table is deleted
+    // Then: the table no longer exists in the system
     [Fact]
     public async Task DeleteAsync_ShouldRemoveTable()
     {
@@ -334,6 +379,9 @@ public class TableGrainTests
         exists.Should().BeFalse();
     }
 
+    // Given: a table currently occupied by a guest
+    // When: staff attempts to seat another guest at the same table
+    // Then: seating is rejected because the table is already occupied
     [Fact]
     public async Task SeatAsync_WhenTableOccupied_ShouldThrow()
     {
@@ -354,6 +402,9 @@ public class TableGrainTests
 
     // Status Transition Tests
 
+    // Given: a table blocked for a private event
+    // When: staff attempts to seat a guest at the blocked table
+    // Then: seating is rejected because the table is blocked
     [Fact]
     public async Task SeatAsync_BlockedTable_ShouldThrow()
     {
@@ -372,6 +423,9 @@ public class TableGrainTests
             .WithMessage("*Cannot seat at table with status*");
     }
 
+    // Given: a table in Dirty status awaiting bussing
+    // When: staff attempts to seat a new guest at the dirty table
+    // Then: seating is rejected because the table has not been cleaned
     [Fact]
     public async Task SeatAsync_DirtyTable_ShouldThrow()
     {
@@ -391,6 +445,9 @@ public class TableGrainTests
             .WithMessage("*Cannot seat at table with status*");
     }
 
+    // Given: a table in Available status (not dirty)
+    // When: staff attempts to mark the table as clean
+    // Then: the action is rejected because the table is not dirty
     [Fact]
     public async Task MarkCleanAsync_NotDirty_ShouldThrow()
     {
@@ -409,6 +466,9 @@ public class TableGrainTests
             .WithMessage("*Table is not dirty*");
     }
 
+    // Given: a table in Available status (not blocked)
+    // When: staff attempts to unblock the table
+    // Then: the action is rejected because the table is not blocked
     [Fact]
     public async Task UnblockAsync_NotBlocked_ShouldThrow()
     {
@@ -429,6 +489,9 @@ public class TableGrainTests
 
     // Combination Tests
 
+    // Given: a table marked as non-combinable
+    // When: staff attempts to combine it with another table
+    // Then: the combination is rejected because the table is not combinable
     [Fact]
     public async Task CombineAsync_NonCombinable_ShouldThrow()
     {
@@ -450,6 +513,9 @@ public class TableGrainTests
             .WithMessage("*Table is not combinable*");
     }
 
+    // Given: a table already combined with another table
+    // When: the same combination is requested again
+    // Then: the operation is idempotent with only one combination tracked
     [Fact]
     public async Task CombineAsync_AlreadyCombined_ShouldHandle()
     {
@@ -470,6 +536,9 @@ public class TableGrainTests
         state.CombinedWith.Should().Contain(otherTableId);
     }
 
+    // Given: a table not combined with any other table
+    // When: uncombine is called
+    // Then: the operation completes without error (idempotent)
     [Fact]
     public async Task UncombineAsync_NotCombined_ShouldBeIdempotent()
     {
@@ -490,6 +559,9 @@ public class TableGrainTests
 
     // Occupancy Tests
 
+    // Given: an available table
+    // When: a VIP guest party of 6 is seated with booking, order, and server details
+    // Then: all occupancy fields including seating timestamp are stored correctly
     [Fact]
     public async Task SeatAsync_WithAllOptionalFields_ShouldStoreAll()
     {
@@ -521,6 +593,9 @@ public class TableGrainTests
         state.CurrentOccupancy.SeatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: a table with the Smith Party of 4 seated
+    // When: the current occupancy is queried
+    // Then: the occupancy details match the seated party
     [Fact]
     public async Task GetOccupancyAsync_AfterSeating_ShouldReturnCorrect()
     {
@@ -542,6 +617,9 @@ public class TableGrainTests
         occupancy.GuestCount.Should().Be(4);
     }
 
+    // Given: an occupied table with a guest
+    // When: the table is cleared after the guest departs
+    // Then: the occupancy is removed and the table status changes to Dirty
     [Fact]
     public async Task ClearAsync_ShouldClearOccupancy()
     {
@@ -586,6 +664,9 @@ public class FloorPlanGrainTests
         return grain;
     }
 
+    // Given: a venue with no floor plans
+    // When: a new Patio floor plan is created as the default with specific dimensions
+    // Then: the floor plan is created with correct name, dimensions, default flag, and active status
     [Fact]
     public async Task CreateAsync_ShouldCreateFloorPlan()
     {
@@ -618,6 +699,9 @@ public class FloorPlanGrainTests
         state.IsActive.Should().BeTrue();
     }
 
+    // Given: an existing floor plan
+    // When: the name, dimensions, and background image are updated
+    // Then: the updated properties are persisted and unchanged properties are preserved
     [Fact]
     public async Task UpdateAsync_ShouldUpdateFloorPlan()
     {
@@ -642,6 +726,9 @@ public class FloorPlanGrainTests
         state.BackgroundImageUrl.Should().Be("https://example.com/floor.png");
     }
 
+    // Given: an empty floor plan
+    // When: two tables are added to the floor plan
+    // Then: both table IDs are tracked on the floor plan
     [Fact]
     public async Task AddTableAsync_ShouldAddTableToFloorPlan()
     {
@@ -663,6 +750,9 @@ public class FloorPlanGrainTests
         tableIds.Should().Contain(tableId2);
     }
 
+    // Given: a floor plan with two tables
+    // When: one table is removed from the floor plan
+    // Then: only the remaining table is tracked on the floor plan
     [Fact]
     public async Task RemoveTableAsync_ShouldRemoveTableFromFloorPlan()
     {
@@ -685,6 +775,9 @@ public class FloorPlanGrainTests
         tableIds.Should().Contain(tableId2);
     }
 
+    // Given: an empty floor plan
+    // When: "Bar Area" and "Dining Room" sections are added with color codes
+    // Then: both sections are tracked with their names and colors
     [Fact]
     public async Task AddSectionAsync_ShouldAddSection()
     {
@@ -706,6 +799,9 @@ public class FloorPlanGrainTests
         state.Sections[1].Name.Should().Be("Dining Room");
     }
 
+    // Given: a floor plan with a "Bar Area" section
+    // When: the "Bar Area" section is removed
+    // Then: the floor plan has no sections
     [Fact]
     public async Task RemoveSectionAsync_ShouldRemoveSection()
     {
@@ -726,6 +822,9 @@ public class FloorPlanGrainTests
         state.Sections.Should().BeEmpty();
     }
 
+    // Given: an active floor plan
+    // When: the floor plan is deactivated
+    // Then: the floor plan is no longer active
     [Fact]
     public async Task DeactivateAsync_ShouldDeactivateFloorPlan()
     {
@@ -742,6 +841,9 @@ public class FloorPlanGrainTests
         (await grain.IsActiveAsync()).Should().BeFalse();
     }
 
+    // Given: a deactivated floor plan
+    // When: the floor plan is reactivated
+    // Then: the floor plan becomes active again
     [Fact]
     public async Task ActivateAsync_ShouldActivateFloorPlan()
     {
@@ -759,6 +861,9 @@ public class FloorPlanGrainTests
         (await grain.IsActiveAsync()).Should().BeTrue();
     }
 
+    // Given: a non-default floor plan
+    // When: the floor plan is set as the default
+    // Then: the floor plan is marked as the default floor plan
     [Fact]
     public async Task SetDefaultAsync_ShouldMarkAsDefault()
     {

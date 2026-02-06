@@ -17,6 +17,9 @@ public class PaymentMethodGrainTests
     private IPaymentMethodGrain GetPaymentMethodGrain(Guid accountId, Guid paymentMethodId)
         => _fixture.Cluster.GrainFactory.GetGrain<IPaymentMethodGrain>($"{accountId}:pm:{paymentMethodId}");
 
+    // Given: a valid Visa card number with cardholder details
+    // When: a card payment method is created
+    // Then: the payment method is stored with brand detection, last 4 digits, and a fingerprint
     [Fact]
     public async Task CreateAsync_WithValidCard_ShouldCreatePaymentMethod()
     {
@@ -45,6 +48,9 @@ public class PaymentMethodGrainTests
         result.Card.Fingerprint.Should().NotBeNullOrEmpty();
     }
 
+    // Given: a valid Mastercard card number
+    // When: a card payment method is created
+    // Then: the card brand is detected as Mastercard with the correct last 4 digits
     [Fact]
     public async Task CreateAsync_WithMastercard_ShouldDetectBrand()
     {

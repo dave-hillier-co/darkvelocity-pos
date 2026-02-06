@@ -26,6 +26,9 @@ public class MenuRegistryGrainTests
     // Menu Item Registration Tests
     // ============================================================================
 
+    // Given: an empty menu registry for an organization
+    // When: a "Caesar Salad" item at $12.99 is registered in category "category-1"
+    // Then: the registry contains the item with correct name, price, category, and default flags
     [Fact]
     public async Task RegisterItemAsync_ShouldRegisterMenuItem()
     {
@@ -53,6 +56,9 @@ public class MenuRegistryGrainTests
         items[0].PublishedVersion.Should().Be(1);
     }
 
+    // Given: an empty menu registry for an organization
+    // When: an "Uncategorized Item" is registered with no category assignment
+    // Then: the item is registered with a null category ID
     [Fact]
     public async Task RegisterItemAsync_WithNullCategoryId_ShouldRegisterMenuItem()
     {
@@ -74,6 +80,9 @@ public class MenuRegistryGrainTests
         items[0].CategoryId.Should().BeNull();
     }
 
+    // Given: an empty menu registry for an organization
+    // When: three items are registered across two categories
+    // Then: all three items are present in the registry
     [Fact]
     public async Task RegisterItemAsync_MultipleItems_ShouldRegisterAll()
     {
@@ -94,6 +103,9 @@ public class MenuRegistryGrainTests
         items.Should().Contain(i => i.Name == "Item Three");
     }
 
+    // Given: a menu item "Original Name" already registered in the registry
+    // When: a new item is registered with the same document ID but different name and price
+    // Then: the existing entry is replaced with the updated name, price, and category
     [Fact]
     public async Task RegisterItemAsync_SameDocumentId_ShouldReplaceExisting()
     {
@@ -114,6 +126,9 @@ public class MenuRegistryGrainTests
         items[0].CategoryId.Should().Be("cat-2");
     }
 
+    // Given: a registered menu item "Original" at $10.00 in cat-1
+    // When: the item is updated with a new name, price, category, and hasDraft flag
+    // Then: the registry entry reflects all updated fields
     [Fact]
     public async Task UpdateItemAsync_ShouldUpdateExistingItem()
     {
@@ -142,6 +157,9 @@ public class MenuRegistryGrainTests
         items[0].IsArchived.Should().BeFalse();
     }
 
+    // Given: a registered menu item
+    // When: the item is updated with isArchived=true
+    // Then: the item is excluded from default queries but included when includeArchived=true
     [Fact]
     public async Task UpdateItemAsync_WithArchivedFlag_ShouldSetArchived()
     {
@@ -170,6 +188,9 @@ public class MenuRegistryGrainTests
         allItems[0].IsArchived.Should().BeTrue();
     }
 
+    // Given: an empty menu registry
+    // When: an update is performed for a non-existing document ID
+    // Then: a new registry entry is created for the item
     [Fact]
     public async Task UpdateItemAsync_NonExistingItem_ShouldCreateNewEntry()
     {
@@ -193,6 +214,9 @@ public class MenuRegistryGrainTests
         items[0].DocumentId.Should().Be(documentId);
     }
 
+    // Given: a registered menu item in the registry
+    // When: the item is unregistered
+    // Then: the item is completely removed from the registry
     [Fact]
     public async Task UnregisterItemAsync_ShouldRemoveItem()
     {
@@ -210,6 +234,9 @@ public class MenuRegistryGrainTests
         items.Should().BeEmpty();
     }
 
+    // Given: an empty menu registry
+    // When: an unregister is attempted for a non-existing item
+    // Then: no exception is thrown (idempotent operation)
     [Fact]
     public async Task UnregisterItemAsync_NonExistingItem_ShouldNotThrow()
     {
@@ -221,6 +248,9 @@ public class MenuRegistryGrainTests
         await grain.UnregisterItemAsync("non-existing-item");
     }
 
+    // Given: four items registered across "cat-food", "cat-drinks", and uncategorized
+    // When: items are queried filtered by "cat-food" and "cat-drinks" respectively
+    // Then: only items matching the requested category are returned
     [Fact]
     public async Task GetItemsAsync_FilterByCategory_ShouldReturnOnlyMatchingItems()
     {
@@ -243,6 +273,9 @@ public class MenuRegistryGrainTests
         drinkItems[0].CategoryId.Should().Be("cat-drinks");
     }
 
+    // Given: one active item and one archived item in the registry
+    // When: items are queried with default parameters (no includeArchived flag)
+    // Then: only the active item is returned
     [Fact]
     public async Task GetItemsAsync_ExcludesArchived_ByDefault()
     {
@@ -260,6 +293,9 @@ public class MenuRegistryGrainTests
         items[0].DocumentId.Should().Be("active-item");
     }
 
+    // Given: one active item and one archived item in the registry
+    // When: items are queried with includeArchived=true
+    // Then: both active and archived items are returned
     [Fact]
     public async Task GetItemsAsync_IncludesArchived_WhenRequested()
     {
@@ -276,6 +312,9 @@ public class MenuRegistryGrainTests
         items.Should().HaveCount(2);
     }
 
+    // Given: a menu registry with no items registered
+    // When: items are queried
+    // Then: an empty list is returned
     [Fact]
     public async Task GetItemsAsync_EmptyRegistry_ShouldReturnEmptyList()
     {
@@ -294,6 +333,9 @@ public class MenuRegistryGrainTests
     // Menu Category Registration Tests
     // ============================================================================
 
+    // Given: an empty menu registry for an organization
+    // When: an "Appetizers" category is registered with display order 1 and a color
+    // Then: the registry contains the category with correct metadata and default flags
     [Fact]
     public async Task RegisterCategoryAsync_ShouldRegisterCategory()
     {
@@ -321,6 +363,9 @@ public class MenuRegistryGrainTests
         categories[0].ItemCount.Should().Be(0);
     }
 
+    // Given: an empty menu registry for an organization
+    // When: a category is registered with no color specified
+    // Then: the category is registered with a null color
     [Fact]
     public async Task RegisterCategoryAsync_WithNullColor_ShouldRegisterCategory()
     {
@@ -342,6 +387,9 @@ public class MenuRegistryGrainTests
         categories[0].Color.Should().BeNull();
     }
 
+    // Given: an empty menu registry
+    // When: three categories (Appetizers, Main Courses, Desserts) are registered
+    // Then: all three categories are present in the registry
     [Fact]
     public async Task RegisterCategoryAsync_MultipleCategories_ShouldRegisterAll()
     {
@@ -359,6 +407,9 @@ public class MenuRegistryGrainTests
         categories.Should().HaveCount(3);
     }
 
+    // Given: a category "Original" already registered in the registry
+    // When: a new category with the same document ID but different name, order, and color is registered
+    // Then: the existing entry is replaced with the updated metadata
     [Fact]
     public async Task RegisterCategoryAsync_SameDocumentId_ShouldReplaceExisting()
     {
@@ -379,6 +430,9 @@ public class MenuRegistryGrainTests
         categories[0].Color.Should().Be("#00FF00");
     }
 
+    // Given: a registered category "Original" at display order 1
+    // When: the category is updated with a new name, display order, color, draft flag, and item count
+    // Then: all updated fields are reflected in the registry
     [Fact]
     public async Task UpdateCategoryAsync_ShouldUpdateExistingCategory()
     {
@@ -408,6 +462,9 @@ public class MenuRegistryGrainTests
         categories[0].ItemCount.Should().Be(10);
     }
 
+    // Given: a registered menu category
+    // When: the category is updated with isArchived=true
+    // Then: the category is excluded from default queries but included when includeArchived=true
     [Fact]
     public async Task UpdateCategoryAsync_WithArchivedFlag_ShouldSetArchived()
     {
@@ -437,6 +494,9 @@ public class MenuRegistryGrainTests
         allCategories[0].IsArchived.Should().BeTrue();
     }
 
+    // Given: a registered category in the registry
+    // When: the category is unregistered
+    // Then: the category is completely removed from the registry
     [Fact]
     public async Task UnregisterCategoryAsync_ShouldRemoveCategory()
     {
@@ -454,6 +514,9 @@ public class MenuRegistryGrainTests
         categories.Should().BeEmpty();
     }
 
+    // Given: an empty menu registry
+    // When: an unregister is attempted for a non-existing category
+    // Then: no exception is thrown (idempotent operation)
     [Fact]
     public async Task UnregisterCategoryAsync_NonExistingCategory_ShouldNotThrow()
     {
@@ -465,6 +528,9 @@ public class MenuRegistryGrainTests
         await grain.UnregisterCategoryAsync("non-existing-category");
     }
 
+    // Given: three categories registered out of display order (Desserts=3, Appetizers=1, Main Courses=2)
+    // When: categories are queried from the registry
+    // Then: categories are returned sorted by display order ascending
     [Fact]
     public async Task GetCategoriesAsync_ShouldReturnOrderedByDisplayOrder()
     {
@@ -485,6 +551,9 @@ public class MenuRegistryGrainTests
         categories[2].DisplayOrder.Should().Be(3);
     }
 
+    // Given: a menu registry with no categories registered
+    // When: categories are queried
+    // Then: an empty list is returned
     [Fact]
     public async Task GetCategoriesAsync_EmptyRegistry_ShouldReturnEmptyList()
     {
@@ -503,6 +572,9 @@ public class MenuRegistryGrainTests
     // Modifier Block Registration Tests
     // ============================================================================
 
+    // Given: an empty menu registry
+    // When: a "Size Options" modifier block is registered
+    // Then: the block ID appears in the registry's modifier block list
     [Fact]
     public async Task RegisterModifierBlockAsync_ShouldRegisterBlock()
     {
@@ -520,6 +592,9 @@ public class MenuRegistryGrainTests
         blockIds[0].Should().Be(blockId);
     }
 
+    // Given: an empty menu registry
+    // When: three modifier blocks (Size, Temperature, Toppings) are registered
+    // Then: all three block IDs appear in the registry
     [Fact]
     public async Task RegisterModifierBlockAsync_MultipleBlocks_ShouldRegisterAll()
     {
@@ -540,6 +615,9 @@ public class MenuRegistryGrainTests
         blockIds.Should().Contain("block-3");
     }
 
+    // Given: a modifier block already registered in the registry
+    // When: a block with the same ID but a different name is registered again
+    // Then: only one entry exists (no duplicate block IDs)
     [Fact]
     public async Task RegisterModifierBlockAsync_SameBlockId_ShouldNotDuplicate()
     {
@@ -558,6 +636,9 @@ public class MenuRegistryGrainTests
         blockIds[0].Should().Be(blockId);
     }
 
+    // Given: a registered modifier block in the registry
+    // When: the modifier block is unregistered
+    // Then: the block is removed from the registry
     [Fact]
     public async Task UnregisterModifierBlockAsync_ShouldRemoveBlock()
     {
@@ -575,6 +656,9 @@ public class MenuRegistryGrainTests
         blockIds.Should().BeEmpty();
     }
 
+    // Given: an empty menu registry
+    // When: an unregister is attempted for a non-existing modifier block
+    // Then: no exception is thrown (idempotent operation)
     [Fact]
     public async Task UnregisterModifierBlockAsync_NonExistingBlock_ShouldNotThrow()
     {
@@ -586,6 +670,9 @@ public class MenuRegistryGrainTests
         await grain.UnregisterModifierBlockAsync("non-existing-block");
     }
 
+    // Given: a menu registry with no modifier blocks registered
+    // When: modifier block IDs are queried
+    // Then: an empty list is returned
     [Fact]
     public async Task GetModifierBlockIdsAsync_EmptyRegistry_ShouldReturnEmptyList()
     {
@@ -604,6 +691,9 @@ public class MenuRegistryGrainTests
     // Tag Registration Tests
     // ============================================================================
 
+    // Given: an empty menu registry
+    // When: a "Gluten Free" dietary tag is registered
+    // Then: the tag ID appears in the registry's tag list
     [Fact]
     public async Task RegisterTagAsync_ShouldRegisterTag()
     {
@@ -621,6 +711,9 @@ public class MenuRegistryGrainTests
         tagIds[0].Should().Be(tagId);
     }
 
+    // Given: an empty menu registry
+    // When: three tags (Vegan, Contains Nuts, Chef's Special) across different categories are registered
+    // Then: all three tag IDs appear in the registry
     [Fact]
     public async Task RegisterTagAsync_MultipleTags_ShouldRegisterAll()
     {
@@ -638,6 +731,9 @@ public class MenuRegistryGrainTests
         tagIds.Should().HaveCount(3);
     }
 
+    // Given: a tag registered as "Original" in the Dietary category
+    // When: the same tag ID is re-registered as "Updated" in the Allergen category
+    // Then: the tag metadata is replaced; it appears under Allergen but not Dietary
     [Fact]
     public async Task RegisterTagAsync_SameTagId_ShouldReplaceMetadata()
     {
@@ -663,6 +759,9 @@ public class MenuRegistryGrainTests
         dietaryTags.Should().BeEmpty();
     }
 
+    // Given: a registered content tag in the registry
+    // When: the tag is unregistered
+    // Then: the tag is removed from the registry
     [Fact]
     public async Task UnregisterTagAsync_ShouldRemoveTag()
     {
@@ -680,6 +779,9 @@ public class MenuRegistryGrainTests
         tagIds.Should().BeEmpty();
     }
 
+    // Given: an empty menu registry
+    // When: an unregister is attempted for a non-existing tag
+    // Then: no exception is thrown (idempotent operation)
     [Fact]
     public async Task UnregisterTagAsync_NonExistingTag_ShouldNotThrow()
     {
@@ -691,6 +793,9 @@ public class MenuRegistryGrainTests
         await grain.UnregisterTagAsync("non-existing-tag");
     }
 
+    // Given: tags registered across Dietary (2), Allergen (1), and Promotional (1) categories
+    // When: tags are queried filtered by each category
+    // Then: only tags matching the requested category are returned
     [Fact]
     public async Task GetTagIdsAsync_FilterByCategory_ShouldReturnMatchingTags()
     {
@@ -713,6 +818,9 @@ public class MenuRegistryGrainTests
         promotionalTags.Should().ContainSingle();
     }
 
+    // Given: three tags registered across different categories
+    // When: tags are queried without a category filter
+    // Then: all three tags are returned regardless of category
     [Fact]
     public async Task GetTagIdsAsync_NoFilter_ShouldReturnAllTags()
     {
@@ -730,6 +838,9 @@ public class MenuRegistryGrainTests
         allTags.Should().HaveCount(3);
     }
 
+    // Given: a menu registry with no tags registered
+    // When: tag IDs are queried
+    // Then: an empty list is returned
     [Fact]
     public async Task GetTagIdsAsync_EmptyRegistry_ShouldReturnEmptyList()
     {
@@ -744,6 +855,9 @@ public class MenuRegistryGrainTests
         tagIds.Should().BeEmpty();
     }
 
+    // Given: a registry with only a Dietary tag and no Allergen tags
+    // When: tags are queried filtered by the Allergen category
+    // Then: an empty list is returned
     [Fact]
     public async Task GetTagIdsAsync_CategoryWithNoTags_ShouldReturnEmptyList()
     {
@@ -763,6 +877,9 @@ public class MenuRegistryGrainTests
     // Cross-Entity Tests
     // ============================================================================
 
+    // Given: an empty menu registry
+    // When: items, categories, modifier blocks, and tags are all registered in the same registry
+    // Then: each entity type is stored and retrievable independently
     [Fact]
     public async Task Registry_ShouldHandleMultipleEntityTypes()
     {
@@ -790,6 +907,9 @@ public class MenuRegistryGrainTests
         tags.Should().ContainSingle();
     }
 
+    // Given: two separate organizations each with their own menu registry
+    // When: items and categories are registered in each organization's registry
+    // Then: each organization only sees its own data (tenant isolation)
     [Fact]
     public async Task Registry_ShouldIsolateByOrganization()
     {
@@ -826,6 +946,9 @@ public class MenuRegistryGrainTests
     // Edge Case Tests
     // ============================================================================
 
+    // Given: an empty menu registry
+    // When: a new item is registered
+    // Then: the item's LastModified timestamp is set to approximately the current time
     [Fact]
     public async Task RegisterItemAsync_LastModified_ShouldBeSet()
     {
@@ -843,6 +966,9 @@ public class MenuRegistryGrainTests
         items[0].LastModified.Should().BeOnOrBefore(DateTimeOffset.UtcNow);
     }
 
+    // Given: an empty menu registry
+    // When: a new category is registered
+    // Then: the category's LastModified timestamp is set to approximately the current time
     [Fact]
     public async Task RegisterCategoryAsync_LastModified_ShouldBeSet()
     {
@@ -860,6 +986,9 @@ public class MenuRegistryGrainTests
         categories[0].LastModified.Should().BeOnOrBefore(DateTimeOffset.UtcNow);
     }
 
+    // Given: a registered item with an initial LastModified timestamp
+    // When: the item is updated after a brief delay
+    // Then: the LastModified timestamp advances to reflect the update time
     [Fact]
     public async Task UpdateItemAsync_ShouldUpdateLastModified()
     {
@@ -883,6 +1012,9 @@ public class MenuRegistryGrainTests
         updatedItems[0].LastModified.Should().BeAfter(originalModified);
     }
 
+    // Given: a registered category with an initial LastModified timestamp
+    // When: the category is updated after a brief delay
+    // Then: the LastModified timestamp advances to reflect the update time
     [Fact]
     public async Task UpdateCategoryAsync_ShouldUpdateLastModified()
     {
@@ -906,6 +1038,9 @@ public class MenuRegistryGrainTests
         updatedCategories[0].LastModified.Should().BeAfter(originalModified);
     }
 
+    // Given: a registered item at published version 1
+    // When: the item is updated with a new name and hasDraft=true
+    // Then: the published version remains at 1 (updates don't increment the version)
     [Fact]
     public async Task UpdateItemAsync_PreservesPublishedVersion()
     {
@@ -923,6 +1058,9 @@ public class MenuRegistryGrainTests
         items[0].PublishedVersion.Should().Be(1);
     }
 
+    // Given: active and archived items across "food" and "drinks" categories
+    // When: items are queried with category="food" and includeArchived toggled
+    // Then: the category and archived filters combine correctly
     [Fact]
     public async Task GetItemsAsync_WithArchivedAndCategoryFilter_ShouldCombineFilters()
     {
@@ -944,6 +1082,9 @@ public class MenuRegistryGrainTests
         allFoodItems.Should().HaveCount(2);
     }
 
+    // Given: an empty menu registry
+    // When: 100 items are registered across two categories
+    // Then: all 100 items are retrievable, with correct counts per category filter
     [Fact]
     public async Task Registry_ShouldHandleLargeNumberOfItems()
     {
@@ -968,6 +1109,9 @@ public class MenuRegistryGrainTests
         catBItems.Should().HaveCount(itemCount - itemCount / 5);
     }
 
+    // Given: an item and category registered via one grain reference
+    // When: data is queried via a new grain reference to the same registry
+    // Then: the previously registered data is still present (event-sourced persistence)
     [Fact]
     public async Task Registry_ShouldPersistAcrossGrainCalls()
     {

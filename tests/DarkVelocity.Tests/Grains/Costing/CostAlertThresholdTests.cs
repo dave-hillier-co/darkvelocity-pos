@@ -25,6 +25,9 @@ public class CostAlertThresholdTests
     // Ingredient Price Change Threshold Tests
     // ============================================================================
 
+    // Given: costing settings configured with a price change alert threshold
+    // When: an ingredient price change percentage is evaluated against the threshold
+    // Then: an alert is triggered only when the absolute price change exceeds the threshold
     [Theory]
     [InlineData(100.00, 105.00, 5.0, false)]   // 5% increase, threshold 10% - no alert
     [InlineData(100.00, 110.00, 10.0, false)]  // 10% increase, threshold 10% - at threshold
@@ -66,6 +69,9 @@ public class CostAlertThresholdTests
         shouldAlert.Should().Be(expectAlert);
     }
 
+    // Given: costing settings configured with a cost increase alert threshold
+    // When: a recipe cost change percentage is evaluated against the threshold
+    // Then: an alert is triggered only for cost increases that exceed the threshold
     [Theory]
     [InlineData(10.00, 10.50, 5.0, false)]    // 5% increase, threshold 5% - at threshold
     [InlineData(10.00, 10.60, 5.0, true)]     // 6% increase, threshold 5% - alert
@@ -108,6 +114,9 @@ public class CostAlertThresholdTests
     // Margin Threshold Tests
     // ============================================================================
 
+    // Given: costing settings with a configured minimum margin percentage
+    // When: an actual margin percentage is checked against the minimum
+    // Then: a below-minimum flag is raised only when the margin is strictly below the threshold
     [Theory]
     [InlineData(55.0, 50.0, false)]  // Margin 55%, min 50% - OK
     [InlineData(50.0, 50.0, false)]  // Margin at minimum - OK
@@ -144,6 +153,9 @@ public class CostAlertThresholdTests
         isBelowMinimum.Should().Be(expectBelowMinimum);
     }
 
+    // Given: costing settings with a configured warning margin percentage
+    // When: an actual margin percentage is checked against the warning level
+    // Then: a below-warning flag is raised only when the margin is strictly below the warning threshold
     [Theory]
     [InlineData(65.0, 60.0, false)]  // Margin 65%, warning 60% - OK
     [InlineData(60.0, 60.0, false)]  // Margin at warning - OK
@@ -183,6 +195,9 @@ public class CostAlertThresholdTests
     // Alert Creation for Different Alert Types
     // ============================================================================
 
+    // Given: a salmon fillet ingredient with a 20% price increase affecting 10 recipes
+    // When: an ingredient price increase cost alert is created
+    // Then: the alert calculates the correct change percentage and captures the affected recipe count
     [Fact]
     public async Task CostAlert_IngredientPriceIncrease_ShouldCalculateImpactCorrectly()
     {
@@ -216,6 +231,9 @@ public class CostAlertThresholdTests
         snapshot.IsAcknowledged.Should().BeFalse();
     }
 
+    // Given: a grilled salmon menu item whose margin dropped from 60% to 45% below the 50% threshold
+    // When: a margin-below-threshold cost alert is created
+    // Then: the alert captures previous margin, current margin, threshold, and linked recipe/menu item IDs
     [Fact]
     public async Task CostAlert_MarginBelowThreshold_ShouldCaptureMarginData()
     {
@@ -252,6 +270,9 @@ public class CostAlertThresholdTests
         snapshot.MenuItemId.Should().Be(menuItemId);
     }
 
+    // Given: a Caesar salad recipe whose cost increased from $5.00 to $6.50
+    // When: a recipe cost increase alert is created
+    // Then: the alert calculates a 30% cost increase and identifies the affected recipe
     [Fact]
     public async Task CostAlert_RecipeCostIncrease_ShouldTrackCostChange()
     {
@@ -283,6 +304,9 @@ public class CostAlertThresholdTests
         snapshot.RecipeName.Should().Be("Caesar Salad");
     }
 
+    // Given: olive oil with a 25% seasonal price decrease affecting 25 recipes
+    // When: an ingredient price decrease alert is created
+    // Then: the alert captures the negative change percentage and the opportunity to improve margins
     [Fact]
     public async Task CostAlert_IngredientPriceDecrease_ShouldIdentifyOpportunity()
     {
@@ -318,6 +342,9 @@ public class CostAlertThresholdTests
     // Alert Workflow Tests
     // ============================================================================
 
+    // Given: a cost alert created for a beef tenderloin price increase
+    // When: a manager acknowledges the alert with a price-adjusted action and notes
+    // Then: the alert transitions from unacknowledged to acknowledged with the user ID and action recorded
     [Fact]
     public async Task CostAlert_FullWorkflow_FromCreationToAcknowledgment()
     {
@@ -363,6 +390,9 @@ public class CostAlertThresholdTests
         acknowledgedSnapshot.AcknowledgedAt.Should().NotBeNull();
     }
 
+    // Given: a recipe cost increase alert awaiting acknowledgment
+    // When: the alert is acknowledged with a specific action type
+    // Then: the recorded action matches the chosen response and the alert is marked acknowledged
     [Theory]
     [InlineData(CostAlertAction.PriceAdjusted)]
     [InlineData(CostAlertAction.MenuUpdated)]
@@ -405,6 +435,9 @@ public class CostAlertThresholdTests
     // Edge Cases
     // ============================================================================
 
+    // Given: a newly added ingredient with no previous price (zero previous value)
+    // When: a cost alert is created with zero as the previous value
+    // Then: the alert is created without error, recording both the zero baseline and current price
     [Fact]
     public async Task CostAlert_ZeroPreviousValue_ShouldHandleGracefully()
     {
@@ -435,6 +468,9 @@ public class CostAlertThresholdTests
         snapshot.CurrentValue.Should().Be(10.00m);
     }
 
+    // Given: an ingredient whose price has not actually changed
+    // When: a cost alert is created with identical previous and current values
+    // Then: the calculated change percentage is zero
     [Fact]
     public async Task CostAlert_SameValue_ShouldShowZeroPercentChange()
     {
@@ -463,6 +499,9 @@ public class CostAlertThresholdTests
         snapshot.ChangePercent.Should().Be(0m);
     }
 
+    // Given: costing settings with a minimum margin of 50% and warning margin of 60%
+    // When: margins at 65%, 55%, and 45% are evaluated against both thresholds
+    // Then: the correct combination of below-minimum and below-warning flags is returned for each level
     [Fact]
     public async Task CostingSettings_MultipleThresholdsInteraction()
     {
@@ -505,6 +544,9 @@ public class CostAlertThresholdTests
     // Alert Index Integration Tests
     // ============================================================================
 
+    // Given: a cost alert index with three active and two acknowledged alerts registered
+    // When: querying for active alerts, acknowledged alerts, and total count
+    // Then: the index returns correct counts and correctly partitions alerts by status
     [Fact]
     public async Task CostAlertIndex_RegisterMultipleAlerts_ShouldTrackAllCorrectly()
     {
@@ -577,6 +619,9 @@ public class CostAlertThresholdTests
         acknowledgedQuery.AcknowledgedCount.Should().Be(2);
     }
 
+    // Given: a cost alert index containing alerts of different types (price increase, margin, recipe cost)
+    // When: querying by a specific alert type
+    // Then: only alerts matching the requested type are returned
     [Fact]
     public async Task CostAlertIndex_QueryByAlertType_ShouldFilterCorrectly()
     {

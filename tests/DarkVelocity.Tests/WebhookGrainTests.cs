@@ -31,6 +31,9 @@ public class WebhookSubscriptionGrainTests
         return grain;
     }
 
+    // Given: A new webhook subscription with name, URL, secret, headers, and event types
+    // When: The webhook subscription is created
+    // Then: The subscription is active with all configured properties persisted
     [Fact]
     public async Task CreateAsync_ShouldCreateWebhook()
     {
@@ -63,6 +66,9 @@ public class WebhookSubscriptionGrainTests
         state.Status.Should().Be(WebhookStatus.Active);
     }
 
+    // Given: An active webhook subscription
+    // When: The subscription name, URL, secret, and event types are updated
+    // Then: The subscription reflects the new configuration
     [Fact]
     public async Task UpdateAsync_ShouldUpdateWebhook()
     {
@@ -87,6 +93,9 @@ public class WebhookSubscriptionGrainTests
         state.Events[0].EventType.Should().Be("booking.created");
     }
 
+    // Given: An active webhook subscription with existing event subscriptions
+    // When: New event types are added to the subscription
+    // Then: The webhook is subscribed to both new and existing event types
     [Fact]
     public async Task SubscribeToEventAsync_ShouldAddEvent()
     {
@@ -104,6 +113,9 @@ public class WebhookSubscriptionGrainTests
         (await grain.IsSubscribedToEventAsync("payment.completed")).Should().BeTrue();
     }
 
+    // Given: A webhook subscribed to order.created and order.completed events
+    // When: The order.created event is unsubscribed
+    // Then: Only order.completed remains subscribed
     [Fact]
     public async Task UnsubscribeFromEventAsync_ShouldRemoveEvent()
     {
@@ -120,6 +132,9 @@ public class WebhookSubscriptionGrainTests
         (await grain.IsSubscribedToEventAsync("order.completed")).Should().BeTrue();
     }
 
+    // Given: An active webhook subscription
+    // When: The webhook is paused
+    // Then: The webhook status is Paused with a pause timestamp recorded
     [Fact]
     public async Task PauseAsync_ShouldPauseWebhook()
     {
@@ -139,6 +154,9 @@ public class WebhookSubscriptionGrainTests
         state.PausedAt.Should().NotBeNull();
     }
 
+    // Given: A paused webhook subscription
+    // When: The webhook is resumed
+    // Then: The webhook status returns to Active with failure counter and pause timestamp cleared
     [Fact]
     public async Task ResumeAsync_ShouldResumeWebhook()
     {
@@ -160,6 +178,9 @@ public class WebhookSubscriptionGrainTests
         state.ConsecutiveFailures.Should().Be(0);
     }
 
+    // Given: An active webhook subscription
+    // When: The webhook is deleted
+    // Then: The webhook status is marked as Deleted
     [Fact]
     public async Task DeleteAsync_ShouldMarkAsDeleted()
     {
@@ -176,6 +197,9 @@ public class WebhookSubscriptionGrainTests
         status.Should().Be(WebhookStatus.Deleted);
     }
 
+    // Given: An active webhook subscribed to order.created
+    // When: A payload is delivered for the order.created event
+    // Then: The delivery is recorded as successful with a 200 status code
     [Fact]
     public async Task DeliverAsync_ShouldRecordDelivery()
     {
@@ -197,6 +221,9 @@ public class WebhookSubscriptionGrainTests
         deliveries[0].Success.Should().BeTrue();
     }
 
+    // Given: A paused webhook subscription
+    // When: A delivery is attempted
+    // Then: An error is raised indicating the webhook is not active
     [Fact]
     public async Task DeliverAsync_WhenPaused_ShouldThrow()
     {
@@ -214,6 +241,9 @@ public class WebhookSubscriptionGrainTests
             .WithMessage("*Webhook is not active*");
     }
 
+    // Given: A webhook not subscribed to the customer.created event
+    // When: A delivery is attempted for customer.created
+    // Then: An error is raised indicating the webhook is not subscribed to that event
     [Fact]
     public async Task DeliverAsync_WhenNotSubscribed_ShouldThrow()
     {
@@ -230,6 +260,9 @@ public class WebhookSubscriptionGrainTests
             .WithMessage("*Not subscribed to event*");
     }
 
+    // Given: An active webhook subscription
+    // When: Five successful deliveries are recorded
+    // Then: All five deliveries are tracked and the consecutive failure counter remains at zero
     [Fact]
     public async Task RecordDeliveryAsync_ShouldTrackDeliveries()
     {
@@ -261,6 +294,9 @@ public class WebhookSubscriptionGrainTests
         state.ConsecutiveFailures.Should().Be(0);
     }
 
+    // Given: An active webhook subscription
+    // When: Two consecutive delivery failures with 500 status codes are recorded
+    // Then: The consecutive failure counter is 2 and the webhook remains active
     [Fact]
     public async Task RecordDeliveryAsync_WithFailures_ShouldTrackFailures()
     {
@@ -296,6 +332,9 @@ public class WebhookSubscriptionGrainTests
         state.Status.Should().Be(WebhookStatus.Active); // Still active, not yet at max retries
     }
 
+    // Given: An active webhook subscription
+    // When: Three consecutive delivery failures are recorded (the default maximum)
+    // Then: The webhook status transitions to Failed
     [Fact]
     public async Task RecordDeliveryAsync_WithMaxFailures_ShouldMarkFailed()
     {
@@ -322,6 +361,9 @@ public class WebhookSubscriptionGrainTests
         state.Status.Should().Be(WebhookStatus.Failed);
     }
 
+    // Given: A webhook with two consecutive delivery failures
+    // When: A successful delivery is recorded
+    // Then: The consecutive failure counter resets to zero and the webhook remains active
     [Fact]
     public async Task RecordDeliveryAsync_SuccessAfterFailures_ShouldResetCounter()
     {
@@ -365,6 +407,9 @@ public class WebhookSubscriptionGrainTests
         state.Status.Should().Be(WebhookStatus.Active);
     }
 
+    // Given: A webhook with 110 recorded deliveries
+    // When: Recent deliveries are retrieved
+    // Then: Only the most recent 100 deliveries are returned
     [Fact]
     public async Task GetRecentDeliveriesAsync_ShouldLimitTo100()
     {
@@ -391,6 +436,9 @@ public class WebhookSubscriptionGrainTests
         deliveries.Should().HaveCount(100);
     }
 
+    // Given: A webhook subscribed to order.created and order.completed events
+    // When: Subscription status is checked for various event types
+    // Then: Subscribed events return true and unsubscribed events return false
     [Fact]
     public async Task IsSubscribedToEventAsync_ShouldReturnCorrectStatus()
     {

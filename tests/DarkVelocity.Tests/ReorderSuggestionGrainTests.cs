@@ -36,6 +36,9 @@ public class ReorderSuggestionGrainTests
         return grain;
     }
 
+    // Given: a new reorder suggestion grain for a site
+    // When: the grain is initialized
+    // Then: default reorder settings are configured with 7-day lead time and 1.5x safety stock multiplier
     [Fact]
     public async Task InitializeAsync_ShouldSetupReorderSuggestions()
     {
@@ -54,6 +57,9 @@ public class ReorderSuggestionGrainTests
         settings.SafetyStockMultiplier.Should().Be(1.5m);
     }
 
+    // Given: an initialized reorder suggestion grain for a site
+    // When: an ingredient with low stock is registered for reorder monitoring
+    // Then: the ingredient generates reorder suggestions on the next scan
     [Fact]
     public async Task RegisterIngredientAsync_ShouldAddIngredientForMonitoring()
     {
@@ -85,6 +91,9 @@ public class ReorderSuggestionGrainTests
         report.TotalSuggestions.Should().BeGreaterThan(0);
     }
 
+    // Given: a registered ingredient with stock below the reorder point and active consumption history
+    // When: reorder suggestions are generated
+    // Then: at least one suggestion is created with an estimated reorder cost
     [Fact]
     public async Task GenerateSuggestionsAsync_ShouldCreateSuggestionsForLowStock()
     {
@@ -108,6 +117,9 @@ public class ReorderSuggestionGrainTests
         report.TotalEstimatedCost.Should().BeGreaterThan(0);
     }
 
+    // Given: one out-of-stock ingredient and one critically low-stock ingredient
+    // When: reorder suggestions are generated
+    // Then: items are categorized by urgency level with urgent items counted
     [Fact]
     public async Task GenerateSuggestionsAsync_ShouldCategorizeByUrgency()
     {
@@ -143,6 +155,9 @@ public class ReorderSuggestionGrainTests
         urgentItems.Should().BeGreaterThan(0);
     }
 
+    // Given: multiple registered ingredients with varying stock levels generating suggestions
+    // When: pending suggestions are retrieved
+    // Then: suggestions are sorted with the most urgent reorder needs first
     [Fact]
     public async Task GetPendingSuggestionsAsync_ShouldReturnOrderedByUrgency()
     {
@@ -175,6 +190,9 @@ public class ReorderSuggestionGrainTests
         }
     }
 
+    // Given: a pending reorder suggestion for low-stock ground beef
+    // When: the suggestion is approved by a manager
+    // Then: the suggestion is removed from the pending list
     [Fact]
     public async Task ApproveSuggestionAsync_ShouldUpdateStatus()
     {
@@ -201,6 +219,9 @@ public class ReorderSuggestionGrainTests
         pendingSuggestions.Should().NotContain(s => s.SuggestionId == suggestionId);
     }
 
+    // Given: a pending reorder suggestion for low-stock ground beef
+    // When: the suggestion is dismissed with a reason that stock was ordered manually
+    // Then: the suggestion is removed from the pending list
     [Fact]
     public async Task DismissSuggestionAsync_ShouldUpdateStatus()
     {
@@ -227,6 +248,9 @@ public class ReorderSuggestionGrainTests
         pendingSuggestions.Should().NotContain(s => s.SuggestionId == suggestionId);
     }
 
+    // Given: a pending reorder suggestion for low-stock ground beef
+    // When: the suggestion is linked to a purchase order
+    // Then: the suggestion is removed from the pending list
     [Fact]
     public async Task MarkAsOrderedAsync_ShouldLinkToPurchaseOrder()
     {
@@ -253,6 +277,9 @@ public class ReorderSuggestionGrainTests
         pendingSuggestions.Should().NotContain(s => s.SuggestionId == suggestionId);
     }
 
+    // Given: pending reorder suggestions for a low-stock ingredient
+    // When: a purchase order draft is generated from the suggestions
+    // Then: the draft contains line items with a total value and a future requested delivery date
     [Fact]
     public async Task GeneratePurchaseOrderDraftAsync_ShouldCreateDraftFromSuggestions()
     {
@@ -278,6 +305,9 @@ public class ReorderSuggestionGrainTests
         draft.RequestedDeliveryDate.Should().BeAfter(DateTime.UtcNow);
     }
 
+    // Given: pending reorder suggestions for items from two different suppliers
+    // When: consolidated purchase order drafts are generated
+    // Then: at least two drafts are created, grouped by supplier
     [Fact]
     public async Task GenerateConsolidatedDraftsAsync_ShouldGroupBySupplier()
     {
@@ -316,6 +346,9 @@ public class ReorderSuggestionGrainTests
         }
     }
 
+    // Given: a registered ingredient with consumption history and known unit cost
+    // When: the economic order quantity is calculated with ordering and holding cost parameters
+    // Then: a positive optimal order quantity is returned
     [Fact]
     public async Task CalculateOptimalOrderQuantityAsync_ShouldReturnEOQ()
     {
@@ -337,6 +370,9 @@ public class ReorderSuggestionGrainTests
         eoq.Should().BeGreaterThan(0);
     }
 
+    // Given: a registered ingredient without a preferred supplier
+    // When: a preferred supplier with a 3-day lead time is assigned
+    // Then: future suggestions reflect the new supplier name and lead time
     [Fact]
     public async Task UpdateIngredientSupplierAsync_ShouldUpdateSupplierInfo()
     {
@@ -367,6 +403,9 @@ public class ReorderSuggestionGrainTests
         }
     }
 
+    // Given: an initialized reorder suggestion grain with default settings
+    // When: custom settings with 14-day lead time and 2.0x safety stock multiplier are applied
+    // Then: the settings are persisted with the new values
     [Fact]
     public async Task ConfigureAsync_ShouldUpdateSettings()
     {
@@ -396,6 +435,9 @@ public class ReorderSuggestionGrainTests
         settings.AnalysisPeriodDays.Should().Be(60);
     }
 
+    // Given: a registered ingredient with active reorder suggestions
+    // When: the ingredient is unregistered from reorder monitoring
+    // Then: all pending suggestions for that ingredient are removed
     [Fact]
     public async Task UnregisterIngredientAsync_ShouldRemoveIngredientAndSuggestions()
     {
@@ -422,6 +464,9 @@ public class ReorderSuggestionGrainTests
         suggestions.Should().NotContain(s => s.IngredientId == ingredientId);
     }
 
+    // Given: pending reorder suggestions at various urgency levels
+    // When: suggestions are filtered by a specific urgency level
+    // Then: only suggestions matching that urgency are returned
     [Fact]
     public async Task GetSuggestionsByUrgencyAsync_ShouldFilterCorrectly()
     {
@@ -449,6 +494,9 @@ public class ReorderSuggestionGrainTests
         suggestions.Should().AllSatisfy(s => s.Urgency.Should().Be(targetUrgency));
     }
 
+    // Given: two ingredients registered under the same preferred supplier
+    // When: the reorder report is retrieved
+    // Then: the supplier summary shows both items with a combined total value
     [Fact]
     public async Task GetReportAsync_ShouldIncludeSupplierSummary()
     {

@@ -23,6 +23,9 @@ public class VendorItemMappingGrainTests
             GrainKeys.VendorItemMapping(orgId, vendorId));
     }
 
+    // Given: a new vendor item mapping grain
+    // When: initialized for a supplier
+    // Then: the vendor mapping is created with zero mappings
     [Fact]
     public async Task InitializeAsync_ShouldCreateVendorMapping()
     {
@@ -46,6 +49,9 @@ public class VendorItemMappingGrainTests
         snapshot.TotalMappings.Should().Be(0);
     }
 
+    // Given: an already initialized vendor mapping
+    // When: initialization is attempted a second time
+    // Then: the operation is rejected as a duplicate initialization
     [Fact]
     public async Task InitializeAsync_AlreadyInitialized_ShouldThrow()
     {
@@ -66,6 +72,9 @@ public class VendorItemMappingGrainTests
             .WithMessage("Vendor mapping already initialized");
     }
 
+    // Given: an initialized vendor mapping for a supplier
+    // When: a vendor product description is manually mapped to an inventory ingredient
+    // Then: the mapping is created with manual source and full confidence
     [Fact]
     public async Task SetMappingAsync_ShouldCreateMapping()
     {
@@ -99,6 +108,9 @@ public class VendorItemMappingGrainTests
         mapping.Confidence.Should().Be(1.0m);
     }
 
+    // Given: a vendor mapping with an exact product description registered
+    // When: the same description is looked up
+    // Then: the mapping is found via exact description match
     [Fact]
     public async Task GetMappingAsync_ExactMatch_ShouldReturnMapping()
     {
@@ -128,6 +140,9 @@ public class VendorItemMappingGrainTests
         result.Mapping!.IngredientId.Should().Be(ingredientId);
     }
 
+    // Given: a vendor mapping with a supplier product code assigned
+    // When: looking up by product code with a different description
+    // Then: the mapping is found via product code match
     [Fact]
     public async Task GetMappingAsync_ProductCodeMatch_ShouldReturnMapping()
     {
@@ -157,6 +172,9 @@ public class VendorItemMappingGrainTests
         result.Mapping!.IngredientId.Should().Be(ingredientId);
     }
 
+    // Given: an initialized vendor mapping with no matching descriptions registered
+    // When: an unknown product description is looked up
+    // Then: no mapping is found
     [Fact]
     public async Task GetMappingAsync_NoMatch_ShouldReturnNotFound()
     {
@@ -177,6 +195,9 @@ public class VendorItemMappingGrainTests
         result.Mapping.Should().BeNull();
     }
 
+    // Given: an initialized vendor mapping with no prior learned patterns
+    // When: a mapping is learned from a confirmed purchase document
+    // Then: the exact mapping is created and fuzzy matching patterns are generated
     [Fact]
     public async Task LearnMappingAsync_ShouldCreateMappingAndPattern()
     {
@@ -212,6 +233,9 @@ public class VendorItemMappingGrainTests
         snapshot.TotalPatterns.Should().BeGreaterThan(0);
     }
 
+    // Given: a vendor mapping with learned patterns for chicken breast and ground beef
+    // When: suggestions are requested for a similar chicken description
+    // Then: the chicken ingredient is suggested as the top match
     [Fact]
     public async Task GetSuggestionsAsync_WithPatterns_ShouldReturnSuggestions()
     {
@@ -250,6 +274,9 @@ public class VendorItemMappingGrainTests
         suggestions[0].IngredientName.Should().Be("Chicken Breast");
     }
 
+    // Given: a vendor mapping with one registered product description
+    // When: the mapping is deleted
+    // Then: the description no longer resolves to any ingredient
     [Fact]
     public async Task DeleteMappingAsync_ShouldRemoveMapping()
     {
@@ -281,6 +308,9 @@ public class VendorItemMappingGrainTests
         afterResult.Found.Should().BeFalse();
     }
 
+    // Given: a vendor mapping for olive oil with an established ingredient link
+    // When: the mapping is used in two separate purchase document confirmations
+    // Then: the usage count reflects both confirmations
     [Fact]
     public async Task RecordUsageAsync_ShouldIncrementUsageCount()
     {
@@ -310,6 +340,9 @@ public class VendorItemMappingGrainTests
         olivOilMapping!.UsageCount.Should().BeGreaterThanOrEqualTo(2);
     }
 
+    // Given: a vendor mapping with three registered product descriptions
+    // When: all mappings are requested
+    // Then: all three descriptions and their ingredient associations are returned
     [Fact]
     public async Task GetAllMappingsAsync_ShouldReturnAllMappings()
     {
@@ -333,6 +366,9 @@ public class VendorItemMappingGrainTests
         mappings.Select(m => m.VendorDescription).Should().Contain("Item 1", "Item 2", "Item 3");
     }
 
+    // Given: a vendor mapping registered with an uppercase product description
+    // When: the same description is looked up in lowercase
+    // Then: the mapping is found via case-insensitive exact match
     [Fact]
     public async Task GetMappingAsync_CaseInsensitive_ShouldMatch()
     {
@@ -359,6 +395,9 @@ public class VendorItemMappingGrainTests
         result.MatchType.Should().Be(MappingMatchType.ExactDescription);
     }
 
+    // Given: a vendor mapping grain that has not been explicitly initialized
+    // When: a mapping is set directly without prior initialization
+    // Then: the grain auto-initializes and the mapping is created successfully
     [Fact]
     public async Task SetMappingAsync_AutoInitializes_WhenNotInitialized()
     {
@@ -380,6 +419,9 @@ public class VendorItemMappingGrainTests
         (await grain.ExistsAsync()).Should().BeTrue();
     }
 
+    // Given: a learned vendor mapping for "Chicken Breast Boneless Skinless 10LB"
+    // When: a similar description differing only in package size is looked up
+    // Then: the mapping is found via fuzzy pattern matching above the similarity threshold
     [Fact]
     public async Task GetMappingAsync_SimilarDescription_ShouldMatchIfAbove85Percent()
     {
@@ -409,6 +451,9 @@ public class VendorItemMappingGrainTests
         result.MatchType.Should().Be(MappingMatchType.FuzzyPattern);
     }
 
+    // Given: a learned vendor mapping for Atlantic salmon
+    // When: a completely unrelated description for ribeye steak is looked up
+    // Then: no mapping is found due to insufficient similarity
     [Fact]
     public async Task GetMappingAsync_LowSimilarity_ShouldNotMatch()
     {
@@ -436,6 +481,9 @@ public class VendorItemMappingGrainTests
         result.MatchType.Should().Be(MappingMatchType.None);
     }
 
+    // Given: a vendor mapping with a learned pattern for organic eggs
+    // When: a second similar description for the same ingredient is learned (reinforcement)
+    // Then: the pattern weight increases, improving future suggestion confidence
     [Fact]
     public async Task LearnMappingAsync_SamePatternTwice_ShouldIncreaseWeight()
     {
@@ -475,6 +523,9 @@ public class VendorItemMappingGrainTests
         suggestions[0].IngredientId.Should().Be(ingredientId);
     }
 
+    // Given: a vendor mapping with unit price and unit of measure configured
+    // When: the mapping is retrieved by product description
+    // Then: the expected unit price and unit are included in the result
     [Fact]
     public async Task GetMappingAsync_WithExpectedPrice_ShouldReturnPriceInfo()
     {
@@ -507,6 +558,9 @@ public class VendorItemMappingGrainTests
         result.Mapping.Unit.Should().Be("lb");
     }
 
+    // Given: a vendor mapping with learned chicken patterns and external ingredient candidates
+    // When: suggestions are requested for a chicken description with candidate ingredients provided
+    // Then: results merge pattern-based and candidate-based matches with the learned pattern preferred
     [Fact]
     public async Task GetSuggestionsAsync_WithCandidates_ShouldMergePatternAndIngredient()
     {
@@ -547,6 +601,9 @@ public class VendorItemMappingGrainTests
         suggestions.Any(s => s.IngredientId == chickenId).Should().BeTrue();
     }
 
+    // Given: a vendor mapping with an uppercase product code
+    // When: the same product code is looked up in lowercase
+    // Then: the mapping is found via case-insensitive product code match
     [Fact]
     public async Task GetMappingAsync_ProductCodeDifferentCase_ShouldMatch()
     {
@@ -576,6 +633,9 @@ public class VendorItemMappingGrainTests
         result.Mapping!.IngredientId.Should().Be(ingredientId);
     }
 
+    // Given: an initialized vendor mapping with a placeholder name and unknown type
+    // When: the vendor name and type are updated to reflect the actual supplier identity
+    // Then: the snapshot reflects the new vendor name and type
     [Fact]
     public async Task UpdateVendorInfoAsync_ShouldUpdateNameAndType()
     {
@@ -600,6 +660,9 @@ public class VendorItemMappingGrainTests
         snapshotAfter.VendorType.Should().Be(VendorType.Supplier);
     }
 
+    // Given: an initialized vendor mapping for a supplier
+    // When: three different vendor descriptions for the same unsalted butter ingredient are learned
+    // Then: all three descriptions are individually findable and multiple patterns are generated
     [Fact]
     public async Task LearnMapping_SameIngredientDifferentDescriptions_ShouldCreateMultiplePatterns()
     {

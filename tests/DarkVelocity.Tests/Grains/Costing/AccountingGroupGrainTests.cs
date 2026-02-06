@@ -27,6 +27,9 @@ public class AccountingGroupGrainTests
     // Create Tests
     // ============================================================================
 
+    // Given: a new accounting group grain with no prior state
+    // When: the accounting group is created with name, code, description, and account codes
+    // Then: the snapshot reflects all provided fields with active status and zero item count
     [Fact]
     public async Task CreateAsync_ShouldCreateAccountingGroupSuccessfully()
     {
@@ -59,6 +62,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(0);
     }
 
+    // Given: an accounting group that has already been created
+    // When: attempting to create the same accounting group again
+    // Then: an InvalidOperationException is thrown indicating the group already exists
     [Fact]
     public async Task CreateAsync_AlreadyExists_ShouldThrowInvalidOperationException()
     {
@@ -80,6 +86,9 @@ public class AccountingGroupGrainTests
             .WithMessage("Accounting group already exists");
     }
 
+    // Given: a new accounting group grain with no prior state
+    // When: the accounting group is created with only required fields (name and code)
+    // Then: optional fields remain null and the group is successfully created
     [Fact]
     public async Task CreateAsync_WithMinimalData_ShouldSucceed()
     {
@@ -112,6 +121,9 @@ public class AccountingGroupGrainTests
     // Update Tests
     // ============================================================================
 
+    // Given: an existing accounting group with initial field values
+    // When: all fields are updated with new values
+    // Then: the snapshot reflects all the updated field values
     [Fact]
     public async Task UpdateAsync_ShouldUpdateAllFields()
     {
@@ -142,6 +154,9 @@ public class AccountingGroupGrainTests
         snapshot.IsActive.Should().BeTrue(); // Unchanged
     }
 
+    // Given: an existing accounting group with all fields populated
+    // When: only the name is updated while other fields are null in the command
+    // Then: the name changes but all other fields retain their original values
     [Fact]
     public async Task UpdateAsync_PartialUpdate_ShouldPreserveOtherFields()
     {
@@ -171,6 +186,9 @@ public class AccountingGroupGrainTests
         snapshot.CogsAccountCode.Should().Be("5000"); // Preserved
     }
 
+    // Given: an active accounting group
+    // When: the group is updated with IsActive set to false
+    // Then: the accounting group becomes inactive
     [Fact]
     public async Task UpdateAsync_Deactivate_ShouldSetIsActiveFalse()
     {
@@ -196,6 +214,9 @@ public class AccountingGroupGrainTests
         snapshot.IsActive.Should().BeFalse();
     }
 
+    // Given: an accounting group grain that has never been created
+    // When: an update is attempted
+    // Then: an InvalidOperationException is thrown indicating the grain is not initialized
     [Fact]
     public async Task UpdateAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -218,6 +239,9 @@ public class AccountingGroupGrainTests
     // GetSnapshot Tests
     // ============================================================================
 
+    // Given: a created accounting group with known field values
+    // When: the snapshot is retrieved
+    // Then: the snapshot contains the correct group ID, location, name, and code
     [Fact]
     public async Task GetSnapshotAsync_ShouldReturnCurrentState()
     {
@@ -240,6 +264,9 @@ public class AccountingGroupGrainTests
         snapshot.Code.Should().Be("FOOD-001");
     }
 
+    // Given: an accounting group grain that has never been created
+    // When: the snapshot is requested
+    // Then: an InvalidOperationException is thrown indicating the grain is not initialized
     [Fact]
     public async Task GetSnapshotAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -260,6 +287,9 @@ public class AccountingGroupGrainTests
     // Item Count Tests
     // ============================================================================
 
+    // Given: a created accounting group with zero items
+    // When: the item count is incremented three times
+    // Then: the item count reflects three assigned items
     [Fact]
     public async Task IncrementItemCountAsync_ShouldIncreaseCount()
     {
@@ -282,6 +312,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(3);
     }
 
+    // Given: an accounting group with three items assigned
+    // When: the item count is decremented once
+    // Then: the item count decreases to two
     [Fact]
     public async Task DecrementItemCountAsync_ShouldDecreaseCount()
     {
@@ -306,6 +339,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(2);
     }
 
+    // Given: a created accounting group with zero items
+    // When: the item count is decremented multiple times
+    // Then: the item count remains at zero and does not go negative
     [Fact]
     public async Task DecrementItemCountAsync_AtZero_ShouldNotGoNegative()
     {
@@ -327,6 +363,9 @@ public class AccountingGroupGrainTests
         snapshot.ItemCount.Should().Be(0);
     }
 
+    // Given: an accounting group grain that has never been created
+    // When: the item count increment is attempted
+    // Then: an InvalidOperationException is thrown indicating the grain is not initialized
     [Fact]
     public async Task IncrementItemCountAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -343,6 +382,9 @@ public class AccountingGroupGrainTests
             .WithMessage("Accounting group grain not initialized");
     }
 
+    // Given: an accounting group grain that has never been created
+    // When: the item count decrement is attempted
+    // Then: an InvalidOperationException is thrown indicating the grain is not initialized
     [Fact]
     public async Task DecrementItemCountAsync_NotInitialized_ShouldThrowInvalidOperationException()
     {
@@ -363,6 +405,9 @@ public class AccountingGroupGrainTests
     // Multiple Accounting Groups Tests
     // ============================================================================
 
+    // Given: two separate accounting groups (Food and Beverages) for the same location
+    // When: items are assigned independently to each group
+    // Then: each group maintains its own name and item count without cross-contamination
     [Fact]
     public async Task MultipleAccountingGroups_ShouldBeIndependent()
     {
@@ -400,6 +445,9 @@ public class AccountingGroupGrainTests
     // Common Accounting Group Scenarios
     // ============================================================================
 
+    // Given: a set of standard hospitality accounting groups (Food, Beverage, Alcohol, Merchandise, Other)
+    // When: each group is created with its respective code and account mappings
+    // Then: all groups are active with correct names and codes
     [Fact]
     public async Task CreateStandardAccountingGroups_ShouldSucceed()
     {
@@ -438,6 +486,9 @@ public class AccountingGroupGrainTests
         }
     }
 
+    // Given: an accounting group with menu items being assigned and unassigned over time
+    // When: five items are assigned, two removed, and three more assigned
+    // Then: the item count accurately reflects the net total of six items
     [Fact]
     public async Task AccountingGroup_TrackMenuItemAssignment_ShouldMaintainAccurateCount()
     {

@@ -18,6 +18,9 @@ public class StreamEventTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: A subscriber listening on the user event stream for an organization
+    // When: A new user is created with email and display name
+    // Then: A UserCreatedEvent is published with the correct user ID and email
     [Fact]
     public async Task UserGrain_PublishesUserCreatedEvent_WhenCreated()
     {
@@ -61,6 +64,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: An active user and a subscriber on the user event stream
+    // When: The user is deactivated
+    // Then: A UserStatusChangedEvent is published showing transition from Active to Inactive
     [Fact]
     public async Task UserGrain_PublishesStatusChangedEvent_WhenDeactivated()
     {
@@ -101,6 +107,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: A user and a subscriber on the user event stream
+    // When: Site access is granted and then revoked for the user
+    // Then: Both UserSiteAccessGrantedEvent and UserSiteAccessRevokedEvent are published
     [Fact]
     public async Task UserGrain_PublishesSiteAccessEvents_WhenAccessChanges()
     {
@@ -147,6 +156,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: A subscriber on the employee event stream for an organization
+    // When: A new employee is created with employee number and assigned site
+    // Then: An EmployeeCreatedEvent is published with the employee ID and name
     [Fact]
     public async Task EmployeeGrain_PublishesEmployeeCreatedEvent_WhenCreated()
     {
@@ -194,6 +206,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: An employee and a subscriber on the employee event stream
+    // When: The employee clocks in and then clocks out
+    // Then: Both EmployeeClockedInEvent and EmployeeClockedOutEvent are published
     [Fact]
     public async Task EmployeeGrain_PublishesClockEvents_WhenClocking()
     {
@@ -236,6 +251,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: Subscribers on both the order and sales event streams
+    // When: An order is created, a line added, payment recorded, and order closed
+    // Then: OrderCreatedEvent, OrderLineAddedEvent, OrderCompletedEvent, and SaleRecordedEvent are all published
     [Fact]
     public async Task OrderGrain_PublishesOrderCompletedEvent_WhenClosed()
     {
@@ -311,6 +329,9 @@ public class StreamEventTests
         }
     }
 
+    // Given: Subscribers on both the order and sales event streams
+    // When: An order with a line item is voided with reason "Customer cancelled"
+    // Then: Both OrderVoidedEvent and VoidRecordedEvent are published with the void reason
     [Fact]
     public async Task OrderGrain_PublishesVoidEvents_WhenVoided()
     {

@@ -30,6 +30,9 @@ public class DeviceGroupManagementTests
 
     #region Site-Level Device Management Tests
 
+    // Given: An initialized site location
+    // When: POS terminals, receipt printers, kitchen printers, and cash drawers are registered
+    // Then: The site summary correctly counts devices by type
     [Fact]
     public async Task SiteDevices_RegisterMultipleTypes_ShouldTrackAllTypes()
     {
@@ -61,6 +64,9 @@ public class DeviceGroupManagementTests
         summary.TotalCashDrawers.Should().Be(2);
     }
 
+    // Given: A site with five registered POS devices
+    // When: Three devices report as online and two report as offline
+    // Then: The site summary shows three online POS devices out of five total
     [Fact]
     public async Task SiteDevices_UpdateStatus_ShouldAggregateOnlineCount()
     {
@@ -89,6 +95,9 @@ public class DeviceGroupManagementTests
         summary.OnlinePosDevices.Should().Be(3);
     }
 
+    // Given: A site with three registered POS devices
+    // When: One device is unregistered from the site
+    // Then: The site total POS device count decreases to two
     [Fact]
     public async Task SiteDevices_UnregisterDevice_ShouldUpdateCounts()
     {
@@ -118,6 +127,9 @@ public class DeviceGroupManagementTests
 
     #region Alert Management Tests
 
+    // Given: A registered printer at an initialized site
+    // When: An offline alert is raised for the printer
+    // Then: The site summary includes the alert with the correct device and alert type
     [Fact]
     public async Task SiteAlerts_AddAlert_ShouldBeTracked()
     {
@@ -145,6 +157,9 @@ public class DeviceGroupManagementTests
         summary.Alerts[0].AlertType.Should().Be("Offline");
     }
 
+    // Given: A printer with an active paper-out alert at a site
+    // When: The alert is cleared for the printer
+    // Then: The site summary has no remaining alerts
     [Fact]
     public async Task SiteAlerts_ClearAlert_ShouldRemoveAlert()
     {
@@ -172,6 +187,9 @@ public class DeviceGroupManagementTests
         afterSummary.Alerts.Should().BeEmpty();
     }
 
+    // Given: A site with two printers and one POS terminal registered
+    // When: Alerts are raised for paper-low, offline, and low-battery across the three devices
+    // Then: The site summary tracks all three alerts
     [Fact]
     public async Task SiteAlerts_MultipleAlerts_ShouldTrackAll()
     {
@@ -209,6 +227,9 @@ public class DeviceGroupManagementTests
 
     #region Printer Health Management Tests
 
+    // Given: A registered receipt printer at a site
+    // When: The printer reports a paper-low status with 15% paper level
+    // Then: A PaperLow alert is created for the printer
     [Fact]
     public async Task PrinterHealth_StatusUpdates_ShouldCreateAppropriateAlerts()
     {
@@ -230,6 +251,9 @@ public class DeviceGroupManagementTests
             a.AlertType == "PaperLow");
     }
 
+    // Given: A printer with an active paper-out alert at a site
+    // When: The printer reports a Ready status
+    // Then: All alerts for the printer are cleared
     [Fact]
     public async Task PrinterHealth_ReadyStatus_ShouldClearAlerts()
     {
@@ -254,6 +278,9 @@ public class DeviceGroupManagementTests
         afterSummary.Alerts.Should().BeEmpty();
     }
 
+    // Given: A site with three printers (receipt, kitchen, and label)
+    // When: Each printer reports a different health status (Ready, PaperOut, Error)
+    // Then: Each printer's health status is tracked independently
     [Fact]
     public async Task PrinterHealth_MultiplePrinterStatuses_ShouldTrackIndependently()
     {
@@ -290,6 +317,9 @@ public class DeviceGroupManagementTests
 
     #region Cross-Location Isolation Tests
 
+    // Given: Two different site locations within the same organization
+    // When: Devices are registered at each location independently
+    // Then: Each location's device counts are isolated from the other
     [Fact]
     public async Task MultipleLocations_ShouldBeIsolated()
     {
@@ -320,6 +350,9 @@ public class DeviceGroupManagementTests
         summary2.TotalPosDevices.Should().Be(3);
     }
 
+    // Given: Two different organizations with the same location ID
+    // When: Devices are registered under each organization
+    // Then: Each organization's device counts are isolated by tenant boundary
     [Fact]
     public async Task MultipleOrganizations_ShouldBeIsolated()
     {
@@ -351,6 +384,9 @@ public class DeviceGroupManagementTests
 
     #region Connection Quality Tests
 
+    // Given: A registered POS device at a site with excellent signal and very low latency
+    // When: The device sends a heartbeat with those metrics
+    // Then: The device connection quality is rated as Excellent
     [Fact]
     public async Task ConnectionQuality_CalculatedCorrectly_ExcellentNetwork()
     {
@@ -374,6 +410,9 @@ public class DeviceGroupManagementTests
         health!.ConnectionQuality.Should().Be(ConnectionQuality.Excellent);
     }
 
+    // Given: A registered POS device at a site with weak signal and high latency
+    // When: The device sends a heartbeat with those poor metrics
+    // Then: The device connection quality is rated as Poor
     [Fact]
     public async Task ConnectionQuality_CalculatedCorrectly_PoorNetwork()
     {
@@ -397,6 +436,9 @@ public class DeviceGroupManagementTests
         health!.ConnectionQuality.Should().Be(ConnectionQuality.Poor);
     }
 
+    // Given: A site with five registered POS devices all sending heartbeats with good connection metrics
+    // When: The site health summary is requested
+    // Then: The overall site connection quality is rated as Excellent
     [Fact]
     public async Task OverallConnectionQuality_ReflectsSiteHealth()
     {
@@ -431,6 +473,9 @@ public class DeviceGroupManagementTests
 
     #region Heartbeat Aggregation Tests
 
+    // Given: A site with three registered POS devices
+    // When: All three devices send heartbeats
+    // Then: The health summary reports all three devices as online with zero offline
     [Fact]
     public async Task SiteHeartbeats_AllDevicesReporting_ShouldShowAllOnline()
     {
@@ -458,6 +503,9 @@ public class DeviceGroupManagementTests
         summary.OfflineDevices.Should().Be(0);
     }
 
+    // Given: A site with two registered POS devices
+    // When: Only one device sends a heartbeat while the other remains silent
+    // Then: The health summary reports one device online and one device offline
     [Fact]
     public async Task SiteHeartbeats_PartialReporting_ShouldShowMixedStatus()
     {
@@ -520,6 +568,9 @@ public class HardwareGrainEdgeCaseTests
 
     #region POS Device Edge Cases
 
+    // Given: A registered POS device with a configured default printer and cash drawer
+    // When: The device is deactivated and then reactivated via update
+    // Then: The device retains its printer and cash drawer configuration after reactivation
     [Fact]
     public async Task PosDevice_DeactivateReactivate_ShouldMaintainConfig()
     {
@@ -561,6 +612,9 @@ public class HardwareGrainEdgeCaseTests
         reactivatedSnapshot.OpenDrawerOnCash.Should().BeFalse();
     }
 
+    // Given: A registered POS device with a specific model and OS version
+    // When: Only the device name is updated via a partial update
+    // Then: The name changes while model and OS version remain unchanged
     [Fact]
     public async Task PosDevice_PartialUpdate_ShouldOnlyChangeSpecifiedFields()
     {
@@ -591,6 +645,9 @@ public class HardwareGrainEdgeCaseTests
 
     #region Printer Edge Cases
 
+    // Given: A registered network receipt printer that has never printed
+    // When: A print is recorded on the printer
+    // Then: The last-print timestamp is set and the printer is marked as online
     [Fact]
     public async Task Printer_RecordPrint_ShouldUpdateTimestampAndStatus()
     {
@@ -616,6 +673,9 @@ public class HardwareGrainEdgeCaseTests
         afterSnapshot.IsOnline.Should().BeTrue();
     }
 
+    // Given: A registered kitchen printer
+    // When: The online status is toggled between online and offline multiple times
+    // Then: The printer correctly tracks each status change
     [Fact]
     public async Task Printer_SetOnlineStatus_ShouldToggleCorrectly()
     {
@@ -640,6 +700,9 @@ public class HardwareGrainEdgeCaseTests
         (await grain.IsOnlineAsync()).Should().BeTrue();
     }
 
+    // Given: A new Bluetooth receipt printer with a MAC address
+    // When: The printer is registered with Bluetooth connection type
+    // Then: The MAC address is stored and network properties are null
     [Fact]
     public async Task Printer_BluetoothConnection_ShouldStoreCorrectly()
     {
@@ -666,6 +729,9 @@ public class HardwareGrainEdgeCaseTests
 
     #region Cash Drawer Edge Cases
 
+    // Given: A registered USB cash drawer
+    // When: Custom kick pulse settings are configured (pin 2, 300ms on, 200ms off)
+    // Then: The custom kick pulse settings are persisted correctly
     [Fact]
     public async Task CashDrawer_CustomKickPulseSettings_ShouldPersist()
     {
@@ -692,6 +758,9 @@ public class HardwareGrainEdgeCaseTests
         snapshot.KickPulseOffTime.Should().Be(200);
     }
 
+    // Given: A registered USB cash drawer that has never been opened
+    // When: A drawer open event is recorded
+    // Then: The last-opened timestamp is set to the current time
     [Fact]
     public async Task CashDrawer_RecordOpen_ShouldTrackTimestamp()
     {
@@ -712,6 +781,9 @@ public class HardwareGrainEdgeCaseTests
         snapshot.LastOpenedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
+    // Given: A registered USB cash drawer
+    // When: The kick command bytes are requested
+    // Then: A non-empty kick command is returned
     [Fact]
     public async Task CashDrawer_GetKickCommand_ShouldReturnCommand()
     {
@@ -731,6 +803,9 @@ public class HardwareGrainEdgeCaseTests
         kickCommand.Should().NotBeNullOrEmpty();
     }
 
+    // Given: A cash drawer connected via a receipt printer
+    // When: The drawer is registered with Printer connection type and a printer ID
+    // Then: The drawer stores the linked printer ID and Printer connection type
     [Fact]
     public async Task CashDrawer_PrinterConnected_ShouldStorePrinterId()
     {

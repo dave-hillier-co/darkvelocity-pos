@@ -16,6 +16,9 @@ public class EmployeeGrainTests
         _cluster = fixture.Cluster;
     }
 
+    // Given: a new hire with employee number EMP-001 assigned to a site
+    // When: the employee record is created
+    // Then: the employee is active with correct name, number, and site access
     [Fact]
     public async Task CreateEmployee_SetsCorrectState()
     {
@@ -49,6 +52,9 @@ public class EmployeeGrainTests
         Assert.Contains(siteId, state.AllowedSiteIds);
     }
 
+    // Given: an existing employee named Jane Doe
+    // When: her name is changed to Janet and her email is updated
+    // Then: the employee record reflects the new name and email with an incremented version
     [Fact]
     public async Task UpdateEmployee_UpdatesNameAndEmail()
     {
@@ -74,6 +80,9 @@ public class EmployeeGrainTests
         Assert.Equal("janet@example.com", state.Email);
     }
 
+    // Given: an active employee assigned to a site
+    // When: the employee clocks in for their shift
+    // Then: a time entry is created and the employee is marked as clocked in
     [Fact]
     public async Task ClockIn_RecordsTimeEntry()
     {
@@ -94,6 +103,9 @@ public class EmployeeGrainTests
         Assert.True(await grain.IsClockedInAsync());
     }
 
+    // Given: an employee who is currently clocked in
+    // When: the employee clocks out at the end of their shift
+    // Then: total hours worked are calculated and the employee is no longer clocked in
     [Fact]
     public async Task ClockOut_CalculatesTotalHours()
     {
@@ -117,6 +129,9 @@ public class EmployeeGrainTests
         Assert.False(await grain.IsClockedInAsync());
     }
 
+    // Given: an active employee with no assigned roles
+    // When: the employee is assigned the Server role in Front of House at $15.50/hr
+    // Then: the role assignment appears on the employee record as their primary role
     [Fact]
     public async Task AssignRole_AddsRoleToEmployee()
     {
@@ -145,6 +160,9 @@ public class EmployeeGrainTests
         Assert.True(state.RoleAssignments[0].IsPrimary);
     }
 
+    // Given: an active employee
+    // When: the employee is terminated with reason "Position eliminated"
+    // Then: the employee status is Terminated and reactivation is rejected
     [Fact]
     public async Task Terminate_SetsStatusAndPreventsReactivation()
     {
@@ -168,6 +186,9 @@ public class EmployeeGrainTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => grain.ActivateAsync());
     }
 
+    // Given: an employee assigned only to site 1 who cannot clock in at site 2
+    // When: the employee is granted access to site 2
+    // Then: the employee can successfully clock in at the newly authorized site
     [Fact]
     public async Task GrantSiteAccess_AllowsClockInAtNewSite()
     {
@@ -195,6 +216,9 @@ public class EmployeeGrainTests
         Assert.NotEqual(Guid.Empty, result.TimeEntryId);
     }
 
+    // Given: an employee named Frank Miller linked to a user account
+    // When: the user account name is updated to Franklin Miller Jr
+    // Then: the employee record is synced with the new name
     [Fact]
     public async Task SyncFromUser_UpdatesEmployeeFromUserChanges()
     {
@@ -217,6 +241,9 @@ public class EmployeeGrainTests
         Assert.Equal("Miller Jr", state.LastName);
     }
 
+    // Given: an active employee linked to a user account
+    // When: the linked user account is deactivated
+    // Then: the employee status is automatically set to Inactive
     [Fact]
     public async Task SyncFromUser_DeactivatesEmployee_WhenUserIsDeactivated()
     {
