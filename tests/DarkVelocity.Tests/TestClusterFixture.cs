@@ -41,6 +41,9 @@ public class TestSiloConfigurator : ISiloConfigurator
         siloBuilder.AddLogStorageBasedLogConsistencyProvider("LogStorage");
         siloBuilder.AddMemoryGrainStorage("LogStorage");
 
+        // Add in-memory reminder service for grains that use Orleans reminders (e.g., NoShowDetectionGrain)
+        siloBuilder.UseInMemoryReminderService();
+
         // Add memory stream provider for pub/sub testing with implicit subscription support
         siloBuilder.AddMemoryStreams(StreamConstants.DefaultStreamProvider);
 
