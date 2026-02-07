@@ -1,22 +1,45 @@
-name: PR Tests
+name: PR
 
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  test:
+  unit-tests:
     runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build solution
+        run: dotnet build
+
+      - name: Run unit tests
+        run: dotnet test --no-build --verbosity normal --filter "Category=Unit"
+
+  integration-tests:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Start infrastructure services
         run: |
           cd docker
           docker compose up -d azurite postgres spicedb-migrate spicedb
-          # Wait for services to be ready
           echo "Waiting for Azurite..."
           timeout 30 bash -c 'until nc -z localhost 10002; do sleep 1; done' || true
           echo "Waiting for PostgreSQL..."
@@ -26,11 +49,11 @@ jobs:
           echo "Infrastructure ready"
 
       - name: Build solution
-        run: dotnet build --configuration Release
+        run: dotnet build
 
-      - name: Run tests with coverage
+      - name: Run integration tests with coverage
         run: >
-          dotnet test --configuration Release --no-build --verbosity normal
+          dotnet test --no-build --verbosity normal --filter "Category!=Unit"
           --collect:"XPlat Code Coverage"
           --results-directory ./coverage
 
