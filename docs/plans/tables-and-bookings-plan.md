@@ -1,134 +1,254 @@
 # Tables & Bookings -- Implementation Plan
 
-> **Date:** February 2026
-> **Domain Completeness:** ~80-85% (was documented as 60%)
-> **Grains:** 11 production grains + 1 stream subscriber
+> **Date:** February 2026 (revised after codebase validation)
+> **Domain Completeness:** ~85-90% grain logic done; gaps are in cross-grain wiring and availability intelligence
+> **Grains:** 11 grains + 1 stream subscriber
 
 ---
 
-## Current State
+## Current State (Validated)
 
-The domain is substantially more complete than previously documented. Here's what actually exists:
+### What's Actually Done
 
-### Production-Ready Grains
+Every grain has a fully implemented `ReceiveReminder()` callback. The earlier assessment that these were stubbed was **wrong**. Here's the accurate picture:
 
-| Grain | What It Does | Status |
-|-------|-------------|--------|
-| **BookingGrain** | Full lifecycle with 13 event types, deposits, no-show, order linking | Done |
-| **TableGrain** | CRUD, status management, occupancy, table combinations, cleaning flow | Done |
-| **FloorPlanGrain** | Sections, table layout, canvas dimensions, background images | Done |
-| **BookingSettingsGrain** | Operating hours, slot intervals, party size limits, deposit rules, blocked dates | Done |
-| **BookingCalendarGrain** | Daily calendar view, hourly slots, cover counts, table allocations, availability | Done |
-| **WaitlistGrain** | FIFO queue, quoted waits, notify/seat/remove, average wait tracking | Done |
-| **TableAssignmentOptimizerGrain** | Scored recommendations, server workload balancing, table combinations | Done |
-| **TurnTimeAnalyticsGrain** | 10k-record rolling window, stats by party size/day/time, active seating monitoring | Done |
-| **BookingAccountingSubscriber** | Deposit journal entries (paid/applied/refunded/forfeited) | Done |
+| Grain | Lines | Tests | Status |
+|-------|------:|:-----:|--------|
+| **TableGrain** | 233 | 17 | Complete. CRUD, status machine, occupancy, combinations, tags, position. |
+| **FloorPlanGrain** | 172 | 8 | Complete. Sections, table list, canvas dimensions, active/default. |
+| **BookingSettingsGrain** | 128 | ~6 | Complete but availability is **naive** (see below). |
+| **BookingGrain** | ~400 | ~20 | Complete. 13 events, full lifecycle, deposits, order linking. |
+| **BookingCalendarGrain** | ~250 | ~8 | Complete. Day views, hourly slots, cover counts, table allocations. |
+| **WaitlistGrain** | ~150 | ~4 | Complete. FIFO queue, wait estimates, notify/seat/remove. |
+| **EnhancedWaitlistGrain** | ~300 | 0 | Complete. Returning customer priority, SMS, turn time data, suitability matching. |
+| **TableAssignmentOptimizerGrain** | 408 | 0 | Complete. Scoring algorithm, server workload balancing, table combinations. |
+| **TurnTimeAnalyticsGrain** | 345 | ~3 | Complete. 10k rolling window, stats by party/day/time, active monitoring. |
+| **NoShowDetectionGrain** | 335 | ~4 | Complete. `ReceiveReminder()` calls `CheckNoShowAsync()` → `ProcessNoShowAsync()` → marks no-show, forfeits deposit, records history, sends notification. |
+| **BookingNotificationSchedulerGrain** | 482 | ~2 | Complete. `ReceiveReminder()` dispatches via `SendNotificationAsync()` → checks booking not cancelled → sends via NotificationGrain (email/SMS/push). Templates for all 6 notification types. |
+| **BookingAccountingSubscriber** | ~80 | 0 | Complete. Journal entries for deposit paid/applied/refunded/forfeited. |
 
-### Partially Complete Grains
+### What's Actually Wrong
 
-| Grain | What's Done | What's Missing |
-|-------|------------|----------------|
-| **EnhancedWaitlistGrain** | Priority for returning customers, SMS notifications, turn time data, table suitability matching | Needs integration testing, notification delivery depends on System domain |
-| **BookingNotificationSchedulerGrain** | Scheduling logic, Orleans reminders registered, notification history tracking | `ReceiveReminder()` callback is stubbed -- notifications are scheduled but never actually sent |
-| **NoShowDetectionGrain** | Registration, grace period settings, history tracking | `ReceiveReminder()` callback is stubbed -- registered bookings are never actually checked |
+The gaps are **not** stubbed callbacks. They are:
 
-### What's Not There At All
+#### 1. Availability is disconnected from actual bookings
+`BookingSettingsGrain.GetAvailabilityAsync()` at `TableGrain.cs:457-483` generates time slots but **only checks party size and blocked dates**. It does not:
+- Query `BookingCalendarGrain` for how many bookings already exist per slot
+- Check actual table capacity
+- Factor in turn times or existing occupancy
+- Consider table suitability for the party size
 
-| Feature | Notes |
-|---------|-------|
-| Public-facing booking widget | No online booking flow for guests |
-| Google/social booking integration | No Agentic or Reserve with Google support |
-| SMS/email confirmation delivery | Scheduler exists but NotificationGrain uses stub services |
-| Deposit payment link generation | Deposits recorded but no payment link sent to guest |
-| Automated deposit-to-order application | Event defined but never triggered |
-| Real-time floor plan updates via SignalR | State supports it, no push to POS clients |
-| Customer preference learning | No "prefers window seat" or "usually orders wine" from history |
-| Multi-venue booking | Can't book across sites in one flow |
+This means every slot always shows as "available" if the date isn't blocked and party size is under the max. This is the single biggest functional gap.
+
+#### 2. Table optimizer is never called
+`TableAssignmentOptimizerGrain` has a full scoring algorithm (size match, VIP tags, seating preferences, server workload balancing, table combinations) but **nothing calls it**. Tables are registered manually. No endpoint exposes recommendations. No integration exists between booking confirmation and table assignment.
+
+#### 3. Turn time analytics are never fed
+`TurnTimeAnalyticsGrain` calculates stats by party size, day, and time of day, tracks active seatings, and flags long-running tables. But **no grain calls `RecordTurnTimeAsync()`** when a guest departs. The data never flows in.
+
+#### 4. No tests for optimizer, enhanced waitlist, or subscriber
+Three production grains and one subscriber have **zero test coverage**. These contain scoring algorithms and financial logic (deposit accounting) that need tests.
+
+#### 5. Customer no-show history update is commented out
+`NoShowDetectionGrain.ProcessNoShowAsync()` lines 321-327: the customer grain call is commented out with `// Would call customer grain to update no-show count`.
+
+#### 6. Manager notification email is hardcoded
+`NoShowDetectionGrain.ProcessNoShowAsync()` line 313: `To: "manager@restaurant.com"` -- should come from site settings.
+
+#### 7. Sections aren't linked to tables
+`FloorPlanGrain` tracks sections (name, color, sort order) and table IDs separately, but there's no association between which tables belong to which section.
+
+#### 8. No composite floor plan view endpoint
+The event storming spec defines `FloorPlanBookingView` (tables + current booking + next booking + upcoming arrivals + waitlist) but no endpoint assembles this view.
 
 ---
 
 ## Plan
 
-### Phase 1: Wire Up What's Already Built (1-2 weeks)
+### Phase 1: Fix Availability (the critical gap)
 
-The biggest bang-for-buck is connecting the grains that are 90% done but have stubbed reminder callbacks.
+**Why this is #1:** Every other feature (public booking, optimizer, analytics) depends on availability returning real numbers.
 
-#### 1.1 NoShowDetectionGrain -- Complete the Reminder Callback
-**Effort:** 2-3 days
+#### 1.1 Table-aware availability calculation
 
-The grain registers Orleans reminders at `bookingTime + gracePeriod` but the `ReceiveReminder()` method doesn't do anything. Wire it to:
+Replace the naive `BookingSettingsGrain.GetAvailabilityAsync()` with a calculation that actually checks capacity.
 
-1. Check if booking status is still `Confirmed` (guest hasn't arrived)
-2. Call `BookingGrain.MarkNoShowAsync()` if `AutoMarkNoShow` is enabled
-3. Call `BookingGrain.ForfeitDepositAsync()` if `ForfeitDepositOnNoShow` is enabled
-4. Publish a no-show event for downstream consumers (customer history, reporting)
+**Approach:** The availability endpoint (`AvailabilityEndpoints.cs`) should orchestrate across grains rather than relying on BookingSettingsGrain alone:
 
-Tests:
-- Booking past grace period with no arrival -> marked no-show
-- Booking past grace period but guest arrived -> not marked
-- No-show with deposit -> deposit forfeited
-- No-show without deposit -> just marked
-- AutoMarkNoShow disabled -> only records check, doesn't mark
+1. Get settings from `BookingSettingsGrain` (operating hours, slot interval, party size limit, blocked dates)
+2. Get existing bookings from `BookingCalendarGrain.GetBookingsAsync()` for the requested date
+3. Get table capacity from `FloorPlanGrain.GetTableIdsAsync()` → fan-out to `ITableGrain.GetStateAsync()` for each table
+4. For each time slot:
+   - Count bookings that overlap (considering duration + turnover buffer)
+   - Count available tables that fit the party size
+   - Return `IsAvailable`, `AvailableCapacity`, and `AvailableTableIds`
 
-#### 1.2 BookingNotificationSchedulerGrain -- Complete the Reminder Callback
-**Effort:** 3-4 days
+The `BookingCalendarGrain` already has `GetAvailabilityAsync(int partySize)` which generates `AvailableTimeSlot` with `SuggestedTables` -- this logic should be used instead of the settings grain's naive version.
 
-The grain schedules reminders for confirmation, 24h, 2h, and follow-up notifications but `ReceiveReminder()` doesn't dispatch them. Wire it to:
+**Tests:**
+- Slot with 0 bookings → available
+- Slot at max capacity → unavailable
+- Slot with overlapping bookings that span across slots → correct overlap detection
+- Party of 6 with only 4-top tables → unavailable (or suggests combination)
+- Blocked date → all slots unavailable
 
-1. Look up the scheduled notification by reminder name
-2. Call `NotificationGrain.SendAsync()` with the appropriate template and channel
-3. Mark the notification as sent (or record error)
-4. For follow-up notifications, include a link to leave a review or rebook
+#### 1.2 Wire BookingCalendarGrain into booking lifecycle
 
-This depends on the System domain's NotificationGrain -- which exists and is functional but uses stub email/SMS services. For Phase 1, use the stubs (logs instead of sends). Real delivery comes in Phase 3.
+Currently BookingCalendarGrain tracks bookings but **nothing adds them**. Wire:
 
-Tests:
-- Confirmed booking -> confirmation notification dispatched
-- 24h before booking -> reminder dispatched
-- Notification for cancelled booking -> cancelled, not sent
-- Notification failure -> error recorded, not retried (for now)
+1. `BookingGrain.RequestAsync()` → call `BookingCalendarGrain.AddBookingAsync()`
+2. `BookingGrain.CancelAsync()` → call `BookingCalendarGrain.RemoveBookingAsync()`
+3. `BookingGrain.ModifyAsync()` (time change) → call `BookingCalendarGrain.UpdateBookingAsync()`
 
-#### 1.3 Deposit-to-Order Application
-**Effort:** 1-2 days
-
-`BookingDepositAppliedToOrderEvent` is defined but nothing triggers it. When a booking is linked to an order via `LinkToOrderAsync()`, automatically apply the deposit as a credit on the order's payment.
-
-Wire:
-1. `BookingGrain.LinkToOrderAsync()` checks if deposit is paid
-2. If so, publish `BookingDepositAppliedToOrderEvent` to the booking-events stream
-3. BookingAccountingSubscriber already handles this event (debits deposit liability, credits sales)
-4. PaymentGrain on the order should receive the deposit amount as a pre-payment
-
-Tests:
-- Link order to booking with paid deposit -> deposit applied
-- Link order to booking with no deposit -> no-op
-- Link order to booking with waived deposit -> no-op
-
-#### 1.4 Real-Time Floor Plan via SignalR
-**Effort:** 2-3 days
-
-Table status changes (seat, clear, dirty, clean, block) should push updates to connected POS devices so the floor plan view stays current without polling.
-
-Wire:
-1. After `TableGrain.SeatAsync()`, `ClearAsync()`, `MarkDirtyAsync()`, `MarkCleanAsync()` -- push a `TableStatusChanged` message via SignalR hub
-2. Create a `FloorPlanHub` that POS clients subscribe to by site
-3. Message payload: `{ tableId, status, occupancy, serverName }`
-
-Tests:
-- Table seated -> SignalR message received by connected clients
-- Table cleared -> status update pushed
-- Multiple clients on same site -> all receive update
+**Tests:**
+- Request booking → appears on calendar
+- Cancel booking → removed from calendar, cover count decremented
+- Modify booking time → calendar updated
 
 ---
 
-### Phase 2: Competitive Parity Features (2-3 weeks)
+### Phase 2: Connect the Optimizer and Analytics
 
-#### 2.1 Online Booking Widget / Public API
-**Effort:** 5-7 days
+These grains are fully built but isolated. Wire them into the operational flow.
 
-No competitor survives without online booking. Guests need a public-facing flow. This doesn't require a full frontend build -- expose a public API that a whitelabel widget or third-party booking page can consume.
+#### 2.1 Auto-register tables with optimizer
 
-Endpoints (unauthenticated, rate-limited):
+When a table is created via `TableGrain.CreateAsync()`, auto-register with `TableAssignmentOptimizerGrain.RegisterTableAsync()`. When deleted, unregister.
+
+**Approach:** The `TableEndpoints.cs` POST handler already calls `CreateAsync()` -- add a call to the optimizer after creation.
+
+**Tests:**
+- Create table → registered with optimizer
+- Delete table → unregistered
+- Update table capacity → optimizer record updated
+
+#### 2.2 Expose optimizer via API
+
+Add endpoints to use the optimizer:
+
+```
+GET  /api/orgs/{orgId}/sites/{siteId}/tables/recommendations?partySize=&bookingId=&preference=
+POST /api/orgs/{orgId}/sites/{siteId}/tables/auto-assign
+GET  /api/orgs/{orgId}/sites/{siteId}/tables/server-workloads
+POST /api/orgs/{orgId}/sites/{siteId}/tables/server-sections
+```
+
+#### 2.3 Feed turn time analytics on departure
+
+When `BookingGrain.RecordDepartureAsync()` fires:
+
+1. Call `TurnTimeAnalyticsGrain.RecordTurnTimeAsync()` with seated-at/departed-at times
+2. Call `TurnTimeAnalyticsGrain.UnregisterSeatingAsync()` to remove from active tracking
+
+When `BookingGrain.SeatGuestAsync()` fires:
+
+1. Call `TurnTimeAnalyticsGrain.RegisterSeatingAsync()` to start tracking
+
+**Tests:**
+- Guest departs → turn time recorded
+- Turn time stats update after recording
+- Active seatings list updates on seat/depart
+
+#### 2.4 Expose analytics via API
+
+```
+GET /api/orgs/{orgId}/sites/{siteId}/analytics/turn-times
+GET /api/orgs/{orgId}/sites/{siteId}/analytics/turn-times/by-party-size
+GET /api/orgs/{orgId}/sites/{siteId}/analytics/turn-times/by-day
+GET /api/orgs/{orgId}/sites/{siteId}/analytics/active-seatings
+GET /api/orgs/{orgId}/sites/{siteId}/analytics/long-running?threshold=30m
+```
+
+---
+
+### Phase 3: Cross-Grain Wiring and Missing Integrations
+
+#### 3.1 Update optimizer on table status changes
+
+When `TableGrain.SeatAsync()` fires → call `TableAssignmentOptimizerGrain.RecordTableUsageAsync()`
+When `TableGrain.ClearAsync()` fires → call `TableAssignmentOptimizerGrain.ClearTableUsageAsync()`
+
+This keeps the optimizer's occupancy view current for workload balancing.
+
+#### 3.2 Uncomment customer no-show history
+
+`NoShowDetectionGrain.ProcessNoShowAsync()` lines 321-327: uncomment and wire `ICustomerGrain.RecordNoShowAsync()`. Verify the customer grain has this method or add it.
+
+#### 3.3 Fix hardcoded manager email
+
+Replace `"manager@restaurant.com"` in `NoShowDetectionGrain` line 313 with a lookup from site settings or notification preferences.
+
+#### 3.4 Link sections to tables in FloorPlanGrain
+
+Add `SectionId` to `TableState` (or a mapping in `FloorPlanState`). When tables are assigned to sections, the optimizer can use section-based server assignments.
+
+**State change:** Add `[Id(19)] public Guid? SectionId { get; set; }` to `TableState`.
+
+#### 3.5 Composite floor plan view endpoint
+
+Build the `FloorPlanBookingView` from the event storming spec:
+
+```
+GET /api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}/live
+```
+
+Assembles:
+1. All tables from FloorPlanGrain with current status from TableGrain
+2. Current booking for each occupied table from BookingGrain
+3. Next upcoming booking per table from BookingCalendarGrain
+4. Active waitlist entries from WaitlistGrain
+5. Upcoming arrivals (next 30 min) from BookingCalendarGrain
+
+This is the "host stand view" -- the single most important screen for front-of-house operations.
+
+#### 3.6 SignalR push for floor plan updates
+
+When table status changes, push to connected POS clients:
+1. Create `FloorPlanHub` scoped by site
+2. On `TableGrain.SeatAsync()`, `ClearAsync()`, `MarkDirtyAsync()`, `MarkCleanAsync()` → push `TableStatusChanged`
+3. On `BookingGrain.RecordArrivalAsync()` → push `GuestArrived` (upcoming arrivals list changes)
+
+---
+
+### Phase 4: Test Coverage
+
+Zero-test grains that contain real logic:
+
+#### 4.1 TableAssignmentOptimizerGrain tests
+- Perfect capacity match scores highest
+- Larger tables penalized (wasted capacity)
+- VIP tag matching boosts score
+- Seating preference matching boosts score
+- Server workload balancing prefers less busy servers
+- 2-table combinations found for oversized parties
+- AutoAssign returns top recommendation
+
+#### 4.2 EnhancedWaitlistGrain tests
+- Returning customer gets priority position boost
+- FindNextSuitableEntry matches party to table capacity
+- Expired entries auto-removed
+- Wait estimates recalculate based on turn time data
+
+#### 4.3 BookingAccountingSubscriber tests
+- Deposit paid → journal entry debits cash, credits deposit liability
+- Deposit applied to order → debits liability, credits revenue
+- Deposit refunded → debits liability, credits cash
+- Deposit forfeited → debits liability, credits other income
+
+#### 4.4 TurnTimeAnalyticsGrain tests
+- Stats calculation (average, median, stddev)
+- Stats by party size grouping
+- Rolling window trims at 10k records
+- Long-running table detection
+- Estimated turn time falls back gracefully (exact match → size range → party-size default)
+
+---
+
+### Phase 5: Public Booking and Integrations
+
+Once availability is correct and the optimizer is wired, the public booking API becomes viable.
+
+#### 5.1 Public booking endpoints
 ```
 GET  /api/public/sites/{siteSlug}/availability?date=&partySize=
 POST /api/public/sites/{siteSlug}/bookings
@@ -136,174 +256,22 @@ GET  /api/public/bookings/{confirmationCode}
 POST /api/public/bookings/{confirmationCode}/cancel
 ```
 
-The grains already support all of this -- BookingSettingsGrain.GetAvailabilityAsync(), BookingGrain.RequestAsync(), etc. The work is:
-1. Create public endpoints with site slug lookup (no auth required)
-2. Add rate limiting (per IP, per site)
-3. Add CAPTCHA or similar bot protection
-4. Return availability in a format suitable for calendar rendering
-5. Send confirmation email/SMS after booking (via notification scheduler)
-6. Generate a manage-my-booking link with confirmation code
+#### 5.2 Deposit payment links
+When deposit required → create PaymentIntent → generate Stripe Checkout URL → include in notification.
 
-Tests:
-- Public availability check returns slots
-- Public booking request creates booking and sends confirmation
-- Confirmation code lookup returns booking status
-- Rate limiting prevents abuse
-- Blocked dates return no availability
-
-#### 2.2 Customer Preference Learning
-**Effort:** 3-4 days
-
-OpenTable and Fresha track guest preferences from history. DarkVelocity has `CustomerVisitHistoryGrain` in the Customers domain but the Booking domain doesn't use it.
-
-Wire:
-1. On `BookingGrain.RecordDepartureAsync()`, record visit details to `CustomerVisitHistoryGrain` (table preferences, party size patterns, occasion)
-2. On `BookingGrain.RequestAsync()`, fetch customer history if `customerId` provided
-3. `TableAssignmentOptimizerGrain.GetRecommendationsAsync()` should factor in customer's table preferences (previously assigned tables, section preferences)
-4. Store preference signals: "sat at window 3 of last 5 visits" -> suggest window tables
-
-Tests:
-- Customer with history of window tables -> window table scored higher
-- New customer -> no preference applied
-- Customer with allergy tag -> tag visible in booking details
-
-#### 2.3 Waitlist-to-Booking Promotion with Notification
-**Effort:** 2-3 days
-
-`EnhancedWaitlistGrain.PromoteToBookingAsync()` exists but isn't connected end-to-end. Complete the flow:
-
-1. When a table becomes available, call `FindNextSuitableEntryAsync()` to find a match
-2. Create a booking via `BookingGrain.RequestAsync()` and auto-confirm
-3. Send "your table is ready" notification via the notification scheduler
-4. If guest doesn't respond within `NotificationResponseTimeout` (10 min default), expire and try next entry
-
-Tests:
-- Table clears -> next suitable waitlist entry promoted
-- Guest notified -> accepts within timeout -> seated
-- Guest doesn't respond -> expired, next entry tried
-- No suitable entry -> no action
-
----
-
-### Phase 3: Differentiation (2-3 weeks)
-
-#### 3.1 Real Notification Delivery
-**Effort:** 5-7 days
-
-This is a System domain dependency, not a Bookings task, but bookings are the most visible consumer. Replace stub notification services with real ones:
-
-1. Email via SendGrid or AWS SES
-2. SMS via Twilio or MessageBird
-3. Push via Firebase Cloud Messaging
-
-Booking-specific templates:
-- Confirmation: "Your booking at {venue} for {partySize} on {date} at {time} is confirmed. Ref: {code}"
-- Reminder (24h): "Reminder: your booking tomorrow at {venue}..."
-- Reminder (2h): "Your table at {venue} is in 2 hours..."
-- Table ready (waitlist): "Your table is ready at {venue}! Please check in within {timeout} minutes."
-- Follow-up: "Thanks for visiting {venue}! We'd love your feedback."
-- No-show deposit forfeit: "Your booking was marked as a no-show. Your deposit of {amount} has been forfeited per our cancellation policy."
-
-#### 3.2 Deposit Payment Links
-**Effort:** 3-4 days
-
-When `BookingGrain.RequireDepositAsync()` fires, send the guest a payment link. This requires:
-
-1. Create a `PaymentIntentGrain` for the deposit amount
-2. Generate a hosted payment page URL (Stripe Checkout Session or equivalent)
-3. Include the payment link in the deposit-required notification
-4. On successful payment webhook, call `BookingGrain.RecordDepositPaymentAsync()`
-5. On payment expiry, optionally cancel the booking
-
-This bridges the Bookings and Payment Processors domains.
-
-#### 3.3 Google Reserve Integration
-**Effort:** 5-7 days
-
-Google Reserve with Google lets guests book directly from Google Search/Maps. This is how OpenTable generates 1.7B diners/year. The integration:
-
-1. Implement the Google Reserve API (Maps Booking API) as an inbound channel
-2. Map Google availability requests to `BookingSettingsGrain.GetAvailabilityAsync()`
-3. Map Google booking requests to `BookingGrain.RequestAsync()`
-4. Map Google cancellation requests to `BookingGrain.CancelAsync()`
-5. Push status updates back to Google on confirmation/cancellation
-
-This could also be modeled as an External Channel (like Deliverect) with a Google Reserve adapter.
-
-#### 3.4 Experiential Dining / Events
-**Effort:** 5-7 days
-
-Toast and OpenTable support "experiences" -- chef's tables, tasting menus, themed nights. These are bookable events with:
-
-1. Fixed capacity (e.g., 12 seats for chef's table)
-2. Fixed menu (pre-selected or prix fixe)
-3. Different pricing than standard dining
-4. Time-bound (specific dates/times, not recurring)
-5. Often require full pre-payment, not just deposit
-
-This could be a new `ExperienceGrain` or an extension of `BookingGrain` with an `ExperienceId` link:
-
-```
-ExperienceGrain
-├── Name, Description, Images
-├── Capacity (min/max guests)
-├── Schedule (specific dates and times)
-├── Menu (linked MenuDefinition or inline)
-├── Pricing (per person, flat rate, or tiered)
-├── PaymentPolicy (full prepayment, deposit, none)
-├── Status (Draft, Published, SoldOut, Completed, Cancelled)
-└── BookingIds (linked bookings)
-```
-
----
-
-### Phase 4: Advanced Analytics & Intelligence (1-2 weeks)
-
-#### 4.1 Predictive Availability
-**Effort:** 3-5 days
-
-Use `TurnTimeAnalyticsGrain` data to predict when currently-occupied tables will free up:
-
-1. For each occupied table, estimate remaining time based on historical turn time for that party size, day, and time of day
-2. Show "estimated available at {time}" in the availability response
-3. Allow overbooking within confidence intervals (e.g., "90% chance table 5 frees up by 8:15pm")
-4. Factor weather, events, and day-of-week patterns into predictions
-
-#### 4.2 No-Show Risk Scoring
-**Effort:** 2-3 days
-
-Use `NoShowDetectionGrain` history + customer data to score no-show risk:
-
-1. Customer's personal no-show rate
-2. Day-of-week patterns (Friday/Saturday higher no-show)
-3. Party size (larger parties more likely to no-show)
-4. Booking lead time (far-in-advance bookings more likely to cancel)
-5. Deposit status (deposits dramatically reduce no-shows)
-
-Use the risk score to:
-- Suggest deposits for high-risk bookings
-- Adjust overbooking strategy
-- Prioritize confirmation calls for high-risk bookings
-
-#### 4.3 Revenue Optimization
-**Effort:** 3-4 days
-
-Combine turn time analytics, cover counts, and order data to optimize seating:
-
-1. Revenue-per-seat-hour metric: which tables/times generate the most revenue?
-2. Duration management: suggest shorter booking durations for high-demand slots
-3. Party size optimization: recommend which party sizes to prioritize for which slots
-4. Pace alerts: notify managers when the evening is filling faster/slower than forecast
+#### 5.3 Deposit-to-order application
+When `BookingGrain.LinkToOrderAsync()` fires with a paid deposit → publish `BookingDepositAppliedToOrderEvent` → BookingAccountingSubscriber creates the journal entry.
 
 ---
 
 ## Summary
 
-| Phase | Effort | Impact | Dependency |
-|-------|--------|--------|------------|
-| **Phase 1: Wire up existing grains** | 1-2 weeks | High -- turns 80% into 90%+ | None |
-| **Phase 2: Competitive parity** | 2-3 weeks | High -- online booking is table stakes | Phase 1 (notifications) |
-| **Phase 3: Differentiation** | 2-3 weeks | Medium-High -- real notifications, Google, experiences | System domain (notification services), Payment Processors |
-| **Phase 4: Analytics & intelligence** | 1-2 weeks | Medium -- data-driven operations | Phase 1 (turn time data accumulation) |
+| Phase | What | Why | Effort |
+|-------|------|-----|--------|
+| **1. Fix availability** | Wire BookingCalendarGrain into availability; make availability table-aware | Nothing works if availability is wrong | 3-5 days |
+| **2. Connect optimizer & analytics** | Auto-register tables, feed turn times, expose APIs | Grains are built but isolated -- zero value until wired | 4-6 days |
+| **3. Cross-grain wiring** | Status sync, no-show customer history, sections, composite view, SignalR | Completes the operational flow for front-of-house | 5-7 days |
+| **4. Test coverage** | Tests for optimizer, enhanced waitlist, subscriber, analytics | 4 production grains with zero tests | 3-4 days |
+| **5. Public booking** | Public API, deposit payment links, deposit-to-order | Requires phases 1-2 to be correct | 5-7 days |
 
-**Phase 1 is the priority.** The grains are built but disconnected. Wiring up the reminder callbacks, deposit application, and SignalR push completes the operational flow without writing new domain logic.
+**Phase 1 is the priority.** Availability is the foundation. Everything else -- optimizer recommendations, public booking, waitlist estimates -- depends on availability returning real numbers. Today it returns "everything is available" regardless of how many bookings exist.

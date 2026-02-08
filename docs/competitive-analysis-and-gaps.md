@@ -39,7 +39,7 @@ This document focuses on categories 2 and 3.
 | External Channels | 40% | ~40% | Deliverect production-ready; UberEats/DoorDash/Deliveroo still stubs |
 | Finance | 40% | ~38% | ChartOfAccounts and periods done; JournalEntry never posts to AccountGrain; reports return zeros |
 | Reporting | 60% | ~60% | Unchanged |
-| Tables & Bookings | 60% | ~60% | Unchanged |
+| Tables & Bookings | 60% | **~85-90%** | 11 grains fully implemented incl. reminder callbacks; gaps are cross-grain wiring (availability ignores calendar, optimizer never called, analytics never fed) |
 | Organization | 70% | ~70% | Unchanged |
 
 **Average: ~65-70%** (up from ~55-60% in the outdated doc). Remaining work is primarily external service wiring, not domain logic.
