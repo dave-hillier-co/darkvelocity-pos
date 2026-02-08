@@ -30,7 +30,7 @@ interface DeviceAuthContextValue extends DeviceAuthState {
 const DeviceAuthContext = createContext<DeviceAuthContextValue | null>(null)
 
 const DEVICE_STORAGE_KEY = 'darkvelocity_kds_device'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5200'
 
 export function DeviceAuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DeviceAuthState>({

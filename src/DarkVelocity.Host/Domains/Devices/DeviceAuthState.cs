@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace DarkVelocity.Host.State;
 
 public enum DeviceAuthStatus
@@ -8,6 +10,7 @@ public enum DeviceAuthStatus
     Denied
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DeviceType
 {
     Pos,

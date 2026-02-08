@@ -23,7 +23,7 @@ interface StationContextValue extends StationState {
 const StationContext = createContext<StationContextValue | null>(null)
 
 const STATION_STORAGE_KEY = 'darkvelocity_kds_station'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5200'
 
 export function StationProvider({ children }: { children: ReactNode }) {
   const { organizationId, siteId, deviceId, isDeviceAuthenticated } = useDeviceAuth()

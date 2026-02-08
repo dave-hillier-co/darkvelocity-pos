@@ -98,7 +98,8 @@ public static class ServiceCollectionExtensions
                 policy.WithOrigins(
                         "http://localhost:5173",  // POS dev
                         "http://localhost:5174",  // Back Office dev
-                        "http://localhost:5175"   // KDS dev
+                        "http://localhost:5175",  // KDS dev
+                        "http://localhost:5176"   // Order dev
                     )
                     .AllowAnyHeader()
                     .AllowAnyMethod()

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
-  const { loginWithGoogle, loginWithMicrosoft, isAuthenticated, isLoading, error } = useAuth()
+  const { loginWithGoogle, loginWithMicrosoft, loginAsDev, isAuthenticated, isLoading, error } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -92,6 +92,24 @@ export default function LoginPage() {
               <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
             </svg>
             Continue with Microsoft
+          </button>
+
+          <button
+            type="button"
+            onClick={loginAsDev}
+            className="dev-login"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              backgroundColor: 'transparent',
+              color: 'var(--pico-muted-color)',
+              border: '1px dashed var(--pico-muted-border-color)',
+              marginTop: '0.75rem',
+            }}
+          >
+            Dev Login
           </button>
         </section>
 

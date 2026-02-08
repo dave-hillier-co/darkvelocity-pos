@@ -99,7 +99,7 @@ export function DeviceAuthProvider({ children }: { children: ReactNode }) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/device/token`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5200'}/api/device/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userCode, deviceCode }),

@@ -136,6 +136,13 @@ public static class OAuthEndpoints
                 _ => "Google"
             };
 
+            var schemeProvider = context.RequestServices.GetRequiredService<IAuthenticationSchemeProvider>();
+            if (await schemeProvider.GetSchemeAsync(selectedProvider) is null)
+            {
+                return Results.BadRequest(new OAuthError("provider_not_configured",
+                    $"{selectedProvider} OAuth is not configured. Set OAuth:{selectedProvider} credentials in appsettings."));
+            }
+
             var properties = new AuthenticationProperties
             {
                 RedirectUri = $"/api/oauth/callback?state={Uri.EscapeDataString(combinedState)}&response_type={response_type}",
@@ -169,18 +176,30 @@ public static class OAuthEndpoints
                 code_challenge,
                 code_challenge_method));
 
+            var schemeName = provider.ToLowerInvariant() switch
+            {
+                "google" => "Google",
+                "microsoft" => "Microsoft",
+                _ => (string?)null
+            };
+
+            if (schemeName is null)
+                return Results.BadRequest(new OAuthError("invalid_provider",
+                    "Supported providers: google, microsoft"));
+
+            var schemeProvider = context.RequestServices.GetRequiredService<IAuthenticationSchemeProvider>();
+            if (await schemeProvider.GetSchemeAsync(schemeName) is null)
+            {
+                return Results.BadRequest(new OAuthError("provider_not_configured",
+                    $"{schemeName} OAuth is not configured. Set OAuth:{schemeName} credentials in appsettings."));
+            }
+
             var properties = new AuthenticationProperties
             {
                 RedirectUri = $"/api/oauth/callback?state={Uri.EscapeDataString(state)}&response_type=token"
             };
 
-            return provider.ToLowerInvariant() switch
-            {
-                "google" => Results.Challenge(properties, ["Google"]),
-                "microsoft" => Results.Challenge(properties, ["Microsoft"]),
-                _ => Results.BadRequest(new OAuthError("invalid_provider",
-                    "Supported providers: google, microsoft"))
-            };
+            return Results.Challenge(properties, [schemeName]);
         }).WithName("OAuthLogin")
           .WithDescription("Simplified OAuth login - redirects to provider");
 
@@ -819,6 +838,42 @@ public static class OAuthEndpoints
             });
         }).WithName("OAuthPinAuthenticate")
           .WithDescription("Authenticate with PIN and receive authorization code");
+
+        // ========================================================================
+        // Dev Login Endpoint (Development only)
+        // ========================================================================
+
+        if (app.Environment.IsDevelopment())
+        {
+            group.MapGet("/dev-login", (
+                JwtTokenService tokenService,
+                string? returnUrl) =>
+            {
+                var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+                var orgId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+                var displayName = "Dev Admin";
+                string[] roles = ["owner", "admin", "manager", "backoffice"];
+
+                var (accessToken, expires) = tokenService.GenerateAccessToken(
+                    userId, displayName, orgId, roles: roles);
+                var refreshToken = tokenService.GenerateRefreshToken();
+
+                var target = returnUrl ?? "http://localhost:5174";
+
+                var fragment = $"access_token={accessToken}" +
+                    $"&token_type=Bearer" +
+                    $"&expires_in={(int)(expires - DateTime.UtcNow).TotalSeconds}" +
+                    $"&refresh_token={refreshToken}" +
+                    $"&user_id={userId}" +
+                    $"&org_id={orgId}" +
+                    $"&display_name={Uri.EscapeDataString(displayName)}";
+
+                var separator = target.Contains('#') ? "&" : "#";
+                return Results.Redirect($"{target}{separator}{fragment}");
+            }).WithName("OAuthDevLogin")
+              .WithDescription("Development-only login that bypasses OAuth providers")
+              .ExcludeFromDescription();
+        }
 
         return app;
     }

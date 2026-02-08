@@ -21,6 +21,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   loginWithGoogle: () => void
   loginWithMicrosoft: () => void
+  loginAsDev: () => void
   logout: () => void
   isAuthenticated: boolean
 }
@@ -28,7 +29,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const STORAGE_KEY = 'darkvelocity_backoffice_auth'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5200'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -145,6 +146,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${API_URL}/api/oauth/login/microsoft?returnUrl=${returnUrl}`
   }, [])
 
+  const loginAsDev = useCallback(() => {
+    const returnUrl = encodeURIComponent(window.location.origin)
+    window.location.href = `${API_URL}/api/oauth/dev-login?returnUrl=${returnUrl}`
+  }, [])
+
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
     setState({
@@ -162,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...state,
         loginWithGoogle,
         loginWithMicrosoft,
+        loginAsDev,
         logout,
         isAuthenticated: !!state.user && !!state.accessToken,
       }}
