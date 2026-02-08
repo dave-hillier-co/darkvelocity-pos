@@ -1018,4 +1018,23 @@ public static class GrainKeys
     /// </summary>
     public static string PolishFiscal(Guid orgId, Guid siteId)
         => $"{orgId}:{siteId}:fiscal:poland";
+
+    // ============================================================================
+    // Ordering (QR / Kiosk)
+    // ============================================================================
+
+    /// <summary>
+    /// Creates a key for an ordering link grain (QR code, kiosk URL).
+    /// </summary>
+    public static string OrderingLink(Guid orgId, Guid linkId) => OrgEntity(orgId, "orderinglink", linkId);
+
+    /// <summary>
+    /// Creates a key for a guest ordering session grain.
+    /// </summary>
+    public static string GuestSession(Guid orgId, Guid siteId, Guid sessionId) => SiteEntity(orgId, siteId, "guestsession", sessionId);
+
+    /// <summary>
+    /// Creates a key for the ordering link registry grain (per site).
+    /// </summary>
+    public static string OrderingLinkRegistry(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:orderinglinkregistry";
 }
