@@ -1,4 +1,7 @@
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.State;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Host.Grains;
@@ -7,15 +10,48 @@ namespace DarkVelocity.Host.Grains;
 // Status Mapping Grain Implementation
 // ============================================================================
 
-public class StatusMappingGrain : Grain, IStatusMappingGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class StatusMappingGrain : JournaledGrain<StatusMappingState, IStatusMappingEvent>, IStatusMappingGrain
 {
-    private readonly IPersistentState<StatusMappingState> _state;
-
-    public StatusMappingGrain(
-        [PersistentState("statusmapping", "OrleansStorage")]
-        IPersistentState<StatusMappingState> state)
+    protected override void TransitionState(StatusMappingState state, IStatusMappingEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case StatusMappingConfigured e:
+                state.OrgId = e.OrgId;
+                state.MappingId = e.MappingId;
+                state.PlatformType = e.PlatformType;
+                state.Mappings = e.Mappings.Select(m => new StatusMappingEntryState
+                {
+                    ExternalStatusCode = m.ExternalStatusCode,
+                    ExternalStatusName = m.ExternalStatusName,
+                    InternalStatus = m.InternalStatus,
+                    TriggersPosAction = m.TriggersPosAction,
+                    PosActionType = m.PosActionType
+                }).ToList();
+                state.ConfiguredAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case StatusMappingEntryAdded e:
+                state.Mappings.RemoveAll(m => m.ExternalStatusCode == e.ExternalStatusCode);
+                state.Mappings.Add(new StatusMappingEntryState
+                {
+                    ExternalStatusCode = e.ExternalStatusCode,
+                    ExternalStatusName = e.ExternalStatusName,
+                    InternalStatus = e.InternalStatus,
+                    TriggersPosAction = e.TriggersPosAction,
+                    PosActionType = e.PosActionType
+                });
+                break;
+
+            case StatusMappingEntryRemoved e:
+                state.Mappings.RemoveAll(m => m.ExternalStatusCode == e.ExternalStatusCode);
+                break;
+
+            case StatusMappingUsageRecorded e:
+                state.LastUsedAt = e.OccurredAt.UtcDateTime;
+                break;
+        }
     }
 
     public async Task<StatusMappingSnapshot> ConfigureAsync(ConfigureStatusMappingCommand command)
@@ -23,25 +59,23 @@ public class StatusMappingGrain : Grain, IStatusMappingGrain
         var key = this.GetPrimaryKeyString();
         var parts = key.Split(':');
         var orgId = Guid.Parse(parts[0]);
+        var mappingId = Guid.NewGuid();
 
-        _state.State = new StatusMappingState
-        {
-            OrgId = orgId,
-            MappingId = Guid.NewGuid(),
-            PlatformType = command.PlatformType,
-            Mappings = command.Mappings.Select(m => new StatusMappingEntryState
-            {
-                ExternalStatusCode = m.ExternalStatusCode,
-                ExternalStatusName = m.ExternalStatusName,
-                InternalStatus = m.InternalStatus,
-                TriggersPosAction = m.TriggersPosAction,
-                PosActionType = m.PosActionType
-            }).ToList(),
-            ConfiguredAt = DateTime.UtcNow,
-            Version = 1
-        };
+        RaiseEvent(new StatusMappingConfigured(
+            MappingId: mappingId,
+            OrgId: orgId,
+            PlatformType: command.PlatformType,
+            Mappings: command.Mappings.Select(m => new StatusMappingEntryData(
+                ExternalStatusCode: m.ExternalStatusCode,
+                ExternalStatusName: m.ExternalStatusName,
+                InternalStatus: m.InternalStatus,
+                TriggersPosAction: m.TriggersPosAction,
+                PosActionType: m.PosActionType
+            )).ToList(),
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
@@ -49,43 +83,43 @@ public class StatusMappingGrain : Grain, IStatusMappingGrain
     {
         EnsureExists();
 
-        // Remove existing mapping for this status code if present
-        _state.State.Mappings.RemoveAll(m => m.ExternalStatusCode == mapping.ExternalStatusCode);
-
-        _state.State.Mappings.Add(new StatusMappingEntryState
-        {
-            ExternalStatusCode = mapping.ExternalStatusCode,
-            ExternalStatusName = mapping.ExternalStatusName,
-            InternalStatus = mapping.InternalStatus,
-            TriggersPosAction = mapping.TriggersPosAction,
-            PosActionType = mapping.PosActionType
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new StatusMappingEntryAdded(
+            MappingId: State.MappingId,
+            ExternalStatusCode: mapping.ExternalStatusCode,
+            ExternalStatusName: mapping.ExternalStatusName,
+            InternalStatus: mapping.InternalStatus,
+            TriggersPosAction: mapping.TriggersPosAction,
+            PosActionType: mapping.PosActionType,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task RemoveMappingAsync(string externalStatusCode)
     {
         EnsureExists();
 
-        var removed = _state.State.Mappings.RemoveAll(m => m.ExternalStatusCode == externalStatusCode);
-        if (removed > 0)
+        var exists = State.Mappings.Any(m => m.ExternalStatusCode == externalStatusCode);
+        if (exists)
         {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new StatusMappingEntryRemoved(
+                MappingId: State.MappingId,
+                ExternalStatusCode: externalStatusCode,
+                OccurredAt: DateTimeOffset.UtcNow
+            ));
+            await ConfirmEvents();
         }
     }
 
     public Task<InternalOrderStatus?> GetInternalStatusAsync(string externalStatusCode)
     {
-        var mapping = _state.State.Mappings.FirstOrDefault(m => m.ExternalStatusCode == externalStatusCode);
+        var mapping = State.Mappings.FirstOrDefault(m => m.ExternalStatusCode == externalStatusCode);
         return Task.FromResult(mapping != null ? (InternalOrderStatus?)mapping.InternalStatus : null);
     }
 
     public Task<string?> GetExternalStatusAsync(InternalOrderStatus internalStatus)
     {
-        var mapping = _state.State.Mappings.FirstOrDefault(m => m.InternalStatus == internalStatus);
+        var mapping = State.Mappings.FirstOrDefault(m => m.InternalStatus == internalStatus);
         return Task.FromResult(mapping?.ExternalStatusCode);
     }
 
@@ -96,27 +130,33 @@ public class StatusMappingGrain : Grain, IStatusMappingGrain
 
     public async Task RecordUsageAsync(string externalStatusCode)
     {
-        _state.State.LastUsedAt = DateTime.UtcNow;
-        await _state.WriteStateAsync();
+        RaiseEvent(new StatusMappingUsageRecorded(
+            MappingId: State.MappingId,
+            ExternalStatusCode: externalStatusCode,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
+    public Task<int> GetVersionAsync() => Task.FromResult(Version);
+
     private StatusMappingSnapshot CreateSnapshot() => new(
-        MappingId: _state.State.MappingId,
-        PlatformType: _state.State.PlatformType,
-        Mappings: _state.State.Mappings.Select(m => new StatusMappingEntry(
+        MappingId: State.MappingId,
+        PlatformType: State.PlatformType,
+        Mappings: State.Mappings.Select(m => new StatusMappingEntry(
             ExternalStatusCode: m.ExternalStatusCode,
             ExternalStatusName: m.ExternalStatusName,
             InternalStatus: m.InternalStatus,
             TriggersPosAction: m.TriggersPosAction,
             PosActionType: m.PosActionType
         )).ToList(),
-        ConfiguredAt: _state.State.ConfiguredAt,
-        LastUsedAt: _state.State.LastUsedAt
+        ConfiguredAt: State.ConfiguredAt,
+        LastUsedAt: State.LastUsedAt
     );
 
     private void EnsureExists()
     {
-        if (_state.State.MappingId == Guid.Empty)
+        if (State.MappingId == Guid.Empty)
             throw new InvalidOperationException("Status mapping not configured");
     }
 }
@@ -125,42 +165,113 @@ public class StatusMappingGrain : Grain, IStatusMappingGrain
 // Channel Grain Implementation
 // ============================================================================
 
-public class ChannelGrain : Grain, IChannelGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class ChannelGrain : JournaledGrain<ChannelState, IChannelEvent>, IChannelGrain
 {
-    private readonly IPersistentState<ChannelState> _state;
-
-    public ChannelGrain(
-        [PersistentState("channel", "OrleansStorage")]
-        IPersistentState<ChannelState> state)
+    protected override void TransitionState(ChannelState state, IChannelEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case ChannelConnected e:
+                state.OrgId = e.OrgId;
+                state.ChannelId = e.ChannelId;
+                state.PlatformType = e.PlatformType;
+                state.IntegrationType = e.IntegrationType;
+                state.Name = e.Name;
+                state.Status = ChannelStatus.Active;
+                state.ApiCredentialsEncrypted = e.ApiCredentialsEncrypted;
+                state.WebhookSecret = e.WebhookSecret;
+                state.ExternalChannelId = e.ExternalChannelId;
+                state.Settings = e.Settings;
+                state.ConnectedAt = e.OccurredAt.UtcDateTime;
+                state.TodayDate = e.OccurredAt.UtcDateTime.Date;
+                break;
+
+            case ChannelUpdated e:
+                if (e.Name != null) state.Name = e.Name;
+                if (e.ApiCredentialsEncrypted != null) state.ApiCredentialsEncrypted = e.ApiCredentialsEncrypted;
+                if (e.WebhookSecret != null) state.WebhookSecret = e.WebhookSecret;
+                if (e.Settings != null) state.Settings = e.Settings;
+                break;
+
+            case ChannelDisconnected:
+                state.Status = ChannelStatus.Disconnected;
+                break;
+
+            case ChannelPaused e:
+                state.Status = ChannelStatus.Paused;
+                state.PauseReason = e.Reason;
+                break;
+
+            case ChannelResumed:
+                state.Status = ChannelStatus.Active;
+                state.PauseReason = null;
+                break;
+
+            case ChannelLocationMappingAdded e:
+                state.Locations.RemoveAll(l => l.LocationId == e.LocationId);
+                state.Locations.Add(new ChannelLocationState
+                {
+                    LocationId = e.LocationId,
+                    ExternalStoreId = e.ExternalStoreId,
+                    IsActive = e.IsActive,
+                    MenuId = e.MenuId,
+                    OperatingHoursOverride = e.OperatingHoursOverride
+                });
+                break;
+
+            case ChannelLocationMappingRemoved e:
+                state.Locations.RemoveAll(l => l.LocationId == e.LocationId);
+                break;
+
+            case ChannelOrderRecorded e:
+                state.TotalOrdersToday++;
+                state.TotalRevenueToday += e.Amount;
+                state.LastOrderAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case ChannelSyncRecorded e:
+                state.LastSyncAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case ChannelHeartbeatRecorded e:
+                state.LastHeartbeatAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case ChannelErrorRecorded e:
+                state.LastErrorMessage = e.ErrorMessage;
+                state.Status = ChannelStatus.Error;
+                break;
+
+            case ChannelDailyCountersReset e:
+                state.TodayDate = e.NewDate.ToDateTime(TimeOnly.MinValue);
+                state.TotalOrdersToday = 0;
+                state.TotalRevenueToday = 0;
+                break;
+        }
     }
 
     public async Task<ChannelSnapshot> ConnectAsync(ConnectChannelCommand command)
     {
-        if (_state.State.ChannelId != Guid.Empty)
+        if (State.ChannelId != Guid.Empty)
             throw new InvalidOperationException("Channel already connected");
 
         var (orgId, _, channelId) = GrainKeys.ParseOrgEntity(this.GetPrimaryKeyString());
 
-        _state.State = new ChannelState
-        {
-            OrgId = orgId,
-            ChannelId = channelId,
-            PlatformType = command.PlatformType,
-            IntegrationType = command.IntegrationType,
-            Name = command.Name,
-            Status = ChannelStatus.Active,
-            ApiCredentialsEncrypted = command.ApiCredentialsEncrypted,
-            WebhookSecret = command.WebhookSecret,
-            ExternalChannelId = command.ExternalChannelId,
-            Settings = command.Settings,
-            ConnectedAt = DateTime.UtcNow,
-            TodayDate = DateTime.UtcNow.Date,
-            Version = 1
-        };
+        RaiseEvent(new ChannelConnected(
+            ChannelId: channelId,
+            OrgId: orgId,
+            Name: command.Name,
+            PlatformType: command.PlatformType,
+            IntegrationType: command.IntegrationType,
+            ExternalChannelId: command.ExternalChannelId,
+            ApiCredentialsEncrypted: command.ApiCredentialsEncrypted,
+            WebhookSecret: command.WebhookSecret,
+            Settings: command.Settings,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
@@ -168,72 +279,82 @@ public class ChannelGrain : Grain, IChannelGrain
     {
         EnsureExists();
 
-        if (command.Name != null) _state.State.Name = command.Name;
-        if (command.Status != null) _state.State.Status = command.Status.Value;
-        if (command.ApiCredentialsEncrypted != null) _state.State.ApiCredentialsEncrypted = command.ApiCredentialsEncrypted;
-        if (command.WebhookSecret != null) _state.State.WebhookSecret = command.WebhookSecret;
-        if (command.Settings != null) _state.State.Settings = command.Settings;
+        RaiseEvent(new ChannelUpdated(
+            ChannelId: State.ChannelId,
+            Name: command.Name,
+            ApiCredentialsEncrypted: command.ApiCredentialsEncrypted,
+            WebhookSecret: command.WebhookSecret,
+            Settings: command.Settings,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
     public async Task DisconnectAsync()
     {
         EnsureExists();
-        _state.State.Status = ChannelStatus.Disconnected;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelDisconnected(
+            ChannelId: State.ChannelId,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task PauseAsync(string? reason = null)
     {
         EnsureExists();
-        _state.State.Status = ChannelStatus.Paused;
-        _state.State.PauseReason = reason;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelPaused(
+            ChannelId: State.ChannelId,
+            Reason: reason,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task ResumeAsync()
     {
         EnsureExists();
-        _state.State.Status = ChannelStatus.Active;
-        _state.State.PauseReason = null;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelResumed(
+            ChannelId: State.ChannelId,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task AddLocationMappingAsync(ChannelLocationMapping mapping)
     {
         EnsureExists();
 
-        // Remove existing mapping for this location if present
-        _state.State.Locations.RemoveAll(l => l.LocationId == mapping.LocationId);
-
-        _state.State.Locations.Add(new ChannelLocationState
-        {
-            LocationId = mapping.LocationId,
-            ExternalStoreId = mapping.ExternalStoreId,
-            IsActive = mapping.IsActive,
-            MenuId = mapping.MenuId,
-            OperatingHoursOverride = mapping.OperatingHoursOverride
-        });
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new ChannelLocationMappingAdded(
+            ChannelId: State.ChannelId,
+            LocationId: mapping.LocationId,
+            ExternalStoreId: mapping.ExternalStoreId,
+            IsActive: mapping.IsActive,
+            MenuId: mapping.MenuId,
+            OperatingHoursOverride: mapping.OperatingHoursOverride,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task RemoveLocationMappingAsync(Guid locationId)
     {
         EnsureExists();
 
-        var removed = _state.State.Locations.RemoveAll(l => l.LocationId == locationId);
-        if (removed > 0)
+        var exists = State.Locations.Any(l => l.LocationId == locationId);
+        if (exists)
         {
-            _state.State.Version++;
-            await _state.WriteStateAsync();
+            RaiseEvent(new ChannelLocationMappingRemoved(
+                ChannelId: State.ChannelId,
+                LocationId: locationId,
+                OccurredAt: DateTimeOffset.UtcNow
+            ));
+            await ConfirmEvents();
         }
     }
 
@@ -245,80 +366,97 @@ public class ChannelGrain : Grain, IChannelGrain
     public async Task RecordOrderAsync(decimal orderTotal)
     {
         EnsureExists();
-        ResetDailyCountersIfNeeded();
+        await ResetDailyCountersIfNeededAsync();
 
-        _state.State.TotalOrdersToday++;
-        _state.State.TotalRevenueToday += orderTotal;
-        _state.State.LastOrderAt = DateTime.UtcNow;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new ChannelOrderRecorded(
+            ChannelId: State.ChannelId,
+            Amount: orderTotal,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task RecordSyncAsync()
     {
         EnsureExists();
-        _state.State.LastSyncAt = DateTime.UtcNow;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelSyncRecorded(
+            ChannelId: State.ChannelId,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task RecordHeartbeatAsync()
     {
         EnsureExists();
-        _state.State.LastHeartbeatAt = DateTime.UtcNow;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelHeartbeatRecorded(
+            ChannelId: State.ChannelId,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public async Task RecordErrorAsync(string errorMessage)
     {
         EnsureExists();
-        _state.State.LastErrorMessage = errorMessage;
-        _state.State.Status = ChannelStatus.Error;
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+
+        RaiseEvent(new ChannelErrorRecorded(
+            ChannelId: State.ChannelId,
+            ErrorMessage: errorMessage,
+            OccurredAt: DateTimeOffset.UtcNow
+        ));
+        await ConfirmEvents();
     }
 
     public Task<bool> IsAcceptingOrdersAsync()
     {
-        return Task.FromResult(_state.State.ChannelId != Guid.Empty && _state.State.Status == ChannelStatus.Active);
+        return Task.FromResult(State.ChannelId != Guid.Empty && State.Status == ChannelStatus.Active);
     }
 
+    public Task<int> GetVersionAsync() => Task.FromResult(Version);
+
     private ChannelSnapshot CreateSnapshot() => new(
-        ChannelId: _state.State.ChannelId,
-        PlatformType: _state.State.PlatformType,
-        IntegrationType: _state.State.IntegrationType,
-        Name: _state.State.Name,
-        Status: _state.State.Status,
-        ExternalChannelId: _state.State.ExternalChannelId,
-        ConnectedAt: _state.State.ConnectedAt,
-        LastSyncAt: _state.State.LastSyncAt,
-        LastOrderAt: _state.State.LastOrderAt,
-        LastHeartbeatAt: _state.State.LastHeartbeatAt,
-        Locations: _state.State.Locations.Select(l => new ChannelLocationMapping(
+        ChannelId: State.ChannelId,
+        PlatformType: State.PlatformType,
+        IntegrationType: State.IntegrationType,
+        Name: State.Name,
+        Status: State.Status,
+        ExternalChannelId: State.ExternalChannelId,
+        ConnectedAt: State.ConnectedAt,
+        LastSyncAt: State.LastSyncAt,
+        LastOrderAt: State.LastOrderAt,
+        LastHeartbeatAt: State.LastHeartbeatAt,
+        Locations: State.Locations.Select(l => new ChannelLocationMapping(
             LocationId: l.LocationId,
             ExternalStoreId: l.ExternalStoreId,
             IsActive: l.IsActive,
             MenuId: l.MenuId,
             OperatingHoursOverride: l.OperatingHoursOverride
         )).ToList(),
-        TotalOrdersToday: _state.State.TotalOrdersToday,
-        TotalRevenueToday: _state.State.TotalRevenueToday,
-        LastErrorMessage: _state.State.LastErrorMessage
+        TotalOrdersToday: State.TotalOrdersToday,
+        TotalRevenueToday: State.TotalRevenueToday,
+        LastErrorMessage: State.LastErrorMessage
     );
 
     private void EnsureExists()
     {
-        if (_state.State.ChannelId == Guid.Empty)
+        if (State.ChannelId == Guid.Empty)
             throw new InvalidOperationException("Channel not connected");
     }
 
-    private void ResetDailyCountersIfNeeded()
+    private async Task ResetDailyCountersIfNeededAsync()
     {
-        var today = DateTime.UtcNow.Date;
-        if (_state.State.TodayDate != today)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (State.TodayDate != today.ToDateTime(TimeOnly.MinValue))
         {
-            _state.State.TodayDate = today;
-            _state.State.TotalOrdersToday = 0;
-            _state.State.TotalRevenueToday = 0;
+            RaiseEvent(new ChannelDailyCountersReset(
+                ChannelId: State.ChannelId,
+                NewDate: today,
+                OccurredAt: DateTimeOffset.UtcNow
+            ));
+            await ConfirmEvents();
         }
     }
 }

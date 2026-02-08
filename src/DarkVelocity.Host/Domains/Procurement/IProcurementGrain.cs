@@ -70,6 +70,7 @@ public interface ISupplierGrain : IGrainWithStringKey
     Task<SupplierSnapshot> GetSnapshotAsync();
     Task<decimal> GetIngredientPriceAsync(Guid ingredientId);
     Task RecordPurchaseAsync(decimal amount, bool onTime);
+    Task<int> GetVersionAsync();
 }
 
 // ============================================================================

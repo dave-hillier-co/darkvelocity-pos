@@ -1,6 +1,9 @@
 using DarkVelocity.Host;
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Host.Grains;
@@ -676,44 +679,70 @@ public class CostAlertGrain : Grain, ICostAlertGrain
 // Costing Settings Grain Implementation
 // ============================================================================
 
-public class CostingSettingsGrain : Grain, ICostingSettingsGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class CostingSettingsGrain : JournaledGrain<CostingSettingsState, ICostingSettingsEvent>, ICostingSettingsGrain
 {
-    private readonly IPersistentState<CostingSettingsState> _state;
-
-    public CostingSettingsGrain(
-        [PersistentState("costingsettings", "OrleansStorage")]
-        IPersistentState<CostingSettingsState> state)
+    protected override void TransitionState(CostingSettingsState state, ICostingSettingsEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case CostingSettingsInitialized e:
+                state.Id = e.SettingsId;
+                state.OrganizationId = e.OrganizationId;
+                state.LocationId = e.LocationId;
+                state.TargetFoodCostPercent = 30;
+                state.TargetBeverageCostPercent = 25;
+                state.MinimumMarginPercent = 50;
+                state.WarningMarginPercent = 60;
+                state.PriceChangeAlertThreshold = 10;
+                state.CostIncreaseAlertThreshold = 5;
+                state.AutoRecalculateCosts = true;
+                state.AutoCreateSnapshots = true;
+                state.SnapshotFrequencyDays = 7;
+                state.CreatedAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case CostingSettingsUpdated e:
+                if (e.TargetFoodCostPercent.HasValue)
+                    state.TargetFoodCostPercent = e.TargetFoodCostPercent.Value;
+                if (e.TargetBeverageCostPercent.HasValue)
+                    state.TargetBeverageCostPercent = e.TargetBeverageCostPercent.Value;
+                if (e.MinimumMarginPercent.HasValue)
+                    state.MinimumMarginPercent = e.MinimumMarginPercent.Value;
+                if (e.WarningMarginPercent.HasValue)
+                    state.WarningMarginPercent = e.WarningMarginPercent.Value;
+                if (e.PriceChangeAlertThreshold.HasValue)
+                    state.PriceChangeAlertThreshold = e.PriceChangeAlertThreshold.Value;
+                if (e.CostIncreaseAlertThreshold.HasValue)
+                    state.CostIncreaseAlertThreshold = e.CostIncreaseAlertThreshold.Value;
+                if (e.AutoRecalculateCosts.HasValue)
+                    state.AutoRecalculateCosts = e.AutoRecalculateCosts.Value;
+                if (e.AutoCreateSnapshots.HasValue)
+                    state.AutoCreateSnapshots = e.AutoCreateSnapshots.Value;
+                if (e.SnapshotFrequencyDays.HasValue && e.SnapshotFrequencyDays.Value > 0)
+                    state.SnapshotFrequencyDays = e.SnapshotFrequencyDays.Value;
+                state.UpdatedAt = e.OccurredAt.UtcDateTime;
+                break;
+        }
     }
 
     public async Task InitializeAsync(Guid locationId)
     {
-        if (_state.State.Id != Guid.Empty)
+        if (State.Id != Guid.Empty)
             return; // Already initialized
 
         var key = this.GetPrimaryKeyString();
         var parts = key.Split(':');
         var orgId = Guid.Parse(parts[0]);
 
-        _state.State = new CostingSettingsState
+        RaiseEvent(new CostingSettingsInitialized
         {
-            Id = Guid.NewGuid(),
+            SettingsId = Guid.NewGuid(),
             OrganizationId = orgId,
             LocationId = locationId,
-            TargetFoodCostPercent = 30,
-            TargetBeverageCostPercent = 25,
-            MinimumMarginPercent = 50,
-            WarningMarginPercent = 60,
-            PriceChangeAlertThreshold = 10,
-            CostIncreaseAlertThreshold = 5,
-            AutoRecalculateCosts = true,
-            AutoCreateSnapshots = true,
-            SnapshotFrequencyDays = 7,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _state.WriteStateAsync();
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public Task<CostingSettingsSnapshot> GetSettingsAsync()
@@ -726,74 +755,70 @@ public class CostingSettingsGrain : Grain, ICostingSettingsGrain
     {
         EnsureExists();
 
-        if (command.TargetFoodCostPercent.HasValue)
-            _state.State.TargetFoodCostPercent = command.TargetFoodCostPercent.Value;
-        if (command.TargetBeverageCostPercent.HasValue)
-            _state.State.TargetBeverageCostPercent = command.TargetBeverageCostPercent.Value;
-        if (command.MinimumMarginPercent.HasValue)
-            _state.State.MinimumMarginPercent = command.MinimumMarginPercent.Value;
-        if (command.WarningMarginPercent.HasValue)
-            _state.State.WarningMarginPercent = command.WarningMarginPercent.Value;
-        if (command.PriceChangeAlertThreshold.HasValue)
-            _state.State.PriceChangeAlertThreshold = command.PriceChangeAlertThreshold.Value;
-        if (command.CostIncreaseAlertThreshold.HasValue)
-            _state.State.CostIncreaseAlertThreshold = command.CostIncreaseAlertThreshold.Value;
-        if (command.AutoRecalculateCosts.HasValue)
-            _state.State.AutoRecalculateCosts = command.AutoRecalculateCosts.Value;
-        if (command.AutoCreateSnapshots.HasValue)
-            _state.State.AutoCreateSnapshots = command.AutoCreateSnapshots.Value;
-        if (command.SnapshotFrequencyDays.HasValue && command.SnapshotFrequencyDays.Value > 0)
-            _state.State.SnapshotFrequencyDays = command.SnapshotFrequencyDays.Value;
+        RaiseEvent(new CostingSettingsUpdated
+        {
+            SettingsId = State.Id,
+            TargetFoodCostPercent = command.TargetFoodCostPercent,
+            TargetBeverageCostPercent = command.TargetBeverageCostPercent,
+            MinimumMarginPercent = command.MinimumMarginPercent,
+            WarningMarginPercent = command.WarningMarginPercent,
+            PriceChangeAlertThreshold = command.PriceChangeAlertThreshold,
+            CostIncreaseAlertThreshold = command.CostIncreaseAlertThreshold,
+            AutoRecalculateCosts = command.AutoRecalculateCosts,
+            AutoCreateSnapshots = command.AutoCreateSnapshots,
+            SnapshotFrequencyDays = command.SnapshotFrequencyDays,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.UpdatedAt = DateTime.UtcNow;
-
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
     public Task<bool> ExistsAsync()
     {
-        return Task.FromResult(_state.State.Id != Guid.Empty);
+        return Task.FromResult(State.Id != Guid.Empty);
     }
 
     public Task<bool> ShouldAlertOnPriceChangeAsync(decimal changePercent)
     {
-        return Task.FromResult(Math.Abs(changePercent) > _state.State.PriceChangeAlertThreshold);
+        return Task.FromResult(Math.Abs(changePercent) > State.PriceChangeAlertThreshold);
     }
 
     public Task<bool> ShouldAlertOnCostIncreaseAsync(decimal changePercent)
     {
-        return Task.FromResult(changePercent > _state.State.CostIncreaseAlertThreshold);
+        return Task.FromResult(changePercent > State.CostIncreaseAlertThreshold);
     }
 
     public Task<bool> IsMarginBelowMinimumAsync(decimal marginPercent)
     {
-        return Task.FromResult(marginPercent < _state.State.MinimumMarginPercent);
+        return Task.FromResult(marginPercent < State.MinimumMarginPercent);
     }
 
     public Task<bool> IsMarginBelowWarningAsync(decimal marginPercent)
     {
-        return Task.FromResult(marginPercent < _state.State.WarningMarginPercent);
+        return Task.FromResult(marginPercent < State.WarningMarginPercent);
     }
+
+    public Task<int> GetVersionAsync() => Task.FromResult(Version);
 
     private void EnsureExists()
     {
-        if (_state.State.Id == Guid.Empty)
+        if (State.Id == Guid.Empty)
             throw new InvalidOperationException("Costing settings not found - call InitializeAsync first");
     }
 
     private CostingSettingsSnapshot CreateSnapshot()
     {
         return new CostingSettingsSnapshot(
-            _state.State.LocationId,
-            _state.State.TargetFoodCostPercent,
-            _state.State.TargetBeverageCostPercent,
-            _state.State.MinimumMarginPercent,
-            _state.State.WarningMarginPercent,
-            _state.State.PriceChangeAlertThreshold,
-            _state.State.CostIncreaseAlertThreshold,
-            _state.State.AutoRecalculateCosts,
-            _state.State.AutoCreateSnapshots,
-            _state.State.SnapshotFrequencyDays);
+            State.LocationId,
+            State.TargetFoodCostPercent,
+            State.TargetBeverageCostPercent,
+            State.MinimumMarginPercent,
+            State.WarningMarginPercent,
+            State.PriceChangeAlertThreshold,
+            State.CostIncreaseAlertThreshold,
+            State.AutoRecalculateCosts,
+            State.AutoCreateSnapshots,
+            State.SnapshotFrequencyDays);
     }
 }

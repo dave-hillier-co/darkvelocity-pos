@@ -142,6 +142,11 @@ public interface IChannelGrain : IGrainWithStringKey
     /// Check if the channel is currently accepting orders.
     /// </summary>
     Task<bool> IsAcceptingOrdersAsync();
+
+    /// <summary>
+    /// Get the current event-sourced version number.
+    /// </summary>
+    Task<int> GetVersionAsync();
 }
 
 // ============================================================================
@@ -235,6 +240,11 @@ public interface IStatusMappingGrain : IGrainWithStringKey
     /// Record that a mapping was used (for tracking).
     /// </summary>
     Task RecordUsageAsync(string externalStatusCode);
+
+    /// <summary>
+    /// Get the current event-sourced version number.
+    /// </summary>
+    Task<int> GetVersionAsync();
 }
 
 // ============================================================================

@@ -354,8 +354,10 @@ public interface IModifierBlockGrain : IGrainWithStringKey
     Task<ModifierBlockVersionSnapshot?> GetVersionAsync(int version);
     Task<ModifierBlockVersionSnapshot?> GetPublishedAsync();
     Task<ModifierBlockVersionSnapshot?> GetDraftAsync();
+    Task<IReadOnlyList<ModifierBlockVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20);
     Task PublishDraftAsync(Guid? publishedBy = null, string? note = null);
     Task DiscardDraftAsync();
+    Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null);
 
     // Usage tracking
     Task RegisterUsageAsync(string itemDocumentId);

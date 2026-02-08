@@ -461,6 +461,20 @@ public sealed record ModifierBlockDraftDiscarded(
 ) : IModifierBlockEvent;
 
 /// <summary>
+/// Domain event: Modifier block reverted to a previous version.
+/// </summary>
+[GenerateSerializer]
+public sealed record ModifierBlockRevertedToVersion(
+    [property: Id(0)] string BlockId,
+    [property: Id(1)] DateTimeOffset OccurredAt,
+    [property: Id(2)] int FromVersion,
+    [property: Id(3)] int ToVersion,
+    [property: Id(4)] int NewVersionNumber,
+    [property: Id(5)] Guid? RevertedBy,
+    [property: Id(6)] string? Reason
+) : IModifierBlockEvent;
+
+/// <summary>
 /// Domain event: Modifier block usage was registered.
 /// </summary>
 [GenerateSerializer]

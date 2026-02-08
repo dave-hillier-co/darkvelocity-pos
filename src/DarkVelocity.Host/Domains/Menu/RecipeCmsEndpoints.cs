@@ -668,6 +668,56 @@ public static class RecipeCmsEndpoints
             return Results.Ok(ToCategoryResponse(snapshot));
         });
 
+        group.MapGet("/categories/{documentId}/versions", async (
+            Guid orgId,
+            string documentId,
+            [FromQuery] int skip,
+            [FromQuery] int take,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IRecipeCategoryDocumentGrain>(GrainKeys.RecipeCategoryDocument(orgId, documentId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            take = take <= 0 ? 20 : Math.Min(take, 100);
+            var versions = await grain.GetVersionHistoryAsync(skip, take);
+
+            return Results.Ok(Hal.Resource(new
+            {
+                versions = versions.Select(ToCategoryVersionResponse).ToList()
+            }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/recipes/cms/categories/{documentId}/versions?skip={skip}&take={take}" }
+            }));
+        });
+
+        group.MapPost("/categories/{documentId}/revert", async (
+            Guid orgId,
+            string documentId,
+            [FromBody] RevertVersionRequest request,
+            [FromHeader(Name = "X-User-Id")] Guid? userId,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IRecipeCategoryDocumentGrain>(GrainKeys.RecipeCategoryDocument(orgId, documentId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            await grain.RevertToVersionAsync(request.Version, userId, request.Reason);
+            var snapshot = await grain.GetSnapshotAsync();
+
+            // Update registry
+            var registryGrain = grainFactory.GetGrain<IRecipeRegistryGrain>(GrainKeys.RecipeRegistry(orgId));
+            var published = snapshot.Published!;
+            await registryGrain.UpdateCategoryAsync(
+                documentId, published.Name, published.DisplayOrder, published.Color,
+                hasDraft: false, isArchived: snapshot.IsArchived, recipeCount: published.RecipeDocumentIds.Count);
+
+            return Results.Ok(Hal.Resource(ToCategoryResponse(snapshot), new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/recipes/cms/categories/{documentId}" }
+            }));
+        });
+
         group.MapPost("/categories/{documentId}/archive", async (
             Guid orgId,
             string documentId,

@@ -446,6 +446,56 @@ public static class MenuCmsEndpoints
             return Results.Ok(ToCategoryVersionResponse(result));
         });
 
+        group.MapGet("/categories/{documentId}/versions", async (
+            Guid orgId,
+            string documentId,
+            [FromQuery] int skip,
+            [FromQuery] int take,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IMenuCategoryDocumentGrain>(GrainKeys.MenuCategoryDocument(orgId, documentId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            take = take <= 0 ? 20 : Math.Min(take, 100);
+            var versions = await grain.GetVersionHistoryAsync(skip, take);
+
+            return Results.Ok(Hal.Resource(new
+            {
+                versions = versions.Select(ToCategoryVersionResponse).ToList()
+            }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/menu/cms/categories/{documentId}/versions?skip={skip}&take={take}" }
+            }));
+        });
+
+        group.MapPost("/categories/{documentId}/revert", async (
+            Guid orgId,
+            string documentId,
+            [FromBody] RevertVersionRequest request,
+            [FromHeader(Name = "X-User-Id")] Guid? userId,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IMenuCategoryDocumentGrain>(GrainKeys.MenuCategoryDocument(orgId, documentId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            await grain.RevertToVersionAsync(request.Version, userId, request.Reason);
+            var snapshot = await grain.GetSnapshotAsync();
+
+            // Update registry
+            var registryGrain = grainFactory.GetGrain<IMenuRegistryGrain>(GrainKeys.MenuRegistry(orgId));
+            var published = snapshot.Published!;
+            await registryGrain.UpdateCategoryAsync(
+                documentId, published.Name, published.DisplayOrder, published.Color,
+                hasDraft: false, isArchived: snapshot.IsArchived, itemCount: published.ItemDocumentIds.Count);
+
+            return Results.Ok(Hal.Resource(ToCategoryResponse(snapshot), new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/menu/cms/categories/{documentId}" }
+            }));
+        });
+
         group.MapPost("/categories/{documentId}/publish", async (
             Guid orgId,
             string documentId,
@@ -541,6 +591,45 @@ public static class MenuCmsEndpoints
             if (!await grain.ExistsAsync())
                 return Results.NotFound();
 
+            var snapshot = await grain.GetSnapshotAsync();
+            return Results.Ok(ToModifierBlockResponse(snapshot));
+        });
+
+        group.MapGet("/modifier-blocks/{blockId}/versions", async (
+            Guid orgId,
+            string blockId,
+            [FromQuery] int skip,
+            [FromQuery] int take,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IModifierBlockGrain>(GrainKeys.ModifierBlock(orgId, blockId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            take = take <= 0 ? 20 : Math.Min(take, 100);
+            var versions = await grain.GetVersionHistoryAsync(skip, take);
+
+            return Results.Ok(Hal.Resource(new
+            {
+                versions = versions.Select(ToModifierBlockVersionResponse).ToList()
+            }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/menu/cms/modifier-blocks/{blockId}/versions?skip={skip}&take={take}" }
+            }));
+        });
+
+        group.MapPost("/modifier-blocks/{blockId}/revert", async (
+            Guid orgId,
+            string blockId,
+            [FromBody] RevertVersionRequest request,
+            [FromHeader(Name = "X-User-Id")] Guid? userId,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IModifierBlockGrain>(GrainKeys.ModifierBlock(orgId, blockId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound();
+
+            await grain.RevertToVersionAsync(request.Version, userId, request.Reason);
             var snapshot = await grain.GetSnapshotAsync();
             return Results.Ok(ToModifierBlockResponse(snapshot));
         });

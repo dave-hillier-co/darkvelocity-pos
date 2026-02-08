@@ -1,5 +1,9 @@
+using DarkVelocity.Host;
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Host.Grains;
@@ -11,32 +15,100 @@ namespace DarkVelocity.Host.Grains;
 /// <summary>
 /// Grain for supplier management.
 /// Manages supplier information, pricing, and performance metrics.
+/// Uses event sourcing via JournaledGrain for state persistence.
 /// </summary>
-public class SupplierGrain : Grain, ISupplierGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class SupplierGrain : JournaledGrain<SupplierState, ISupplierEvent>, ISupplierGrain
 {
-    private readonly IPersistentState<SupplierState> _state;
-
-    public SupplierGrain(
-        [PersistentState("supplier", "OrleansStorage")]
-        IPersistentState<SupplierState> state)
+    protected override void TransitionState(SupplierState state, ISupplierEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case SupplierCreated e:
+                state.OrgId = e.OrgId;
+                state.SupplierId = e.SupplierId;
+                state.Code = e.Code;
+                state.Name = e.Name;
+                state.ContactName = e.ContactName ?? "";
+                state.ContactEmail = e.ContactEmail ?? "";
+                state.ContactPhone = e.ContactPhone ?? "";
+                state.Address = e.Address ?? "";
+                state.PaymentTermsDays = e.PaymentTermsDays;
+                state.LeadTimeDays = e.LeadTimeDays;
+                state.Notes = e.Notes;
+                state.IsActive = true;
+                break;
+
+            case SupplierUpdated e:
+                if (e.Name != null) state.Name = e.Name;
+                if (e.ContactName != null) state.ContactName = e.ContactName;
+                if (e.ContactEmail != null) state.ContactEmail = e.ContactEmail;
+                if (e.ContactPhone != null) state.ContactPhone = e.ContactPhone;
+                if (e.Address != null) state.Address = e.Address;
+                if (e.PaymentTermsDays.HasValue) state.PaymentTermsDays = e.PaymentTermsDays.Value;
+                if (e.LeadTimeDays.HasValue) state.LeadTimeDays = e.LeadTimeDays.Value;
+                if (e.Notes != null) state.Notes = e.Notes;
+                if (e.IsActive.HasValue) state.IsActive = e.IsActive.Value;
+                break;
+
+            case SupplierIngredientAdded e:
+                var existingIngredient = state.Ingredients.FirstOrDefault(i => i.IngredientId == e.IngredientId);
+                if (existingIngredient != null)
+                {
+                    existingIngredient.SupplierSku = e.SupplierSku ?? "";
+                    existingIngredient.UnitPrice = e.UnitPrice;
+                    existingIngredient.Unit = e.Unit;
+                    existingIngredient.MinOrderQuantity = e.MinOrderQuantity ?? 0;
+                    existingIngredient.LeadTimeDays = e.LeadTimeDays ?? 0;
+                }
+                else
+                {
+                    state.Ingredients.Add(new SupplierIngredientState
+                    {
+                        IngredientId = e.IngredientId,
+                        IngredientName = e.IngredientName,
+                        Sku = e.Sku ?? "",
+                        SupplierSku = e.SupplierSku ?? "",
+                        UnitPrice = e.UnitPrice,
+                        Unit = e.Unit,
+                        MinOrderQuantity = e.MinOrderQuantity ?? 0,
+                        LeadTimeDays = e.LeadTimeDays ?? 0
+                    });
+                }
+                break;
+
+            case SupplierIngredientRemoved e:
+                state.Ingredients.RemoveAll(i => i.IngredientId == e.IngredientId);
+                break;
+
+            case SupplierIngredientPriceUpdated e:
+                var ingredientToUpdate = state.Ingredients.FirstOrDefault(i => i.IngredientId == e.IngredientId);
+                if (ingredientToUpdate != null)
+                {
+                    ingredientToUpdate.UnitPrice = e.NewPrice;
+                }
+                break;
+
+            case SupplierPurchaseRecorded e:
+                state.TotalPurchasesYtd += e.Amount;
+                state.TotalDeliveries++;
+                if (e.OnTime) state.OnTimeDeliveries++;
+                break;
+        }
     }
 
     public async Task<SupplierSnapshot> CreateAsync(CreateSupplierCommand command)
     {
-        if (_state.State.SupplierId != Guid.Empty)
+        if (State.SupplierId != Guid.Empty)
             throw new InvalidOperationException("Supplier already exists");
 
         var key = this.GetPrimaryKeyString();
-        var parts = key.Split(':');
-        var orgId = Guid.Parse(parts[0]);
-        var supplierId = Guid.Parse(parts[2]);
+        var (orgId, _, supplierId) = GrainKeys.ParseOrgEntity(key);
 
-        _state.State = new SupplierState
+        RaiseEvent(new SupplierCreated
         {
-            OrgId = orgId,
             SupplierId = supplierId,
+            OrgId = orgId,
             Code = command.Code,
             Name = command.Name,
             ContactName = command.ContactName,
@@ -46,11 +118,10 @@ public class SupplierGrain : Grain, ISupplierGrain
             PaymentTermsDays = command.PaymentTermsDays,
             LeadTimeDays = command.LeadTimeDays,
             Notes = command.Notes,
-            IsActive = true,
-            Version = 1
-        };
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
 
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
@@ -58,18 +129,22 @@ public class SupplierGrain : Grain, ISupplierGrain
     {
         EnsureInitialized();
 
-        if (command.Name != null) _state.State.Name = command.Name;
-        if (command.ContactName != null) _state.State.ContactName = command.ContactName;
-        if (command.ContactEmail != null) _state.State.ContactEmail = command.ContactEmail;
-        if (command.ContactPhone != null) _state.State.ContactPhone = command.ContactPhone;
-        if (command.Address != null) _state.State.Address = command.Address;
-        if (command.PaymentTermsDays.HasValue) _state.State.PaymentTermsDays = command.PaymentTermsDays.Value;
-        if (command.LeadTimeDays.HasValue) _state.State.LeadTimeDays = command.LeadTimeDays.Value;
-        if (command.Notes != null) _state.State.Notes = command.Notes;
-        if (command.IsActive.HasValue) _state.State.IsActive = command.IsActive.Value;
+        RaiseEvent(new SupplierUpdated
+        {
+            SupplierId = State.SupplierId,
+            Name = command.Name,
+            ContactName = command.ContactName,
+            ContactEmail = command.ContactEmail,
+            ContactPhone = command.ContactPhone,
+            Address = command.Address,
+            PaymentTermsDays = command.PaymentTermsDays,
+            LeadTimeDays = command.LeadTimeDays,
+            Notes = command.Notes,
+            IsActive = command.IsActive,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
 
-        _state.State.Version++;
-        await _state.WriteStateAsync();
         return CreateSnapshot();
     }
 
@@ -77,55 +152,51 @@ public class SupplierGrain : Grain, ISupplierGrain
     {
         EnsureInitialized();
 
-        var existing = _state.State.Ingredients.FirstOrDefault(i => i.IngredientId == ingredient.IngredientId);
-        if (existing != null)
+        RaiseEvent(new SupplierIngredientAdded
         {
-            existing.SupplierSku = ingredient.SupplierSku;
-            existing.UnitPrice = ingredient.UnitPrice;
-            existing.Unit = ingredient.Unit;
-            existing.MinOrderQuantity = ingredient.MinOrderQuantity;
-            existing.LeadTimeDays = ingredient.LeadTimeDays;
-        }
-        else
-        {
-            _state.State.Ingredients.Add(new SupplierIngredientState
-            {
-                IngredientId = ingredient.IngredientId,
-                IngredientName = ingredient.IngredientName,
-                Sku = ingredient.Sku,
-                SupplierSku = ingredient.SupplierSku,
-                UnitPrice = ingredient.UnitPrice,
-                Unit = ingredient.Unit,
-                MinOrderQuantity = ingredient.MinOrderQuantity,
-                LeadTimeDays = ingredient.LeadTimeDays
-            });
-        }
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+            SupplierId = State.SupplierId,
+            IngredientId = ingredient.IngredientId,
+            IngredientName = ingredient.IngredientName,
+            Sku = ingredient.Sku,
+            SupplierSku = ingredient.SupplierSku,
+            UnitPrice = ingredient.UnitPrice,
+            Unit = ingredient.Unit,
+            MinOrderQuantity = ingredient.MinOrderQuantity,
+            LeadTimeDays = ingredient.LeadTimeDays,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task RemoveIngredientAsync(Guid ingredientId)
     {
         EnsureInitialized();
 
-        _state.State.Ingredients.RemoveAll(i => i.IngredientId == ingredientId);
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new SupplierIngredientRemoved
+        {
+            SupplierId = State.SupplierId,
+            IngredientId = ingredientId,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public async Task UpdateIngredientPriceAsync(Guid ingredientId, decimal newPrice)
     {
         EnsureInitialized();
 
-        var ingredient = _state.State.Ingredients.FirstOrDefault(i => i.IngredientId == ingredientId)
+        var ingredient = State.Ingredients.FirstOrDefault(i => i.IngredientId == ingredientId)
             ?? throw new InvalidOperationException("Ingredient not found");
 
-        ingredient.UnitPrice = newPrice;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        RaiseEvent(new SupplierIngredientPriceUpdated
+        {
+            SupplierId = State.SupplierId,
+            IngredientId = ingredientId,
+            NewPrice = newPrice,
+            PreviousPrice = ingredient.UnitPrice,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public Task<SupplierSnapshot> GetSnapshotAsync()
@@ -138,7 +209,7 @@ public class SupplierGrain : Grain, ISupplierGrain
     {
         EnsureInitialized();
 
-        var ingredient = _state.State.Ingredients.FirstOrDefault(i => i.IngredientId == ingredientId)
+        var ingredient = State.Ingredients.FirstOrDefault(i => i.IngredientId == ingredientId)
             ?? throw new InvalidOperationException("Ingredient not found");
 
         return Task.FromResult(ingredient.UnitPrice);
@@ -148,33 +219,37 @@ public class SupplierGrain : Grain, ISupplierGrain
     {
         EnsureInitialized();
 
-        _state.State.TotalPurchasesYtd += amount;
-        _state.State.TotalDeliveries++;
-        if (onTime) _state.State.OnTimeDeliveries++;
-
-        _state.State.Version++;
-        await _state.WriteStateAsync();
+        RaiseEvent(new SupplierPurchaseRecorded
+        {
+            SupplierId = State.SupplierId,
+            Amount = amount,
+            OnTime = onTime,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
+        await ConfirmEvents();
     }
+
+    public Task<int> GetVersionAsync() => Task.FromResult(Version);
 
     private SupplierSnapshot CreateSnapshot()
     {
-        var onTimePercent = _state.State.TotalDeliveries > 0
-            ? _state.State.OnTimeDeliveries * 100 / _state.State.TotalDeliveries
+        var onTimePercent = State.TotalDeliveries > 0
+            ? State.OnTimeDeliveries * 100 / State.TotalDeliveries
             : 100;
 
         return new SupplierSnapshot(
-            SupplierId: _state.State.SupplierId,
-            Code: _state.State.Code,
-            Name: _state.State.Name,
-            ContactName: _state.State.ContactName,
-            ContactEmail: _state.State.ContactEmail,
-            ContactPhone: _state.State.ContactPhone,
-            Address: _state.State.Address,
-            PaymentTermsDays: _state.State.PaymentTermsDays,
-            LeadTimeDays: _state.State.LeadTimeDays,
-            Notes: _state.State.Notes,
-            IsActive: _state.State.IsActive,
-            Ingredients: _state.State.Ingredients.Select(i => new SupplierIngredient(
+            SupplierId: State.SupplierId,
+            Code: State.Code,
+            Name: State.Name,
+            ContactName: State.ContactName,
+            ContactEmail: State.ContactEmail,
+            ContactPhone: State.ContactPhone,
+            Address: State.Address,
+            PaymentTermsDays: State.PaymentTermsDays,
+            LeadTimeDays: State.LeadTimeDays,
+            Notes: State.Notes,
+            IsActive: State.IsActive,
+            Ingredients: State.Ingredients.Select(i => new SupplierIngredient(
                 IngredientId: i.IngredientId,
                 IngredientName: i.IngredientName,
                 Sku: i.Sku,
@@ -183,13 +258,13 @@ public class SupplierGrain : Grain, ISupplierGrain
                 Unit: i.Unit,
                 MinOrderQuantity: i.MinOrderQuantity,
                 LeadTimeDays: i.LeadTimeDays)).ToList(),
-            TotalPurchasesYtd: _state.State.TotalPurchasesYtd,
+            TotalPurchasesYtd: State.TotalPurchasesYtd,
             OnTimeDeliveryPercent: onTimePercent);
     }
 
     private void EnsureInitialized()
     {
-        if (_state.State.SupplierId == Guid.Empty)
+        if (State.SupplierId == Guid.Empty)
             throw new InvalidOperationException("Supplier grain not initialized");
     }
 }

@@ -299,4 +299,5 @@ public interface ICostingSettingsGrain : IGrainWithStringKey
     Task<bool> ShouldAlertOnCostIncreaseAsync(decimal changePercent);
     Task<bool> IsMarginBelowMinimumAsync(decimal marginPercent);
     Task<bool> IsMarginBelowWarningAsync(decimal marginPercent);
+    Task<int> GetVersionAsync();
 }

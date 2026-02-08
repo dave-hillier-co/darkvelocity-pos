@@ -345,6 +345,7 @@ public interface IMenuSyncGrain : IGrainWithStringKey
     Task CompleteAsync();
     Task FailAsync(string error);
     Task<MenuSyncSnapshot> GetSnapshotAsync();
+    Task<int> GetVersionAsync();
 }
 
 // ============================================================================

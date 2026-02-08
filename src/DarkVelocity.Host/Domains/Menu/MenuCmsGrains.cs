@@ -1279,6 +1279,37 @@ public class ModifierBlockGrain : JournaledGrain<ModifierBlockState, IModifierBl
                 state.CurrentVersion = state.Versions.Max(v => v.VersionNumber);
                 break;
 
+            case ModifierBlockRevertedToVersion e:
+                var revertSource = state.Versions.First(v => v.VersionNumber == e.ToVersion);
+                state.Versions.Add(new ModifierBlockVersionState
+                {
+                    VersionNumber = e.NewVersionNumber,
+                    CreatedAt = e.OccurredAt,
+                    CreatedBy = e.RevertedBy,
+                    ChangeNote = e.Reason ?? $"Reverted to version {e.ToVersion}",
+                    Content = revertSource.Content,
+                    SelectionRule = revertSource.SelectionRule,
+                    MinSelections = revertSource.MinSelections,
+                    MaxSelections = revertSource.MaxSelections,
+                    IsRequired = revertSource.IsRequired,
+                    Options = revertSource.Options.Select(o => new ModifierOptionState
+                    {
+                        OptionId = o.OptionId,
+                        Content = o.Content,
+                        PriceAdjustment = o.PriceAdjustment,
+                        IsDefault = o.IsDefault,
+                        DisplayOrder = o.DisplayOrder,
+                        IsActive = o.IsActive,
+                        ServingSize = o.ServingSize,
+                        ServingUnit = o.ServingUnit,
+                        InventoryItemId = o.InventoryItemId
+                    }).ToList()
+                });
+                state.CurrentVersion = e.NewVersionNumber;
+                state.PublishedVersion = e.NewVersionNumber;
+                state.DraftVersion = null;
+                break;
+
             case ModifierBlockUsageRegistered e:
                 if (!state.UsedByItemIds.Contains(e.ItemDocumentId))
                     state.UsedByItemIds.Add(e.ItemDocumentId);
@@ -1404,6 +1435,18 @@ public class ModifierBlockGrain : JournaledGrain<ModifierBlockState, IModifierBl
         return Task.FromResult<ModifierBlockVersionSnapshot?>(ToVersionSnapshot(v));
     }
 
+    public Task<IReadOnlyList<ModifierBlockVersionSnapshot>> GetVersionHistoryAsync(int skip = 0, int take = 20)
+    {
+        EnsureInitialized();
+        var versions = State.Versions
+            .OrderByDescending(v => v.VersionNumber)
+            .Skip(skip)
+            .Take(take)
+            .Select(ToVersionSnapshot)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<ModifierBlockVersionSnapshot>>(versions);
+    }
+
     public async Task PublishDraftAsync(Guid? publishedBy = null, string? note = null)
     {
         EnsureInitialized();
@@ -1434,6 +1477,28 @@ public class ModifierBlockGrain : JournaledGrain<ModifierBlockState, IModifierBl
             BlockId: State.BlockId,
             OccurredAt: DateTimeOffset.UtcNow,
             DiscardedVersion: State.DraftVersion.Value
+        ));
+
+        await ConfirmEvents();
+    }
+
+    public async Task RevertToVersionAsync(int version, Guid? revertedBy = null, string? reason = null)
+    {
+        EnsureInitialized();
+
+        if (!State.Versions.Any(v => v.VersionNumber == version))
+            throw new InvalidOperationException($"Version {version} not found");
+
+        var newVersionNumber = State.CurrentVersion + 1;
+
+        RaiseEvent(new ModifierBlockRevertedToVersion(
+            BlockId: State.BlockId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            FromVersion: State.PublishedVersion ?? 0,
+            ToVersion: version,
+            NewVersionNumber: newVersionNumber,
+            RevertedBy: revertedBy,
+            Reason: reason
         ));
 
         await ConfirmEvents();

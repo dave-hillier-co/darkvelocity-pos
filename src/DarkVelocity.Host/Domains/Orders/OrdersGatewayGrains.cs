@@ -1,5 +1,8 @@
+using DarkVelocity.Host.Events;
 using DarkVelocity.Host.Grains;
 using DarkVelocity.Host.State;
+using Orleans.EventSourcing;
+using Orleans.Providers;
 using Orleans.Runtime;
 
 namespace DarkVelocity.Host.Grains;
@@ -502,23 +505,62 @@ public class ExternalOrderGrain : Grain, IExternalOrderGrain
 // ============================================================================
 
 /// <summary>
-/// Grain for menu sync management.
+/// Event-sourced grain for menu sync management.
 /// Manages menu synchronization with delivery platforms.
+/// All state changes are recorded as events and can be replayed for full history.
 /// </summary>
-public class MenuSyncGrain : Grain, IMenuSyncGrain
+[LogConsistencyProvider(ProviderName = "LogStorage")]
+public class MenuSyncGrain : JournaledGrain<MenuSyncState, IMenuSyncEvent>, IMenuSyncGrain
 {
-    private readonly IPersistentState<MenuSyncState> _state;
-
-    public MenuSyncGrain(
-        [PersistentState("menuSync", "OrleansStorage")]
-        IPersistentState<MenuSyncState> state)
+    /// <summary>
+    /// Applies domain events to mutate state. This is the core of event sourcing.
+    /// </summary>
+    protected override void TransitionState(MenuSyncState state, IMenuSyncEvent @event)
     {
-        _state = state;
+        switch (@event)
+        {
+            case MenuSyncStarted e:
+                state.OrgId = e.OrgId;
+                state.MenuSyncId = e.MenuSyncId;
+                state.DeliveryPlatformId = e.DeliveryPlatformId;
+                state.LocationId = e.LocationId;
+                state.Status = MenuSyncStatus.InProgress;
+                state.StartedAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case MenuSyncItemSynced e:
+                state.Mappings.Add(new MenuItemMappingState
+                {
+                    InternalMenuItemId = e.InternalMenuItemId,
+                    PlatformItemId = e.PlatformItemId ?? string.Empty,
+                    PlatformCategoryId = e.PlatformCategoryId,
+                    PriceOverride = e.PriceOverride,
+                    IsAvailable = e.IsAvailable
+                });
+                state.ItemsSynced++;
+                break;
+
+            case MenuSyncItemFailed e:
+                state.ItemsFailed++;
+                state.Errors.Add($"Item {e.MenuItemId}: {e.Error}");
+                break;
+
+            case MenuSyncCompleted e:
+                state.Status = MenuSyncStatus.Completed;
+                state.CompletedAt = e.OccurredAt.UtcDateTime;
+                break;
+
+            case MenuSyncFailed e:
+                state.Status = MenuSyncStatus.Failed;
+                state.Errors.Add(e.Error);
+                state.CompletedAt = e.OccurredAt.UtcDateTime;
+                break;
+        }
     }
 
     public async Task<MenuSyncSnapshot> StartAsync(StartMenuSyncCommand command)
     {
-        if (_state.State.MenuSyncId != Guid.Empty)
+        if (State.MenuSyncId != Guid.Empty)
             throw new InvalidOperationException("Menu sync already exists");
 
         var key = this.GetPrimaryKeyString();
@@ -526,18 +568,14 @@ public class MenuSyncGrain : Grain, IMenuSyncGrain
         var orgId = Guid.Parse(parts[0]);
         var syncId = Guid.Parse(parts[2]);
 
-        _state.State = new MenuSyncState
-        {
-            OrgId = orgId,
-            MenuSyncId = syncId,
-            DeliveryPlatformId = command.DeliveryPlatformId,
-            LocationId = command.LocationId,
-            Status = MenuSyncStatus.InProgress,
-            StartedAt = DateTime.UtcNow,
-            Version = 1
-        };
+        RaiseEvent(new MenuSyncStarted(
+            MenuSyncId: syncId,
+            OrgId: orgId,
+            DeliveryPlatformId: command.DeliveryPlatformId,
+            LocationId: command.LocationId,
+            OccurredAt: DateTimeOffset.UtcNow));
 
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
         return CreateSnapshot();
     }
 
@@ -545,53 +583,52 @@ public class MenuSyncGrain : Grain, IMenuSyncGrain
     {
         EnsureInitialized();
 
-        _state.State.Mappings.Add(new MenuItemMappingState
-        {
-            InternalMenuItemId = mapping.InternalMenuItemId,
-            PlatformItemId = mapping.PlatformItemId,
-            PlatformCategoryId = mapping.PlatformCategoryId,
-            PriceOverride = mapping.PriceOverride,
-            IsAvailable = mapping.IsAvailable
-        });
+        RaiseEvent(new MenuSyncItemSynced(
+            MenuSyncId: State.MenuSyncId,
+            InternalMenuItemId: mapping.InternalMenuItemId,
+            PlatformItemId: mapping.PlatformItemId,
+            PlatformCategoryId: mapping.PlatformCategoryId,
+            PriceOverride: mapping.PriceOverride,
+            IsAvailable: mapping.IsAvailable,
+            OccurredAt: DateTimeOffset.UtcNow));
 
-        _state.State.ItemsSynced++;
-        _state.State.Version++;
-
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task RecordItemFailedAsync(Guid menuItemId, string error)
     {
         EnsureInitialized();
 
-        _state.State.ItemsFailed++;
-        _state.State.Errors.Add($"Item {menuItemId}: {error}");
-        _state.State.Version++;
+        RaiseEvent(new MenuSyncItemFailed(
+            MenuSyncId: State.MenuSyncId,
+            MenuItemId: menuItemId,
+            Error: error,
+            OccurredAt: DateTimeOffset.UtcNow));
 
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task CompleteAsync()
     {
         EnsureInitialized();
 
-        _state.State.Status = MenuSyncStatus.Completed;
-        _state.State.CompletedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        RaiseEvent(new MenuSyncCompleted(
+            MenuSyncId: State.MenuSyncId,
+            OccurredAt: DateTimeOffset.UtcNow));
 
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public async Task FailAsync(string error)
     {
         EnsureInitialized();
 
-        _state.State.Status = MenuSyncStatus.Failed;
-        _state.State.Errors.Add(error);
-        _state.State.CompletedAt = DateTime.UtcNow;
-        _state.State.Version++;
+        RaiseEvent(new MenuSyncFailed(
+            MenuSyncId: State.MenuSyncId,
+            Error: error,
+            OccurredAt: DateTimeOffset.UtcNow));
 
-        await _state.WriteStateAsync();
+        await ConfirmEvents();
     }
 
     public Task<MenuSyncSnapshot> GetSnapshotAsync()
@@ -600,23 +637,28 @@ public class MenuSyncGrain : Grain, IMenuSyncGrain
         return Task.FromResult(CreateSnapshot());
     }
 
+    public Task<int> GetVersionAsync()
+    {
+        return Task.FromResult(Version);
+    }
+
     private MenuSyncSnapshot CreateSnapshot()
     {
         return new MenuSyncSnapshot(
-            MenuSyncId: _state.State.MenuSyncId,
-            DeliveryPlatformId: _state.State.DeliveryPlatformId,
-            LocationId: _state.State.LocationId,
-            Status: _state.State.Status,
-            StartedAt: _state.State.StartedAt,
-            CompletedAt: _state.State.CompletedAt,
-            ItemsSynced: _state.State.ItemsSynced,
-            ItemsFailed: _state.State.ItemsFailed,
-            Errors: _state.State.Errors);
+            MenuSyncId: State.MenuSyncId,
+            DeliveryPlatformId: State.DeliveryPlatformId,
+            LocationId: State.LocationId,
+            Status: State.Status,
+            StartedAt: State.StartedAt,
+            CompletedAt: State.CompletedAt,
+            ItemsSynced: State.ItemsSynced,
+            ItemsFailed: State.ItemsFailed,
+            Errors: State.Errors);
     }
 
     private void EnsureInitialized()
     {
-        if (_state.State.MenuSyncId == Guid.Empty)
+        if (State.MenuSyncId == Guid.Empty)
             throw new InvalidOperationException("Menu sync grain not initialized");
     }
 }
