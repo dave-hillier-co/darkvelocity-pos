@@ -326,6 +326,18 @@ public static class GrainKeys
         => $"{orgId}:notifications";
 
     /// <summary>
+    /// Creates a key for an accounting group grain.
+    /// </summary>
+    public static string AccountingGroup(Guid orgId, Guid groupId)
+        => $"{orgId}:accountinggroup:{groupId}";
+
+    /// <summary>
+    /// Creates a key for a tax rate grain.
+    /// </summary>
+    public static string TaxRate(Guid orgId, string countryCode, string fiscalCode)
+        => $"{orgId}:taxrate:{countryCode}:{fiscalCode}";
+
+    /// <summary>
     /// Creates a key for a menu engineering grain.
     /// </summary>
     public static string MenuEngineering(Guid orgId, Guid siteId)

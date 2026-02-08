@@ -21,6 +21,69 @@ public static class UkTestData
     public static readonly Guid SilverTierId = Guid.Parse("30000000-0000-0000-0000-000000000003");
     public static readonly Guid GoldTierId = Guid.Parse("30000000-0000-0000-0000-000000000004");
 
+    // Floor Plans (1 per site)
+    public static readonly Guid LondonFloorPlanId = Guid.Parse("33000000-0000-0000-0000-000000000001");
+    public static readonly Guid ManchesterFloorPlanId = Guid.Parse("33000000-0000-0000-0000-000000000002");
+    public static readonly Guid BirminghamFloorPlanId = Guid.Parse("33000000-0000-0000-0000-000000000003");
+    public static readonly Guid EdinburghFloorPlanId = Guid.Parse("33000000-0000-0000-0000-000000000004");
+
+    // Default Menu Definition
+    public static readonly Guid DefaultMenuDefinitionId = Guid.Parse("34000000-0000-0000-0000-000000000001");
+
+    // Accounting Groups
+    public static readonly Guid FoodAccountingGroupId = Guid.Parse("35000000-0000-0000-0000-000000000001");
+    public static readonly Guid BeverageAccountingGroupId = Guid.Parse("35000000-0000-0000-0000-000000000002");
+    public static readonly Guid SpiritAccountingGroupId = Guid.Parse("35000000-0000-0000-0000-000000000003");
+
+    // Kitchen Stations - London (5 stations)
+    public static readonly Guid LondonGrillStationId = Guid.Parse("36000000-0000-0000-0001-000000000001");
+    public static readonly Guid LondonFryerStationId = Guid.Parse("36000000-0000-0000-0001-000000000002");
+    public static readonly Guid LondonSauteStationId = Guid.Parse("36000000-0000-0000-0001-000000000003");
+    public static readonly Guid LondonDessertStationId = Guid.Parse("36000000-0000-0000-0001-000000000004");
+    public static readonly Guid LondonBarStationId = Guid.Parse("36000000-0000-0000-0001-000000000005");
+    // Kitchen Stations - Other sites (3 each)
+    public static readonly Guid ManchesterGrillStationId = Guid.Parse("36000000-0000-0000-0002-000000000001");
+    public static readonly Guid ManchesterFryerStationId = Guid.Parse("36000000-0000-0000-0002-000000000002");
+    public static readonly Guid ManchesterBarStationId = Guid.Parse("36000000-0000-0000-0002-000000000003");
+    public static readonly Guid BirminghamGrillStationId = Guid.Parse("36000000-0000-0000-0003-000000000001");
+    public static readonly Guid BirminghamFryerStationId = Guid.Parse("36000000-0000-0000-0003-000000000002");
+    public static readonly Guid BirminghamBarStationId = Guid.Parse("36000000-0000-0000-0003-000000000003");
+    public static readonly Guid EdinburghGrillStationId = Guid.Parse("36000000-0000-0000-0004-000000000001");
+    public static readonly Guid EdinburghFryerStationId = Guid.Parse("36000000-0000-0000-0004-000000000002");
+    public static readonly Guid EdinburghBarStationId = Guid.Parse("36000000-0000-0000-0004-000000000003");
+
+    // Roles
+    public static readonly Guid GeneralManagerRoleId = Guid.Parse("37000000-0000-0000-0000-000000000001");
+    public static readonly Guid AssistantManagerRoleId = Guid.Parse("37000000-0000-0000-0000-000000000002");
+    public static readonly Guid HeadChefRoleId = Guid.Parse("37000000-0000-0000-0000-000000000003");
+    public static readonly Guid SousChefRoleId = Guid.Parse("37000000-0000-0000-0000-000000000004");
+    public static readonly Guid LineCookRoleId = Guid.Parse("37000000-0000-0000-0000-000000000005");
+    public static readonly Guid ServerRoleId = Guid.Parse("37000000-0000-0000-0000-000000000006");
+    public static readonly Guid BartenderRoleId = Guid.Parse("37000000-0000-0000-0000-000000000007");
+
+    // Gift Cards
+    public static readonly Guid PhysicalGiftCardId = Guid.Parse("38000000-0000-0000-0000-000000000001");
+    public static readonly Guid DigitalGiftCardId = Guid.Parse("38000000-0000-0000-0000-000000000002");
+    public static readonly Guid PromotionalGiftCardId = Guid.Parse("38000000-0000-0000-0000-000000000003");
+
+    // Channels
+    public static readonly Guid DeliverooChannelId = Guid.Parse("39000000-0000-0000-0000-000000000001");
+    public static readonly Guid UberEatsChannelId = Guid.Parse("39000000-0000-0000-0000-000000000002");
+
+    // Cash Drawers (1 per site)
+    public static readonly Guid LondonCashDrawerId = Guid.Parse("3A000000-0000-0000-0000-000000000001");
+    public static readonly Guid ManchesterCashDrawerId = Guid.Parse("3A000000-0000-0000-0000-000000000002");
+    public static readonly Guid BirminghamCashDrawerId = Guid.Parse("3A000000-0000-0000-0000-000000000003");
+    public static readonly Guid EdinburghCashDrawerId = Guid.Parse("3A000000-0000-0000-0000-000000000004");
+
+    // Recipe Document IDs
+    public static readonly Guid FishAndChipsRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000001");
+    public static readonly Guid SteakAndAlePieRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000002");
+    public static readonly Guid BangersAndMashRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000003");
+    public static readonly Guid StickyToffeePuddingRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000004");
+    public static readonly Guid ShepherdsPieRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000005");
+    public static readonly Guid AppleCrumbleRecipeId = Guid.Parse("3B000000-0000-0000-0000-000000000006");
+
     // User Groups
     public static readonly Guid AdminsGroupId = Guid.Parse("31000000-0000-0000-0000-000000000001");
     public static readonly Guid ManagersGroupId = Guid.Parse("31000000-0000-0000-0000-000000000002");
@@ -1049,6 +1112,355 @@ public static class UkTestData
 
     #endregion
 
+    #region Floor Plans
+
+    public static class FloorPlans
+    {
+        public static FloorPlanData ForSite(Guid siteId)
+        {
+            var (id, name) = siteId == LondonSiteId ? (LondonFloorPlanId, "Main Floor - Shoreditch") :
+                             siteId == ManchesterSiteId ? (ManchesterFloorPlanId, "Main Floor - Northern Quarter") :
+                             siteId == BirminghamSiteId ? (BirminghamFloorPlanId, "Main Floor - Jewellery Quarter") :
+                             (EdinburghFloorPlanId, "Main Floor - Grassmarket");
+
+            return new()
+            {
+                Id = id,
+                SiteId = siteId,
+                Name = name,
+                IsDefault = true,
+                Width = 800,
+                Height = 600
+            };
+        }
+
+        public static IEnumerable<FloorPlanData> All => Sites.All.Select(s => ForSite(s.Id));
+    }
+
+    public record FloorPlanData
+    {
+        public required Guid Id { get; init; }
+        public required Guid SiteId { get; init; }
+        public required string Name { get; init; }
+        public bool IsDefault { get; init; }
+        public int Width { get; init; } = 800;
+        public int Height { get; init; } = 600;
+    }
+
+    #endregion
+
+    #region Kitchen Stations
+
+    public static class KitchenStations
+    {
+        public static IEnumerable<KitchenStationData> ForSite(Guid siteId)
+        {
+            if (siteId == LondonSiteId)
+            {
+                return
+                [
+                    new() { Id = LondonGrillStationId, SiteId = siteId, Name = "Grill", Type = "Grill", DisplayOrder = 1 },
+                    new() { Id = LondonFryerStationId, SiteId = siteId, Name = "Fryer", Type = "Fryer", DisplayOrder = 2 },
+                    new() { Id = LondonSauteStationId, SiteId = siteId, Name = "Saute", Type = "Saute", DisplayOrder = 3 },
+                    new() { Id = LondonDessertStationId, SiteId = siteId, Name = "Dessert", Type = "Dessert", DisplayOrder = 4 },
+                    new() { Id = LondonBarStationId, SiteId = siteId, Name = "Bar", Type = "Bar", DisplayOrder = 5 }
+                ];
+            }
+
+            var (grillId, fryerId, barId) = siteId == ManchesterSiteId
+                ? (ManchesterGrillStationId, ManchesterFryerStationId, ManchesterBarStationId)
+                : siteId == BirminghamSiteId
+                    ? (BirminghamGrillStationId, BirminghamFryerStationId, BirminghamBarStationId)
+                    : (EdinburghGrillStationId, EdinburghFryerStationId, EdinburghBarStationId);
+
+            return
+            [
+                new() { Id = grillId, SiteId = siteId, Name = "Grill", Type = "Grill", DisplayOrder = 1 },
+                new() { Id = fryerId, SiteId = siteId, Name = "Fryer", Type = "Fryer", DisplayOrder = 2 },
+                new() { Id = barId, SiteId = siteId, Name = "Bar", Type = "Bar", DisplayOrder = 3 }
+            ];
+        }
+
+        public static IEnumerable<KitchenStationData> All => Sites.All.SelectMany(s => ForSite(s.Id));
+    }
+
+    public record KitchenStationData
+    {
+        public required Guid Id { get; init; }
+        public required Guid SiteId { get; init; }
+        public required string Name { get; init; }
+        public required string Type { get; init; }
+        public int DisplayOrder { get; init; }
+    }
+
+    #endregion
+
+    #region Roles
+
+    public static class Roles
+    {
+        public static IEnumerable<RoleData> All =>
+        [
+            new() { Id = GeneralManagerRoleId, Name = "General Manager", Department = "Management", DefaultHourlyRate = 22.00m, Color = "#2E4057", SortOrder = 1 },
+            new() { Id = AssistantManagerRoleId, Name = "Assistant Manager", Department = "Management", DefaultHourlyRate = 17.00m, Color = "#3C6E71", SortOrder = 2 },
+            new() { Id = HeadChefRoleId, Name = "Head Chef", Department = "BackOfHouse", DefaultHourlyRate = 20.00m, Color = "#D9534F", SortOrder = 3 },
+            new() { Id = SousChefRoleId, Name = "Sous Chef", Department = "BackOfHouse", DefaultHourlyRate = 15.50m, Color = "#E8834A", SortOrder = 4 },
+            new() { Id = LineCookRoleId, Name = "Line Cook", Department = "BackOfHouse", DefaultHourlyRate = 13.50m, Color = "#F0AD4E", SortOrder = 5 },
+            new() { Id = ServerRoleId, Name = "Server", Department = "FrontOfHouse", DefaultHourlyRate = 12.00m, Color = "#5BC0DE", SortOrder = 6 },
+            new() { Id = BartenderRoleId, Name = "Bartender", Department = "FrontOfHouse", DefaultHourlyRate = 13.00m, Color = "#9B59B6", SortOrder = 7 }
+        ];
+    }
+
+    public record RoleData
+    {
+        public required Guid Id { get; init; }
+        public required string Name { get; init; }
+        public required string Department { get; init; }
+        public required decimal DefaultHourlyRate { get; init; }
+        public required string Color { get; init; }
+        public int SortOrder { get; init; }
+    }
+
+    #endregion
+
+    #region Accounting Groups
+
+    public static class AccountingGroups
+    {
+        public static IEnumerable<AccountingGroupData> All =>
+        [
+            new() { Id = FoodAccountingGroupId, Name = "Food", Code = "FOOD-001", RevenueAccountCode = "4000", CogsAccountCode = "5000" },
+            new() { Id = BeverageAccountingGroupId, Name = "Beverage", Code = "BEV-001", RevenueAccountCode = "4100", CogsAccountCode = "5100" },
+            new() { Id = SpiritAccountingGroupId, Name = "Spirits & Cocktails", Code = "SPRT-001", RevenueAccountCode = "4200", CogsAccountCode = "5200" }
+        ];
+
+        /// <summary>
+        /// Maps a menu category to its accounting group.
+        /// </summary>
+        public static Guid GetGroupIdForCategory(Guid categoryId)
+        {
+            if (categoryId == MenuCategories.DrinksSpiritsId)
+                return SpiritAccountingGroupId;
+            if (categoryId == MenuCategories.DrinksBeerId ||
+                categoryId == MenuCategories.DrinksWineId ||
+                categoryId == MenuCategories.DrinksSoftId)
+                return BeverageAccountingGroupId;
+            return FoodAccountingGroupId;
+        }
+    }
+
+    public record AccountingGroupData
+    {
+        public required Guid Id { get; init; }
+        public required string Name { get; init; }
+        public required string Code { get; init; }
+        public string? RevenueAccountCode { get; init; }
+        public string? CogsAccountCode { get; init; }
+    }
+
+    #endregion
+
+    #region Tax Rates
+
+    public static class TaxRates
+    {
+        public static IEnumerable<TaxRateData> All =>
+        [
+            new() { CountryCode = "GB", FiscalCode = "STANDARD", Description = "Standard Rate VAT", Rate = 0.20m },
+            new() { CountryCode = "GB", FiscalCode = "REDUCED", Description = "Reduced Rate VAT", Rate = 0.05m }
+        ];
+    }
+
+    public record TaxRateData
+    {
+        public required string CountryCode { get; init; }
+        public required string FiscalCode { get; init; }
+        public required string Description { get; init; }
+        public required decimal Rate { get; init; }
+    }
+
+    #endregion
+
+    #region Gift Cards
+
+    public static class GiftCards
+    {
+        public static IEnumerable<GiftCardData> All =>
+        [
+            new() { Id = PhysicalGiftCardId, CardNumber = "PH-2024-00001", Type = "Physical", InitialValue = 50.00m, Currency = "GBP" },
+            new() { Id = DigitalGiftCardId, CardNumber = "DG-2024-00001", Type = "Digital", InitialValue = 25.00m, Currency = "GBP" },
+            new() { Id = PromotionalGiftCardId, CardNumber = "PR-2024-00001", Type = "Promotional", InitialValue = 10.00m, Currency = "GBP" }
+        ];
+    }
+
+    public record GiftCardData
+    {
+        public required Guid Id { get; init; }
+        public required string CardNumber { get; init; }
+        public required string Type { get; init; }
+        public required decimal InitialValue { get; init; }
+        public string Currency { get; init; } = "GBP";
+    }
+
+    #endregion
+
+    #region Channels
+
+    public static class Channels
+    {
+        public static IEnumerable<ChannelData> All =>
+        [
+            new() { Id = DeliverooChannelId, Name = "Deliveroo", PlatformType = "Deliveroo", IntegrationType = "Aggregator" },
+            new() { Id = UberEatsChannelId, Name = "UberEats", PlatformType = "UberEats", IntegrationType = "Aggregator" }
+        ];
+    }
+
+    public record ChannelData
+    {
+        public required Guid Id { get; init; }
+        public required string Name { get; init; }
+        public required string PlatformType { get; init; }
+        public required string IntegrationType { get; init; }
+    }
+
+    #endregion
+
+    #region Recipes
+
+    public static class Recipes
+    {
+        public static IEnumerable<RecipeData> All =>
+        [
+            new()
+            {
+                Id = FishAndChipsRecipeId,
+                Name = "Fish & Chips",
+                Description = "Beer-battered North Sea haddock with triple-cooked chips",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0002-000000000001"),
+                PortionYield = 1,
+                PrepTimeMinutes = 15,
+                CookTimeMinutes = 20,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0001-000000000001"), Name = "North Sea Haddock Fillets", Quantity = 0.25m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000001"), Name = "Plain Flour", Quantity = 0.05m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000001"), Name = "Maris Piper Potatoes", Quantity = 0.30m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000004"), Name = "Garden Peas (Frozen)", Quantity = 0.10m, Unit = "kg" }
+                ]
+            },
+            new()
+            {
+                Id = SteakAndAlePieRecipeId,
+                Name = "Steak & Ale Pie",
+                Description = "28-day aged beef in Timothy Taylor Landlord ale with shortcrust pastry",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0002-000000000002"),
+                PortionYield = 1,
+                PrepTimeMinutes = 30,
+                CookTimeMinutes = 120,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0001-000000000002"), Name = "28-Day Aged Beef (Stewing)", Quantity = 0.25m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000001"), Name = "Plain Flour", Quantity = 0.15m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000008"), Name = "White Onions", Quantity = 0.10m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000006"), Name = "Unsalted Butter", Quantity = 0.03m, Unit = "kg" }
+                ]
+            },
+            new()
+            {
+                Id = BangersAndMashRecipeId,
+                Name = "Bangers & Mash",
+                Description = "Cumberland sausages with creamy mash and onion gravy",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0002-000000000003"),
+                PortionYield = 1,
+                PrepTimeMinutes = 10,
+                CookTimeMinutes = 25,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0001-000000000003"), Name = "Cumberland Sausages", Quantity = 0.20m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000001"), Name = "Maris Piper Potatoes", Quantity = 0.25m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000008"), Name = "White Onions", Quantity = 0.08m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000006"), Name = "Unsalted Butter", Quantity = 0.02m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000005"), Name = "Double Cream", Quantity = 0.05m, Unit = "litres" }
+                ]
+            },
+            new()
+            {
+                Id = StickyToffeePuddingRecipeId,
+                Name = "Sticky Toffee Pudding",
+                Description = "Dates, toffee sauce, clotted cream",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0004-000000000001"),
+                PortionYield = 1,
+                PrepTimeMinutes = 20,
+                CookTimeMinutes = 35,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000003"), Name = "Dried Dates", Quantity = 0.10m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000001"), Name = "Plain Flour", Quantity = 0.08m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000001"), Name = "Free-Range Eggs", Quantity = 0.08m, Unit = "dozen" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000004"), Name = "Clotted Cream", Quantity = 0.05m, Unit = "litres" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000006"), Name = "Unsalted Butter", Quantity = 0.03m, Unit = "kg" }
+                ]
+            },
+            new()
+            {
+                Id = ShepherdsPieRecipeId,
+                Name = "Shepherd's Pie",
+                Description = "Slow-braised lamb shoulder with root vegetables and cheesy mash crust",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0002-000000000004"),
+                PortionYield = 1,
+                PrepTimeMinutes = 20,
+                CookTimeMinutes = 90,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0001-000000000004"), Name = "Lamb Shoulder (Bone-in)", Quantity = 0.25m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000001"), Name = "Maris Piper Potatoes", Quantity = 0.25m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000005"), Name = "Carrots", Quantity = 0.08m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000008"), Name = "White Onions", Quantity = 0.08m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000002"), Name = "Mature Cheddar", Quantity = 0.04m, Unit = "kg" }
+                ]
+            },
+            new()
+            {
+                Id = AppleCrumbleRecipeId,
+                Name = "Apple Crumble",
+                Description = "Bramley apples with oat crumble topping and vanilla custard",
+                MenuItemId = Guid.Parse("50000000-0000-0000-0004-000000000002"),
+                PortionYield = 1,
+                PrepTimeMinutes = 15,
+                CookTimeMinutes = 35,
+                Ingredients =
+                [
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0003-000000000002"), Name = "Bramley Apples", Quantity = 0.20m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000004"), Name = "Oats", Quantity = 0.06m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0004-000000000001"), Name = "Plain Flour", Quantity = 0.04m, Unit = "kg" },
+                    new() { IngredientId = Guid.Parse("80000000-0000-0000-0002-000000000006"), Name = "Unsalted Butter", Quantity = 0.04m, Unit = "kg" }
+                ]
+            }
+        ];
+    }
+
+    public record RecipeData
+    {
+        public required Guid Id { get; init; }
+        public required string Name { get; init; }
+        public string? Description { get; init; }
+        public required Guid MenuItemId { get; init; }
+        public decimal PortionYield { get; init; } = 1;
+        public int PrepTimeMinutes { get; init; }
+        public int CookTimeMinutes { get; init; }
+        public List<RecipeIngredientData> Ingredients { get; init; } = [];
+    }
+
+    public record RecipeIngredientData
+    {
+        public required Guid IngredientId { get; init; }
+        public required string Name { get; init; }
+        public required decimal Quantity { get; init; }
+        public required string Unit { get; init; }
+    }
+
+    #endregion
+
     #region Tables
 
     public static class Tables
@@ -1062,29 +1474,29 @@ public static class UkTestData
             return
             [
                 // Main Dining - 2 tops
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000001"), SiteId = siteId, Number = "1", Name = "Window 1", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Square, Section = "Main Dining", Tags = ["Window", "Romantic"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000002"), SiteId = siteId, Number = "2", Name = "Window 2", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Square, Section = "Main Dining", Tags = ["Window"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000003"), SiteId = siteId, Number = "3", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Round, Section = "Main Dining" },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000004"), SiteId = siteId, Number = "4", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Round, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000001"), SiteId = siteId, Number = "1", Name = "Window 1", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Square, Section = "Main Dining", Tags = ["Window", "Romantic"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000002"), SiteId = siteId, Number = "2", Name = "Window 2", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Square, Section = "Main Dining", Tags = ["Window"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000003"), SiteId = siteId, Number = "3", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Round, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000004"), SiteId = siteId, Number = "4", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Round, Section = "Main Dining" },
 
                 // Main Dining - 4 tops
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000005"), SiteId = siteId, Number = "5", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000006"), SiteId = siteId, Number = "6", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000007"), SiteId = siteId, Number = "7", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000008"), SiteId = siteId, Number = "8", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000005"), SiteId = siteId, Number = "5", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000006"), SiteId = siteId, Number = "6", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000007"), SiteId = siteId, Number = "7", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000008"), SiteId = siteId, Number = "8", MinCapacity = 2, MaxCapacity = 4, Shape = TableShape.Rectangle, Section = "Main Dining" },
 
                 // Main Dining - 6 tops
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000009"), SiteId = siteId, Number = "9", Name = "Large Booth", MinCapacity = 4, MaxCapacity = 6, Shape = TableShape.Rectangle, Section = "Main Dining", Tags = ["Booth", "Groups"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000010"), SiteId = siteId, Number = "10", MinCapacity = 4, MaxCapacity = 6, Shape = TableShape.Rectangle, Section = "Main Dining", Tags = ["Groups"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000009"), SiteId = siteId, Number = "9", Name = "Large Booth", MinCapacity = 4, MaxCapacity = 6, Shape = TableShape.Rectangle, Section = "Main Dining", Tags = ["Booth", "Groups"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000010"), SiteId = siteId, Number = "10", MinCapacity = 4, MaxCapacity = 6, Shape = TableShape.Rectangle, Section = "Main Dining", Tags = ["Groups"] },
 
                 // Bar Area
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000011"), SiteId = siteId, Number = "B1", Name = "Bar Stool 1", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000012"), SiteId = siteId, Number = "B2", Name = "Bar Stool 2", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000013"), SiteId = siteId, Number = "B3", Name = "Bar Stool 3", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000014"), SiteId = siteId, Number = "B4", Name = "Bar Stool 4", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000011"), SiteId = siteId, Number = "B1", Name = "Bar Stool 1", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000012"), SiteId = siteId, Number = "B2", Name = "Bar Stool 2", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000013"), SiteId = siteId, Number = "B3", Name = "Bar Stool 3", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000014"), SiteId = siteId, Number = "B4", Name = "Bar Stool 4", MinCapacity = 1, MaxCapacity = 2, Shape = TableShape.Bar, Section = "Bar", Tags = ["Bar"] },
 
                 // Private Dining
-                new() { Id = Guid.Parse($"{baseId}-0000-0000-000000000015"), SiteId = siteId, Number = "PD1", Name = "Private Dining", MinCapacity = 6, MaxCapacity = 12, Shape = TableShape.Rectangle, Section = "Private Dining", Tags = ["Private", "Groups", "Events"] }
+                new() { Id = Guid.Parse($"{baseId}-0000-0000-0000-000000000015"), SiteId = siteId, Number = "PD1", Name = "Private Dining", MinCapacity = 6, MaxCapacity = 12, Shape = TableShape.Rectangle, Section = "Private Dining", Tags = ["Private", "Groups", "Events"] }
             ];
         }
     }
