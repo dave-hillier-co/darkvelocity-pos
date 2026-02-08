@@ -12,11 +12,37 @@ DarkVelocity's architecture already spans a remarkably broad surface area -- 17 
 
 However, competitive analysis across 25+ platforms reveals **three categories of gaps**:
 
-1. **Execution gaps** -- Features that are designed in user stories but not yet implemented (the existing `product-completeness-analysis.md` covers these well)
+1. **Execution gaps** -- Features where grain logic is complete but external integrations are stubbed (e.g., Stripe/Adyen SDK, email/SMS services, delivery platform HTTP clients)
 2. **Parity gaps** -- Features that competitors consider table stakes but are absent from DarkVelocity's user stories entirely
 3. **Differentiation opportunities** -- Emerging capabilities (AI, marketplace, multi-vertical) where DarkVelocity could leapfrog competitors
 
-This document focuses on categories 2 and 3. For category 1, see `product-completeness-analysis.md`.
+**Note on `product-completeness-analysis.md`:** That document is outdated. Codebase validation (Feb 2026) shows most domains are 10-30 percentage points more complete than documented. The common pattern: grain logic, state machines, and endpoints are done; what's missing is real external service integrations and background job triggers. See Section 1.1 below for revised ratings.
+
+This document focuses on categories 2 and 3.
+
+### 1.1 Revised Domain Completeness (Validated Against Codebase)
+
+| Domain | Old Rating | Actual | Key Finding |
+|--------|:---------:|:------:|-------------|
+| Orders | 78% | **~90%** | Seat assignment, line discounts, price overrides, order merging, course firing all implemented |
+| Payments | 75% | **~90%** | Settlement batch, house accounts, offline queue, chargeback grain all implemented |
+| Menu | 82% | **~85%** | Modifier availability windows added; auto-86, upsells, price tiers still missing |
+| Inventory | 60% | **~85%** | StockTake with blind counts, 6-state transfer lifecycle, variance reporting, ABC classification |
+| Staff | 55% | **~80%** | Multi-jurisdiction overtime, break compliance, payroll export (5 formats), tax calculation |
+| Devices | 45% | **~75-80%** | Print queue with retry, offline sync with conflict resolution, device health monitoring, RFC 8628 auth |
+| Customers | 65% | **~70%** | RFM segmentation, birthday rewards, points expiration methods exist but lack background job triggers |
+| System | 35% | **~65-70%** | NotificationGrain, AlertGrain rule evaluation, webhook delivery, scheduled jobs all real -- but notification services are stubs |
+| Payment Processors | 30% | **~55-60%** | Full grain logic with idempotency, circuit breakers, retry -- but use StubStripeClient/StubAdyenClient |
+| Costing | 50% | ~50% | Unchanged |
+| Fiscal | 50% | ~50% | Unchanged |
+| Recipes | 55% | ~55% | Unchanged |
+| External Channels | 40% | ~40% | Deliverect production-ready; UberEats/DoorDash/Deliveroo still stubs |
+| Finance | 40% | ~38% | ChartOfAccounts and periods done; JournalEntry never posts to AccountGrain; reports return zeros |
+| Reporting | 60% | ~60% | Unchanged |
+| Tables & Bookings | 60% | ~60% | Unchanged |
+| Organization | 70% | ~70% | Unchanged |
+
+**Average: ~65-70%** (up from ~55-60% in the outdated doc). Remaining work is primarily external service wiring, not domain logic.
 
 ---
 
@@ -535,13 +561,12 @@ DarkVelocity's architecture has several properties that make multi-vertical expa
 ### Where DarkVelocity is Weak
 - **No online ordering** -- Every competitor has this; it's a glaring omission
 - **No AI features** -- The market has moved to AI as standard; DarkVelocity has none
-- **Implementation depth** -- Many grains are partially implemented (30-60% complete)
-- **No real payment processing** -- Stripe/Adyen integrations are interfaces only
-- **No offline payments** -- Critical for reliability
+- **External integrations are stubbed** -- Grain logic is solid (~65-70% avg) but Stripe/Adyen use stub SDK clients, notification services log instead of sending, delivery platform adapters beyond Deliverect are skeletons
 - **No consumer-facing anything** -- No online ordering, no kiosks, no customer apps
+- **Finance posting loop is broken** -- JournalEntryGrain validates entries but never posts to AccountGrain; financial reports return zeros
 
 ### Net Assessment
-DarkVelocity has the broadest architectural ambition of any platform reviewed. The grain-based domain model is well-designed and covers more ground than Toast, Square, or Lightspeed. The gap is in execution and in the absence of digital customer-facing channels. The most impactful investment would be online ordering + AI analytics, which would close the two largest competitive gaps simultaneously.
+DarkVelocity has the broadest architectural ambition of any platform reviewed. The grain-based domain model is well-designed and covers more ground than Toast, Square, or Lightspeed. Domain logic is more complete than previously documented (~65-70% average, not 55-60%). The remaining execution work is primarily wiring up real external services (payment SDKs, notification providers, delivery platform APIs) and adding background job triggers -- not building new domain logic. The most impactful new investment would be online ordering + AI analytics, which would close the two largest competitive gaps simultaneously.
 
 ---
 
