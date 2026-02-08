@@ -63,11 +63,11 @@ export default function PurchaseOrdersPage() {
     : sampleOrders.filter((order) => order.status === statusFilter)
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Purchase Orders</h1>
         <p>Create and manage supplier orders</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -99,7 +99,7 @@ export default function PurchaseOrdersPage() {
         <button>New Purchase Order</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Order #</th>
@@ -148,6 +148,6 @@ export default function PurchaseOrdersPage() {
           No purchase orders found
         </p>
       )}
-    </div>
+    </>
   )
 }

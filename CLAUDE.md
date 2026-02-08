@@ -133,8 +133,47 @@ cd apps/backoffice && npm install && npm run dev
 ### TypeScript Style
 - Functional components with hooks
 - No barrel files (`index.ts`)
-- Semantic HTML elements (Pico.css styles them automatically)
 - Inline styles for layout only
+
+### Pico.css Classless Approach
+Pico.css is used for its classless philosophy. Let semantic HTML elements do the work — avoid adding CSS classes where Pico styles elements automatically.
+
+**Prefer semantic HTML over custom classes:**
+- `<table>` not `<table className="data-table">` — Pico styles tables natively
+- `<hgroup>` with `<h1>` + `<p>` for page titles with subtitles — not `<header className="page-header">`
+- `<article>` for card-like containers — Pico styles these automatically
+- `<details>/<summary>` for collapsible sections and navigation groups
+- `<nav>` with `<ul>/<li>` for navigation — Pico styles nav lists as flex rows
+- `<header>`, `<footer>`, `<main>`, `<aside>`, `<section>` — all get automatic styling
+
+**Acceptable Pico modifier classes:**
+- `secondary`, `outline`, `contrast` — Pico's built-in button/link modifiers
+- `container` — Pico's centered max-width container
+
+**When custom classes are justified:**
+- Layout-specific CSS that Pico doesn't provide (sidebar positioning, app-level grid layouts)
+- The POS tablet UI needs custom layout classes for its 3-column register grid
+- Status badges (`badge-success`, `badge-warning`, `badge-danger`) — Pico has no badge component
+- Card grids (`cards-grid`) — Pico has no responsive grid system
+- Centering utilities for full-page layouts (login pages)
+
+**Pattern for navigation (following picocss.com):**
+```tsx
+<nav>
+  <details open={isCurrentSection}>
+    <summary>Section Title</summary>
+    <ul>
+      <li><a href="/path" className="secondary">Link</a></li>
+    </ul>
+  </details>
+</nav>
+```
+
+**Never introduce classes for things Pico already styles:**
+- Don't add table styling classes — `<table>` is enough
+- Don't add form styling classes — `<input>`, `<select>`, `<label>` are styled
+- Don't add heading classes — use the correct `<h1>`-`<h6>` element
+- Don't wrap content in `<div className="...">` when a semantic element exists
 
 ### Testing
 - xUnit for backend tests

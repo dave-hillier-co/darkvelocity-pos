@@ -53,11 +53,11 @@ export default function DeliveriesPage() {
   const pendingCount = sampleDeliveries.filter((d) => d.status === 'pending').length
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Deliveries</h1>
         <p>Receive and manage supplier deliveries</p>
-      </header>
+      </hgroup>
 
       {pendingCount > 0 && (
         <article style={{ marginBottom: '1rem', background: 'var(--pico-mark-background-color)', padding: '1rem' }}>
@@ -90,7 +90,7 @@ export default function DeliveriesPage() {
         <button>Record Ad-hoc Delivery</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Delivery #</th>
@@ -151,6 +151,6 @@ export default function DeliveriesPage() {
           No deliveries found
         </p>
       )}
-    </div>
+    </>
   )
 }

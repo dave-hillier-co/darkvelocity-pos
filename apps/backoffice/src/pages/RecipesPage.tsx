@@ -37,11 +37,11 @@ export default function RecipesPage() {
   })
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Recipes</h1>
         <p>Manage recipe costing and ingredients</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -64,7 +64,7 @@ export default function RecipesPage() {
         <button>New Recipe</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Code</th>
@@ -109,6 +109,6 @@ export default function RecipesPage() {
           No recipes found
         </p>
       )}
-    </div>
+    </>
   )
 }
