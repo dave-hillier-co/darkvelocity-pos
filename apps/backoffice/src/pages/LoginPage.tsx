@@ -36,7 +36,7 @@ export default function LoginPage() {
           </p>
         )}
 
-        <section className="social-login">
+        <section>
           <button
             type="button"
             onClick={loginWithGoogle}
@@ -97,7 +97,6 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={loginAsDev}
-            className="dev-login"
             style={{
               display: 'flex',
               alignItems: 'center',

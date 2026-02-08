@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const navSections = [
   {
@@ -40,41 +40,47 @@ const navSections = [
 ]
 
 export default function Layout() {
+  const { pathname } = useLocation()
+
   return (
-    <div className="app-layout">
-      <aside className="sidebar">
-        <header className="sidebar-header">
-          <h1>DarkVelocity</h1>
-          <small>Back Office</small>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <aside>
+        <header>
+          <hgroup>
+            <h2>DarkVelocity</h2>
+            <p>Back Office</p>
+          </hgroup>
         </header>
 
-        <nav className="sidebar-nav">
-          {navSections.map((section) => (
-            <div key={section.title} className="sidebar-section">
-              <div className="sidebar-section-title">{section.title}</div>
-              {section.links.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) => isActive ? 'active' : ''}
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
+        <nav>
+          {navSections.map((section) => {
+            const isCurrentSection = section.links.some((link) => pathname.startsWith(link.to))
+            return (
+              <details key={section.title} open={isCurrentSection}>
+                <summary>{section.title}</summary>
+                <ul>
+                  {section.links.map((link) => (
+                    <li key={link.to}>
+                      <NavLink to={link.to} className="secondary">
+                        {link.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )
+          })}
         </nav>
 
-        <footer className="sidebar-footer">
+        <footer>
           <small>Admin User</small>
-          <br />
           <button className="secondary outline" style={{ marginTop: '0.5rem' }}>
             Log Out
           </button>
         </footer>
       </aside>
 
-      <main className="main-content">
+      <main>
         <Outlet />
       </main>
     </div>

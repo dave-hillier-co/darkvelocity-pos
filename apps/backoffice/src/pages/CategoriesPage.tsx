@@ -45,17 +45,17 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Categories</h1>
         <p>Organize menu items into categories</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
         <button>New Category</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th style={{ width: '50px' }}>Order</th>
@@ -148,6 +148,6 @@ export default function CategoriesPage() {
           No categories found
         </p>
       )}
-    </div>
+    </>
   )
 }

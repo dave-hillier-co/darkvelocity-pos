@@ -58,11 +58,11 @@ export default function StockPage() {
   const outOfStockCount = sampleStock.filter((s) => s.currentStock <= 0).length
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Stock Levels</h1>
         <p>Monitor ingredient stock and reorder points</p>
-      </header>
+      </hgroup>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <article style={{ margin: 0, padding: '1rem' }}>
@@ -106,7 +106,7 @@ export default function StockPage() {
         </div>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Ingredient</th>
@@ -171,6 +171,6 @@ export default function StockPage() {
           No stock items found
         </p>
       )}
-    </div>
+    </>
   )
 }

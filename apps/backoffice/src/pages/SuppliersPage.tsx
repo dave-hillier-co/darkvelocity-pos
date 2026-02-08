@@ -9,11 +9,11 @@ const sampleSuppliers: Supplier[] = [
 
 export default function SuppliersPage() {
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Suppliers</h1>
         <p>Manage your suppliers and procurement</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
         <input
@@ -24,7 +24,7 @@ export default function SuppliersPage() {
         <button>Add Supplier</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Code</th>
@@ -58,6 +58,6 @@ export default function SuppliersPage() {
           ))}
         </tbody>
       </table>
-    </div>
+    </>
   )
 }

@@ -11,11 +11,11 @@ const sampleIngredients: Ingredient[] = [
 
 export default function IngredientsPage() {
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Ingredients</h1>
         <p>Track raw materials and stock levels</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
         <input
@@ -26,7 +26,7 @@ export default function IngredientsPage() {
         <button>Add Ingredient</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Code</th>
@@ -63,6 +63,6 @@ export default function IngredientsPage() {
           })}
         </tbody>
       </table>
-    </div>
+    </>
   )
 }

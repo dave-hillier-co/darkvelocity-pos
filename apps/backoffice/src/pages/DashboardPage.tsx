@@ -1,10 +1,10 @@
 export default function DashboardPage() {
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Dashboard</h1>
         <p>Overview of today's performance</p>
-      </header>
+      </hgroup>
 
       <div className="cards-grid">
         <article>
@@ -48,6 +48,6 @@ export default function DashboardPage() {
           <button className="secondary">View Reports</button>
         </div>
       </section>
-    </div>
+    </>
   )
 }

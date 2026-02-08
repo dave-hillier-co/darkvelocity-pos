@@ -1,10 +1,10 @@
 export default function ReportsPage() {
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Reports</h1>
         <p>Analyze sales, costs, and margins</p>
-      </header>
+      </hgroup>
 
       <div className="cards-grid">
         <article>
@@ -55,6 +55,6 @@ export default function ReportsPage() {
           </footer>
         </article>
       </div>
-    </div>
+    </>
   )
 }

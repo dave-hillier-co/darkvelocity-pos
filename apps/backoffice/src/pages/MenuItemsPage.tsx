@@ -18,11 +18,11 @@ function formatCurrency(amount: number): string {
 
 export default function MenuItemsPage() {
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Menu Items</h1>
         <p>Manage your menu items and pricing</p>
-      </header>
+      </hgroup>
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
         <input
@@ -33,7 +33,7 @@ export default function MenuItemsPage() {
         <button>Add Item</button>
       </div>
 
-      <table className="data-table">
+      <table>
         <thead>
           <tr>
             <th>Name</th>
@@ -63,6 +63,6 @@ export default function MenuItemsPage() {
           ))}
         </tbody>
       </table>
-    </div>
+    </>
   )
 }

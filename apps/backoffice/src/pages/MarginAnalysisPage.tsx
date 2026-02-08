@@ -83,11 +83,11 @@ export default function MarginAnalysisPage() {
   const underperforming = sampleItemMargins.filter((m) => m.marginPercent < m.targetMargin)
 
   return (
-    <div className="main-body">
-      <header className="page-header">
+    <>
+      <hgroup>
         <h1>Margin Analysis</h1>
         <p>Track profitability and cost of goods sold</p>
-      </header>
+      </hgroup>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <article style={{ margin: 0, padding: '1rem' }}>
@@ -147,7 +147,7 @@ export default function MarginAnalysisPage() {
       </div>
 
       {view === 'items' ? (
-        <table className="data-table">
+        <table>
           <thead>
             <tr>
               <th>Item</th>
@@ -189,7 +189,7 @@ export default function MarginAnalysisPage() {
           </tbody>
         </table>
       ) : (
-        <table className="data-table">
+        <table>
           <thead>
             <tr>
               <th>Date</th>
@@ -224,6 +224,6 @@ export default function MarginAnalysisPage() {
           No margin data found
         </p>
       )}
-    </div>
+    </>
   )
 }
