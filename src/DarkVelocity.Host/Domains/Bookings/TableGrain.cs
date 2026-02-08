@@ -56,6 +56,7 @@ public class TableGrain : Grain, ITableGrain
         if (command.Position != null) _state.State.Position = command.Position;
         if (command.IsCombinable.HasValue) _state.State.IsCombinable = command.IsCombinable.Value;
         if (command.SortOrder.HasValue) _state.State.SortOrder = command.SortOrder.Value;
+        if (command.SectionId.HasValue) _state.State.SectionId = command.SectionId.Value;
 
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
@@ -216,6 +217,15 @@ public class TableGrain : Grain, ITableGrain
         await _state.WriteStateAsync();
     }
 
+    public async Task SetSectionAsync(Guid? sectionId)
+    {
+        EnsureExists();
+        _state.State.SectionId = sectionId;
+        _state.State.UpdatedAt = DateTime.UtcNow;
+        _state.State.Version++;
+        await _state.WriteStateAsync();
+    }
+
     public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);
 
     Task<TableStatus> ITableGrain.GetStatusAsync() => Task.FromResult(_state.State.Status);
@@ -235,12 +245,15 @@ public class TableGrain : Grain, ITableGrain
 public class FloorPlanGrain : Grain, IFloorPlanGrain
 {
     private readonly IPersistentState<FloorPlanState> _state;
+    private readonly IGrainFactory _grainFactory;
 
     public FloorPlanGrain(
         [PersistentState("floorplan", "OrleansStorage")]
-        IPersistentState<FloorPlanState> state)
+        IPersistentState<FloorPlanState> state,
+        IGrainFactory grainFactory)
     {
         _state = state;
+        _grainFactory = grainFactory;
     }
 
     public async Task<FloorPlanCreatedResult> CreateAsync(CreateFloorPlanCommand command)
@@ -392,6 +405,27 @@ public class FloorPlanGrain : Grain, IFloorPlanGrain
         _state.State.UpdatedAt = DateTime.UtcNow;
         _state.State.Version++;
         await _state.WriteStateAsync();
+    }
+
+    public async Task AssignTableToSectionAsync(Guid tableId, Guid sectionId)
+    {
+        EnsureExists();
+        if (!_state.State.TableIds.Contains(tableId))
+            throw new InvalidOperationException("Table is not part of this floor plan");
+        if (!_state.State.Sections.Any(s => s.Id == sectionId))
+            throw new InvalidOperationException("Section not found in this floor plan");
+
+        var tableGrain = _grainFactory.GetGrain<ITableGrain>(
+            GrainKeys.Table(_state.State.OrganizationId, _state.State.SiteId, tableId));
+        await tableGrain.SetSectionAsync(sectionId);
+    }
+
+    public async Task UnassignTableFromSectionAsync(Guid tableId)
+    {
+        EnsureExists();
+        var tableGrain = _grainFactory.GetGrain<ITableGrain>(
+            GrainKeys.Table(_state.State.OrganizationId, _state.State.SiteId, tableId));
+        await tableGrain.SetSectionAsync(null);
     }
 
     public Task<bool> ExistsAsync() => Task.FromResult(_state.State.Id != Guid.Empty);

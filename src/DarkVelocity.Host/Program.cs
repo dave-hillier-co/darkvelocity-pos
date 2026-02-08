@@ -3,6 +3,7 @@ using DarkVelocity.Host.Adapters;
 using DarkVelocity.Host.Authorization;
 using DarkVelocity.Host.Endpoints;
 using DarkVelocity.Host.Extensions;
+using DarkVelocity.Host.Hubs;
 using DarkVelocity.Host.PaymentProcessors;
 using DarkVelocity.Host.Services;
 using DarkVelocity.Host.Streams;
@@ -62,6 +63,10 @@ builder.Services
     // Webhook delivery service
     .AddHttpClient<IWebhookDeliveryService, WebhookDeliveryService>();
 
+// SignalR for real-time floor plan updates
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<FloorPlanNotifier>();
+
 var app = builder.Build();
 
 // Configure middleware
@@ -85,6 +90,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
 
 // Orleans Dashboard at /dashboard
 app.MapOrleansDashboard(routePrefix: "/dashboard");
+
+// SignalR hubs
+app.MapHub<FloorPlanHub>("/hubs/floor-plan");
 
 // Map all API endpoints
 app.MapOAuthEndpoints()
@@ -113,8 +121,11 @@ app.MapOAuthEndpoints()
    .MapSearchEndpoints()
    .MapTableEndpoints()
    .MapFloorPlanEndpoints()
+   .MapFloorPlanLiveEndpoints()
    .MapWaitlistEndpoints()
    .MapAvailabilityEndpoints()
+   .MapOptimizerEndpoints()
+   .MapTurnTimeAnalyticsEndpoints()
    .MapWebhookEndpoints()
    .MapPaymentGatewayEndpoints()
    .MapPaymentProcessorEndpoints()

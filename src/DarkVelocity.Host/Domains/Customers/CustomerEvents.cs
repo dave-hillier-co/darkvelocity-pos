@@ -140,6 +140,15 @@ public sealed record CustomerVisitRecorded : ICustomerEvent
 }
 
 [GenerateSerializer]
+public sealed record CustomerNoShowRecorded : ICustomerEvent
+{
+    [Id(0)] public Guid CustomerId { get; init; }
+    [Id(1)] public DateTime BookingTime { get; init; }
+    [Id(2)] public Guid? BookingId { get; init; }
+    [Id(3)] public DateTime OccurredAt { get; init; }
+}
+
+[GenerateSerializer]
 public sealed record CustomerTagAdded : ICustomerEvent
 {
     [Id(0)] public Guid CustomerId { get; init; }

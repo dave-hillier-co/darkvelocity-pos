@@ -249,6 +249,9 @@ public interface ICustomerGrain : IGrainWithStringKey
     Task SetSeatingPreferenceAsync(string preference);
 
     // Queries
+    // No-show tracking
+    Task RecordNoShowAsync(DateTime bookingTime, Guid? bookingId = null);
+
     Task<bool> ExistsAsync();
     Task<bool> IsLoyaltyMemberAsync();
     Task<int> GetPointsBalanceAsync();

@@ -1,5 +1,6 @@
 using DarkVelocity.Host.Contracts;
 using DarkVelocity.Host.Grains;
+using DarkVelocity.Host.Hubs;
 using DarkVelocity.Host.State;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,6 +23,15 @@ public static class TableEndpoints
             var result = await grain.CreateAsync(new CreateTableCommand(
                 orgId, siteId, request.Number, request.MinCapacity, request.MaxCapacity,
                 request.Name, request.Shape, request.FloorPlanId));
+
+            // Auto-register with optimizer
+            var optimizerGrain = grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+                GrainKeys.TableAssignmentOptimizer(orgId, siteId));
+            if (!await optimizerGrain.ExistsAsync())
+                await optimizerGrain.InitializeAsync(orgId, siteId);
+            await optimizerGrain.RegisterTableAsync(
+                tableId, request.Number, request.MinCapacity, request.MaxCapacity,
+                isCombinable: true);
 
             var state = await grain.GetStateAsync();
             var links = BuildTableLinks(orgId, siteId, tableId, state);
@@ -57,17 +67,33 @@ public static class TableEndpoints
 
             await grain.UpdateAsync(new UpdateTableCommand(
                 request.Number, request.Name, request.MinCapacity, request.MaxCapacity,
-                request.Shape, request.Position, request.IsCombinable, request.SortOrder));
+                request.Shape, request.Position, request.IsCombinable, request.SortOrder,
+                request.SectionId));
             var state = await grain.GetStateAsync();
-            var links = BuildTableLinks(orgId, siteId, tableId, state);
 
+            // Update optimizer if capacity or combinability changed
+            if (request.MinCapacity.HasValue || request.MaxCapacity.HasValue ||
+                request.IsCombinable.HasValue || request.Number != null)
+            {
+                var optimizerGrain = grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+                    GrainKeys.TableAssignmentOptimizer(orgId, siteId));
+                if (await optimizerGrain.ExistsAsync())
+                {
+                    await optimizerGrain.RegisterTableAsync(
+                        tableId, state.Number, state.MinCapacity, state.MaxCapacity,
+                        state.IsCombinable, state.Tags);
+                }
+            }
+
+            var links = BuildTableLinks(orgId, siteId, tableId, state);
             return Results.Ok(Hal.Resource(state, links));
         });
 
         group.MapPost("/{tableId}/seat", async (
             Guid orgId, Guid siteId, Guid tableId,
             [FromBody] SeatTableRequest request,
-            IGrainFactory grainFactory) =>
+            IGrainFactory grainFactory,
+            FloorPlanNotifier notifier) =>
         {
             var grain = grainFactory.GetGrain<ITableGrain>(GrainKeys.Table(orgId, siteId, tableId));
             if (!await grain.ExistsAsync())
@@ -77,10 +103,20 @@ public static class TableEndpoints
             var state = await grain.GetStateAsync();
             var links = BuildTableLinks(orgId, siteId, tableId, state);
 
+            // Update optimizer with table usage
+            var optimizerGrain = grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+                GrainKeys.TableAssignmentOptimizer(orgId, siteId));
+            if (await optimizerGrain.ExistsAsync())
+                await optimizerGrain.RecordTableUsageAsync(tableId, request.ServerId ?? Guid.Empty, request.GuestCount);
+
+            // Push real-time update
+            await notifier.NotifyTableStatusChanged(orgId, siteId, tableId, state.Number, state.Status, state.CurrentOccupancy);
+
             return Results.Ok(Hal.Resource(new { status = state.Status, occupancy = state.CurrentOccupancy }, links));
         });
 
-        group.MapPost("/{tableId}/clear", async (Guid orgId, Guid siteId, Guid tableId, IGrainFactory grainFactory) =>
+        group.MapPost("/{tableId}/clear", async (Guid orgId, Guid siteId, Guid tableId,
+            IGrainFactory grainFactory, FloorPlanNotifier notifier) =>
         {
             var grain = grainFactory.GetGrain<ITableGrain>(GrainKeys.Table(orgId, siteId, tableId));
             if (!await grain.ExistsAsync())
@@ -89,13 +125,24 @@ public static class TableEndpoints
             await grain.ClearAsync();
             var state = await grain.GetStateAsync();
             var links = BuildTableLinks(orgId, siteId, tableId, state);
+
+            // Clear optimizer usage
+            var optimizerGrain = grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+                GrainKeys.TableAssignmentOptimizer(orgId, siteId));
+            if (await optimizerGrain.ExistsAsync())
+                await optimizerGrain.ClearTableUsageAsync(tableId);
+
+            // Push real-time update
+            await notifier.NotifyTableStatusChanged(orgId, siteId, tableId, state.Number, state.Status, null);
+
             return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         });
 
         group.MapPost("/{tableId}/status", async (
             Guid orgId, Guid siteId, Guid tableId,
             [FromBody] SetTableStatusRequest request,
-            IGrainFactory grainFactory) =>
+            IGrainFactory grainFactory,
+            FloorPlanNotifier notifier) =>
         {
             var grain = grainFactory.GetGrain<ITableGrain>(GrainKeys.Table(orgId, siteId, tableId));
             if (!await grain.ExistsAsync())
@@ -104,6 +151,10 @@ public static class TableEndpoints
             await grain.SetStatusAsync(request.Status);
             var state = await grain.GetStateAsync();
             var links = BuildTableLinks(orgId, siteId, tableId, state);
+
+            // Push real-time update
+            await notifier.NotifyTableStatusChanged(orgId, siteId, tableId, state.Number, state.Status, state.CurrentOccupancy);
+
             return Results.Ok(Hal.Resource(new { status = state.Status }, links));
         });
 
@@ -114,6 +165,13 @@ public static class TableEndpoints
                 return Results.NotFound(Hal.Error("not_found", "Table not found"));
 
             await grain.DeleteAsync();
+
+            // Unregister from optimizer
+            var optimizerGrain = grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+                GrainKeys.TableAssignmentOptimizer(orgId, siteId));
+            if (await optimizerGrain.ExistsAsync())
+                await optimizerGrain.UnregisterTableAsync(tableId);
+
             return Results.NoContent();
         });
 

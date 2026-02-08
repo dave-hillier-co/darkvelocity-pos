@@ -94,6 +94,36 @@ public static class FloorPlanEndpoints
             return Results.NoContent();
         });
 
+        // Section-table assignment
+        group.MapPost("/{floorPlanId}/sections/{sectionId}/tables/{tableId}", async (
+            Guid orgId, Guid siteId, Guid floorPlanId, Guid sectionId, Guid tableId,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IFloorPlanGrain>(GrainKeys.FloorPlan(orgId, siteId, floorPlanId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Floor plan not found"));
+
+            await grain.AssignTableToSectionAsync(tableId, sectionId);
+            return Results.Ok(Hal.Resource(new { tableId, sectionId, assigned = true }, new Dictionary<string, object>
+            {
+                ["self"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}/sections/{sectionId}/tables/{tableId}" },
+                ["table"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/tables/{tableId}" },
+                ["floor-plan"] = new { href = $"/api/orgs/{orgId}/sites/{siteId}/floor-plans/{floorPlanId}" }
+            }));
+        });
+
+        group.MapDelete("/{floorPlanId}/sections/{sectionId}/tables/{tableId}", async (
+            Guid orgId, Guid siteId, Guid floorPlanId, Guid sectionId, Guid tableId,
+            IGrainFactory grainFactory) =>
+        {
+            var grain = grainFactory.GetGrain<IFloorPlanGrain>(GrainKeys.FloorPlan(orgId, siteId, floorPlanId));
+            if (!await grain.ExistsAsync())
+                return Results.NotFound(Hal.Error("not_found", "Floor plan not found"));
+
+            await grain.UnassignTableFromSectionAsync(tableId);
+            return Results.NoContent();
+        });
+
         return app;
     }
 }

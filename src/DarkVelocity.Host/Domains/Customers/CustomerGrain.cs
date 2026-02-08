@@ -193,6 +193,11 @@ public class CustomerGrain : JournaledGrain<CustomerState, ICustomerEvent>, ICus
                 state.LastVisitAt = e.OccurredAt;
                 break;
 
+            case CustomerNoShowRecorded e:
+                state.NoShowCount++;
+                state.LastNoShowAt = e.OccurredAt;
+                break;
+
             case CustomerPreferencesUpdated e:
                 state.Preferences = state.Preferences with
                 {
@@ -1536,6 +1541,19 @@ public class CustomerGrain : JournaledGrain<CustomerState, ICustomerEvent>, ICus
     {
         EnsureExists();
         return Task.FromResult(State.Referral.SuccessfulReferrals >= State.Referral.ReferralRewardsCap);
+    }
+
+    public async Task RecordNoShowAsync(DateTime bookingTime, Guid? bookingId = null)
+    {
+        EnsureExists();
+        RaiseEvent(new CustomerNoShowRecorded
+        {
+            CustomerId = State.Id,
+            BookingTime = bookingTime,
+            BookingId = bookingId,
+            OccurredAt = DateTime.UtcNow
+        });
+        await ConfirmEvents();
     }
 
     public Task<bool> ExistsAsync() => Task.FromResult(State.Id != Guid.Empty);

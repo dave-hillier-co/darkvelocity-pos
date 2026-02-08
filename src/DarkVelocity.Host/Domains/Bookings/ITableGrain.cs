@@ -23,7 +23,8 @@ public record UpdateTableCommand(
     [property: Id(4)] TableShape? Shape = null,
     [property: Id(5)] TablePosition? Position = null,
     [property: Id(6)] bool? IsCombinable = null,
-    [property: Id(7)] int? SortOrder = null);
+    [property: Id(7)] int? SortOrder = null,
+    [property: Id(8)] Guid? SectionId = null);
 
 [GenerateSerializer]
 public record SeatTableCommand(
@@ -63,6 +64,7 @@ public interface ITableGrain : IGrainWithStringKey
     // Position (for floor plan)
     Task SetPositionAsync(TablePosition position);
     Task SetFloorPlanAsync(Guid floorPlanId);
+    Task SetSectionAsync(Guid? sectionId);
 
     // Queries
     Task<bool> ExistsAsync();
@@ -108,6 +110,8 @@ public interface IFloorPlanGrain : IGrainWithStringKey
     Task AddSectionAsync(string name, string? color = null);
     Task RemoveSectionAsync(Guid sectionId);
     Task UpdateSectionAsync(Guid sectionId, string? name = null, string? color = null, int? sortOrder = null);
+    Task AssignTableToSectionAsync(Guid tableId, Guid sectionId);
+    Task UnassignTableFromSectionAsync(Guid tableId);
 
     // Status
     Task SetDefaultAsync();

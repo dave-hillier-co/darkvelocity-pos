@@ -310,8 +310,9 @@ public class NoShowDetectionGrain : Grain, INoShowDetectionGrain, IRemindable
 
             if (await notificationGrain.ExistsAsync())
             {
+                var managerEmail = await GetManagerEmailAsync();
                 await notificationGrain.SendEmailAsync(new SendEmailCommand(
-                    To: "manager@restaurant.com", // Would be configured
+                    To: managerEmail,
                     Subject: $"No-Show: {checkRecord.GuestName}",
                     Body: $"Booking {bookingId} for {checkRecord.GuestName} at {checkRecord.BookingTime:g} was marked as a no-show."));
             }
@@ -320,11 +321,41 @@ public class NoShowDetectionGrain : Grain, INoShowDetectionGrain, IRemindable
         // Update customer no-show history if configured
         if (_state.State.Settings.UpdateCustomerHistory && checkRecord.CustomerId.HasValue)
         {
-            // Would call customer grain to update no-show count
-            // var customerGrain = _grainFactory.GetGrain<ICustomerGrain>(
-            //     GrainKeys.Customer(_state.State.OrganizationId, checkRecord.CustomerId.Value));
-            // await customerGrain.RecordNoShowAsync();
+            try
+            {
+                var customerGrain = _grainFactory.GetGrain<ICustomerGrain>(
+                    GrainKeys.Customer(_state.State.OrganizationId, checkRecord.CustomerId.Value));
+                if (await customerGrain.ExistsAsync())
+                    await customerGrain.RecordNoShowAsync(checkRecord.BookingTime, bookingId);
+            }
+            catch
+            {
+                // Customer grain may not exist, ignore
+            }
         }
+    }
+
+    private async Task<string> GetManagerEmailAsync()
+    {
+        // Try to get an email target from notification channel config
+        try
+        {
+            var notificationGrain = _grainFactory.GetGrain<INotificationGrain>(
+                GrainKeys.Notifications(_state.State.OrganizationId));
+            if (await notificationGrain.ExistsAsync())
+            {
+                var channels = await notificationGrain.GetChannelsAsync();
+                var emailChannel = channels.FirstOrDefault(c =>
+                    c.Type == NotificationType.Email && c.IsEnabled);
+                if (emailChannel != null && !string.IsNullOrEmpty(emailChannel.Target))
+                    return emailChannel.Target;
+            }
+        }
+        catch
+        {
+            // Fall back to default
+        }
+        return "manager@restaurant.com";
     }
 
     private void EnsureExists()

@@ -22,7 +22,8 @@ public record UpdateTableRequest(
     TableShape? Shape = null,
     TablePosition? Position = null,
     bool? IsCombinable = null,
-    int? SortOrder = null);
+    int? SortOrder = null,
+    Guid? SectionId = null);
 
 public record SeatTableRequest(
     Guid? BookingId,

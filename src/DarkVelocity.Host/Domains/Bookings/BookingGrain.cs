@@ -208,6 +208,10 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
         State.Occasion = command.Occasion;
         State.ExternalRef = command.ExternalRef;
 
+        // Add to booking calendar
+        await AddToCalendarAsync(bookingId, confirmationCode, command.RequestedTime, command.PartySize,
+            command.Guest.Name, BookingStatus.Requested, command.Duration);
+
         return new BookingRequestedResult(bookingId, confirmationCode, State.CreatedAt);
     }
 
@@ -232,6 +236,9 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
         if (confirmedTime.HasValue)
             State.ConfirmedTime = confirmedTime.Value;
 
+        // Update calendar status
+        await UpdateCalendarStatusAsync(BookingStatus.Confirmed);
+
         return new BookingConfirmedResult(State.ConfirmedTime!.Value, State.ConfirmationCode);
     }
 
@@ -254,6 +261,11 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
         // Set duration if specified
         if (command.NewDuration != null)
             State.Duration = command.NewDuration.Value;
+
+        // Update calendar with new time/party size
+        await UpdateCalendarBookingAsync(
+            time: command.NewTime.HasValue ? TimeOnly.FromDateTime(command.NewTime.Value) : null,
+            partySize: command.NewPartySize);
     }
 
     public async Task CancelAsync(CancelBookingCommand command)
@@ -274,6 +286,9 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+
+        // Remove from calendar
+        await RemoveFromCalendarAsync();
     }
 
     public async Task AssignTableAsync(AssignTableCommand command)
@@ -316,6 +331,9 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
 
         State.CheckedInBy = command.CheckedInBy;
 
+        // Update calendar status
+        await UpdateCalendarStatusAsync(BookingStatus.Arrived);
+
         return State.ArrivedAt!.Value;
     }
 
@@ -334,12 +352,30 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+
+        // Update calendar with table assignment and status
+        await UpdateCalendarBookingAsync(
+            status: BookingStatus.Seated,
+            tableId: command.TableId,
+            tableNumber: command.TableNumber);
+
+        // Register seating with turn time analytics
+        var analyticsGrain = GrainFactory.GetGrain<ITurnTimeAnalyticsGrain>(
+            GrainKeys.TurnTimeAnalytics(State.OrganizationId, State.SiteId));
+        if (await analyticsGrain.ExistsAsync())
+        {
+            await analyticsGrain.RegisterSeatingAsync(
+                State.Id, command.TableId, command.TableNumber, State.PartySize, DateTime.UtcNow);
+        }
     }
 
     public async Task RecordDepartureAsync(RecordDepartureCommand command)
     {
         EnsureExists();
         EnsureStatus(BookingStatus.Seated);
+
+        var seatedAt = State.SeatedAt;
+        var tableId = State.TableAssignments.FirstOrDefault()?.TableId;
 
         if (command.OrderId != null)
         {
@@ -357,6 +393,25 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+
+        // Update calendar status
+        await UpdateCalendarStatusAsync(BookingStatus.Completed);
+
+        // Record turn time analytics
+        if (seatedAt.HasValue)
+        {
+            var analyticsGrain = GrainFactory.GetGrain<ITurnTimeAnalyticsGrain>(
+                GrainKeys.TurnTimeAnalytics(State.OrganizationId, State.SiteId));
+            if (await analyticsGrain.ExistsAsync())
+            {
+                await analyticsGrain.RecordTurnTimeAsync(new RecordTurnTimeCommand(
+                    BookingId: State.Id,
+                    TableId: tableId,
+                    PartySize: State.PartySize,
+                    SeatedAt: seatedAt.Value,
+                    DepartedAt: DateTime.UtcNow));
+            }
+        }
     }
 
     public async Task MarkNoShowAsync(Guid? markedBy = null)
@@ -371,6 +426,9 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
             OccurredAt = DateTime.UtcNow
         });
         await ConfirmEvents();
+
+        // Update calendar status
+        await UpdateCalendarStatusAsync(BookingStatus.NoShow);
     }
 
     public async Task AddSpecialRequestAsync(string request)
@@ -585,6 +643,77 @@ public class BookingGrain : JournaledGrain<BookingState, IBookingEvent>, IBookin
     {
         if (!allowedStatuses.Contains(State.Status))
             throw new InvalidOperationException($"Invalid status. Expected one of [{string.Join(", ", allowedStatuses)}], got {State.Status}");
+    }
+
+    private async Task AddToCalendarAsync(Guid bookingId, string confirmationCode, DateTime requestedTime,
+        int partySize, string guestName, BookingStatus status, TimeSpan? duration)
+    {
+        var date = DateOnly.FromDateTime(requestedTime);
+        var calendarGrain = GrainFactory.GetGrain<IBookingCalendarGrain>(
+            GrainKeys.BookingCalendar(State.OrganizationId, State.SiteId, date));
+        if (!await calendarGrain.ExistsAsync())
+            await calendarGrain.InitializeAsync(State.OrganizationId, State.SiteId, date);
+
+        await calendarGrain.AddBookingAsync(new AddBookingToCalendarCommand(
+            BookingId: bookingId,
+            ConfirmationCode: confirmationCode,
+            Time: TimeOnly.FromDateTime(requestedTime),
+            PartySize: partySize,
+            GuestName: guestName,
+            Status: status,
+            Duration: duration));
+    }
+
+    private async Task UpdateCalendarStatusAsync(BookingStatus newStatus)
+    {
+        var date = DateOnly.FromDateTime(State.RequestedTime);
+        var calendarGrain = GrainFactory.GetGrain<IBookingCalendarGrain>(
+            GrainKeys.BookingCalendar(State.OrganizationId, State.SiteId, date));
+        if (await calendarGrain.ExistsAsync())
+        {
+            try
+            {
+                await calendarGrain.UpdateBookingAsync(new UpdateBookingInCalendarCommand(
+                    BookingId: State.Id, Status: newStatus));
+            }
+            catch (InvalidOperationException)
+            {
+                // Booking may not be in calendar yet, ignore
+            }
+        }
+    }
+
+    private async Task UpdateCalendarBookingAsync(
+        BookingStatus? status = null, TimeOnly? time = null,
+        int? partySize = null, Guid? tableId = null, string? tableNumber = null)
+    {
+        var date = DateOnly.FromDateTime(State.RequestedTime);
+        var calendarGrain = GrainFactory.GetGrain<IBookingCalendarGrain>(
+            GrainKeys.BookingCalendar(State.OrganizationId, State.SiteId, date));
+        if (await calendarGrain.ExistsAsync())
+        {
+            try
+            {
+                await calendarGrain.UpdateBookingAsync(new UpdateBookingInCalendarCommand(
+                    BookingId: State.Id, Status: status, Time: time,
+                    PartySize: partySize, TableId: tableId, TableNumber: tableNumber));
+            }
+            catch (InvalidOperationException)
+            {
+                // Booking may not be in calendar yet, ignore
+            }
+        }
+    }
+
+    private async Task RemoveFromCalendarAsync()
+    {
+        var date = DateOnly.FromDateTime(State.RequestedTime);
+        var calendarGrain = GrainFactory.GetGrain<IBookingCalendarGrain>(
+            GrainKeys.BookingCalendar(State.OrganizationId, State.SiteId, date));
+        if (await calendarGrain.ExistsAsync())
+        {
+            await calendarGrain.RemoveBookingAsync(State.Id);
+        }
     }
 
     private static string GenerateConfirmationCode()

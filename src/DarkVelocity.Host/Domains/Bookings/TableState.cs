@@ -66,6 +66,7 @@ public sealed class TableState
     [Id(16)] public DateTime CreatedAt { get; set; }
     [Id(17)] public DateTime? UpdatedAt { get; set; }
     [Id(18)] public int Version { get; set; }
+    [Id(19)] public Guid? SectionId { get; set; }
 }
 
 // Floor Plan State

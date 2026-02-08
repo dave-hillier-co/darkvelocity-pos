@@ -52,7 +52,8 @@ public class BookingCalendarGrainImpl : Grain, IBookingCalendarGrain
             Time = command.Time,
             PartySize = command.PartySize,
             GuestName = command.GuestName,
-            Status = command.Status
+            Status = command.Status,
+            Duration = command.Duration
         };
 
         _state.State.Bookings.Add(reference);
@@ -198,36 +199,123 @@ public class BookingCalendarGrainImpl : Grain, IBookingCalendarGrain
         var settings = await settingsGrain.GetStateAsync();
         var interval = settings.SlotInterval;
         var duration = query.RequestedDuration ?? settings.DefaultDuration;
+        var turnoverBuffer = settings.TurnoverBuffer;
+
+        // Check blocked dates
+        if (settings.BlockedDates.Contains(query.Date))
+        {
+            return GenerateUnavailableSlots(settings.DefaultOpenTime, settings.DefaultCloseTime, interval, duration);
+        }
+
+        // Check party size
+        if (query.PartySize > settings.MaxPartySizeOnline)
+        {
+            return GenerateUnavailableSlots(settings.DefaultOpenTime, settings.DefaultCloseTime, interval, duration);
+        }
+
+        // Try to get table recommendations from optimizer
+        var optimizerGrain = _grainFactory.GetGrain<ITableAssignmentOptimizerGrain>(
+            GrainKeys.TableAssignmentOptimizer(_state.State.OrganizationId, _state.State.SiteId));
+        var hasOptimizer = await optimizerGrain.ExistsAsync();
 
         var currentTime = settings.DefaultOpenTime;
         var closeTime = settings.DefaultCloseTime;
 
         while (currentTime < closeTime)
         {
-            // Count bookings at this time slot
+            // Count bookings that overlap this time slot (considering duration + turnover buffer)
             var overlappingBookings = _state.State.Bookings.Count(b =>
             {
-                var bookingEnd = b.Time.Add(b.Duration ?? duration);
+                var bookingDuration = b.Duration ?? duration;
+                var bookingEnd = b.Time.Add(bookingDuration).Add(turnoverBuffer);
                 return b.Time <= currentTime && bookingEnd > currentTime;
             });
 
-            var isAvailable = overlappingBookings < settings.MaxBookingsPerSlot &&
-                              query.PartySize <= settings.MaxPartySizeOnline;
-
+            var slotAvailableByCount = overlappingBookings < settings.MaxBookingsPerSlot;
             var availableCapacity = Math.Max(0, settings.MaxBookingsPerSlot - overlappingBookings);
+
+            // Get table suggestions from optimizer if available
+            var suggestedTables = new List<TableSuggestion>();
+            var hasAvailableTables = true;
+
+            if (hasOptimizer)
+            {
+                var bookingDateTime = query.Date.ToDateTime(currentTime);
+                var recommendations = await optimizerGrain.GetRecommendationsAsync(new TableAssignmentRequest(
+                    BookingId: Guid.Empty,
+                    PartySize: query.PartySize,
+                    BookingTime: bookingDateTime,
+                    Duration: duration));
+
+                if (recommendations.Success && recommendations.Recommendations.Count > 0)
+                {
+                    // Filter out tables already booked at this time
+                    var bookedTableIds = _state.State.Bookings
+                        .Where(b =>
+                        {
+                            var bookingDuration = b.Duration ?? duration;
+                            var bookingEnd = b.Time.Add(bookingDuration).Add(turnoverBuffer);
+                            return b.Time <= currentTime && bookingEnd > currentTime && b.TableId.HasValue;
+                        })
+                        .Select(b => b.TableId!.Value)
+                        .ToHashSet();
+
+                    suggestedTables = recommendations.Recommendations
+                        .Where(r => !bookedTableIds.Contains(r.TableId))
+                        .Select(r => new TableSuggestion
+                        {
+                            TableId = r.TableId,
+                            TableNumber = r.TableNumber,
+                            Capacity = r.Capacity,
+                            IsCombination = r.RequiresCombination,
+                            CombinedTableIds = r.CombinedTableIds,
+                            Score = r.Score
+                        })
+                        .ToList();
+
+                    hasAvailableTables = suggestedTables.Count > 0;
+                    availableCapacity = suggestedTables.Count;
+                }
+                else
+                {
+                    hasAvailableTables = false;
+                }
+            }
+
+            var isAvailable = slotAvailableByCount && hasAvailableTables;
 
             slots.Add(new AvailableTimeSlot
             {
                 Time = currentTime,
                 IsAvailable = isAvailable,
                 AvailableCapacity = availableCapacity,
-                SuggestedTables = [], // Would be populated by TableAssignmentOptimizer
+                SuggestedTables = suggestedTables,
                 EstimatedDuration = duration
             });
 
             currentTime = currentTime.Add(interval);
         }
 
+        return slots;
+    }
+
+    private static IReadOnlyList<AvailableTimeSlot> GenerateUnavailableSlots(
+        TimeOnly openTime, TimeOnly closeTime, TimeSpan interval, TimeSpan duration)
+    {
+        var slots = new List<AvailableTimeSlot>();
+        var currentTime = openTime;
+        while (currentTime < closeTime)
+        {
+            slots.Add(new AvailableTimeSlot
+            {
+                Time = currentTime,
+                IsAvailable = false,
+                AvailableCapacity = 0,
+                SuggestedTables = [],
+                EstimatedDuration = duration
+            });
+            currentTime = currentTime.Add(interval);
+        }
         return slots;
     }
 

@@ -18,16 +18,47 @@ public static class AvailabilityEndpoints
             [FromQuery] TimeOnly? preferredTime,
             IGrainFactory grainFactory) =>
         {
-            var grain = grainFactory.GetGrain<IBookingSettingsGrain>(GrainKeys.BookingSettings(orgId, siteId));
-            if (!await grain.ExistsAsync())
-                await grain.InitializeAsync(orgId, siteId);
+            // Get settings for basic validation (blocked dates, max party size, operating hours)
+            var settingsGrain = grainFactory.GetGrain<IBookingSettingsGrain>(GrainKeys.BookingSettings(orgId, siteId));
+            if (!await settingsGrain.ExistsAsync())
+                await settingsGrain.InitializeAsync(orgId, siteId);
 
-            var slots = await grain.GetAvailabilityAsync(new GetAvailabilityQuery(date, partySize, preferredTime));
-            var items = slots.Select(s => new
+            var settings = await settingsGrain.GetStateAsync();
+
+            // Quick rejection: blocked date or party too large
+            if (settings.BlockedDates.Contains(date) || partySize > settings.MaxPartySizeOnline)
+            {
+                var emptySlots = GenerateUnavailableSlots(settings);
+                return Results.Ok(new
+                {
+                    date = date.ToString("yyyy-MM-dd"),
+                    partySize,
+                    _links = new { self = new { href = $"/api/orgs/{orgId}/sites/{siteId}/availability?date={date:yyyy-MM-dd}&partySize={partySize}" } },
+                    slots = emptySlots
+                });
+            }
+
+            // Use BookingCalendarGrain for real availability (checks actual bookings)
+            var calendarGrain = grainFactory.GetGrain<IBookingCalendarGrain>(
+                GrainKeys.BookingCalendar(orgId, siteId, date));
+            if (!await calendarGrain.ExistsAsync())
+                await calendarGrain.InitializeAsync(orgId, siteId, date);
+
+            var availableSlots = await calendarGrain.GetAvailabilityAsync(
+                new GetCalendarAvailabilityQuery(date, partySize, preferredTime));
+
+            var items = availableSlots.Select(s => new
             {
                 time = s.Time.ToString("HH:mm"),
                 isAvailable = s.IsAvailable,
-                availableCapacity = s.AvailableCapacity
+                availableCapacity = s.AvailableCapacity,
+                suggestedTables = s.SuggestedTables.Select(t => new
+                {
+                    tableId = t.TableId,
+                    tableNumber = t.TableNumber,
+                    capacity = t.Capacity,
+                    score = t.Score
+                }).ToList()
             }).ToList();
 
             return Results.Ok(new
@@ -46,11 +77,33 @@ public static class AvailabilityEndpoints
             [FromQuery] int partySize,
             IGrainFactory grainFactory) =>
         {
-            var grain = grainFactory.GetGrain<IBookingSettingsGrain>(GrainKeys.BookingSettings(orgId, siteId));
-            if (!await grain.ExistsAsync())
-                await grain.InitializeAsync(orgId, siteId);
+            var settingsGrain = grainFactory.GetGrain<IBookingSettingsGrain>(GrainKeys.BookingSettings(orgId, siteId));
+            if (!await settingsGrain.ExistsAsync())
+                await settingsGrain.InitializeAsync(orgId, siteId);
 
-            var isAvailable = await grain.IsSlotAvailableAsync(date, time, partySize);
+            var settings = await settingsGrain.GetStateAsync();
+
+            // Basic validation
+            if (settings.BlockedDates.Contains(date) || partySize > settings.MaxPartySizeOnline ||
+                time < settings.DefaultOpenTime || time >= settings.DefaultCloseTime)
+            {
+                return Results.Ok(new { date = date.ToString("yyyy-MM-dd"), time = time.ToString("HH:mm"), partySize, isAvailable = false });
+            }
+
+            // Check real booking data from calendar
+            var calendarGrain = grainFactory.GetGrain<IBookingCalendarGrain>(
+                GrainKeys.BookingCalendar(orgId, siteId, date));
+            if (!await calendarGrain.ExistsAsync())
+            {
+                // No calendar means no bookings — slot is available
+                return Results.Ok(new { date = date.ToString("yyyy-MM-dd"), time = time.ToString("HH:mm"), partySize, isAvailable = true });
+            }
+
+            var slots = await calendarGrain.GetAvailabilityAsync(
+                new GetCalendarAvailabilityQuery(date, partySize));
+            var matchingSlot = slots.FirstOrDefault(s => s.Time == time);
+            var isAvailable = matchingSlot?.IsAvailable ?? true;
+
             return Results.Ok(new { date = date.ToString("yyyy-MM-dd"), time = time.ToString("HH:mm"), partySize, isAvailable });
         });
 
@@ -114,5 +167,17 @@ public static class AvailabilityEndpoints
         }).WithTags("Bookings");
 
         return app;
+    }
+
+    private static List<object> GenerateUnavailableSlots(BookingSettingsState settings)
+    {
+        var slots = new List<object>();
+        var currentTime = settings.DefaultOpenTime;
+        while (currentTime < settings.DefaultCloseTime)
+        {
+            slots.Add(new { time = currentTime.ToString("HH:mm"), isAvailable = false, availableCapacity = 0 });
+            currentTime = currentTime.Add(settings.SlotInterval);
+        }
+        return slots;
     }
 }

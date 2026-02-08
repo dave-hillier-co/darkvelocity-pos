@@ -281,6 +281,10 @@ public sealed class CustomerState
     [Id(36)] public bool IsAnonymized { get; set; }
     [Id(37)] public DateTime? AnonymizedAt { get; set; }
     [Id(38)] public string? AnonymizedHash { get; set; }
+
+    // No-show tracking
+    [Id(39)] public int NoShowCount { get; set; }
+    [Id(40)] public DateTime? LastNoShowAt { get; set; }
 }
 
 [GenerateSerializer]

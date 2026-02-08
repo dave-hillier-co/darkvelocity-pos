@@ -13,7 +13,8 @@ public record AddBookingToCalendarCommand(
     [property: Id(2)] TimeOnly Time,
     [property: Id(3)] int PartySize,
     [property: Id(4)] string GuestName,
-    [property: Id(5)] BookingStatus Status);
+    [property: Id(5)] BookingStatus Status,
+    [property: Id(6)] TimeSpan? Duration = null);
 
 [GenerateSerializer]
 public record UpdateBookingInCalendarCommand(
