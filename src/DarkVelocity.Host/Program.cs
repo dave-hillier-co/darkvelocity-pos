@@ -128,6 +128,7 @@ app.MapOAuthEndpoints()
    .MapExpenseEndpoints()
    .MapReportingEndpoints()
    .MapCostingEndpoints()
+   .MapOrderingEndpoints()
    .MapSystemEndpoints();
 
 app.Run();
