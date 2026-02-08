@@ -123,6 +123,8 @@ public class TestOrganizationBootstrap
 
     public async Task BootstrapUsersAsync()
     {
+        var emailLookup = _grainFactory.GetGrain<IEmailLookupGrain>(GrainKeys.EmailLookup());
+
         foreach (var user in UkTestData.Users.All)
         {
             var grain = _grainFactory.GetGrain<IUserGrain>(GrainKeys.User(OrgId, user.Id));
@@ -144,6 +146,11 @@ public class TestOrganizationBootstrap
 
             foreach (var groupId in user.GroupIds)
                 await grain.AddToGroupAsync(groupId);
+
+            await emailLookup.RegisterEmailAsync(user.Email, OrgId, user.Id);
+
+            foreach (var additionalEmail in user.AdditionalEmails)
+                await emailLookup.RegisterEmailAsync(additionalEmail, OrgId, user.Id);
         }
     }
 

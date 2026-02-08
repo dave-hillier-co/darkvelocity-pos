@@ -133,6 +133,20 @@ public static class UkTestData
                 SiteAccess = [LondonSiteId, ManchesterSiteId, BirminghamSiteId, EdinburghSiteId],
                 GroupIds = [AdminsGroupId]
             },
+            // Owner - Developer
+            new()
+            {
+                Id = Guid.Parse("32000000-0000-0000-0000-000000000099"),
+                Email = "dave.hillier1@gmail.com",
+                DisplayName = "Dave Hillier",
+                FirstName = "Dave",
+                LastName = "Hillier",
+                Type = UserType.Owner,
+                Pin = "9999",
+                AdditionalEmails = ["davehillier81@hotmail.com"],
+                SiteAccess = [LondonSiteId, ManchesterSiteId, BirminghamSiteId, EdinburghSiteId],
+                GroupIds = [AdminsGroupId]
+            },
             // Admin - Operations Director
             new()
             {
@@ -342,6 +356,7 @@ public static class UkTestData
         public string? LastName { get; init; }
         public required UserType Type { get; init; }
         public string? Pin { get; init; }
+        public List<string> AdditionalEmails { get; init; } = [];
         public List<Guid> SiteAccess { get; init; } = [];
         public List<Guid> GroupIds { get; init; } = [];
     }
