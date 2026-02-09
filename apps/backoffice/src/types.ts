@@ -1,3 +1,42 @@
+// HAL+JSON types (centralized)
+export interface HalLink {
+  href: string
+  title?: string
+  templated?: boolean
+}
+
+export interface HalResource {
+  _links: Record<string, HalLink>
+}
+
+export interface HalCollection<T> extends HalResource {
+  _embedded: {
+    items: T[]
+  }
+  count: number
+  total?: number
+}
+
+// Document versioning types (CMS pattern)
+export interface VersionInfo {
+  version: number
+  publishedAt: string
+  publishedBy: string
+  changeNote?: string
+}
+
+export interface DocumentSnapshot<T> {
+  documentId: string
+  currentVersion: number
+  status: 'draft' | 'published' | 'archived'
+  hasDraft: boolean
+  content: T
+  versions?: VersionInfo[]
+  createdAt: string
+  updatedAt: string
+  _links: Record<string, HalLink>
+}
+
 // Auth types
 export interface AdminUser {
   id: string
@@ -82,22 +121,4 @@ export interface Supplier {
   paymentTermsDays: number
   leadTimeDays: number
   isActive: boolean
-}
-
-// HAL types
-export interface HalLink {
-  href: string
-  title?: string
-}
-
-export interface HalResource {
-  _links: Record<string, HalLink>
-}
-
-export interface HalCollection<T> extends HalResource {
-  _embedded: {
-    items: T[]
-  }
-  count: number
-  total?: number
 }

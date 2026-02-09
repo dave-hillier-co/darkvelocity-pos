@@ -1,15 +1,41 @@
-import type { Ingredient } from '../types'
-
-const sampleIngredients: Ingredient[] = [
-  { id: '1', code: 'BEEF-MINCE', name: 'Beef Mince', unitOfMeasure: 'kg', category: 'proteins', storageType: 'chilled', reorderLevel: 5, currentStock: 8.5 },
-  { id: '2', code: 'CHICKEN-BREAST', name: 'Chicken Breast', unitOfMeasure: 'kg', category: 'proteins', storageType: 'chilled', reorderLevel: 4, currentStock: 3.2 },
-  { id: '3', code: 'COD-FILLET', name: 'Cod Fillet', unitOfMeasure: 'kg', category: 'proteins', storageType: 'frozen', reorderLevel: 3, currentStock: 6.0 },
-  { id: '4', code: 'POTATO', name: 'Potatoes', unitOfMeasure: 'kg', category: 'produce', storageType: 'ambient', reorderLevel: 10, currentStock: 25.0 },
-  { id: '5', code: 'LETTUCE', name: 'Romaine Lettuce', unitOfMeasure: 'unit', category: 'produce', storageType: 'chilled', reorderLevel: 5, currentStock: 4 },
-  { id: '6', code: 'CHEESE-CHEDDAR', name: 'Cheddar Cheese', unitOfMeasure: 'kg', category: 'dairy', storageType: 'chilled', reorderLevel: 2, currentStock: 1.5 },
-]
+import { useState, useEffect } from 'react'
+import { useInventory } from '../contexts/InventoryContext'
 
 export default function IngredientsPage() {
+  const { items, isLoading, error, loadItems } = useInventory()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showAddDialog, setShowAddDialog] = useState(false)
+
+  useEffect(() => {
+    loadItems()
+  }, [])
+
+  const filteredItems = items.filter((item) => {
+    const matchesSearch =
+      item.ingredientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
+  })
+
+  function isLowStock(item: typeof items[number]): boolean {
+    return item.reorderPoint != null && item.currentQuantity <= item.reorderPoint
+  }
+
+  if (error) {
+    return (
+      <>
+        <hgroup>
+          <h1>Ingredients</h1>
+          <p>Track raw materials and stock levels</p>
+        </hgroup>
+        <article aria-label="Error">
+          <p>{error}</p>
+          <button onClick={() => loadItems()}>Retry</button>
+        </article>
+      </>
+    )
+  }
+
   return (
     <>
       <hgroup>
@@ -21,15 +47,33 @@ export default function IngredientsPage() {
         <input
           type="search"
           placeholder="Search ingredients..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: '300px' }}
+          aria-label="Search ingredients"
         />
-        <button>Add Ingredient</button>
+        <button onClick={() => setShowAddDialog(true)}>Add Ingredient</button>
       </div>
 
-      <table>
+      {showAddDialog && (
+        <dialog open>
+          <article>
+            <header>
+              <button aria-label="Close" rel="prev" onClick={() => setShowAddDialog(false)} />
+              <h3>Add Ingredient</h3>
+            </header>
+            <p>Ingredient creation form will be connected to the initialize inventory API.</p>
+            <footer>
+              <button className="secondary" onClick={() => setShowAddDialog(false)}>Close</button>
+            </footer>
+          </article>
+        </dialog>
+      )}
+
+      <table aria-busy={isLoading}>
         <thead>
           <tr>
-            <th>Code</th>
+            <th>SKU</th>
             <th>Name</th>
             <th>Category</th>
             <th>Stock</th>
@@ -39,18 +83,18 @@ export default function IngredientsPage() {
           </tr>
         </thead>
         <tbody>
-          {sampleIngredients.map((ingredient) => {
-            const isLow = (ingredient.currentStock ?? 0) <= ingredient.reorderLevel
+          {filteredItems.map((item) => {
+            const low = isLowStock(item)
             return (
-              <tr key={ingredient.id}>
-                <td><code>{ingredient.code}</code></td>
-                <td>{ingredient.name}</td>
-                <td>{ingredient.category}</td>
-                <td>{ingredient.currentStock?.toFixed(2)}</td>
-                <td>{ingredient.unitOfMeasure}</td>
+              <tr key={item.ingredientId}>
+                <td><code>{item.sku}</code></td>
+                <td>{item.ingredientName}</td>
+                <td>{item.category}</td>
+                <td>{item.currentQuantity.toFixed(2)}</td>
+                <td>{item.unit}</td>
                 <td>
-                  <span className={`badge ${isLow ? 'badge-warning' : 'badge-success'}`}>
-                    {isLow ? 'Low Stock' : 'OK'}
+                  <span className={`badge ${low ? 'badge-warning' : 'badge-success'}`}>
+                    {low ? 'Low Stock' : 'OK'}
                   </span>
                 </td>
                 <td>
@@ -63,6 +107,12 @@ export default function IngredientsPage() {
           })}
         </tbody>
       </table>
+
+      {!isLoading && filteredItems.length === 0 && (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>
+          No ingredients found
+        </p>
+      )}
     </>
   )
 }

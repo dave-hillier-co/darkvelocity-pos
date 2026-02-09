@@ -1,23 +1,6 @@
-import { useState } from 'react'
-
-interface Delivery {
-  id: string
-  deliveryNumber: string
-  purchaseOrderNumber: string | null
-  supplierName: string
-  status: 'pending' | 'accepted' | 'rejected'
-  lineCount: number
-  totalValue: number
-  hasDiscrepancies: boolean
-  receivedAt: string
-}
-
-const sampleDeliveries: Delivery[] = [
-  { id: '1', deliveryNumber: 'DEL-2026-0015', purchaseOrderNumber: 'PO-2026-0001', supplierName: 'Fresh Foods Ltd', status: 'pending', lineCount: 5, totalValue: 445.00, hasDiscrepancies: true, receivedAt: '2026-01-26' },
-  { id: '2', deliveryNumber: 'DEL-2026-0014', purchaseOrderNumber: 'PO-2025-0089', supplierName: 'Beverage Distributors', status: 'accepted', lineCount: 8, totalValue: 620.00, hasDiscrepancies: false, receivedAt: '2026-01-25' },
-  { id: '3', deliveryNumber: 'DEL-2026-0013', purchaseOrderNumber: null, supplierName: 'Quality Meats', status: 'accepted', lineCount: 2, totalValue: 180.00, hasDiscrepancies: false, receivedAt: '2026-01-24' },
-  { id: '4', deliveryNumber: 'DEL-2026-0012', purchaseOrderNumber: 'PO-2025-0088', supplierName: 'Fresh Foods Ltd', status: 'accepted', lineCount: 4, totalValue: 280.00, hasDiscrepancies: true, receivedAt: '2026-01-22' },
-]
+import { useEffect } from 'react'
+import { useProcurement } from '../contexts/ProcurementContext'
+import type { Delivery } from '../reducers/procurementReducer'
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-GB', {
@@ -44,13 +27,26 @@ function getStatusBadgeClass(status: Delivery['status']): string {
 }
 
 export default function DeliveriesPage() {
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const {
+    deliveries,
+    isLoading,
+    error,
+    statusFilter,
+    loadDeliveries,
+    acceptDelivery,
+    rejectDelivery,
+    setStatusFilter,
+  } = useProcurement()
+
+  useEffect(() => {
+    loadDeliveries()
+  }, [])
 
   const filteredDeliveries = statusFilter === 'all'
-    ? sampleDeliveries
-    : sampleDeliveries.filter((d) => d.status === statusFilter)
+    ? deliveries
+    : deliveries.filter((d: Delivery) => d.status === statusFilter)
 
-  const pendingCount = sampleDeliveries.filter((d) => d.status === 'pending').length
+  const pendingCount = deliveries.filter((d: Delivery) => d.status === 'pending').length
 
   return (
     <>
@@ -58,6 +54,12 @@ export default function DeliveriesPage() {
         <h1>Deliveries</h1>
         <p>Receive and manage supplier deliveries</p>
       </hgroup>
+
+      {error && (
+        <article style={{ background: 'var(--pico-del-color)', padding: '1rem', marginBottom: '1rem' }}>
+          <p>{error}</p>
+        </article>
+      )}
 
       {pendingCount > 0 && (
         <article style={{ marginBottom: '1rem', background: 'var(--pico-mark-background-color)', padding: '1rem' }}>
@@ -90,7 +92,7 @@ export default function DeliveriesPage() {
         <button>Record Ad-hoc Delivery</button>
       </div>
 
-      <table>
+      <table aria-busy={isLoading}>
         <thead>
           <tr>
             <th>Delivery #</th>
@@ -104,7 +106,7 @@ export default function DeliveriesPage() {
           </tr>
         </thead>
         <tbody>
-          {filteredDeliveries.map((delivery) => (
+          {filteredDeliveries.map((delivery: Delivery) => (
             <tr key={delivery.id}>
               <td>
                 <strong>{delivery.deliveryNumber}</strong>
@@ -114,7 +116,7 @@ export default function DeliveriesPage() {
                   </span>
                 )}
               </td>
-              <td>{delivery.purchaseOrderNumber || <span style={{ color: 'var(--pico-muted-color)' }}>Ad-hoc</span>}</td>
+              <td>{delivery.purchaseOrderId || <span style={{ color: 'var(--pico-muted-color)' }}>Ad-hoc</span>}</td>
               <td>{delivery.supplierName}</td>
               <td>
                 <span className={`badge ${getStatusBadgeClass(delivery.status)}`}>
@@ -131,10 +133,18 @@ export default function DeliveriesPage() {
                   </button>
                   {delivery.status === 'pending' && (
                     <>
-                      <button className="outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                      <button
+                        className="outline"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                        onClick={() => acceptDelivery(delivery.id)}
+                      >
                         Accept
                       </button>
-                      <button className="secondary outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                      <button
+                        className="secondary outline"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                        onClick={() => rejectDelivery(delivery.id, 'Rejected from deliveries page')}
+                      >
                         Reject
                       </button>
                     </>
@@ -146,7 +156,7 @@ export default function DeliveriesPage() {
         </tbody>
       </table>
 
-      {filteredDeliveries.length === 0 && (
+      {!isLoading && filteredDeliveries.length === 0 && (
         <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>
           No deliveries found
         </p>

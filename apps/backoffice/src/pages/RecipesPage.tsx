@@ -1,22 +1,6 @@
-import { useState } from 'react'
-
-interface Recipe {
-  id: string
-  code: string
-  menuItemName: string
-  portionYield: number
-  currentCostPerPortion: number
-  ingredientCount: number
-  isActive: boolean
-}
-
-const sampleRecipes: Recipe[] = [
-  { id: '1', code: 'RCP-BURGER-001', menuItemName: 'Classic Burger', portionYield: 1, currentCostPerPortion: 3.75, ingredientCount: 5, isActive: true },
-  { id: '2', code: 'RCP-FISH-001', menuItemName: 'Fish & Chips', portionYield: 1, currentCostPerPortion: 4.20, ingredientCount: 4, isActive: true },
-  { id: '3', code: 'RCP-PASTA-001', menuItemName: 'Spaghetti Bolognese', portionYield: 4, currentCostPerPortion: 2.50, ingredientCount: 8, isActive: true },
-  { id: '4', code: 'RCP-STEAK-001', menuItemName: 'Ribeye Steak', portionYield: 1, currentCostPerPortion: 8.50, ingredientCount: 3, isActive: true },
-  { id: '5', code: 'RCP-SALAD-001', menuItemName: 'Caesar Salad', portionYield: 1, currentCostPerPortion: 2.80, ingredientCount: 6, isActive: false },
-]
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useRecipeCms } from '../contexts/RecipeCmsContext'
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-GB', {
@@ -26,15 +10,38 @@ function formatCurrency(amount: number): string {
 }
 
 export default function RecipesPage() {
+  const navigate = useNavigate()
+  const { recipes, categories, isLoading, error, loadRecipes, loadCategories } = useRecipeCms()
   const [searchTerm, setSearchTerm] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
-  const filteredRecipes = sampleRecipes.filter((recipe) => {
-    const matchesSearch = recipe.menuItemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      recipe.code.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = showInactive || recipe.isActive
-    return matchesSearch && matchesStatus
+  useEffect(() => {
+    loadRecipes()
+    loadCategories()
+  }, [])
+
+  const filteredRecipes = recipes.filter((recipe) => {
+    const matchesSearch = recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesArchived = showArchived || !recipe.isArchived
+    const matchesCategory = categoryFilter === 'all' || recipe.categoryId === categoryFilter
+    return matchesSearch && matchesArchived && matchesCategory
   })
+
+  if (error) {
+    return (
+      <>
+        <hgroup>
+          <h1>Recipes</h1>
+          <p>Manage recipe costing and ingredients</p>
+        </hgroup>
+        <article aria-label="Error">
+          <p>{error}</p>
+          <button onClick={() => loadRecipes()}>Retry</button>
+        </article>
+      </>
+    )
+  }
 
   return (
     <>
@@ -51,50 +58,72 @@ export default function RecipesPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ maxWidth: '300px' }}
+            aria-label="Search recipes"
           />
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ maxWidth: '200px' }}
+            aria-label="Filter by category"
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat.documentId} value={cat.documentId}>{cat.name}</option>
+            ))}
+          </select>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <input
               type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
             />
-            Show inactive
+            Show archived
           </label>
         </div>
-        <button>New Recipe</button>
+        <button onClick={() => navigate('/menu/recipes/new')}>New Recipe</button>
       </div>
 
-      <table>
+      <table aria-busy={isLoading}>
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Menu Item</th>
-            <th>Yield</th>
+            <th>Name</th>
             <th>Cost/Portion</th>
-            <th>Ingredients</th>
+            <th>Version</th>
+            <th>Menu Items</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {filteredRecipes.map((recipe) => (
-            <tr key={recipe.id}>
-              <td><code>{recipe.code}</code></td>
-              <td>{recipe.menuItemName}</td>
-              <td>{recipe.portionYield}</td>
-              <td>{formatCurrency(recipe.currentCostPerPortion)}</td>
-              <td>{recipe.ingredientCount}</td>
+            <tr key={recipe.documentId}>
+              <td>{recipe.name}</td>
+              <td>{formatCurrency(recipe.costPerPortion)}</td>
+              <td>{recipe.publishedVersion ?? '-'}</td>
+              <td>{recipe.linkedMenuItemCount}</td>
               <td>
-                <span className={`badge ${recipe.isActive ? 'badge-success' : 'badge-danger'}`}>
-                  {recipe.isActive ? 'Active' : 'Inactive'}
-                </span>
+                {recipe.isArchived ? (
+                  <span className="badge badge-danger">Archived</span>
+                ) : recipe.hasDraft ? (
+                  <span className="badge badge-warning">Draft</span>
+                ) : (
+                  <span className="badge badge-success">Published</span>
+                )}
               </td>
               <td>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="secondary outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                  <button
+                    className="secondary outline"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                    onClick={() => navigate(`/menu/recipes/${recipe.documentId}`)}
+                  >
                     Edit
                   </button>
-                  <button className="secondary outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                  <button
+                    className="secondary outline"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                    onClick={() => navigate(`/menu/recipes/${recipe.documentId}`)}
+                  >
                     Cost
                   </button>
                 </div>
@@ -104,7 +133,7 @@ export default function RecipesPage() {
         </tbody>
       </table>
 
-      {filteredRecipes.length === 0 && (
+      {!isLoading && filteredRecipes.length === 0 && (
         <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>
           No recipes found
         </p>

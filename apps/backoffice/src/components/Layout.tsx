@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 const navSections = [
   {
@@ -12,6 +13,8 @@ const navSections = [
     links: [
       { to: '/menu/items', label: 'Item List' },
       { to: '/menu/categories', label: 'Categories' },
+      { to: '/menu/modifier-blocks', label: 'Modifier Blocks' },
+      { to: '/menu/tags', label: 'Content Tags' },
       { to: '/menu/recipes', label: 'Recipes' },
     ],
   },
@@ -31,6 +34,26 @@ const navSections = [
     ],
   },
   {
+    title: 'People',
+    links: [
+      { to: '/employees', label: 'Employees' },
+      { to: '/customers', label: 'Customers' },
+    ],
+  },
+  {
+    title: 'Bookings',
+    links: [
+      { to: '/bookings', label: 'Reservations' },
+      { to: '/bookings/floor-plans', label: 'Floor Plans' },
+    ],
+  },
+  {
+    title: 'Channels',
+    links: [
+      { to: '/channels', label: 'Delivery Platforms' },
+    ],
+  },
+  {
     title: 'Analytics',
     links: [
       { to: '/reports', label: 'Sales Reports' },
@@ -41,6 +64,7 @@ const navSections = [
 
 export default function Layout() {
   const { pathname } = useLocation()
+  const { user, logout } = useAuth()
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -73,8 +97,8 @@ export default function Layout() {
         </nav>
 
         <footer>
-          <small>Admin User</small>
-          <button className="secondary outline" style={{ marginTop: '0.5rem' }}>
+          <small>{user?.displayName ?? 'Admin User'}</small>
+          <button className="secondary outline" style={{ marginTop: '0.5rem' }} onClick={logout}>
             Log Out
           </button>
         </footer>

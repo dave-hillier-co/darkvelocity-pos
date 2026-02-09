@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { HalResource } from '../types'
 
 // Types matching backend contracts
 export interface InventoryState {
@@ -33,21 +34,6 @@ export interface StockBatch {
   deliveryId?: string
   location?: string
   receivedAt: string
-}
-
-export interface HalResource {
-  _links: Record<string, { href: string }>
-}
-
-export interface HalCollection<T> {
-  _embedded: {
-    items: T[]
-  }
-  _links: {
-    self: { href: string }
-  }
-  total?: number
-  count: number
 }
 
 // Request types matching backend
@@ -116,4 +102,15 @@ export async function adjustInventory(ingredientId: string, request: AdjustInven
 export async function getInventoryLevel(ingredientId: string): Promise<InventoryLevelInfo & HalResource> {
   const endpoint = apiClient.buildOrgSitePath(`/inventory/${ingredientId}/level`)
   return apiClient.get(endpoint)
+}
+
+export interface InventorySearchFilter {
+  query?: string
+  category?: string
+  belowReorderPoint?: boolean
+}
+
+export async function searchInventory(filter: InventorySearchFilter = {}): Promise<{ items: InventoryState[] }> {
+  const endpoint = apiClient.buildOrgSitePath('/inventory/batch/search')
+  return apiClient.post(endpoint, filter)
 }

@@ -1,4 +1,26 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useReports } from '../contexts/ReportsContext'
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+  }).format(amount)
+}
+
 export default function DashboardPage() {
+  const navigate = useNavigate()
+  const { dailySales, costAlerts, isLoading, error, loadDailySales, loadCostAlerts } = useReports()
+
+  useEffect(() => {
+    loadDailySales()
+    loadCostAlerts()
+  }, [])
+
+  const todaySales = dailySales.length > 0 ? dailySales[dailySales.length - 1] : null
+  const activeAlertCount = costAlerts.filter((a) => !a.isAcknowledged).length
+
   return (
     <>
       <hgroup>
@@ -6,36 +28,54 @@ export default function DashboardPage() {
         <p>Overview of today's performance</p>
       </hgroup>
 
+      {error && (
+        <article style={{ background: 'var(--pico-del-color)', padding: '1rem', marginBottom: '1rem' }}>
+          <p>{error}</p>
+        </article>
+      )}
+
       <div className="cards-grid">
-        <article>
+        <article aria-busy={isLoading}>
           <header>Today's Sales</header>
-          <p style={{ fontSize: '2rem', fontWeight: 700 }}>$1,234.56</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700 }}>
+            {todaySales ? formatCurrency(todaySales.grossRevenue) : '--'}
+          </p>
           <footer>
-            <small>+12% from yesterday</small>
+            <small>{todaySales ? `${todaySales.orderCount} orders` : 'No data yet'}</small>
           </footer>
         </article>
 
-        <article>
+        <article aria-busy={isLoading}>
           <header>Orders</header>
-          <p style={{ fontSize: '2rem', fontWeight: 700 }}>47</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700 }}>
+            {todaySales ? todaySales.orderCount : '--'}
+          </p>
           <footer>
-            <small>Average $26.27 per order</small>
+            <small>
+              {todaySales && todaySales.orderCount > 0
+                ? `Average ${formatCurrency(todaySales.grossRevenue / todaySales.orderCount)} per order`
+                : 'No orders today'}
+            </small>
           </footer>
         </article>
 
-        <article>
+        <article aria-busy={isLoading}>
           <header>Gross Margin</header>
-          <p style={{ fontSize: '2rem', fontWeight: 700 }}>68.5%</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700 }}>
+            {todaySales ? `${todaySales.grossMarginPercent.toFixed(1)}%` : '--'}
+          </p>
           <footer>
-            <small>COGS: $389.23</small>
+            <small>{todaySales ? `COGS: ${formatCurrency(todaySales.totalCOGS)}` : 'No data'}</small>
           </footer>
         </article>
 
-        <article>
-          <header>Low Stock Alerts</header>
-          <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--pico-del-color)' }}>3</p>
+        <article aria-busy={isLoading}>
+          <header>Cost Alerts</header>
+          <p style={{ fontSize: '2rem', fontWeight: 700, color: activeAlertCount > 0 ? 'var(--pico-del-color)' : undefined }}>
+            {activeAlertCount}
+          </p>
           <footer>
-            <small>Items below reorder level</small>
+            <small>{activeAlertCount > 0 ? 'Items requiring attention' : 'All clear'}</small>
           </footer>
         </article>
       </div>
@@ -43,9 +83,9 @@ export default function DashboardPage() {
       <section style={{ marginTop: '2rem' }}>
         <h2>Quick Actions</h2>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <button>Create Purchase Order</button>
-          <button className="secondary">Record Delivery</button>
-          <button className="secondary">View Reports</button>
+          <button onClick={() => navigate('/procurement/purchase-orders')}>Upload Purchase Document</button>
+          <button className="secondary" onClick={() => navigate('/procurement/deliveries')}>View Deliveries</button>
+          <button className="secondary" onClick={() => navigate('/reports/margins')}>View Margins</button>
         </div>
       </section>
     </>

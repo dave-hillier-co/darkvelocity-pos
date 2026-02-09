@@ -1,61 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useInventory } from '../contexts/InventoryContext'
+import { useAuth } from '../contexts/AuthContext'
 
-interface StockLevel {
-  id: string
-  ingredientCode: string
-  ingredientName: string
-  category: string
-  currentStock: number
-  unit: string
-  reorderLevel: number
-  reorderQuantity: number
-  lastDelivery: string
-  averageWeeklyUsage: number
-  daysRemaining: number
-}
-
-const sampleStock: StockLevel[] = [
-  { id: '1', ingredientCode: 'BEEF-MINCE', ingredientName: 'Beef Mince', category: 'Proteins', currentStock: 12.5, unit: 'kg', reorderLevel: 5, reorderQuantity: 20, lastDelivery: '2026-01-24', averageWeeklyUsage: 8.5, daysRemaining: 10 },
-  { id: '2', ingredientCode: 'CHICKEN-BREAST', ingredientName: 'Chicken Breast', category: 'Proteins', currentStock: 3.2, unit: 'kg', reorderLevel: 5, reorderQuantity: 15, lastDelivery: '2026-01-22', averageWeeklyUsage: 6.0, daysRemaining: 4 },
-  { id: '3', ingredientCode: 'TOMATO-FRESH', ingredientName: 'Fresh Tomatoes', category: 'Produce', currentStock: 8.0, unit: 'kg', reorderLevel: 3, reorderQuantity: 10, lastDelivery: '2026-01-25', averageWeeklyUsage: 4.0, daysRemaining: 14 },
-  { id: '4', ingredientCode: 'LETTUCE', ingredientName: 'Iceberg Lettuce', category: 'Produce', currentStock: 2.0, unit: 'unit', reorderLevel: 5, reorderQuantity: 12, lastDelivery: '2026-01-25', averageWeeklyUsage: 8.0, daysRemaining: 2 },
-  { id: '5', ingredientCode: 'CHEESE-CHEDDAR', ingredientName: 'Cheddar Cheese', category: 'Dairy', currentStock: 4.5, unit: 'kg', reorderLevel: 2, reorderQuantity: 5, lastDelivery: '2026-01-20', averageWeeklyUsage: 3.0, daysRemaining: 11 },
-  { id: '6', ingredientCode: 'BREAD-BURGER', ingredientName: 'Burger Buns', category: 'Bakery', currentStock: 0, unit: 'unit', reorderLevel: 24, reorderQuantity: 48, lastDelivery: '2026-01-23', averageWeeklyUsage: 35, daysRemaining: 0 },
-]
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-  })
-}
-
-function getStockStatusClass(current: number, reorderLevel: number): string {
-  if (current <= 0) return 'badge-danger'
-  if (current <= reorderLevel) return 'badge-warning'
+function getStockStatusClass(currentQuantity: number, reorderPoint?: number): string {
+  if (currentQuantity <= 0) return 'badge-danger'
+  if (reorderPoint != null && currentQuantity <= reorderPoint) return 'badge-warning'
   return 'badge-success'
 }
 
-function getStockStatusLabel(current: number, reorderLevel: number): string {
-  if (current <= 0) return 'Out of Stock'
-  if (current <= reorderLevel) return 'Low Stock'
+function getStockStatusLabel(currentQuantity: number, reorderPoint?: number): string {
+  if (currentQuantity <= 0) return 'Out of Stock'
+  if (reorderPoint != null && currentQuantity <= reorderPoint) return 'Low Stock'
   return 'In Stock'
 }
 
 export default function StockPage() {
+  const { items, isLoading, error, loadItems, adjustInventory } = useInventory()
+  const auth = useAuth()
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+  const [adjustingItemId, setAdjustingItemId] = useState<string | null>(null)
+  const [adjustQuantity, setAdjustQuantity] = useState('')
+  const [adjustReason, setAdjustReason] = useState('')
 
-  const categories = [...new Set(sampleStock.map((s) => s.category))]
+  useEffect(() => {
+    loadItems()
+  }, [])
 
-  const filteredStock = sampleStock.filter((item) => {
+  const categories = [...new Set(items.map((item) => item.category))].sort()
+
+  const filteredStock = items.filter((item) => {
     const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
-    const matchesLowStock = !showLowStockOnly || item.currentStock <= item.reorderLevel
+    const isLow = item.reorderPoint != null && item.currentQuantity <= item.reorderPoint
+    const matchesLowStock = !showLowStockOnly || isLow || item.currentQuantity <= 0
     return matchesCategory && matchesLowStock
   })
 
-  const lowStockCount = sampleStock.filter((s) => s.currentStock <= s.reorderLevel).length
-  const outOfStockCount = sampleStock.filter((s) => s.currentStock <= 0).length
+  const lowStockCount = items.filter(
+    (item) => item.reorderPoint != null && item.currentQuantity <= item.reorderPoint && item.currentQuantity > 0
+  ).length
+  const outOfStockCount = items.filter((item) => item.currentQuantity <= 0).length
+
+  async function handleAdjust() {
+    if (!adjustingItemId || !adjustQuantity || !adjustReason) return
+    await adjustInventory(adjustingItemId, {
+      newQuantity: parseFloat(adjustQuantity),
+      reason: adjustReason,
+      adjustedBy: auth.user?.email ?? 'unknown',
+    })
+    setAdjustingItemId(null)
+    setAdjustQuantity('')
+    setAdjustReason('')
+  }
+
+  if (error) {
+    return (
+      <>
+        <hgroup>
+          <h1>Stock Levels</h1>
+          <p>Monitor ingredient stock and reorder points</p>
+        </hgroup>
+        <article aria-label="Error">
+          <p>{error}</p>
+          <button onClick={() => loadItems()}>Retry</button>
+        </article>
+      </>
+    )
+  }
 
   return (
     <>
@@ -67,7 +78,7 @@ export default function StockPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <article style={{ margin: 0, padding: '1rem' }}>
           <small style={{ color: 'var(--pico-muted-color)' }}>Total Items</small>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>{sampleStock.length}</p>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>{items.length}</p>
         </article>
         <article style={{ margin: 0, padding: '1rem', background: outOfStockCount > 0 ? 'var(--pico-del-color)' : undefined }}>
           <small style={{ color: outOfStockCount > 0 ? 'inherit' : 'var(--pico-muted-color)' }}>Out of Stock</small>
@@ -85,6 +96,7 @@ export default function StockPage() {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{ maxWidth: '200px' }}
+            aria-label="Filter by category"
           >
             <option value="all">All Categories</option>
             {categories.map((cat) => (
@@ -106,55 +118,102 @@ export default function StockPage() {
         </div>
       </div>
 
-      <table>
+      {/* Adjust dialog */}
+      {adjustingItemId && (
+        <dialog open>
+          <article>
+            <header>
+              <button aria-label="Close" rel="prev" onClick={() => setAdjustingItemId(null)} />
+              <h3>Adjust Inventory</h3>
+            </header>
+            <label>
+              New Quantity
+              <input
+                type="number"
+                step="0.01"
+                value={adjustQuantity}
+                onChange={(e) => setAdjustQuantity(e.target.value)}
+                placeholder="Enter new quantity"
+                required
+              />
+            </label>
+            <label>
+              Reason
+              <input
+                type="text"
+                value={adjustReason}
+                onChange={(e) => setAdjustReason(e.target.value)}
+                placeholder="Reason for adjustment"
+                required
+              />
+            </label>
+            <footer>
+              <button className="secondary" onClick={() => setAdjustingItemId(null)}>Cancel</button>
+              <button
+                onClick={handleAdjust}
+                disabled={!adjustQuantity || !adjustReason}
+                aria-busy={isLoading}
+              >
+                Adjust
+              </button>
+            </footer>
+          </article>
+        </dialog>
+      )}
+
+      <table aria-busy={isLoading}>
         <thead>
           <tr>
             <th>Ingredient</th>
             <th>Category</th>
             <th>Current</th>
             <th>Reorder At</th>
+            <th>Par Level</th>
             <th>Status</th>
-            <th>Days Left</th>
-            <th>Last Delivery</th>
+            <th>Last Received</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {filteredStock.map((item) => (
-            <tr key={item.id}>
+            <tr key={item.ingredientId}>
               <td>
                 <div>
                   <strong>{item.ingredientName}</strong>
                   <br />
-                  <small style={{ color: 'var(--pico-muted-color)' }}>{item.ingredientCode}</small>
+                  <small style={{ color: 'var(--pico-muted-color)' }}>{item.sku}</small>
                 </div>
               </td>
               <td>{item.category}</td>
               <td>
-                <strong>{item.currentStock}</strong> {item.unit}
+                <strong>{item.currentQuantity.toFixed(2)}</strong> {item.unit}
               </td>
-              <td>{item.reorderLevel} {item.unit}</td>
+              <td>{item.reorderPoint != null ? `${item.reorderPoint} ${item.unit}` : '-'}</td>
+              <td>{item.parLevel != null ? `${item.parLevel} ${item.unit}` : '-'}</td>
               <td>
-                <span className={`badge ${getStockStatusClass(item.currentStock, item.reorderLevel)}`}>
-                  {getStockStatusLabel(item.currentStock, item.reorderLevel)}
+                <span className={`badge ${getStockStatusClass(item.currentQuantity, item.reorderPoint)}`}>
+                  {getStockStatusLabel(item.currentQuantity, item.reorderPoint)}
                 </span>
               </td>
               <td>
-                {item.daysRemaining <= 0 ? (
-                  <span style={{ color: 'var(--pico-del-color)' }}>-</span>
-                ) : item.daysRemaining <= 3 ? (
-                  <span style={{ color: 'var(--pico-del-color)' }}>{item.daysRemaining}d</span>
-                ) : (
-                  <span>{item.daysRemaining}d</span>
-                )}
+                {item.lastReceivedAt
+                  ? new Date(item.lastReceivedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+                  : '-'}
               </td>
-              <td>{formatDate(item.lastDelivery)}</td>
               <td>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="secondary outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                  <button
+                    className="secondary outline"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                    onClick={() => {
+                      setAdjustingItemId(item.ingredientId)
+                      setAdjustQuantity(String(item.currentQuantity))
+                      setAdjustReason('')
+                    }}
+                  >
                     Adjust
                   </button>
-                  {item.currentStock <= item.reorderLevel && (
+                  {item.reorderPoint != null && item.currentQuantity <= item.reorderPoint && (
                     <button className="outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
                       Order
                     </button>
@@ -166,7 +225,7 @@ export default function StockPage() {
         </tbody>
       </table>
 
-      {filteredStock.length === 0 && (
+      {!isLoading && filteredStock.length === 0 && (
         <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>
           No stock items found
         </p>

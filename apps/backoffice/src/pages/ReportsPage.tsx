@@ -1,4 +1,8 @@
+import { useNavigate } from 'react-router-dom'
+
 export default function ReportsPage() {
+  const navigate = useNavigate()
+
   return (
     <>
       <hgroup>
@@ -8,18 +12,18 @@ export default function ReportsPage() {
 
       <div className="cards-grid">
         <article>
-          <header>Daily Sales & COGS</header>
-          <p>Revenue and cost of goods sold by day</p>
+          <header>Margin Analysis</header>
+          <p>Profitability analysis per menu item and daily COGS</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/reports/margins')}>View Report</button>
           </footer>
         </article>
 
         <article>
-          <header>Item Margins</header>
-          <p>Profitability analysis per menu item</p>
+          <header>Daily Sales & COGS</header>
+          <p>Revenue and cost of goods sold by day</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/reports/margins')}>View Report</button>
           </footer>
         </article>
 
@@ -27,7 +31,7 @@ export default function ReportsPage() {
           <header>Category Analysis</header>
           <p>Performance by product category</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/reports/margins')}>View Report</button>
           </footer>
         </article>
 
@@ -35,7 +39,7 @@ export default function ReportsPage() {
           <header>Supplier Analysis</header>
           <p>Spend, delivery performance, and trends</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/procurement/suppliers')}>View Report</button>
           </footer>
         </article>
 
@@ -43,15 +47,15 @@ export default function ReportsPage() {
           <header>Stock Movement</header>
           <p>Inventory usage and waste tracking</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/inventory/stock')}>View Report</button>
           </footer>
         </article>
 
         <article>
-          <header>Cash Drawer Report</header>
-          <p>Cash handling and reconciliation</p>
+          <header>Cost Alerts</header>
+          <p>Items with margin or cost changes requiring attention</p>
           <footer>
-            <button className="secondary">View Report</button>
+            <button className="secondary" onClick={() => navigate('/reports/margins')}>View Report</button>
           </footer>
         </article>
       </div>

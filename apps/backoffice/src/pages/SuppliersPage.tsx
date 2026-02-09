@@ -1,19 +1,25 @@
-import type { Supplier } from '../types'
-
-const sampleSuppliers: Supplier[] = [
-  { id: '1', code: 'FRESH01', name: 'Fresh Foods Ltd', contactEmail: 'orders@freshfoods.com', paymentTermsDays: 30, leadTimeDays: 2, isActive: true },
-  { id: '2', code: 'METRO01', name: 'Metro Wholesale', contactEmail: 'sales@metrowholesale.com', paymentTermsDays: 14, leadTimeDays: 1, isActive: true },
-  { id: '3', code: 'SEAFOOD', name: 'Ocean Catch Seafood', contactEmail: 'supply@oceancatch.com', paymentTermsDays: 7, leadTimeDays: 1, isActive: true },
-  { id: '4', code: 'DRINKS', name: 'Beverage Distributors', contactEmail: 'orders@bevdist.com', paymentTermsDays: 30, leadTimeDays: 3, isActive: true },
-]
+import { useEffect } from 'react'
+import { useProcurement } from '../contexts/ProcurementContext'
 
 export default function SuppliersPage() {
+  const { suppliers, isLoading, error, loadSuppliers } = useProcurement()
+
+  useEffect(() => {
+    loadSuppliers()
+  }, [])
+
   return (
     <>
       <hgroup>
         <h1>Suppliers</h1>
         <p>Manage your suppliers and procurement</p>
       </hgroup>
+
+      {error && (
+        <article style={{ background: 'var(--pico-del-color)', padding: '1rem', marginBottom: '1rem' }}>
+          <p>{error}</p>
+        </article>
+      )}
 
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
         <input
@@ -24,7 +30,7 @@ export default function SuppliersPage() {
         <button>Add Supplier</button>
       </div>
 
-      <table>
+      <table aria-busy={isLoading}>
         <thead>
           <tr>
             <th>Code</th>
@@ -37,7 +43,7 @@ export default function SuppliersPage() {
           </tr>
         </thead>
         <tbody>
-          {sampleSuppliers.map((supplier) => (
+          {suppliers.map((supplier) => (
             <tr key={supplier.id}>
               <td><code>{supplier.code}</code></td>
               <td>{supplier.name}</td>
@@ -58,6 +64,12 @@ export default function SuppliersPage() {
           ))}
         </tbody>
       </table>
+
+      {!isLoading && suppliers.length === 0 && (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>
+          No suppliers found
+        </p>
+      )}
     </>
   )
 }
