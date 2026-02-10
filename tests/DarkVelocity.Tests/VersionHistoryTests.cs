@@ -322,12 +322,13 @@ public class ChannelVersionHistoryTests
 
         // Act
         await grain.ConnectAsync(new ConnectChannelCommand(
-            Name: "UberEats London",
             PlatformType: DeliveryPlatformType.UberEats,
-            IntegrationType: IntegrationType.Api,
+            IntegrationType: IntegrationType.Direct,
+            Name: "UberEats London",
+            ApiCredentialsEncrypted: "encrypted-key",
+            WebhookSecret: "webhook-secret",
             ExternalChannelId: "uber-123",
-            ApiCredentials: "encrypted-key",
-            WebhookSecret: "webhook-secret"));
+            Settings: null));
 
         // Assert
         var version = await grain.GetVersionAsync();
@@ -347,14 +348,22 @@ public class ChannelVersionHistoryTests
         var channelId = Guid.NewGuid();
         var grain = GetGrain(orgId, channelId);
         await grain.ConnectAsync(new ConnectChannelCommand(
-            Name: "Deliveroo",
             PlatformType: DeliveryPlatformType.Deliveroo,
-            IntegrationType: IntegrationType.Api,
-            ExternalChannelId: "del-456"));
+            IntegrationType: IntegrationType.Direct,
+            Name: "Deliveroo",
+            ApiCredentialsEncrypted: null,
+            WebhookSecret: null,
+            ExternalChannelId: "del-456",
+            Settings: null));
         var v1 = await grain.GetVersionAsync();
 
         // Act
-        await grain.UpdateAsync(new UpdateChannelCommand(Name: "Deliveroo Updated"));
+        await grain.UpdateAsync(new UpdateChannelCommand(
+            Name: "Deliveroo Updated",
+            Status: null,
+            ApiCredentialsEncrypted: null,
+            WebhookSecret: null,
+            Settings: null));
         var v2 = await grain.GetVersionAsync();
 
         await grain.PauseAsync("Maintenance window");
@@ -402,8 +411,13 @@ public class SupplierVersionHistoryTests
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP001",
             Name: "Fresh Farms",
+            ContactName: "John Doe",
+            ContactEmail: "john@freshfarms.com",
+            ContactPhone: "555-0100",
+            Address: "123 Farm Rd",
             PaymentTermsDays: 30,
-            LeadTimeDays: 2));
+            LeadTimeDays: 2,
+            Notes: null));
 
         // Assert
         var version = await grain.GetVersionAsync();
@@ -426,13 +440,18 @@ public class SupplierVersionHistoryTests
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP002",
             Name: "Meat Co",
+            ContactName: "Jane Smith",
+            ContactEmail: "jane@meatco.com",
+            ContactPhone: "555-0200",
+            Address: "456 Butcher St",
             PaymentTermsDays: 14,
-            LeadTimeDays: 1));
+            LeadTimeDays: 1,
+            Notes: null));
         var v1 = await grain.GetVersionAsync();
 
         // Act
         await grain.AddSkuAsync(new SupplierCatalogItem(
-            skuId, null, "Chicken Breast", null, 8.50m, "kg", null, null));
+            skuId, "SKU-CHK-001", "Chicken Breast", "MC-CB-01", 8.50m, "kg", 1, 1));
         var v2 = await grain.GetVersionAsync();
 
         await grain.UpdateSkuPriceAsync(skuId, 9.00m);
@@ -530,7 +549,14 @@ public class CostingSettingsVersionHistoryTests
         // Act
         await grain.UpdateAsync(new UpdateCostingSettingsCommand(
             TargetFoodCostPercent: 25m,
-            MinimumMarginPercent: 55m));
+            TargetBeverageCostPercent: null,
+            MinimumMarginPercent: 55m,
+            WarningMarginPercent: null,
+            PriceChangeAlertThreshold: null,
+            CostIncreaseAlertThreshold: null,
+            AutoRecalculateCosts: null,
+            AutoCreateSnapshots: null,
+            SnapshotFrequencyDays: null));
         var v2 = await grain.GetVersionAsync();
 
         // Assert
@@ -581,7 +607,10 @@ public class MenuSyncVersionHistoryTests
 
         await grain.RecordItemSyncedAsync(new MenuItemMappingRecord(
             InternalMenuItemId: Guid.NewGuid(),
-            PlatformItemId: "platform-item-1"));
+            PlatformItemId: "platform-item-1",
+            PlatformCategoryId: null,
+            PriceOverride: null,
+            IsAvailable: true));
         var v2 = await grain.GetVersionAsync();
 
         await grain.CompleteAsync();
