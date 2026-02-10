@@ -55,7 +55,7 @@ public class PartialDeliveryTests
             DateTime.UtcNow.AddDays(5), "Weekly order"));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "SKU-GB", "Ground Beef", 100, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Ground Beef", 100, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
