@@ -120,10 +120,19 @@ public class PurchaseOrderGrain : JournaledGrain<PurchaseOrderState, IPurchaseOr
         var key = this.GetPrimaryKeyString();
         var (orgId, _, poId) = GrainKeys.ParseOrgEntity(key);
 
-        // Get supplier name
-        var supplierGrain = _grainFactory.GetGrain<ISupplierGrain>(
-            GrainKeys.Supplier(orgId, command.SupplierId));
-        var supplierSnapshot = await supplierGrain.GetSnapshotAsync();
+        // Get supplier name (graceful fallback if supplier not yet registered)
+        string supplierName;
+        try
+        {
+            var supplierGrain = _grainFactory.GetGrain<ISupplierGrain>(
+                GrainKeys.Supplier(orgId, command.SupplierId));
+            var supplierSnapshot = await supplierGrain.GetSnapshotAsync();
+            supplierName = supplierSnapshot.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            supplierName = command.SupplierId.ToString();
+        }
 
         var orderNumber = $"PO-{DateTime.UtcNow:yyyyMMdd}-{poId.ToString()[..8].ToUpperInvariant()}";
 
@@ -133,7 +142,7 @@ public class PurchaseOrderGrain : JournaledGrain<PurchaseOrderState, IPurchaseOr
             OrgId = orgId,
             OrderNumber = orderNumber,
             SupplierId = command.SupplierId,
-            SupplierName = supplierSnapshot.Name,
+            SupplierName = supplierName,
             LocationId = command.LocationId,
             CreatedByUserId = command.CreatedByUserId,
             ExpectedDeliveryDate = command.ExpectedDeliveryDate,
@@ -143,7 +152,7 @@ public class PurchaseOrderGrain : JournaledGrain<PurchaseOrderState, IPurchaseOr
         await ConfirmEvents();
 
         _logger.LogInformation("Purchase order created: {OrderNumber} for supplier {Supplier}",
-            orderNumber, supplierSnapshot.Name);
+            orderNumber, supplierName);
 
         return ToSnapshot();
     }

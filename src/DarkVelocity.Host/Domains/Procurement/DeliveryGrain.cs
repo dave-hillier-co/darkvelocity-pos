@@ -100,10 +100,19 @@ public class DeliveryGrain : JournaledGrain<DeliveryState, IDeliveryEvent>, IDel
         var key = this.GetPrimaryKeyString();
         var (orgId, _, deliveryId) = GrainKeys.ParseOrgEntity(key);
 
-        // Get supplier name
-        var supplierGrain = _grainFactory.GetGrain<ISupplierGrain>(
-            GrainKeys.Supplier(orgId, command.SupplierId));
-        var supplierSnapshot = await supplierGrain.GetSnapshotAsync();
+        // Get supplier name (graceful fallback if supplier not yet registered)
+        string supplierName;
+        try
+        {
+            var supplierGrain = _grainFactory.GetGrain<ISupplierGrain>(
+                GrainKeys.Supplier(orgId, command.SupplierId));
+            var supplierSnapshot = await supplierGrain.GetSnapshotAsync();
+            supplierName = supplierSnapshot.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            supplierName = command.SupplierId.ToString();
+        }
 
         var deliveryNumber = $"DEL-{DateTime.UtcNow:yyyyMMdd}-{deliveryId.ToString()[..8].ToUpperInvariant()}";
 
@@ -113,7 +122,7 @@ public class DeliveryGrain : JournaledGrain<DeliveryState, IDeliveryEvent>, IDel
             OrgId = orgId,
             DeliveryNumber = deliveryNumber,
             SupplierId = command.SupplierId,
-            SupplierName = supplierSnapshot.Name,
+            SupplierName = supplierName,
             PurchaseOrderId = command.PurchaseOrderId,
             LocationId = command.LocationId,
             ReceivedByUserId = command.ReceivedByUserId,
@@ -124,7 +133,7 @@ public class DeliveryGrain : JournaledGrain<DeliveryState, IDeliveryEvent>, IDel
         await ConfirmEvents();
 
         _logger.LogInformation("Delivery created: {DeliveryNumber} from {Supplier}",
-            deliveryNumber, supplierSnapshot.Name);
+            deliveryNumber, supplierName);
 
         return ToSnapshot();
     }
