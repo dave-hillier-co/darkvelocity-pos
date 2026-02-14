@@ -55,7 +55,7 @@ public class PartialDeliveryTests
             DateTime.UtcNow.AddDays(5), "Weekly order"));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Ground Beef", 100, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Ground Beef", 100, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -102,9 +102,9 @@ public class PartialDeliveryTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
 
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId1, Guid.NewGuid(), "Chicken", 50, 4.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId2, Guid.NewGuid(), "Beef", 30, 8.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId3, Guid.NewGuid(), "Pork", 20, 6.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId1, Guid.NewGuid(), "SKU", "Chicken", 50, 4.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId2, Guid.NewGuid(), "SKU", "Beef", 30, 8.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId3, Guid.NewGuid(), "SKU", "Pork", 20, 6.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -139,7 +139,7 @@ public class PartialDeliveryTests
             DateTime.UtcNow.AddDays(7), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Small Parts", 1000, 0.50m, null));
+            lineId, Guid.NewGuid(), "SKU", "Small Parts", 1000, 0.50m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -176,7 +176,7 @@ public class PartialDeliveryTests
             Guid.NewGuid(), "INV-001", null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Tomatoes",
+            lineId, Guid.NewGuid(), "SKU", "Tomatoes",
             null, 80, 2.00m, null, null, null));
 
         // Act - record short delivery discrepancy
@@ -214,11 +214,11 @@ public class PartialDeliveryTests
             Guid.NewGuid(), "INV-002", null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId1, Guid.NewGuid(), "Milk", null, 20, 3.00m, null, null, null));
+            lineId1, Guid.NewGuid(), "SKU", "Milk", null, 20, 3.00m, null, null, null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId2, Guid.NewGuid(), "Eggs", null, 10, 4.00m, null, null, null));
+            lineId2, Guid.NewGuid(), "SKU", "Eggs", null, 10, 4.00m, null, null, null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId3, Guid.NewGuid(), "Butter", null, 15, 5.00m, null, null, null));
+            lineId3, Guid.NewGuid(), "SKU", "Butter", null, 15, 5.00m, null, null, null));
 
         // Act - record different discrepancy types
         await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
@@ -258,7 +258,7 @@ public class PartialDeliveryTests
             Guid.NewGuid(), "INV-003", null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Potatoes",
+            lineId, Guid.NewGuid(), "SKU", "Potatoes",
             Guid.NewGuid(), 120, 0.50m, null, null, null));
 
         // Act - record over-delivery
@@ -294,7 +294,7 @@ public class PartialDeliveryTests
             Guid.NewGuid(), "INV-004", null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Cheese", null, 45, 8.00m, null, null, null));
+            lineId, Guid.NewGuid(), "SKU", "Cheese", null, 45, 8.00m, null, null, null));
 
         await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
             Guid.NewGuid(), lineId, DiscrepancyType.ShortDelivery, 50, 45, "5 blocks short"));
@@ -326,7 +326,7 @@ public class PartialDeliveryTests
             Guid.NewGuid(), "INV-005", null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Fresh Fish", null, 25, 15.00m,
+            lineId, Guid.NewGuid(), "SKU", "Fresh Fish", null, 25, 15.00m,
             "BATCH-FISH-001", DateTime.UtcNow.AddDays(-2), null)); // Already expired
 
         await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
@@ -392,15 +392,15 @@ public class PartialDeliveryTests
 
         // Act - add various items from direct delivery
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Organic Tomatoes",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Organic Tomatoes",
             null, 30, 3.50m, null, DateTime.UtcNow.AddDays(5), null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Fresh Herbs",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Fresh Herbs",
             null, 10, 2.00m, null, DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Local Honey",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Local Honey",
             null, 6, 8.00m, "HONEY-2024-001", DateTime.UtcNow.AddYears(1), null));
 
         // Assert
@@ -433,11 +433,11 @@ public class PartialDeliveryTests
 
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Cream",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Cream",
             null, 24, 3.50m, "CREAM-2024-001", expiryDate1, "Store in cooler"));
 
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Yogurt",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Yogurt",
             null, 48, 1.25m, "YOGURT-2024-002", expiryDate2, null));
 
         // Assert
@@ -469,12 +469,12 @@ public class PartialDeliveryTests
         // Act
         // Batched item
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Milk",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Milk",
             null, 24, 3.00m, "MILK-BATCH-001", DateTime.UtcNow.AddDays(10), null));
 
         // Unbatched item (no expiry)
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Napkins",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Napkins",
             null, 500, 0.02m, null, null, null));
 
         // Assert
@@ -509,11 +509,11 @@ public class PartialDeliveryTests
 
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item A", null, 10, 5.00m, null, null, null)); // 50
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item A", null, 10, 5.00m, null, null, null)); // 50
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item B", null, 20, 2.50m, null, null, null)); // 50
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item B", null, 20, 2.50m, null, null, null)); // 50
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item C", null, 5, 20.00m, null, null, null)); // 100
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item C", null, 5, 20.00m, null, null, null)); // 100
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
@@ -537,7 +537,7 @@ public class PartialDeliveryTests
 
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Expensive Item",
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Expensive Item",
             null, 3, 125.50m, null, null, null));
 
         // Assert

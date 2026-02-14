@@ -115,7 +115,7 @@ public class TurnTimeAnalyticsGrainTests
             SeatedAt: friday.AddMinutes(-90), DepartedAt: friday));
 
         var statsByDay = await grain.GetStatsByDayAsync();
-        statsByDay.Should().HaveCountGreaterOrEqualTo(2);
+        statsByDay.Should().HaveCountGreaterThanOrEqualTo(2);
     }
 
     // Given: a turn time analytics grain

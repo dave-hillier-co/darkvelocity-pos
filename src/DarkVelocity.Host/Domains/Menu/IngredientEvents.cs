@@ -196,6 +196,25 @@ public sealed record IngredientRestored(
     [property: Id(2)] Guid? RestoredBy
 ) : IIngredientEvent;
 
+/// <summary>
+/// Domain event: Ingredient was linked to a product.
+/// </summary>
+[GenerateSerializer]
+public sealed record IngredientLinkedToProduct(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] DateTimeOffset OccurredAt,
+    [property: Id(2)] Guid ProductId
+) : IIngredientEvent;
+
+/// <summary>
+/// Domain event: Ingredient was unlinked from its product.
+/// </summary>
+[GenerateSerializer]
+public sealed record IngredientUnlinkedFromProduct(
+    [property: Id(0)] Guid IngredientId,
+    [property: Id(1)] DateTimeOffset OccurredAt
+) : IIngredientEvent;
+
 // ============================================================================
 // Integration Events (for external notifications, NOT event sourcing)
 // ============================================================================

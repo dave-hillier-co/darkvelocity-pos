@@ -115,7 +115,8 @@ public record IngredientSnapshot(
     [property: Id(15)] string? ProducedByRecipeId,
     [property: Id(16)] bool IsSubRecipeOutput,
     [property: Id(17)] bool IsArchived,
-    [property: Id(18)] DateTimeOffset CreatedAt);
+    [property: Id(18)] DateTimeOffset CreatedAt,
+    [property: Id(19)] Guid? ProductId);
 
 /// <summary>
 /// Snapshot of an allergen declaration.
@@ -193,6 +194,10 @@ public interface IIngredientGrain : IGrainWithStringKey
     Task LinkSupplierAsync(LinkSupplierCommand command);
     Task UnlinkSupplierAsync(Guid supplierId);
     Task<IReadOnlyList<IngredientSupplierSnapshot>> GetSuppliersAsync();
+
+    // Product linkage
+    Task LinkToProductAsync(Guid productId);
+    Task UnlinkFromProductAsync();
 
     // Sub-recipe support
     Task LinkToSubRecipeAsync(string recipeDocumentId);

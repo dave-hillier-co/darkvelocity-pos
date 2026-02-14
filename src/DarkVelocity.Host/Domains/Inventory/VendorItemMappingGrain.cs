@@ -105,6 +105,8 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
                 IngredientId = bestMatch.Pattern.IngredientId,
                 IngredientName = bestMatch.Pattern.IngredientName,
                 IngredientSku = bestMatch.Pattern.IngredientSku,
+                ProductId = bestMatch.Pattern.ProductId,
+                SkuId = bestMatch.Pattern.SkuId,
                 Source = MappingSource.Auto,
                 Confidence = bestMatch.Score,
                 CreatedAt = DateTime.UtcNow
@@ -138,7 +140,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
                 match.Pattern.IngredientSku,
                 match.Score,
                 match.MatchReason,
-                MappingMatchType.FuzzyPattern));
+                MappingMatchType.FuzzyPattern,
+                match.Pattern.ProductId,
+                match.Pattern.SkuId));
         }
 
         // Get ingredient-based suggestions if candidates provided
@@ -184,6 +188,8 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             IngredientId = command.IngredientId,
             IngredientName = command.IngredientName,
             IngredientSku = command.IngredientSku,
+            ProductId = command.ProductId,
+            SkuId = command.SkuId,
             Source = command.Source,
             Confidence = command.Confidence,
             CreatedAt = DateTime.UtcNow,
@@ -208,7 +214,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             command.VendorDescription,
             command.IngredientId,
             command.IngredientName,
-            command.IngredientSku);
+            command.IngredientSku,
+            command.ProductId,
+            command.SkuId);
 
         // Update statistics
         _state.State.TotalMappingsCreated++;
@@ -234,6 +242,8 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             MappingOrigin = command.Source,
             Confidence = command.Confidence,
             LearnedFromDocumentId = command.LearnedFromDocumentId,
+            ProductId = command.ProductId,
+            SkuId = command.SkuId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
@@ -270,6 +280,8 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             IngredientId = command.IngredientId,
             IngredientName = command.IngredientName,
             IngredientSku = command.IngredientSku,
+            ProductId = command.ProductId,
+            SkuId = command.SkuId,
             Source = MappingSource.Manual,
             Confidence = 1.0m,
             CreatedAt = DateTime.UtcNow,
@@ -290,7 +302,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             command.VendorDescription,
             command.IngredientId,
             command.IngredientName,
-            command.IngredientSku);
+            command.IngredientSku,
+            command.ProductId,
+            command.SkuId);
 
         _state.State.TotalMappingsCreated++;
         _state.State.TotalManualMappings++;
@@ -311,6 +325,8 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
             IngredientSku = command.IngredientSku,
             SetBy = command.SetBy,
             ExpectedUnitPrice = command.ExpectedUnitPrice,
+            ProductId = command.ProductId,
+            SkuId = command.SkuId,
             OccurredAt = DateTime.UtcNow
         };
         await PublishEventAsync(evt);
@@ -409,7 +425,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
                 m.IngredientSku,
                 m.UsageCount,
                 m.CreatedAt,
-                m.Source))
+                m.Source,
+                m.ProductId,
+                m.SkuId))
             .ToList();
 
         return Task.FromResult<IReadOnlyList<MappingSummary>>(mappings);
@@ -439,7 +457,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
         string description,
         Guid ingredientId,
         string ingredientName,
-        string ingredientSku)
+        string ingredientSku,
+        Guid? productId = null,
+        Guid? skuId = null)
     {
         var tokens = _fuzzyMatcher.Tokenize(description);
         if (tokens.Count == 0)
@@ -484,7 +504,9 @@ public class VendorItemMappingGrain : Grain, IVendorItemMappingGrain
                 IngredientName = ingredientName,
                 IngredientSku = ingredientSku,
                 Weight = 1,
-                LearnedAt = DateTime.UtcNow
+                LearnedAt = DateTime.UtcNow,
+                ProductId = productId,
+                SkuId = skuId
             };
             _state.State.LearnedPatterns.Add(pattern);
 

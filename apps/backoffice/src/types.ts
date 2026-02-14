@@ -112,6 +112,27 @@ export interface RecipeIngredient {
   wastePercentage: number
 }
 
+// Product & SKU types
+export interface Product {
+  id: string
+  code: string
+  name: string
+  category: string
+  unitOfMeasure: string
+  isActive: boolean
+}
+
+export interface Sku {
+  id: string
+  code: string
+  productId: string
+  productName: string
+  description: string
+  unitOfMeasure: string
+  containerSize: number
+  isActive: boolean
+}
+
 // Supplier types
 export interface Supplier {
   id: string
@@ -121,4 +142,38 @@ export interface Supplier {
   paymentTermsDays: number
   leadTimeDays: number
   isActive: boolean
+}
+
+export interface SupplierCatalogItem {
+  skuId: string
+  skuCode: string
+  productName: string
+  supplierProductCode: string
+  unitPrice: number
+  unit: string
+  minOrderQuantity: number
+  leadTimeDays: number
+}
+
+export interface PurchaseOrderLine {
+  id: string
+  skuId: string
+  skuCode: string
+  productName: string
+  quantityOrdered: number
+  quantityReceived: number
+  unitPrice: number
+  lineTotal: number
+}
+
+export interface DeliveryLine {
+  id: string
+  skuId: string
+  skuCode: string
+  productName: string
+  quantityReceived: number
+  unitCost: number
+  lineCost: number
+  batchNumber: string | null
+  expiryDate: string | null
 }

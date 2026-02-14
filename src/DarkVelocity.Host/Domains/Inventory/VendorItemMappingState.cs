@@ -118,6 +118,12 @@ public sealed record VendorItemMapping
 
     /// <summary>Unit of measure for this item</summary>
     [Id(13)] public string? Unit { get; init; }
+
+    /// <summary>Optional link to the canonical product</summary>
+    [Id(14)] public Guid? ProductId { get; init; }
+
+    /// <summary>Optional link to the specific SKU (purchasable form)</summary>
+    [Id(15)] public Guid? SkuId { get; init; }
 }
 
 /// <summary>
@@ -150,4 +156,10 @@ public sealed record LearnedPattern
 
     /// <summary>When this pattern was last reinforced</summary>
     [Id(6)] public DateTime? LastReinforcedAt { get; init; }
+
+    /// <summary>Optional link to the canonical product</summary>
+    [Id(7)] public Guid? ProductId { get; init; }
+
+    /// <summary>Optional link to the specific SKU</summary>
+    [Id(8)] public Guid? SkuId { get; init; }
 }

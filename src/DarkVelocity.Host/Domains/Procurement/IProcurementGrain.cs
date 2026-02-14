@@ -29,11 +29,11 @@ public record UpdateSupplierCommand(
     [property: Id(8)] bool? IsActive);
 
 [GenerateSerializer]
-public record SupplierIngredient(
-    [property: Id(0)] Guid IngredientId,
-    [property: Id(1)] string IngredientName,
-    [property: Id(2)] string Sku,
-    [property: Id(3)] string SupplierSku,
+public record SupplierCatalogItem(
+    [property: Id(0)] Guid SkuId,
+    [property: Id(1)] string SkuCode,
+    [property: Id(2)] string ProductName,
+    [property: Id(3)] string SupplierProductCode,
     [property: Id(4)] decimal UnitPrice,
     [property: Id(5)] string Unit,
     [property: Id(6)] int MinOrderQuantity,
@@ -52,7 +52,7 @@ public record SupplierSnapshot(
     [property: Id(8)] int LeadTimeDays,
     [property: Id(9)] string? Notes,
     [property: Id(10)] bool IsActive,
-    [property: Id(11)] IReadOnlyList<SupplierIngredient> Ingredients,
+    [property: Id(11)] IReadOnlyList<SupplierCatalogItem> Catalog,
     [property: Id(12)] decimal TotalPurchasesYtd,
     [property: Id(13)] int OnTimeDeliveryPercent);
 
@@ -64,11 +64,11 @@ public interface ISupplierGrain : IGrainWithStringKey
 {
     Task<SupplierSnapshot> CreateAsync(CreateSupplierCommand command);
     Task<SupplierSnapshot> UpdateAsync(UpdateSupplierCommand command);
-    Task AddIngredientAsync(SupplierIngredient ingredient);
-    Task RemoveIngredientAsync(Guid ingredientId);
-    Task UpdateIngredientPriceAsync(Guid ingredientId, decimal newPrice);
+    Task AddSkuAsync(SupplierCatalogItem item);
+    Task RemoveSkuAsync(Guid skuId);
+    Task UpdateSkuPriceAsync(Guid skuId, decimal newPrice);
     Task<SupplierSnapshot> GetSnapshotAsync();
-    Task<decimal> GetIngredientPriceAsync(Guid ingredientId);
+    Task<decimal> GetSkuPriceAsync(Guid skuId);
     Task RecordPurchaseAsync(decimal amount, bool onTime);
     Task<int> GetVersionAsync();
 }
@@ -97,11 +97,12 @@ public record CreatePurchaseOrderCommand(
 [GenerateSerializer]
 public record AddPurchaseOrderLineCommand(
     [property: Id(0)] Guid LineId,
-    [property: Id(1)] Guid IngredientId,
-    [property: Id(2)] string IngredientName,
-    [property: Id(3)] decimal QuantityOrdered,
-    [property: Id(4)] decimal UnitPrice,
-    [property: Id(5)] string? Notes);
+    [property: Id(1)] Guid SkuId,
+    [property: Id(2)] string SkuCode,
+    [property: Id(3)] string ProductName,
+    [property: Id(4)] decimal QuantityOrdered,
+    [property: Id(5)] decimal UnitPrice,
+    [property: Id(6)] string? Notes);
 
 [GenerateSerializer]
 public record UpdatePurchaseOrderLineCommand(
@@ -127,13 +128,14 @@ public record CancelPurchaseOrderCommand(
 [GenerateSerializer]
 public record PurchaseOrderLineSnapshot(
     [property: Id(0)] Guid LineId,
-    [property: Id(1)] Guid IngredientId,
-    [property: Id(2)] string IngredientName,
-    [property: Id(3)] decimal QuantityOrdered,
-    [property: Id(4)] decimal QuantityReceived,
-    [property: Id(5)] decimal UnitPrice,
-    [property: Id(6)] decimal LineTotal,
-    [property: Id(7)] string? Notes);
+    [property: Id(1)] Guid SkuId,
+    [property: Id(2)] string SkuCode,
+    [property: Id(3)] string ProductName,
+    [property: Id(4)] decimal QuantityOrdered,
+    [property: Id(5)] decimal QuantityReceived,
+    [property: Id(6)] decimal UnitPrice,
+    [property: Id(7)] decimal LineTotal,
+    [property: Id(8)] string? Notes);
 
 [GenerateSerializer]
 public record PurchaseOrderSnapshot(
@@ -194,14 +196,15 @@ public record CreateDeliveryCommand(
 [GenerateSerializer]
 public record AddDeliveryLineCommand(
     [property: Id(0)] Guid LineId,
-    [property: Id(1)] Guid IngredientId,
-    [property: Id(2)] string IngredientName,
-    [property: Id(3)] Guid? PurchaseOrderLineId,
-    [property: Id(4)] decimal QuantityReceived,
-    [property: Id(5)] decimal UnitCost,
-    [property: Id(6)] string? BatchNumber,
-    [property: Id(7)] DateTime? ExpiryDate,
-    [property: Id(8)] string? Notes);
+    [property: Id(1)] Guid SkuId,
+    [property: Id(2)] string SkuCode,
+    [property: Id(3)] string ProductName,
+    [property: Id(4)] Guid? PurchaseOrderLineId,
+    [property: Id(5)] decimal QuantityReceived,
+    [property: Id(6)] decimal UnitCost,
+    [property: Id(7)] string? BatchNumber,
+    [property: Id(8)] DateTime? ExpiryDate,
+    [property: Id(9)] string? Notes);
 
 [GenerateSerializer]
 public record RecordDiscrepancyCommand(
@@ -234,15 +237,16 @@ public record RejectDeliveryCommand(
 [GenerateSerializer]
 public record DeliveryLineSnapshot(
     [property: Id(0)] Guid LineId,
-    [property: Id(1)] Guid IngredientId,
-    [property: Id(2)] string IngredientName,
-    [property: Id(3)] Guid? PurchaseOrderLineId,
-    [property: Id(4)] decimal QuantityReceived,
-    [property: Id(5)] decimal UnitCost,
-    [property: Id(6)] decimal LineTotal,
-    [property: Id(7)] string? BatchNumber,
-    [property: Id(8)] DateTime? ExpiryDate,
-    [property: Id(9)] string? Notes);
+    [property: Id(1)] Guid SkuId,
+    [property: Id(2)] string SkuCode,
+    [property: Id(3)] string ProductName,
+    [property: Id(4)] Guid? PurchaseOrderLineId,
+    [property: Id(5)] decimal QuantityReceived,
+    [property: Id(6)] decimal UnitCost,
+    [property: Id(7)] decimal LineTotal,
+    [property: Id(8)] string? BatchNumber,
+    [property: Id(9)] DateTime? ExpiryDate,
+    [property: Id(10)] string? Notes);
 
 [GenerateSerializer]
 public record DeliveryDiscrepancySnapshot(

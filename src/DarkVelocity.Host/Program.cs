@@ -140,6 +140,8 @@ app.MapOAuthEndpoints()
    .MapReportingEndpoints()
    .MapCostingEndpoints()
    .MapOrderingEndpoints()
+   .MapProductEndpoints()
+   .MapProcurementEndpoints()
    .MapSystemEndpoints();
 
 app.Run();

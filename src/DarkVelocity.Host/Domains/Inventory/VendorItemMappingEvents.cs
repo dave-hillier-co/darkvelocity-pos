@@ -43,6 +43,8 @@ public sealed record ItemMappingLearned : DomainEvent
     [Id(107)] public required MappingSource MappingOrigin { get; init; }
     [Id(108)] public required decimal Confidence { get; init; }
     [Id(109)] public Guid? LearnedFromDocumentId { get; init; }
+    [Id(110)] public Guid? ProductId { get; init; }
+    [Id(111)] public Guid? SkuId { get; init; }
 }
 
 /// <summary>
@@ -64,6 +66,8 @@ public sealed record ItemMappingSet : DomainEvent
     [Id(106)] public required string IngredientSku { get; init; }
     [Id(107)] public required Guid SetBy { get; init; }
     [Id(108)] public decimal? ExpectedUnitPrice { get; init; }
+    [Id(109)] public Guid? ProductId { get; init; }
+    [Id(110)] public Guid? SkuId { get; init; }
 }
 
 /// <summary>

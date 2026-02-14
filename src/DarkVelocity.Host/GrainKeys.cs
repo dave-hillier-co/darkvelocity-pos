@@ -364,6 +364,12 @@ public static class GrainKeys
     /// Creates a key for a supplier grain.
     /// </summary>
     public static string Supplier(Guid orgId, Guid supplierId) => OrgEntity(orgId, "supplier", supplierId);
+    public static string SupplierRegistry(Guid orgId) => $"{orgId}:supplierregistry";
+
+    /// <summary>
+    /// Creates a key for a delivery grain.
+    /// </summary>
+    public static string Delivery(Guid orgId, Guid deliveryId) => OrgEntity(orgId, "delivery", deliveryId);
 
     /// <summary>
     /// Creates a key for an inventory item grain (deprecated - use Inventory instead).
@@ -399,6 +405,11 @@ public static class GrainKeys
     /// Creates a key for a reorder suggestion grain (one per site).
     /// </summary>
     public static string ReorderSuggestion(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:reordersuggestion";
+
+    /// <summary>
+    /// Creates a key for a location registry grain (one per site).
+    /// </summary>
+    public static string LocationRegistry(Guid orgId, Guid siteId) => $"{orgId}:{siteId}:locations";
 
     /// <summary>
     /// Creates a key for a device grain.
@@ -622,6 +633,16 @@ public static class GrainKeys
     /// Creates a key for an ingredient grain.
     /// </summary>
     public static string Ingredient(Guid orgId, Guid ingredientId) => $"{orgId}:ingredient:{ingredientId}";
+
+    /// <summary>
+    /// Creates a key for a product grain.
+    /// </summary>
+    public static string Product(Guid orgId, Guid productId) => OrgEntity(orgId, "product", productId);
+
+    /// <summary>
+    /// Creates a key for a SKU grain.
+    /// </summary>
+    public static string Sku(Guid orgId, Guid skuId) => OrgEntity(orgId, "sku", skuId);
 
     /// <summary>
     /// Creates a key for the ingredient registry grain (one per org).

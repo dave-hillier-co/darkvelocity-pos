@@ -42,14 +42,17 @@ public sealed record SupplierUpdated : ISupplierEvent
     [Id(10)] public DateTimeOffset OccurredAt { get; init; }
 }
 
+/// <summary>
+/// A SKU was added to or updated in the supplier's catalog.
+/// </summary>
 [GenerateSerializer]
-public sealed record SupplierIngredientAdded : ISupplierEvent
+public sealed record SupplierSkuAdded : ISupplierEvent
 {
     [Id(0)] public Guid SupplierId { get; init; }
-    [Id(1)] public Guid IngredientId { get; init; }
-    [Id(2)] public string IngredientName { get; init; } = "";
-    [Id(3)] public string? Sku { get; init; }
-    [Id(4)] public string? SupplierSku { get; init; }
+    [Id(1)] public Guid SkuId { get; init; }
+    [Id(2)] public string SkuCode { get; init; } = "";
+    [Id(3)] public string ProductName { get; init; } = "";
+    [Id(4)] public string? SupplierProductCode { get; init; }
     [Id(5)] public decimal UnitPrice { get; init; }
     [Id(6)] public string Unit { get; init; } = "";
     [Id(7)] public int? MinOrderQuantity { get; init; }
@@ -58,18 +61,18 @@ public sealed record SupplierIngredientAdded : ISupplierEvent
 }
 
 [GenerateSerializer]
-public sealed record SupplierIngredientRemoved : ISupplierEvent
+public sealed record SupplierSkuRemoved : ISupplierEvent
 {
     [Id(0)] public Guid SupplierId { get; init; }
-    [Id(1)] public Guid IngredientId { get; init; }
+    [Id(1)] public Guid SkuId { get; init; }
     [Id(2)] public DateTimeOffset OccurredAt { get; init; }
 }
 
 [GenerateSerializer]
-public sealed record SupplierIngredientPriceUpdated : ISupplierEvent
+public sealed record SupplierSkuPriceUpdated : ISupplierEvent
 {
     [Id(0)] public Guid SupplierId { get; init; }
-    [Id(1)] public Guid IngredientId { get; init; }
+    [Id(1)] public Guid SkuId { get; init; }
     [Id(2)] public decimal NewPrice { get; init; }
     [Id(3)] public decimal PreviousPrice { get; init; }
     [Id(4)] public DateTimeOffset OccurredAt { get; init; }

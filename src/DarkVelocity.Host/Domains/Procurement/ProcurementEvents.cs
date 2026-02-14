@@ -3,7 +3,7 @@ namespace DarkVelocity.Host.Events;
 public sealed record DeliveryLineReceived(
     Guid DeliveryId,
     Guid DeliveryLineId,
-    Guid IngredientId,
+    Guid SkuId,
     decimal QuantityReceived,
     decimal UnitCost,
     DateTime? ExpiryDate

@@ -75,6 +75,7 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
                         TotalCost = e.Quantity * e.UnitCost,
                         SupplierId = e.SupplierId,
                         DeliveryId = e.DeliveryId,
+                        SkuId = e.SkuId,
                         Status = BatchStatus.Active
                     };
                     state.Batches.Add(batch);
@@ -113,18 +114,27 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
                 break;
 
             case StockConsumed e:
-                ConsumeFifoForState(state, e.Quantity);
+                if (e.BatchBreakdown.Count > 0)
+                    ApplyBatchBreakdown(state, e.BatchBreakdown, e.Quantity);
+                else
+                    ConsumeFifoForState(state, e.Quantity);
                 state.LastConsumedAt = e.OccurredAt;
                 RecalculateQuantitiesAndCost(state);
                 break;
 
             case StockWrittenOff e:
-                ConsumeFifoForState(state, e.Quantity);
+                if (e.BatchBreakdown.Count > 0)
+                    ApplyBatchBreakdown(state, e.BatchBreakdown, e.Quantity);
+                else
+                    ConsumeFifoForState(state, e.Quantity);
                 RecalculateQuantitiesAndCost(state);
                 break;
 
             case StockTransferredOut e:
-                ConsumeFifoForState(state, e.Quantity);
+                if (e.BatchBreakdown.Count > 0)
+                    ApplyBatchBreakdown(state, e.BatchBreakdown, e.Quantity);
+                else
+                    ConsumeFifoForState(state, e.Quantity);
                 RecalculateQuantitiesAndCost(state);
                 break;
 
@@ -208,6 +218,30 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
         if (remaining > 0)
         {
             state.UnbatchedDeficit += remaining;
+        }
+    }
+
+    private static void ApplyBatchBreakdown(InventoryState state, IReadOnlyList<EventBatchConsumptionDetail> breakdown, decimal totalQuantity)
+    {
+        var consumedFromBatches = 0m;
+        foreach (var detail in breakdown)
+        {
+            var index = state.Batches.FindIndex(b => b.Id == detail.BatchId);
+            if (index >= 0)
+            {
+                var batch = state.Batches[index];
+                var newQty = batch.Quantity - detail.Quantity;
+                var newStatus = newQty <= 0 ? BatchStatus.Exhausted : batch.Status;
+                state.Batches[index] = batch with { Quantity = newQty, Status = newStatus };
+                consumedFromBatches += detail.Quantity;
+            }
+        }
+
+        // Track unbatched consumption for negative stock support
+        var unbatched = totalQuantity - consumedFromBatches;
+        if (unbatched > 0)
+        {
+            state.UnbatchedDeficit += unbatched;
         }
     }
 
@@ -320,7 +354,8 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             ExpiryDate = command.ExpiryDate.HasValue ? DateOnly.FromDateTime(command.ExpiryDate.Value) : null,
             SupplierId = command.SupplierId,
             DeliveryId = command.DeliveryId,
-            OccurredAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow,
+            SkuId = command.SkuId
         });
         await ConfirmEvents();
 
@@ -438,7 +473,13 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             CostOfGoodsConsumed = totalCost,
             OrderId = command.OrderId,
             Reason = command.Reason,
-            OccurredAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow,
+            BatchBreakdown = breakdown.Select(b => new EventBatchConsumptionDetail
+            {
+                BatchId = b.BatchId,
+                Quantity = b.Quantity,
+                UnitCost = b.UnitCost
+            }).ToList()
         });
         await ConfirmEvents();
 
@@ -701,7 +742,13 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             Category = command.WasteCategory.ToString(),
             Reason = command.Reason,
             RecordedBy = command.RecordedBy,
-            OccurredAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow,
+            BatchBreakdown = breakdown.Select(b => new EventBatchConsumptionDetail
+            {
+                BatchId = b.BatchId,
+                Quantity = b.Quantity,
+                UnitCost = b.UnitCost
+            }).ToList()
         });
         await ConfirmEvents();
 
@@ -768,6 +815,8 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
         if (!ledgerResult.Success)
             throw new InvalidOperationException(ledgerResult.Error ?? "Insufficient stock for transfer");
 
+        var breakdown = CalculateFifoBreakdown(command.Quantity);
+
         RaiseEvent(new StockTransferredOut
         {
             IngredientId = State.IngredientId,
@@ -776,7 +825,13 @@ public class InventoryGrain : JournaledGrain<InventoryState, IInventoryEvent>, I
             Quantity = command.Quantity,
             UnitCost = State.WeightedAverageCost,
             TransferredBy = command.TransferredBy,
-            OccurredAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow,
+            BatchBreakdown = breakdown.Select(b => new EventBatchConsumptionDetail
+            {
+                BatchId = b.BatchId,
+                Quantity = b.Quantity,
+                UnitCost = b.UnitCost
+            }).ToList()
         });
         await ConfirmEvents();
 

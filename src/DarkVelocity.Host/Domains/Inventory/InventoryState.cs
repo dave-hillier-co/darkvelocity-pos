@@ -33,6 +33,7 @@ public record StockBatch
     [Id(11)] public BatchStatus Status { get; init; }
     [Id(12)] public string? Location { get; init; }
     [Id(13)] public string? Notes { get; init; }
+    [Id(14)] public Guid? SkuId { get; init; }
 }
 
 public enum MovementType

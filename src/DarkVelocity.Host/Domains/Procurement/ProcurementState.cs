@@ -21,7 +21,7 @@ public sealed class SupplierState
     [Id(9)] public int LeadTimeDays { get; set; } = 3;
     [Id(10)] public string? Notes { get; set; }
     [Id(11)] public bool IsActive { get; set; } = true;
-    [Id(12)] public List<SupplierIngredientState> Ingredients { get; set; } = [];
+    [Id(12)] public List<SupplierCatalogItemState> Catalog { get; set; } = [];
     [Id(13)] public decimal TotalPurchasesYtd { get; set; }
     [Id(14)] public int TotalDeliveries { get; set; }
     [Id(15)] public int OnTimeDeliveries { get; set; }
@@ -29,12 +29,12 @@ public sealed class SupplierState
 }
 
 [GenerateSerializer]
-public sealed class SupplierIngredientState
+public sealed class SupplierCatalogItemState
 {
-    [Id(0)] public Guid IngredientId { get; set; }
-    [Id(1)] public string IngredientName { get; set; } = string.Empty;
-    [Id(2)] public string Sku { get; set; } = string.Empty;
-    [Id(3)] public string SupplierSku { get; set; } = string.Empty;
+    [Id(0)] public Guid SkuId { get; set; }
+    [Id(1)] public string SkuCode { get; set; } = string.Empty;
+    [Id(2)] public string ProductName { get; set; } = string.Empty;
+    [Id(3)] public string SupplierProductCode { get; set; } = string.Empty;
     [Id(4)] public decimal UnitPrice { get; set; }
     [Id(5)] public string Unit { get; set; } = string.Empty;
     [Id(6)] public int MinOrderQuantity { get; set; }
@@ -71,13 +71,14 @@ public sealed class PurchaseOrderState
 public sealed class PurchaseOrderLineState
 {
     [Id(0)] public Guid LineId { get; set; }
-    [Id(1)] public Guid IngredientId { get; set; }
-    [Id(2)] public string IngredientName { get; set; } = string.Empty;
-    [Id(3)] public decimal QuantityOrdered { get; set; }
-    [Id(4)] public decimal QuantityReceived { get; set; }
-    [Id(5)] public decimal UnitPrice { get; set; }
-    [Id(6)] public decimal LineTotal { get; set; }
-    [Id(7)] public string? Notes { get; set; }
+    [Id(1)] public Guid SkuId { get; set; }
+    [Id(2)] public string SkuCode { get; set; } = string.Empty;
+    [Id(3)] public string ProductName { get; set; } = string.Empty;
+    [Id(4)] public decimal QuantityOrdered { get; set; }
+    [Id(5)] public decimal QuantityReceived { get; set; }
+    [Id(6)] public decimal UnitPrice { get; set; }
+    [Id(7)] public decimal LineTotal { get; set; }
+    [Id(8)] public string? Notes { get; set; }
 }
 
 // ============================================================================
@@ -113,15 +114,16 @@ public sealed class DeliveryState
 public sealed class DeliveryLineState
 {
     [Id(0)] public Guid LineId { get; set; }
-    [Id(1)] public Guid IngredientId { get; set; }
-    [Id(2)] public string IngredientName { get; set; } = string.Empty;
-    [Id(3)] public Guid? PurchaseOrderLineId { get; set; }
-    [Id(4)] public decimal QuantityReceived { get; set; }
-    [Id(5)] public decimal UnitCost { get; set; }
-    [Id(6)] public decimal LineTotal { get; set; }
-    [Id(7)] public string? BatchNumber { get; set; }
-    [Id(8)] public DateTime? ExpiryDate { get; set; }
-    [Id(9)] public string? Notes { get; set; }
+    [Id(1)] public Guid SkuId { get; set; }
+    [Id(2)] public string SkuCode { get; set; } = string.Empty;
+    [Id(3)] public string ProductName { get; set; } = string.Empty;
+    [Id(4)] public Guid? PurchaseOrderLineId { get; set; }
+    [Id(5)] public decimal QuantityReceived { get; set; }
+    [Id(6)] public decimal UnitCost { get; set; }
+    [Id(7)] public decimal LineTotal { get; set; }
+    [Id(8)] public string? BatchNumber { get; set; }
+    [Id(9)] public DateTime? ExpiryDate { get; set; }
+    [Id(10)] public string? Notes { get; set; }
 }
 
 [GenerateSerializer]

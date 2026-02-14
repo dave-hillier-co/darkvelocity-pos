@@ -14,44 +14,48 @@ export interface Supplier {
   isActive: boolean
   _links: {
     self: { href: string }
-    ingredients: { href: string }
+    catalog: { href: string }
     orders: { href: string }
   }
 }
 
-export interface SupplierIngredient {
-  supplierId: string
-  ingredientId: string
-  ingredientName: string
+export interface SupplierCatalogItem {
+  skuId: string
+  skuCode: string
+  productName: string
   supplierProductCode: string
-  packSize: number
-  packUnit: string
-  lastKnownPrice: number
+  unitPrice: number
+  unit: string
+  minOrderQuantity: number
+  leadTimeDays: number
   _links: {
     self: { href: string }
+    sku: { href: string }
   }
 }
 
 export interface PurchaseOrderLine {
   id: string
   purchaseOrderId: string
-  ingredientId: string
-  ingredientName: string
+  skuId: string
+  skuCode: string
+  productName: string
   quantityOrdered: number
   quantityReceived: number
   unitPrice: number
   lineTotal: number
   _links: {
     self: { href: string }
-    ingredient: { href: string }
+    sku: { href: string }
   }
 }
 
 export interface DeliveryLine {
   id: string
   deliveryId: string
-  ingredientId: string
-  ingredientName: string
+  skuId: string
+  skuCode: string
+  productName: string
   quantityReceived: number
   unitCost: number
   lineCost: number
@@ -59,7 +63,7 @@ export interface DeliveryLine {
   expiryDate: string | null
   _links: {
     self: { href: string }
-    ingredient: { href: string }
+    sku: { href: string }
   }
 }
 
@@ -101,8 +105,8 @@ export async function deleteSupplier(supplierId: string): Promise<void> {
   return apiClient.delete(apiClient.buildOrgPath(`/suppliers/${supplierId}`))
 }
 
-export async function getSupplierIngredients(supplierId: string): Promise<HalCollection<SupplierIngredient>> {
-  return apiClient.get(apiClient.buildOrgPath(`/suppliers/${supplierId}/ingredients`))
+export async function getSupplierCatalog(supplierId: string): Promise<HalCollection<SupplierCatalogItem>> {
+  return apiClient.get(apiClient.buildOrgPath(`/suppliers/${supplierId}/catalog`))
 }
 
 // Purchase Documents (site-scoped)

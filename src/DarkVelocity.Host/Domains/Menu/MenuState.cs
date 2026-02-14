@@ -52,6 +52,11 @@ public sealed class MenuItemState
     [Id(19)] public List<ProductTagState> ProductTags { get; set; } = [];
     [Id(20)] public ContextualTaxRatesState? TaxRates { get; set; }
     [Id(21)] public List<MenuItemVariationState> Variations { get; set; } = [];
+
+    /// <summary>
+    /// Optional link to a Product for direct-sale items (e.g., wine by the bottle).
+    /// </summary>
+    [Id(22)] public Guid? ProductId { get; set; }
 }
 
 [GenerateSerializer]

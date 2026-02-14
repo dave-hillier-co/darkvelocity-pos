@@ -669,8 +669,9 @@ public class PerformanceBoundaryTests
 
             await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
                 LineId: Guid.NewGuid(),
-                IngredientId: Guid.NewGuid(),
-                IngredientName: $"Ingredient {i + 1}",
+                SkuId: Guid.NewGuid(),
+                SkuCode: $"SKU-{i + 1:D4}",
+                ProductName: $"Ingredient {i + 1}",
                 QuantityOrdered: qty,
                 UnitPrice: price,
                 Notes: null));
@@ -685,10 +686,10 @@ public class PerformanceBoundaryTests
     }
 
     // Given: A registered supplier with 30-day payment terms
-    // When: Adding 100 ingredients to the supplier catalog
-    // Then: All 100 ingredients are stored in the supplier's catalog
+    // When: Adding 100 SKUs to the supplier catalog
+    // Then: All 100 catalog items are stored in the supplier's catalog
     [Fact]
-    public async Task Supplier_ManyIngredients_ShouldCatalogAll()
+    public async Task Supplier_ManyCatalogItems_ShouldCatalogAll()
     {
         // Arrange
         var orgId = Guid.NewGuid();
@@ -707,14 +708,14 @@ public class PerformanceBoundaryTests
             LeadTimeDays: 7,
             Notes: null));
 
-        // Act - Add 100 ingredients to supplier catalog
+        // Act - Add 100 SKUs to supplier catalog
         for (int i = 0; i < 100; i++)
         {
-            await grain.AddIngredientAsync(new SupplierIngredient(
-                IngredientId: Guid.NewGuid(),
-                IngredientName: $"Ingredient {i + 1}",
-                Sku: $"INT-{i + 1:D4}",
-                SupplierSku: $"SKU-{i + 1:D4}",
+            await grain.AddSkuAsync(new SupplierCatalogItem(
+                SkuId: Guid.NewGuid(),
+                SkuCode: $"INT-{i + 1:D4}",
+                ProductName: $"Product {i + 1}",
+                SupplierProductCode: $"SKU-{i + 1:D4}",
                 UnitPrice: 1.00m + (i * 0.10m),
                 Unit: "ea",
                 MinOrderQuantity: (i % 5) + 1,
@@ -723,7 +724,7 @@ public class PerformanceBoundaryTests
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients.Should().HaveCount(100);
+        snapshot.Catalog.Should().HaveCount(100);
     }
 
     #endregion

@@ -62,8 +62,8 @@ public class PurchaseOrderLifecycleTests
         // Add lines
         var line1 = Guid.NewGuid();
         var line2 = Guid.NewGuid();
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "Tomatoes", 50, 2.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "Onions", 30, 1.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "SKU", "Tomatoes", 50, 2.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "SKU", "Onions", 30, 1.00m, null));
 
         var draftSnapshot = await grain.GetSnapshotAsync();
         draftSnapshot.OrderTotal.Should().Be(130m); // 100 + 30
@@ -105,7 +105,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item", 10, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(userId));
 
@@ -140,7 +140,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, "Initial note"));
+            lineId, Guid.NewGuid(), "SKU", "Test Item", 10, 5.00m, "Initial note"));
 
         // Act - update
         await grain.UpdateLineAsync(new UpdatePurchaseOrderLineCommand(
@@ -171,8 +171,8 @@ public class PurchaseOrderLifecycleTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
 
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId1, Guid.NewGuid(), "Item A", 10, 5.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId2, Guid.NewGuid(), "Item B", 20, 3.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId1, Guid.NewGuid(), "SKU", "Item A", 10, 5.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(lineId2, Guid.NewGuid(), "SKU", "Item B", 20, 3.00m, null));
 
         // Act
         await grain.RemoveLineAsync(lineId1);
@@ -180,7 +180,7 @@ public class PurchaseOrderLifecycleTests
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Lines.Should().HaveCount(1);
-        snapshot.Lines[0].IngredientName.Should().Be("Item B");
+        snapshot.Lines[0].ProductName.Should().Be("Item B");
         snapshot.OrderTotal.Should().Be(60m);
     }
 
@@ -204,10 +204,10 @@ public class PurchaseOrderLifecycleTests
         var line2 = Guid.NewGuid();
         var line3 = Guid.NewGuid();
 
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "Item 1", 10, 1.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "Item 2", 20, 2.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "SKU", "Item 1", 10, 1.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "SKU", "Item 2", 20, 2.00m, null));
         await grain.RemoveLineAsync(line1);
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line3, Guid.NewGuid(), "Item 3", 30, 3.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line3, Guid.NewGuid(), "SKU", "Item 3", 30, 3.00m, null));
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
@@ -236,7 +236,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 100, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Test Item", 100, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -270,7 +270,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 100, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Test Item", 100, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -308,7 +308,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Bonus Items", 50, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Bonus Items", 50, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -339,7 +339,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 30, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Test Item", 30, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -374,13 +374,13 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Initial", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Initial", 10, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act & Assert
         var act = () => grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Late Add", 5, 3.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Late Add", 5, 3.00m, null));
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*submitted*");
@@ -403,7 +403,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Item", 10, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
         await grain.CancelAsync(new CancelPurchaseOrderCommand("Cancelled", Guid.NewGuid()));
@@ -431,7 +431,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "SKU", "Item", 10, 5.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
         await grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
@@ -526,11 +526,11 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item A", 10, 5.00m, null)); // 50
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item A", 10, 5.00m, null)); // 50
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item B", 20, 2.50m, null)); // 50
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item B", 20, 2.50m, null)); // 50
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item C", 5, 20.00m, null)); // 100
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Item C", 5, 20.00m, null)); // 100
 
         // Act
         var total = await grain.GetTotalAsync();
@@ -555,7 +555,7 @@ public class PurchaseOrderLifecycleTests
             DateTime.UtcNow.AddDays(3), null));
 
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Precision Item", 7, 13.57m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "SKU", "Precision Item", 7, 13.57m, null));
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
@@ -584,9 +584,9 @@ public class PurchaseOrderLifecycleTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
 
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "Fast Delivery", 100, 1.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "Slow Delivery", 50, 2.00m, null));
-        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line3, Guid.NewGuid(), "No Delivery", 25, 4.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line1, Guid.NewGuid(), "SKU", "Fast Delivery", 100, 1.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line2, Guid.NewGuid(), "SKU", "Slow Delivery", 50, 2.00m, null));
+        await grain.AddLineAsync(new AddPurchaseOrderLineCommand(line3, Guid.NewGuid(), "SKU", "No Delivery", 25, 4.00m, null));
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
@@ -628,7 +628,7 @@ public class PurchaseOrderLifecycleTests
         for (int i = 0; i < lines.Count; i++)
         {
             await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-                lines[i], Guid.NewGuid(), $"Item {i}", 10 + i, 1.00m + i * 0.50m, null));
+                lines[i], Guid.NewGuid(), "SKU", $"Item {i}", 10 + i, 1.00m + i * 0.50m, null));
         }
 
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));

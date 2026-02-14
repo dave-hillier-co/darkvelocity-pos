@@ -22,7 +22,7 @@ public class SupplierGrainTests
 
     // Given: no supplier record exists
     // When: a new supplier is registered with contact details, payment terms, and lead time
-    // Then: the supplier is created with all provided details and defaults to active with no purchases
+    // Then: the supplier is created with all provided details and defaults to active with no catalog items
     [Fact]
     public async Task CreateAsync_ShouldCreateSupplier()
     {
@@ -52,7 +52,7 @@ public class SupplierGrainTests
         result.PaymentTermsDays.Should().Be(30);
         result.LeadTimeDays.Should().Be(2);
         result.IsActive.Should().BeTrue();
-        result.Ingredients.Should().BeEmpty();
+        result.Catalog.Should().BeEmpty();
         result.TotalPurchasesYtd.Should().Be(0);
         result.OnTimeDeliveryPercent.Should().Be(100);
     }
@@ -97,16 +97,16 @@ public class SupplierGrainTests
         result.LeadTimeDays.Should().Be(1); // Unchanged
     }
 
-    // Given: a dairy farm supplier with no ingredients in their catalog
-    // When: whole milk is added to the supplier's ingredient catalog with pricing and SKU
-    // Then: the supplier catalog contains the milk entry with correct price and supplier SKU
+    // Given: a dairy farm supplier with no SKUs in their catalog
+    // When: whole milk is added to the supplier's catalog with pricing and supplier product code
+    // Then: the supplier catalog contains the milk entry with correct price and supplier product code
     [Fact]
-    public async Task AddIngredientAsync_ShouldAddIngredientToCatalog()
+    public async Task AddSkuAsync_ShouldAddSkuToCatalog()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var ingredientId = Guid.NewGuid();
+        var skuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-003",
@@ -120,11 +120,11 @@ public class SupplierGrainTests
             Notes: null));
 
         // Act
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            IngredientId: ingredientId,
-            IngredientName: "Whole Milk",
-            Sku: "MILK-001",
-            SupplierSku: "WM-GAL-01",
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            SkuId: skuId,
+            SkuCode: "MILK-001",
+            ProductName: "Whole Milk",
+            SupplierProductCode: "WM-GAL-01",
             UnitPrice: 3.50m,
             Unit: "gallon",
             MinOrderQuantity: 10,
@@ -132,17 +132,17 @@ public class SupplierGrainTests
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients.Should().HaveCount(1);
-        snapshot.Ingredients[0].IngredientName.Should().Be("Whole Milk");
-        snapshot.Ingredients[0].UnitPrice.Should().Be(3.50m);
-        snapshot.Ingredients[0].SupplierSku.Should().Be("WM-GAL-01");
+        snapshot.Catalog.Should().HaveCount(1);
+        snapshot.Catalog[0].ProductName.Should().Be("Whole Milk");
+        snapshot.Catalog[0].UnitPrice.Should().Be(3.50m);
+        snapshot.Catalog[0].SupplierProductCode.Should().Be("WM-GAL-01");
     }
 
     // Given: a bakery supplies vendor with an empty catalog
     // When: flour, sugar, and butter are each added to the catalog
-    // Then: the supplier catalog contains all three ingredients
+    // Then: the supplier catalog contains all three SKUs
     [Fact]
-    public async Task AddIngredientAsync_MultipleIngredients_ShouldAddAll()
+    public async Task AddSkuAsync_MultipleSkus_ShouldAddAll()
     {
         // Arrange
         var orgId = Guid.NewGuid();
@@ -160,28 +160,28 @@ public class SupplierGrainTests
             Notes: null));
 
         // Act
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            Guid.NewGuid(), "All-Purpose Flour", "FLR-001", "APF-50LB", 25.00m, "bag", 5, 3));
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            Guid.NewGuid(), "Sugar", "SGR-001", "GS-25LB", 18.00m, "bag", 5, 3));
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            Guid.NewGuid(), "Butter", "BTR-001", "UB-36CT", 85.00m, "case", 2, 2));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            Guid.NewGuid(), "FLR-001", "All-Purpose Flour", "APF-50LB", 25.00m, "bag", 5, 3));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            Guid.NewGuid(), "SGR-001", "Sugar", "GS-25LB", 18.00m, "bag", 5, 3));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            Guid.NewGuid(), "BTR-001", "Butter", "UB-36CT", 85.00m, "case", 2, 2));
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients.Should().HaveCount(3);
+        snapshot.Catalog.Should().HaveCount(3);
     }
 
     // Given: a seafood supplier with salmon fillet already in their catalog at $45/lb
-    // When: the same salmon fillet ingredient is re-added with a new price and SKU
-    // Then: the catalog still has one entry but reflects the updated price, SKU, and minimum order
+    // When: the same salmon fillet SKU is re-added with a new price and supplier product code
+    // Then: the catalog still has one entry but reflects the updated price, supplier product code, and minimum order
     [Fact]
-    public async Task AddIngredientAsync_ExistingIngredient_ShouldUpdateDetails()
+    public async Task AddSkuAsync_ExistingSku_ShouldUpdateDetails()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var ingredientId = Guid.NewGuid();
+        var skuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-005",
@@ -194,32 +194,32 @@ public class SupplierGrainTests
             LeadTimeDays: 1,
             Notes: null));
 
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId, "Salmon Fillet", "SAL-001", "SF-5LB", 45.00m, "lb", 10, 1));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId, "SAL-001", "Salmon Fillet", "SF-5LB", 45.00m, "lb", 10, 1));
 
         // Act
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId, "Salmon Fillet", "SAL-001", "SF-5LB-FRESH", 48.00m, "lb", 5, 1));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId, "SAL-001", "Salmon Fillet", "SF-5LB-FRESH", 48.00m, "lb", 5, 1));
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients.Should().HaveCount(1);
-        snapshot.Ingredients[0].UnitPrice.Should().Be(48.00m);
-        snapshot.Ingredients[0].SupplierSku.Should().Be("SF-5LB-FRESH");
-        snapshot.Ingredients[0].MinOrderQuantity.Should().Be(5);
+        snapshot.Catalog.Should().HaveCount(1);
+        snapshot.Catalog[0].UnitPrice.Should().Be(48.00m);
+        snapshot.Catalog[0].SupplierProductCode.Should().Be("SF-5LB-FRESH");
+        snapshot.Catalog[0].MinOrderQuantity.Should().Be(5);
     }
 
     // Given: a beverage distributor with cola syrup and orange juice in their catalog
     // When: cola syrup is removed from the supplier catalog
     // Then: only orange juice remains in the catalog
     [Fact]
-    public async Task RemoveIngredientAsync_ShouldRemoveFromCatalog()
+    public async Task RemoveSkuAsync_ShouldRemoveFromCatalog()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var ingredientId1 = Guid.NewGuid();
-        var ingredientId2 = Guid.NewGuid();
+        var skuId1 = Guid.NewGuid();
+        var skuId2 = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-006",
@@ -232,30 +232,30 @@ public class SupplierGrainTests
             LeadTimeDays: 5,
             Notes: null));
 
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId1, "Cola Syrup", "COL-001", "CS-5GAL", 75.00m, "container", 2, 5));
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId2, "Orange Juice", "OJ-001", "OJ-CASE", 35.00m, "case", 5, 3));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId1, "COL-001", "Cola Syrup", "CS-5GAL", 75.00m, "container", 2, 5));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId2, "OJ-001", "Orange Juice", "OJ-CASE", 35.00m, "case", 5, 3));
 
         // Act
-        await grain.RemoveIngredientAsync(ingredientId1);
+        await grain.RemoveSkuAsync(skuId1);
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients.Should().HaveCount(1);
-        snapshot.Ingredients[0].IngredientName.Should().Be("Orange Juice");
+        snapshot.Catalog.Should().HaveCount(1);
+        snapshot.Catalog[0].ProductName.Should().Be("Orange Juice");
     }
 
     // Given: a coffee roaster with espresso beans listed at $65/bag
     // When: the espresso bean price is updated to $72.50/bag
     // Then: the catalog reflects the new price
     [Fact]
-    public async Task UpdateIngredientPriceAsync_ShouldUpdatePrice()
+    public async Task UpdateSkuPriceAsync_ShouldUpdatePrice()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var ingredientId = Guid.NewGuid();
+        var skuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-007",
@@ -268,27 +268,27 @@ public class SupplierGrainTests
             LeadTimeDays: 7,
             Notes: null));
 
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId, "Espresso Beans", "ESP-001", "EB-5LB", 65.00m, "bag", 3, 7));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId, "ESP-001", "Espresso Beans", "EB-5LB", 65.00m, "bag", 3, 7));
 
         // Act
-        await grain.UpdateIngredientPriceAsync(ingredientId, 72.50m);
+        await grain.UpdateSkuPriceAsync(skuId, 72.50m);
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
-        snapshot.Ingredients[0].UnitPrice.Should().Be(72.50m);
+        snapshot.Catalog[0].UnitPrice.Should().Be(72.50m);
     }
 
     // Given: a spice trader with saffron listed at $125/oz
     // When: the price for saffron is queried
     // Then: the returned price is $125.00
     [Fact]
-    public async Task GetIngredientPriceAsync_ShouldReturnPrice()
+    public async Task GetSkuPriceAsync_ShouldReturnPrice()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var ingredientId = Guid.NewGuid();
+        var skuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-008",
@@ -301,11 +301,11 @@ public class SupplierGrainTests
             LeadTimeDays: 14,
             Notes: null));
 
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            ingredientId, "Saffron", "SAF-001", "SF-1OZ", 125.00m, "oz", 1, 14));
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            skuId, "SAF-001", "Saffron", "SF-1OZ", 125.00m, "oz", 1, 14));
 
         // Act
-        var price = await grain.GetIngredientPriceAsync(ingredientId);
+        var price = await grain.GetSkuPriceAsync(skuId);
 
         // Assert
         price.Should().Be(125.00m);
@@ -376,16 +376,16 @@ public class SupplierGrainTests
         result.Notes.Should().Be("No longer in business");
     }
 
-    // Given: a supplier with no ingredients in their catalog
-    // When: a price update is attempted for a non-existent ingredient
-    // Then: the operation fails because the ingredient is not found
+    // Given: a supplier with no SKUs in their catalog
+    // When: a price update is attempted for a non-existent SKU
+    // Then: the operation fails because the SKU is not found
     [Fact]
-    public async Task UpdateIngredientPriceAsync_NonExistent_ShouldThrow()
+    public async Task UpdateSkuPriceAsync_NonExistent_ShouldThrow()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var nonExistentIngredientId = Guid.NewGuid();
+        var nonExistentSkuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-011",
@@ -399,23 +399,23 @@ public class SupplierGrainTests
             Notes: null));
 
         // Act
-        var act = () => grain.UpdateIngredientPriceAsync(nonExistentIngredientId, 25.00m);
+        var act = () => grain.UpdateSkuPriceAsync(nonExistentSkuId, 25.00m);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not found*");
     }
 
-    // Given: a supplier with one ingredient in their catalog
-    // When: the price is queried for a different ingredient not in the catalog
-    // Then: the operation fails because the ingredient is not found
+    // Given: a supplier with one SKU in their catalog
+    // When: the price is queried for a different SKU not in the catalog
+    // Then: the operation fails because the SKU is not found
     [Fact]
-    public async Task GetIngredientPriceAsync_NonExistent_ShouldThrow()
+    public async Task GetSkuPriceAsync_NonExistent_ShouldThrow()
     {
         // Arrange
         var orgId = Guid.NewGuid();
         var supplierId = Guid.NewGuid();
-        var nonExistentIngredientId = Guid.NewGuid();
+        var nonExistentSkuId = Guid.NewGuid();
         var grain = GetGrain(orgId, supplierId);
         await grain.CreateAsync(new CreateSupplierCommand(
             Code: "SUP-012",
@@ -427,12 +427,12 @@ public class SupplierGrainTests
             PaymentTermsDays: 14,
             LeadTimeDays: 3,
             Notes: null));
-        // Add one ingredient to ensure the supplier has ingredients
-        await grain.AddIngredientAsync(new SupplierIngredient(
-            Guid.NewGuid(), "Some Ingredient", "ING-001", "SI-001", 10.00m, "kg", 5, 3));
+        // Add one SKU to ensure the supplier has catalog items
+        await grain.AddSkuAsync(new SupplierCatalogItem(
+            Guid.NewGuid(), "ING-001", "Some Item", "SI-001", 10.00m, "kg", 5, 3));
 
         // Act
-        var act = () => grain.GetIngredientPriceAsync(nonExistentIngredientId);
+        var act = () => grain.GetSkuPriceAsync(nonExistentSkuId);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -440,7 +440,7 @@ public class SupplierGrainTests
     }
 
     // Given: a supplier that has never been registered (no CreateAsync called)
-    // When: any operation (snapshot, update, add ingredient, record purchase) is attempted
+    // When: any operation (snapshot, update, add SKU, record purchase) is attempted
     // Then: each operation fails because the supplier is not initialized
     [Fact]
     public async Task Operations_OnUninitialized_ShouldThrow()
@@ -461,10 +461,10 @@ public class SupplierGrainTests
         await actUpdate.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not initialized*");
 
-        // Act & Assert - AddIngredientAsync
-        var actAddIngredient = () => grain.AddIngredientAsync(new SupplierIngredient(
-            Guid.NewGuid(), "Test", "SKU-001", "SSSKU-001", 10.00m, "unit", 1, 1));
-        await actAddIngredient.Should().ThrowAsync<InvalidOperationException>()
+        // Act & Assert - AddSkuAsync
+        var actAddSku = () => grain.AddSkuAsync(new SupplierCatalogItem(
+            Guid.NewGuid(), "SKU-001", "Test", "SSSKU-001", 10.00m, "unit", 1, 1));
+        await actAddSku.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not initialized*");
 
         // Act & Assert - RecordPurchaseAsync
@@ -644,8 +644,9 @@ public class PurchaseOrderGrainTests
         // Act
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
             LineId: Guid.NewGuid(),
-            IngredientId: Guid.NewGuid(),
-            IngredientName: "Tomatoes",
+            SkuId: Guid.NewGuid(),
+            SkuCode: "TOM-001",
+            ProductName: "Tomatoes",
             QuantityOrdered: 50,
             UnitPrice: 2.50m,
             Notes: "Roma preferred"));
@@ -653,7 +654,7 @@ public class PurchaseOrderGrainTests
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Lines.Should().HaveCount(1);
-        snapshot.Lines[0].IngredientName.Should().Be("Tomatoes");
+        snapshot.Lines[0].ProductName.Should().Be("Tomatoes");
         snapshot.Lines[0].QuantityOrdered.Should().Be(50);
         snapshot.Lines[0].UnitPrice.Should().Be(2.50m);
         snapshot.Lines[0].LineTotal.Should().Be(125.00m);
@@ -676,11 +677,11 @@ public class PurchaseOrderGrainTests
 
         // Act
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Chicken Breast", 100, 4.50m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "CHK-001", "Chicken Breast", 100, 4.50m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Ground Beef", 75, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "GBF-001", "Ground Beef", 75, 5.00m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Pork Chops", 50, 3.75m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "PRC-001", "Pork Chops", 50, 3.75m, null));
 
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
@@ -703,7 +704,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Lettuce", 30, 1.50m, null));
+            lineId, Guid.NewGuid(), "LET-001", "Lettuce", 30, 1.50m, null));
 
         // Act
         await grain.UpdateLineAsync(new UpdatePurchaseOrderLineCommand(
@@ -736,9 +737,9 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId1, Guid.NewGuid(), "Onions", 25, 1.00m, null));
+            lineId1, Guid.NewGuid(), "ONI-001", "Onions", 25, 1.00m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId2, Guid.NewGuid(), "Garlic", 10, 3.00m, null));
+            lineId2, Guid.NewGuid(), "GAR-001", "Garlic", 10, 3.00m, null));
 
         // Act
         await grain.RemoveLineAsync(lineId1);
@@ -746,7 +747,7 @@ public class PurchaseOrderGrainTests
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Lines.Should().HaveCount(1);
-        snapshot.Lines[0].IngredientName.Should().Be("Garlic");
+        snapshot.Lines[0].ProductName.Should().Be("Garlic");
         snapshot.OrderTotal.Should().Be(30.00m);
     }
 
@@ -764,7 +765,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Carrots", 40, 1.25m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "CAR-001", "Carrots", 40, 1.25m, null));
 
         // Act
         var result = await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
@@ -791,9 +792,9 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId1, Guid.NewGuid(), "Potatoes", 100, 0.50m, null));
+            lineId1, Guid.NewGuid(), "POT-001", "Potatoes", 100, 0.50m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId2, Guid.NewGuid(), "Celery", 20, 2.00m, null));
+            lineId2, Guid.NewGuid(), "CEL-001", "Celery", 20, 2.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -822,9 +823,9 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId1, Guid.NewGuid(), "Apples", 50, 1.00m, null));
+            lineId1, Guid.NewGuid(), "APL-001", "Apples", 50, 1.00m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId2, Guid.NewGuid(), "Oranges", 50, 1.25m, null));
+            lineId2, Guid.NewGuid(), "ORG-001", "Oranges", 50, 1.25m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -854,7 +855,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Rice", 100, 1.50m, null));
+            lineId, Guid.NewGuid(), "RIC-001", "Rice", 100, 1.50m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -882,7 +883,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Mushrooms", 20, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "MSH-001", "Mushrooms", 20, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -910,9 +911,9 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item A", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "ITA-001", "Item A", 10, 5.00m, null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Item B", 20, 2.50m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "ITB-001", "Item B", 20, 2.50m, null));
 
         // Act
         var total = await grain.GetTotalAsync();
@@ -957,7 +958,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -982,12 +983,12 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Initial Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "INI-001", "Initial Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
         var act = () => grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "New Item", 5, 2.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "NEW-001", "New Item", 5, 2.00m, null));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -1009,7 +1010,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -1036,7 +1037,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -1062,7 +1063,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
 
         // Act
         var act = () => grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
@@ -1087,7 +1088,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
         await grain.CancelAsync(new CancelPurchaseOrderCommand("Changed plans", Guid.NewGuid()));
 
@@ -1114,7 +1115,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
         await grain.ReceiveLineAsync(new ReceiveLineCommand(lineId, 10));
 
@@ -1144,7 +1145,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
         await grain.CancelAsync(new CancelPurchaseOrderCommand("First cancellation", Guid.NewGuid()));
 
@@ -1171,7 +1172,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
 
         // Act
         var act = () => grain.UpdateLineAsync(new UpdatePurchaseOrderLineCommand(
@@ -1197,7 +1198,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act
@@ -1223,7 +1224,7 @@ public class PurchaseOrderGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             DateTime.UtcNow.AddDays(3), null));
         await grain.AddLineAsync(new AddPurchaseOrderLineCommand(
-            lineId, Guid.NewGuid(), "Test Item", 10, 5.00m, null));
+            lineId, Guid.NewGuid(), "TST-001", "Test Item", 10, 5.00m, null));
         await grain.SubmitAsync(new SubmitPurchaseOrderCommand(Guid.NewGuid()));
 
         // Act - receive more than ordered
@@ -1332,8 +1333,9 @@ public class DeliveryGrainTests
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
             LineId: Guid.NewGuid(),
-            IngredientId: Guid.NewGuid(),
-            IngredientName: "Fresh Basil",
+            SkuId: Guid.NewGuid(),
+            SkuCode: "BAS-001",
+            ProductName: "Fresh Basil",
             PurchaseOrderLineId: Guid.NewGuid(),
             QuantityReceived: 5,
             UnitCost: 3.00m,
@@ -1344,7 +1346,7 @@ public class DeliveryGrainTests
         // Assert
         var snapshot = await grain.GetSnapshotAsync();
         snapshot.Lines.Should().HaveCount(1);
-        snapshot.Lines[0].IngredientName.Should().Be("Fresh Basil");
+        snapshot.Lines[0].ProductName.Should().Be("Fresh Basil");
         snapshot.Lines[0].QuantityReceived.Should().Be(5);
         snapshot.Lines[0].UnitCost.Should().Be(3.00m);
         snapshot.Lines[0].LineTotal.Should().Be(15.00m);
@@ -1368,13 +1370,13 @@ public class DeliveryGrainTests
 
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Tomatoes",
+            Guid.NewGuid(), Guid.NewGuid(), "TOM-001", "Tomatoes",
             null, 50, 2.00m, null, null, null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Peppers",
+            Guid.NewGuid(), Guid.NewGuid(), "PEP-001", "Peppers",
             null, 30, 3.00m, null, null, null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Onions",
+            Guid.NewGuid(), Guid.NewGuid(), "ONI-001", "Onions",
             null, 40, 1.00m, null, null, null));
 
         // Assert
@@ -1398,7 +1400,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-003", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Chicken Wings",
+            lineId, Guid.NewGuid(), "CKW-001", "Chicken Wings",
             Guid.NewGuid(), 80, 4.00m, null, null, null));
 
         // Act
@@ -1434,7 +1436,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-004", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Glass Bottles",
+            lineId, Guid.NewGuid(), "GLB-001", "Glass Bottles",
             null, 48, 1.50m, null, null, null));
 
         // Act
@@ -1467,9 +1469,9 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-005", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId1, Guid.NewGuid(), "Milk", null, 20, 3.00m, null, null, null));
+            lineId1, Guid.NewGuid(), "MLK-001", "Milk", null, 20, 3.00m, null, null, null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId2, Guid.NewGuid(), "Eggs", null, 10, 4.00m, null, null, null));
+            lineId2, Guid.NewGuid(), "EGG-001", "Eggs", null, 10, 4.00m, null, null, null));
 
         // Act
         await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
@@ -1496,7 +1498,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-006", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Bread",
+            Guid.NewGuid(), Guid.NewGuid(), "BRD-001", "Bread",
             null, 50, 2.50m, "BATCH-B001", DateTime.UtcNow.AddDays(3), null));
 
         // Act
@@ -1523,7 +1525,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-007", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Cheese", null, 45, 8.00m, null, null, null));
+            lineId, Guid.NewGuid(), "CHS-001", "Cheese", null, 45, 8.00m, null, null, null));
         await grain.RecordDiscrepancyAsync(new RecordDiscrepancyCommand(
             Guid.NewGuid(), lineId, DiscrepancyType.ShortDelivery, 50, 45, "5 short"));
 
@@ -1549,7 +1551,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-008", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Fish",
+            Guid.NewGuid(), Guid.NewGuid(), "FSH-001", "Fish",
             null, 30, 12.00m, null, DateTime.UtcNow.AddDays(-1), null));
 
         // Act
@@ -1578,8 +1580,9 @@ public class DeliveryGrainTests
         // Act
         await grain.AddLineAsync(new AddDeliveryLineCommand(
             LineId: Guid.NewGuid(),
-            IngredientId: Guid.NewGuid(),
-            IngredientName: "Cream Cheese",
+            SkuId: Guid.NewGuid(),
+            SkuCode: "CCH-001",
+            ProductName: "Cream Cheese",
             PurchaseOrderLineId: null,
             QuantityReceived: 24,
             UnitCost: 4.50m,
@@ -1604,13 +1607,13 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-010", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Initial Item",
+            Guid.NewGuid(), Guid.NewGuid(), "INI-001", "Initial Item",
             null, 10, 5.00m, null, null, null));
         await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
 
         // Act
         var act = () => grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "New Item",
+            Guid.NewGuid(), Guid.NewGuid(), "NEW-001", "New Item",
             null, 5, 2.00m, null, null, null));
 
         // Assert
@@ -1629,13 +1632,13 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-011", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Initial Item",
+            Guid.NewGuid(), Guid.NewGuid(), "INI-001", "Initial Item",
             null, 10, 5.00m, null, null, null));
         await grain.RejectAsync(new RejectDeliveryCommand("Wrong order", Guid.NewGuid()));
 
         // Act
         var act = () => grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "New Item",
+            Guid.NewGuid(), Guid.NewGuid(), "NEW-001", "New Item",
             null, 5, 2.00m, null, null, null));
 
         // Assert
@@ -1655,7 +1658,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-012", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Test Item",
+            lineId, Guid.NewGuid(), "TST-001", "Test Item",
             null, 10, 5.00m, null, null, null));
         await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
 
@@ -1680,7 +1683,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-013", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Potatoes",
+            lineId, Guid.NewGuid(), "POT-001", "Potatoes",
             Guid.NewGuid(), 120, 0.50m, null, null, null));
 
         // Act
@@ -1708,7 +1711,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-014", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Chicken Thighs",
+            lineId, Guid.NewGuid(), "CKT-001", "Chicken Thighs",
             Guid.NewGuid(), 25, 4.00m, null, null, null));
 
         // Act
@@ -1734,7 +1737,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-015", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Bananas",
+            lineId, Guid.NewGuid(), "BAN-001", "Bananas",
             null, 50, 0.30m, "BATCH-BAN-001", DateTime.UtcNow.AddDays(5), null));
 
         // Act
@@ -1761,7 +1764,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-016", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            lineId, Guid.NewGuid(), "Olive Oil",
+            lineId, Guid.NewGuid(), "OLV-001", "Olive Oil",
             Guid.NewGuid(), 12, 15.00m, null, null, null));
 
         // Act - note: using quantity fields to represent price discrepancy context
@@ -1786,7 +1789,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-017", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item",
             null, 10, 5.00m, null, null, null));
         await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
 
@@ -1809,7 +1812,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-018", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item",
             null, 10, 5.00m, null, null, null));
         await grain.RejectAsync(new RejectDeliveryCommand("Quality issues", Guid.NewGuid()));
 
@@ -1832,7 +1835,7 @@ public class DeliveryGrainTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), "INV-019", null));
         await grain.AddLineAsync(new AddDeliveryLineCommand(
-            Guid.NewGuid(), Guid.NewGuid(), "Test Item",
+            Guid.NewGuid(), Guid.NewGuid(), "TST-001", "Test Item",
             null, 10, 5.00m, null, null, null));
         await grain.AcceptAsync(new AcceptDeliveryCommand(Guid.NewGuid()));
 

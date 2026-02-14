@@ -24,7 +24,8 @@ public record ReceiveBatchCommand(
     [property: Id(5)] Guid? DeliveryId = null,
     [property: Id(6)] string? Location = null,
     [property: Id(7)] string? Notes = null,
-    [property: Id(8)] Guid? ReceivedBy = null);
+    [property: Id(8)] Guid? ReceivedBy = null,
+    [property: Id(9)] Guid? SkuId = null);
 
 [GenerateSerializer]
 public record ConsumeStockCommand(

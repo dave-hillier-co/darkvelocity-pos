@@ -46,7 +46,7 @@ public class TableAssignmentOptimizerGrainTests
             Duration: TimeSpan.FromMinutes(90)));
 
         result.Success.Should().BeTrue();
-        result.Recommendations.Should().HaveCountGreaterOrEqualTo(1);
+        result.Recommendations.Should().HaveCountGreaterThanOrEqualTo(1);
 
         var topRecommendation = result.Recommendations.OrderByDescending(r => r.Score).First();
         topRecommendation.TableId.Should().Be(table4Id, "the 4-top is a perfect match for a party of 4");

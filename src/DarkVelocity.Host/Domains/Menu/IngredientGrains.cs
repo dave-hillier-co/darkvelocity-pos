@@ -181,6 +181,14 @@ public class IngredientGrain : JournaledGrain<IngredientState, IIngredientEvent>
                 state.IsSubRecipeOutput = false;
                 break;
 
+            case IngredientLinkedToProduct e:
+                state.ProductId = e.ProductId;
+                break;
+
+            case IngredientUnlinkedFromProduct:
+                state.ProductId = null;
+                break;
+
             case IngredientArchived e:
                 state.IsArchived = true;
                 state.ArchivedAt = e.OccurredAt;
@@ -397,6 +405,34 @@ public class IngredientGrain : JournaledGrain<IngredientState, IIngredientEvent>
         return Task.FromResult<IReadOnlyList<IngredientSupplierSnapshot>>(suppliers);
     }
 
+    public async Task LinkToProductAsync(Guid productId)
+    {
+        EnsureInitialized();
+
+        RaiseEvent(new IngredientLinkedToProduct(
+            IngredientId: State.IngredientId,
+            OccurredAt: DateTimeOffset.UtcNow,
+            ProductId: productId
+        ));
+
+        await ConfirmEvents();
+    }
+
+    public async Task UnlinkFromProductAsync()
+    {
+        EnsureInitialized();
+
+        if (State.ProductId != null)
+        {
+            RaiseEvent(new IngredientUnlinkedFromProduct(
+                IngredientId: State.IngredientId,
+                OccurredAt: DateTimeOffset.UtcNow
+            ));
+
+            await ConfirmEvents();
+        }
+    }
+
     public async Task LinkToSubRecipeAsync(string recipeDocumentId)
     {
         EnsureInitialized();
@@ -580,7 +616,8 @@ public class IngredientGrain : JournaledGrain<IngredientState, IIngredientEvent>
             ProducedByRecipeId: State.ProducedByRecipeId,
             IsSubRecipeOutput: State.IsSubRecipeOutput,
             IsArchived: State.IsArchived,
-            CreatedAt: State.CreatedAt
+            CreatedAt: State.CreatedAt,
+            ProductId: State.ProductId
         );
     }
 

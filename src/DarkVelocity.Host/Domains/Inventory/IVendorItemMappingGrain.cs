@@ -32,7 +32,9 @@ public record LearnMappingCommand(
     [property: Id(7)] Guid? LearnedFromDocumentId = null,
     [property: Id(8)] Guid? LearnedBy = null,
     [property: Id(9)] decimal? UnitPrice = null,
-    [property: Id(10)] string? Unit = null);
+    [property: Id(10)] string? Unit = null,
+    [property: Id(11)] Guid? ProductId = null,
+    [property: Id(12)] Guid? SkuId = null);
 
 /// <summary>
 /// Command to manually set or update a mapping.
@@ -46,7 +48,9 @@ public record SetMappingCommand(
     [property: Id(4)] Guid SetBy,
     [property: Id(5)] string? VendorProductCode = null,
     [property: Id(6)] decimal? ExpectedUnitPrice = null,
-    [property: Id(7)] string? Unit = null);
+    [property: Id(7)] string? Unit = null,
+    [property: Id(8)] Guid? ProductId = null,
+    [property: Id(9)] Guid? SkuId = null);
 
 /// <summary>
 /// Command to delete a mapping.
@@ -102,7 +106,9 @@ public record MappingSuggestion(
     [property: Id(2)] string IngredientSku,
     [property: Id(3)] decimal Confidence,
     [property: Id(4)] string MatchReason,
-    [property: Id(5)] MappingMatchType MatchType);
+    [property: Id(5)] MappingMatchType MatchType,
+    [property: Id(6)] Guid? ProductId = null,
+    [property: Id(7)] Guid? SkuId = null);
 
 /// <summary>
 /// Snapshot of vendor mapping state.
@@ -130,7 +136,9 @@ public record MappingSummary(
     [property: Id(4)] string IngredientSku,
     [property: Id(5)] int UsageCount,
     [property: Id(6)] DateTime CreatedAt,
-    [property: Id(7)] MappingSource Source);
+    [property: Id(7)] MappingSource Source,
+    [property: Id(8)] Guid? ProductId = null,
+    [property: Id(9)] Guid? SkuId = null);
 
 // ============================================================================
 // Grain Interface
